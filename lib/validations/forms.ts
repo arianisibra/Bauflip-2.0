@@ -77,3 +77,77 @@ export const transitionSchema = z.object({
   projectId: z.string().min(1),
   targetStatus: z.enum(projectStatuses),
 });
+
+export const moduleLabelSchema = z.object({
+  key: z.string().min(2),
+  label: z.string().min(2, "Bezeichnung ist zu kurz."),
+});
+
+export const kanbanColumnRenameSchema = z.object({
+  columnId: z.string().min(1),
+  title: z.string().min(2, "Spaltenname ist zu kurz."),
+});
+
+export const kanbanMoveCardSchema = z.object({
+  cardId: z.string().min(1),
+  columnId: z.string().min(1),
+});
+
+export const chatMessageSchema = z.object({
+  projectId: z.string().min(1),
+  appointmentId: z.string().optional(),
+  body: z.string().min(1, "Nachricht darf nicht leer sein."),
+});
+
+export const chatAttachmentSchema = z.object({
+  projectId: z.string().min(1),
+  messageId: z.string().min(1),
+  fileName: z.string().min(1),
+  fileType: z.string().min(1),
+  filePath: z.string().min(1),
+});
+
+export const csvImportSchema = z.object({
+  type: z.enum(["customers", "articles"]),
+  csvText: z.string().min(1, "CSV-Inhalt fehlt."),
+});
+
+export const stockDecisionSchema = z.object({
+  projectId: z.string().min(1),
+  decision: z.enum(["ab_lager", "bestellen"]),
+  notes: z.string().min(2, "Bitte Begründung ergänzen."),
+});
+
+export const supplierTemplateSubmissionSchema = z.object({
+  projectId: z.string().min(1),
+  templateId: z.string().min(1),
+  valuesJson: z.string().min(2),
+});
+
+export const smtpSendSchema = z.object({
+  projectId: z.string().optional(),
+  to: z.email("Bitte gültige E-Mail angeben."),
+  subject: z.string().min(3),
+  html: z.string().min(3),
+  includeIcs: z.string().optional(),
+  icsTitle: z.string().optional(),
+  icsDescription: z.string().optional(),
+  icsStartsAt: z.string().optional(),
+  icsEndsAt: z.string().optional(),
+});
+
+export const swissQrSchema = z.object({
+  iban: z.string().min(5),
+  creditorName: z.string().min(2),
+  creditorStreet: z.string().min(2),
+  creditorPostalCode: z.string().min(2),
+  creditorCity: z.string().min(2),
+  amount: z.string().min(1),
+  currency: z.enum(["CHF", "EUR"]),
+  debtorName: z.string().min(2),
+  debtorStreet: z.string().min(2),
+  debtorPostalCode: z.string().min(2),
+  debtorCity: z.string().min(2),
+  reference: z.string().min(2),
+  message: z.string().min(1),
+});

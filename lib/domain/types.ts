@@ -33,6 +33,23 @@ export type NoteType = (typeof noteTypes)[number];
 export const roleTypes = ["admin", "office", "technician"] as const;
 export type RoleType = (typeof roleTypes)[number];
 
+export const appPageKeys = [
+  "uebersicht",
+  "projekte",
+  "kunden",
+  "kontakte",
+  "termine",
+  "artikel",
+  "rapporte",
+  "team_chat",
+  "zeiterfassung",
+  "bestellformular",
+  "einstellungen",
+  "integrationen",
+  "import_export",
+] as const;
+export type AppPageKey = (typeof appPageKeys)[number];
+
 export type Customer = {
   id: string;
   name: string;
@@ -42,6 +59,14 @@ export type Customer = {
   postalCode: string | null;
   city: string | null;
   createdAt: string;
+};
+
+export type UserProfile = {
+  id: string;
+  displayName: string;
+  email: string;
+  role: RoleType;
+  avatarUrl: string | null;
 };
 
 export type Project = {
@@ -132,5 +157,148 @@ export type Invoice = {
   invoiceNumber: string | null;
   status: "entwurf" | "gesendet" | "bezahlt";
   sentAt: string | null;
+  createdAt: string;
+};
+
+export type SidebarItem = {
+  key: AppPageKey;
+  label: string;
+  href: string;
+  section: "navigation" | "einsatz" | "system";
+};
+
+export type ModuleLabel = {
+  key: string;
+  label: string;
+};
+
+export type KanbanColumn = {
+  id: string;
+  projectId: string;
+  title: string;
+  color: "slate" | "blue" | "green" | "orange" | "violet";
+  sortOrder: number;
+  status: ProjectStatus;
+};
+
+export type KanbanCard = {
+  id: string;
+  projectId: string;
+  columnId: string;
+  title: string;
+  sortOrder: number;
+  status: ProjectStatus;
+  assignedTechnicianIds: string[];
+  dueDate: string | null;
+};
+
+export type ProjectChatMessage = {
+  id: string;
+  projectId: string;
+  appointmentId: string | null;
+  senderId: string;
+  senderName: string;
+  body: string;
+  createdAt: string;
+};
+
+export type ProjectChatAttachment = {
+  id: string;
+  messageId: string;
+  projectId: string;
+  fileName: string;
+  fileType: string;
+  filePath: string;
+  uploadedAt: string;
+};
+
+export type CalendarEvent = {
+  id: string;
+  projectId: string;
+  appointmentId: string;
+  technicianId: string;
+  technicianEmail: string;
+  provider: "google" | "microsoft" | "ics";
+  providerEventId: string | null;
+  startsAt: string;
+  endsAt: string;
+  title: string;
+  createdAt: string;
+};
+
+export type Article = {
+  id: string;
+  name: string;
+  sku: string;
+  category: string;
+  supplierId: string | null;
+  inStock: number;
+  createdAt: string;
+};
+
+export type EmployeeStat = {
+  profileId: string;
+  profileName: string;
+  offeneProjekte: number;
+  abgeschlosseneHeute: number;
+  offeneRapporte: number;
+  stundenDieseWoche: number;
+};
+
+export type AuditEvent = {
+  id: string;
+  action: string;
+  projectId: string | null;
+  actorRole: RoleType;
+  actorName: string;
+  payload: string;
+  createdAt: string;
+};
+
+export type MailProviderConfig = {
+  id: string;
+  providerName: "google" | "outlook" | "custom";
+  host: string;
+  port: number;
+  secure: boolean;
+  username: string;
+  password: string;
+  fromEmail: string;
+  signature: string;
+};
+
+export type MailDispatchLog = {
+  id: string;
+  projectId: string | null;
+  to: string;
+  subject: string;
+  status: "gesendet" | "fehler";
+  errorMessage: string | null;
+  sentAt: string;
+};
+
+export type SupplierOrderTemplate = {
+  id: string;
+  supplierId: string;
+  supplierName: string;
+  name: string;
+  requiredFields: string[];
+};
+
+export type SupplierOrderSubmission = {
+  id: string;
+  projectId: string;
+  templateId: string;
+  valuesJson: string;
+  status: "entwurf" | "eingereicht";
+  createdAt: string;
+};
+
+export type StockDecision = {
+  id: string;
+  projectId: string;
+  decision: "ab_lager" | "bestellen";
+  notes: string;
+  decidedByRole: RoleType;
   createdAt: string;
 };

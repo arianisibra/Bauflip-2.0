@@ -1,13 +1,18 @@
 import { ChatbotFab } from "@/components/app/chatbot-fab";
 import { SidebarNav } from "@/components/app/sidebar-nav";
 import { UserAvatarButton } from "@/components/app/user-avatar-button";
+import { getCurrentRole } from "@/lib/auth/session";
+import { getVisibleSidebarItems } from "@/lib/navigation/sidebar-config";
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const role = await getCurrentRole();
+  const items = getVisibleSidebarItems(role);
+
   return (
     <div className="h-screen overflow-hidden bg-slate-100">
       <div className="flex h-full">
         <div className="overflow-hidden">
-          <SidebarNav />
+          <SidebarNav role={role} items={items} />
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col">

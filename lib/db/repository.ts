@@ -1,24 +1,53 @@
 import type {
   Appointment,
+  Article,
+  AuditEvent,
+  CalendarEvent,
   Customer,
   Delivery,
+  EmployeeStat,
   Invoice,
+  KanbanCard,
+  KanbanColumn,
+  MailDispatchLog,
+  ModuleLabel,
   Project,
+  ProjectChatAttachment,
+  ProjectChatMessage,
   ProjectNote,
   PurchaseOrder,
   Quote,
+  RoleType,
+  StockDecision,
+  SupplierOrderSubmission,
+  SupplierOrderTemplate,
   TechnicianReport,
+  UserProfile,
 } from "@/lib/domain/types";
 import {
   mockAppointments,
+  mockArticles,
+  mockAuditEvents,
+  mockCalendarEvents,
   mockCustomers,
   mockDeliveries,
+  mockEmployeeStats,
   mockInvoices,
+  mockKanbanCards,
+  mockKanbanColumns,
+  mockMailDispatchLogs,
+  mockModuleLabels,
   mockNotes,
   mockOrders,
+  mockProfiles,
   mockProjects,
+  mockProjectChatAttachments,
+  mockProjectChatMessages,
   mockQuotes,
   mockReports,
+  mockStockDecisions,
+  mockSupplierSubmissions,
+  mockSupplierTemplates,
 } from "@/lib/db/mock-data";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -383,6 +412,17 @@ export async function updateProjectStatus(projectId: string, status: Project["st
     project.status = status;
     project.nextOwnerRole = nextOwnerRole;
     project.updatedAt = new Date().toISOString();
+    const matchingColumn = mockKanbanColumns.find(
+      (column) => column.projectId === projectId && column.status === status,
+    );
+    if (matchingColumn) {
+      mockKanbanCards
+        .filter((card) => card.projectId === projectId)
+        .forEach((card) => {
+          card.columnId = matchingColumn.id;
+          card.status = status;
+        });
+    }
     return project;
   }
 
@@ -395,5 +435,383 @@ export async function updateProjectStatus(projectId: string, status: Project["st
     throw new Error("Projektstatus konnte nicht aktualisiert werden.");
   }
 
+  const { data: columns } = await supabase
+    .from("kanban_columns")
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("status", status)
+    .limit(1);
+  const column = columns?.[0];
+  if (column) {
+    await supabase
+      .from("kanban_cards")
+      .update({ column_id: column.id, status })
+      .eq("project_id", projectId);
+  }
+
   return data as unknown as Project;
+}
+
+export async function listProfilesByRole(role: RoleType) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return mockProfiles.filter((item) => item.role === role);
+  }
+  const { data } = await supabase.from("profiles").select("*").eq("role", role);
+  return (data as unknown as UserProfile[]) ?? [];
+}
+
+export async function listModuleLabels() {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return mockModuleLabels;
+  }
+  const { data } = await supabase.from("ui_module_labels").select("*");
+  return ((data as unknown as ModuleLabel[]) ?? []).length > 0 ? (data as unknown as ModuleLabel[]) : mockModuleLabels;
+}
+
+export async function upsertModuleLabel(key: string, label: string) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const found = mockModuleLabels.find((item) => item.key === key);
+    if (found) {
+      found.label = label;
+      return found;
+    }
+    const created = { key, label };
+    mockModuleLabels.push(created);
+    return created;
+  }
+  const { data, error } = await supabase.from("ui_module_labels")
+    .upsert({ key, label }, { onConflict: "key" })
+    .select("*")
+    .single();
+  if (error || !data) {
+    throw new Error("Modulname konnte nicht gespeichert werden.");
+  }
+  return data as unknown as ModuleLabel;
+}
+
+export async function listKanbanColumns(projectId: string) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return mockKanbanColumns.filter((item) => item.projectId === projectId).sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+  const { data } = await supabase
+    .from("kanban_columns")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("sort_order", { ascending: true });
+  return (data as unknown as KanbanColumn[]) ?? [];
+}
+
+export async function listKanbanCards(projectId: string) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return mockKanbanCards.filter((item) => item.projectId === projectId).sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+  const { data } = await supabase
+    .from("kanban_cards")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("sort_order", { ascending: true });
+  return (data as unknown as KanbanCard[]) ?? [];
+}
+
+export async function renameKanbanColumn(columnId: string, title: string) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const column = mockKanbanColumns.find((item) => item.id === columnId);
+    if (!column) {
+      throw new Error("Kanban-Spalte nicht gefunden.");
+    }
+    column.title = title;
+    return column;
+  }
+  const { data, error } = await supabase
+    .from("kanban_columns")
+    .update({ title })
+    .eq("id", columnId)
+    .select("*")
+    .single();
+  if (error || !data) {
+    throw new Error("Spalte konnte nicht umbenannt werden.");
+  }
+  return data as unknown as KanbanColumn;
+}
+
+export async function moveKanbanCard(cardId: string, columnId: string) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const card = mockKanbanCards.find((item) => item.id === cardId);
+    if (!card) {
+      throw new Error("Kanban-Karte nicht gefunden.");
+    }
+    card.columnId = columnId;
+    return card;
+  }
+  const { data, error } = await supabase
+    .from("kanban_cards")
+    .update({ column_id: columnId })
+    .eq("id", cardId)
+    .select("*")
+    .single();
+  if (error || !data) {
+    throw new Error("Kanban-Karte konnte nicht verschoben werden.");
+  }
+  return data as unknown as KanbanCard;
+}
+
+export async function listProjectChat(projectId: string) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const messages = mockProjectChatMessages.filter((item) => item.projectId === projectId);
+    const attachments = mockProjectChatAttachments.filter((item) => item.projectId === projectId);
+    return { messages, attachments };
+  }
+  const [messages, attachments] = await Promise.all([
+    supabase.from("project_chat_messages").select("*").eq("project_id", projectId).order("created_at"),
+    supabase.from("project_chat_attachments").select("*").eq("project_id", projectId).order("uploaded_at"),
+  ]);
+  return {
+    messages: (messages.data as unknown as ProjectChatMessage[]) ?? [],
+    attachments: (attachments.data as unknown as ProjectChatAttachment[]) ?? [],
+  };
+}
+
+export async function addProjectChatMessage(input: Omit<ProjectChatMessage, "id" | "createdAt">) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const item: ProjectChatMessage = {
+      id: id("pcm"),
+      createdAt: new Date().toISOString(),
+      ...input,
+    };
+    mockProjectChatMessages.push(item);
+    return item;
+  }
+  const { data, error } = await supabase.from("project_chat_messages").insert({
+    project_id: input.projectId,
+    appointment_id: input.appointmentId,
+    sender_id: input.senderId,
+    sender_name: input.senderName,
+    body: input.body,
+  }).select("*").single();
+  if (error || !data) {
+    throw new Error("Nachricht konnte nicht gespeichert werden.");
+  }
+  return data as unknown as ProjectChatMessage;
+}
+
+export async function addProjectChatAttachment(input: Omit<ProjectChatAttachment, "id" | "uploadedAt">) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const item: ProjectChatAttachment = {
+      id: id("pca"),
+      uploadedAt: new Date().toISOString(),
+      ...input,
+    };
+    mockProjectChatAttachments.push(item);
+    return item;
+  }
+  const { data, error } = await supabase.from("project_chat_attachments").insert({
+    message_id: input.messageId,
+    project_id: input.projectId,
+    file_name: input.fileName,
+    file_type: input.fileType,
+    file_path: input.filePath,
+  }).select("*").single();
+  if (error || !data) {
+    throw new Error("Anhang konnte nicht gespeichert werden.");
+  }
+  return data as unknown as ProjectChatAttachment;
+}
+
+export async function addCalendarEvent(input: Omit<CalendarEvent, "id" | "createdAt">) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const event: CalendarEvent = { id: id("cal"), createdAt: new Date().toISOString(), ...input };
+    mockCalendarEvents.push(event);
+    return event;
+  }
+  const { data, error } = await supabase.from("calendar_events").insert({
+    project_id: input.projectId,
+    appointment_id: input.appointmentId,
+    technician_id: input.technicianId,
+    technician_email: input.technicianEmail,
+    provider: input.provider,
+    provider_event_id: input.providerEventId,
+    starts_at: input.startsAt,
+    ends_at: input.endsAt,
+    title: input.title,
+  }).select("*").single();
+  if (error || !data) {
+    throw new Error("Kalendereintrag konnte nicht gespeichert werden.");
+  }
+  return data as unknown as CalendarEvent;
+}
+
+export async function listArticles() {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return mockArticles;
+  }
+  const { data } = await supabase.from("articles").select("*").order("name", { ascending: true });
+  return (data as unknown as Article[]) ?? [];
+}
+
+export async function upsertArticles(items: Omit<Article, "id" | "createdAt">[]) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    for (const item of items) {
+      const existing = mockArticles.find((entry) => entry.sku === item.sku);
+      if (existing) {
+        existing.name = item.name;
+        existing.category = item.category;
+        existing.inStock = item.inStock;
+      } else {
+        mockArticles.push({
+          id: id("art"),
+          createdAt: new Date().toISOString(),
+          ...item,
+        });
+      }
+    }
+    return mockArticles;
+  }
+  const payload = items.map((item) => ({
+    name: item.name,
+    sku: item.sku,
+    category: item.category,
+    supplier_id: item.supplierId,
+    in_stock: item.inStock,
+  }));
+  const { data, error } = await supabase.from("articles")
+    .upsert(payload, { onConflict: "sku" })
+    .select("*");
+  if (error || !data) {
+    throw new Error("Artikel konnten nicht importiert werden.");
+  }
+  return data as unknown as Article[];
+}
+
+export async function listEmployeeStats() {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return mockEmployeeStats;
+  }
+  const { data } = await supabase.from("employee_metrics_snapshots").select("*");
+  return ((data as unknown as EmployeeStat[]) ?? []).length > 0 ? (data as unknown as EmployeeStat[]) : mockEmployeeStats;
+}
+
+export async function listAuditEvents(limit = 100) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return mockAuditEvents.slice(0, limit);
+  }
+  const { data } = await supabase.from("audit_events").select("*").order("created_at", { ascending: false }).limit(limit);
+  return (data as unknown as AuditEvent[]) ?? [];
+}
+
+export async function addAuditEvent(input: Omit<AuditEvent, "id" | "createdAt">) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const event: AuditEvent = {
+      id: id("ae"),
+      createdAt: new Date().toISOString(),
+      ...input,
+    };
+    mockAuditEvents.unshift(event);
+    return event;
+  }
+  const { data, error } = await supabase.from("audit_events").insert({
+    action: input.action,
+    project_id: input.projectId,
+    actor_role: input.actorRole,
+    actor_name: input.actorName,
+    payload: input.payload,
+  }).select("*").single();
+  if (error || !data) {
+    throw new Error("Audit-Eintrag konnte nicht gespeichert werden.");
+  }
+  return data as unknown as AuditEvent;
+}
+
+export async function listSupplierTemplates() {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return mockSupplierTemplates;
+  }
+  const { data } = await supabase.from("supplier_order_form_templates").select("*").order("name");
+  return (data as unknown as SupplierOrderTemplate[]) ?? [];
+}
+
+export async function addSupplierSubmission(input: Omit<SupplierOrderSubmission, "id" | "createdAt">) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const submission: SupplierOrderSubmission = {
+      id: id("sos"),
+      createdAt: new Date().toISOString(),
+      ...input,
+    };
+    mockSupplierSubmissions.push(submission);
+    return submission;
+  }
+  const { data, error } = await supabase.from("supplier_order_form_submissions").insert({
+    project_id: input.projectId,
+    template_id: input.templateId,
+    values_json: input.valuesJson,
+    status: input.status,
+  }).select("*").single();
+  if (error || !data) {
+    throw new Error("Bestellformular konnte nicht gespeichert werden.");
+  }
+  return data as unknown as SupplierOrderSubmission;
+}
+
+export async function addStockDecision(input: Omit<StockDecision, "id" | "createdAt">) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const item: StockDecision = {
+      id: id("sd"),
+      createdAt: new Date().toISOString(),
+      ...input,
+    };
+    mockStockDecisions.push(item);
+    return item;
+  }
+  const { data, error } = await supabase.from("stock_decisions").insert({
+    project_id: input.projectId,
+    decision: input.decision,
+    notes: input.notes,
+    decided_by_role: input.decidedByRole,
+  }).select("*").single();
+  if (error || !data) {
+    throw new Error("Lagerentscheidung konnte nicht gespeichert werden.");
+  }
+  return data as unknown as StockDecision;
+}
+
+export async function addMailDispatchLog(input: Omit<MailDispatchLog, "id" | "sentAt">) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const item: MailDispatchLog = {
+      id: id("mail"),
+      sentAt: new Date().toISOString(),
+      ...input,
+    };
+    mockMailDispatchLogs.push(item);
+    return item;
+  }
+  const { data, error } = await supabase.from("mail_messages").insert({
+    project_id: input.projectId,
+    recipient: input.to,
+    subject: input.subject,
+    status: input.status,
+    error_message: input.errorMessage,
+  }).select("*").single();
+  if (error || !data) {
+    throw new Error("Mail-Log konnte nicht gespeichert werden.");
+  }
+  return data as unknown as MailDispatchLog;
 }

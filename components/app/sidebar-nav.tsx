@@ -3,18 +3,59 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardList, FolderKanban, LayoutGrid, Users } from "lucide-react";
+import type { ComponentType } from "react";
+import {
+  CalendarDays,
+  ChartColumnStacked,
+  Clock3,
+  Cog,
+  FolderKanban,
+  Gauge,
+  MessageSquare,
+  PackageSearch,
+  Phone,
+  ScrollText,
+  Settings2,
+  Upload,
+  Users,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { RoleType, SidebarItem } from "@/lib/domain/types";
 
-const navigation = [
-  { href: "/", label: "Dashboard", icon: LayoutGrid },
-  { href: "/anfrage/neu", label: "Neue Anfrage", icon: ClipboardList },
-  { href: "/projekte", label: "Projekte", icon: FolderKanban },
-  { href: "/kunden", label: "Kunden", icon: Users },
-];
+const iconByKey: Record<SidebarItem["key"], ComponentType<{ className?: string }>> = {
+  uebersicht: Gauge,
+  projekte: FolderKanban,
+  kunden: Users,
+  kontakte: Phone,
+  termine: CalendarDays,
+  artikel: PackageSearch,
+  rapporte: ScrollText,
+  team_chat: MessageSquare,
+  zeiterfassung: Clock3,
+  bestellformular: ChartColumnStacked,
+  einstellungen: Cog,
+  integrationen: Settings2,
+  import_export: Upload,
+};
 
-export function SidebarNav() {
+type SidebarNavProps = {
+  role: RoleType;
+  items: SidebarItem[];
+};
+
+export function SidebarNav({ role, items }: SidebarNavProps) {
   const pathname = usePathname();
+  const grouped = {
+    navigation: items.filter((item) => item.section === "navigation"),
+    einsatz: items.filter((item) => item.section === "einsatz"),
+    system: items.filter((item) => item.section === "system"),
+  };
+
+  const sectionTitle = {
+    navigation: "Navigation",
+    einsatz: "Einsatz",
+    system: "System",
+  };
 
   return (
     <aside className="flex h-full w-72 shrink-0 flex-col border-r bg-gradient-to-b from-sky-950 to-slate-950 px-4 py-5 text-slate-100">
@@ -29,34 +70,34 @@ export function SidebarNav() {
         />
       </div>
 
-      <nav className="flex flex-col gap-2">
-        {navigation.map((item) => {
-          const Icon = item.icon;
-          const isActive = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors",
-                isActive
-                  ? "bg-cyan-400/20 text-cyan-100"
-                  : "text-slate-200 hover:bg-slate-800/80 hover:text-white",
-              )}
-            >
-              <Icon className="size-4" />
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
+      <nav className="flex flex-col gap-5">
+        {(Object.keys(grouped) as Array<keyof typeof grouped>).map((section) => (
+          <div key={section} className="flex flex-col gap-2">
+            <p className="px-2 text-xs font-semibold tracking-[0.14em] uppercase text-slate-400">
+              {sectionTitle[section]}
+            </p>
+            {grouped[section].map((item) => {
+              const Icon = iconByKey[item.key];
+              const isActive = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors",
+                    isActive
+                      ? "bg-cyan-400/20 text-cyan-100"
+                      : "text-slate-200 hover:bg-slate-800/80 hover:text-white",
+                  )}
+                >
+                  <Icon className="size-4" />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        ))}
       </nav>
-
-      <div className="mt-auto rounded-xl border border-cyan-300/20 bg-sky-900/40 p-3 text-xs">
-        <p className="font-medium text-cyan-100">Geführter Ablauf aktiv</p>
-        <p className="mt-1 text-slate-200">
-          Status und Pflichtangaben steuern die nächsten Schritte automatisch.
-        </p>
-      </div>
     </aside>
   );
 }

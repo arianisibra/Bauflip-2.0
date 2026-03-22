@@ -1,13 +1,28 @@
 import type {
   Appointment,
+  Article,
+  AuditEvent,
+  CalendarEvent,
   Customer,
   Delivery,
+  EmployeeStat,
   Invoice,
+  KanbanCard,
+  KanbanColumn,
+  MailDispatchLog,
+  MailProviderConfig,
+  ModuleLabel,
   Project,
+  ProjectChatAttachment,
+  ProjectChatMessage,
   ProjectNote,
   PurchaseOrder,
   Quote,
+  StockDecision,
+  SupplierOrderSubmission,
+  SupplierOrderTemplate,
   TechnicianReport,
+  UserProfile,
 } from "@/lib/domain/types";
 
 const now = new Date().toISOString();
@@ -22,6 +37,23 @@ export const mockCustomers: Customer[] = [
     postalCode: "8001",
     city: "Zürich",
     createdAt: now,
+  },
+];
+
+export const mockProfiles: UserProfile[] = [
+  {
+    id: "u-admin-1",
+    displayName: "Nora Admin",
+    email: "admin@bauflip.ch",
+    role: "admin",
+    avatarUrl: null,
+  },
+  {
+    id: "u-tech-1",
+    displayName: "Luca Monteur",
+    email: "monteur@bauflip.ch",
+    role: "technician",
+    avatarUrl: null,
   },
 ];
 
@@ -87,3 +119,132 @@ export const mockQuotes: Quote[] = [];
 export const mockOrders: PurchaseOrder[] = [];
 export const mockDeliveries: Delivery[] = [];
 export const mockInvoices: Invoice[] = [];
+
+export const mockModuleLabels: ModuleLabel[] = [
+  { key: "overview_page_title", label: "Admin Übersicht" },
+  { key: "overview_page_subtitle", label: "Was braucht heute deine Aufmerksamkeit?" },
+];
+
+export const mockKanbanColumns: KanbanColumn[] = [
+  {
+    id: "kc-1",
+    projectId: "p-1",
+    title: "Eingang",
+    color: "blue",
+    sortOrder: 0,
+    status: "anfrage",
+  },
+  {
+    id: "kc-2",
+    projectId: "p-1",
+    title: "In Abklärung",
+    color: "orange",
+    sortOrder: 1,
+    status: "bericht_ausstehend",
+  },
+  {
+    id: "kc-3",
+    projectId: "p-1",
+    title: "Umsetzung",
+    color: "green",
+    sortOrder: 2,
+    status: "ausfuehrung_geplant",
+  },
+  {
+    id: "kc-4",
+    projectId: "p-1",
+    title: "Abschluss",
+    color: "violet",
+    sortOrder: 3,
+    status: "rechnung",
+  },
+];
+
+export const mockKanbanCards: KanbanCard[] = [
+  {
+    id: "card-1",
+    projectId: "p-1",
+    columnId: "kc-2",
+    title: "Lamellenstoren Westfassade",
+    sortOrder: 0,
+    status: "bericht_ausstehend",
+    assignedTechnicianIds: ["u-tech-1"],
+    dueDate: now,
+  },
+];
+
+export const mockProjectChatMessages: ProjectChatMessage[] = [
+  {
+    id: "pcm-1",
+    projectId: "p-1",
+    appointmentId: "a-1",
+    senderId: "u-admin-1",
+    senderName: "Nora Admin",
+    body: "Bitte bei der Besichtigung besonders auf Motorgeräusche achten.",
+    createdAt: now,
+  },
+];
+
+export const mockProjectChatAttachments: ProjectChatAttachment[] = [];
+
+export const mockCalendarEvents: CalendarEvent[] = [];
+
+export const mockArticles: Article[] = [
+  {
+    id: "art-1",
+    name: "Markisenstoff Premium",
+    sku: "MARK-STOFF-01",
+    category: "Markisen + Stoff",
+    supplierId: null,
+    inStock: 12,
+    createdAt: now,
+  },
+  {
+    id: "art-2",
+    name: "Faltrolladen Regapak Set",
+    sku: "REGAPAK-SET-01",
+    category: "Faltrolladen Regapak",
+    supplierId: null,
+    inStock: 3,
+    createdAt: now,
+  },
+];
+
+export const mockEmployeeStats: EmployeeStat[] = [
+  {
+    profileId: "u-tech-1",
+    profileName: "Luca Monteur",
+    offeneProjekte: 2,
+    abgeschlosseneHeute: 1,
+    offeneRapporte: 1,
+    stundenDieseWoche: 34,
+  },
+];
+
+export const mockAuditEvents: AuditEvent[] = [
+  {
+    id: "ae-1",
+    action: "projekt_erstellt",
+    projectId: "p-1",
+    actorRole: "office",
+    actorName: "Nora Admin",
+    payload: "{\"status\":\"anfrage\"}",
+    createdAt: now,
+  },
+];
+
+export const mockMailProviders: MailProviderConfig[] = [];
+export const mockMailDispatchLogs: MailDispatchLog[] = [];
+
+export const mockSupplierTemplates: SupplierOrderTemplate[] = [
+  {
+    id: "st-1",
+    supplierId: "s-1",
+    supplierName: "Sonnentuch AG",
+    name: "Markisen Bestellung",
+    requiredFields: ["produkt", "farbe", "breite_mm", "hoehe_mm", "lieferadresse"],
+  },
+];
+
+export const mockSupplierSubmissions: SupplierOrderSubmission[] = [];
+export const mockStockDecisions: StockDecision[] = [];
