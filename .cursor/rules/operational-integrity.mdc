@@ -1,0 +1,33 @@
+---
+description: Enforce complete steps, visible context, explicit ownership, and clean handoffs
+alwaysApply: true
+---
+
+# Operational integrity: data, handoffs, status
+
+Treat **missing data**, **handoff quality**, and **status integrity** as first-class—not optional polish.
+
+## What the system must do
+
+| Concern | Expectation |
+|--------|----------------|
+| **Incomplete critical steps** | Block or warn before advancing when required fields, approvals, or prerequisites for *this* status are missing. Prefer validation at transition time over silent bad state. |
+| **Missing information** | Surface gaps in-context (inline, summary panel, or transition modal)—not only in a distant log. Use clear labels for *what* is missing and *who* can fix it. |
+| **Notes** | Keep notes **visible and contextual**: tied to the entity and step (project, appointment, quote, etc.), easy to find from the screen where the work happens. Avoid burying history in generic activity feeds only. |
+| **Next step ownership** | After every meaningful transition, make **next owner** explicit in UI and model (role or user)—aligned with workflow-first “next owner.” |
+| **Office / admin / technician** | Handoffs are **clean**: each side sees what the other needed, what changed, and what to do next. Technician-facing surfaces consume a **documented subset** of the same truth; office/admin remains system of record. |
+
+## Quick check
+
+Before shipping a flow, ask: *Can someone advance this without required data? Can the next person see why and what to do without asking around?*
+
+## Example
+
+```markdown
+❌ BAD: Status changes to "Scheduled" with no assigned window; notes only in a global timeline.
+
+✅ GOOD: "Schedule" requires slot + resource; blocked with inline errors until satisfied;
+appointment detail shows last handoff note; status change sets next_owner to coordinator or tech lead.
+```
+
+Pair with **workflow-first**: required input and next owner from the workflow must appear in validation, UI, and persistence—not only in prose.

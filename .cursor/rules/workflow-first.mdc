@@ -1,0 +1,32 @@
+---
+description: Clarify operational workflow before screens, schema, or implementation
+alwaysApply: true
+---
+
+# Workflow before UI and code
+
+Before proposing **screens**, **components**, **database tables**, or **implementation details**, first make the **workflow** explicit enough to build against.
+
+## Per feature, always cover
+
+| Lens | Question |
+|------|----------|
+| **Trigger** | What event or request starts this? |
+| **Actor** | Who does it (role/system)? |
+| **Required input** | What must be known or captured to proceed? |
+| **Decision** | What gets decided, approved, or rejected? |
+| **Status transition** | What state changes (before → after)? |
+| **Next owner** | Who or what owns the next step? |
+
+If any of these are unclear, **stop and clarify**—do not jump straight to UI mockups, component APIs, or schema.
+
+## Example
+
+```markdown
+❌ BAD: "Add a Projects table and a /projects page with a DataTable."
+
+✅ GOOD: "Intake: office receives call (trigger) → coordinator captures site + customer (input) →
+decide quote vs site visit (decision) → project moves draft → qualified (status) → estimator owns next (owner)."
+```
+
+Use questions or a short bullet workflow first; only then align UI, data, and code to that flow.

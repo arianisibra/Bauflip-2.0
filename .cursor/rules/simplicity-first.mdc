@@ -1,0 +1,26 @@
+---
+description: Prefer the simplest solution that works; avoid overengineering and speculative design
+alwaysApply: true
+---
+
+# Simplicity first
+
+Optimize for **speed of delivery**, **clarity**, **maintainability**, and **real operational usefulness**—not theoretical elegance.
+
+## Avoid
+
+- Speculative abstractions (“we might need plugins later”)
+- Generic enterprise architecture (layers, frameworks, patterns) without a concrete need
+- Premature optimization (measure or hit a known limit first)
+- Future-proofing without evidence (no user, scale, or compliance signal)
+- Overengineering (extra indirection, config, or genericity that doesn’t pay off now)
+
+## Prefer
+
+- The smallest change that solves the current problem and is easy to read and change
+- Obvious names, straight-line code paths, and reuse of what already exists in the repo
+- Deferring complexity until there is a clear, repeated pain or requirement
+
+## Quick check
+
+Before adding abstraction or infrastructure, ask: *Would a teammate ship the simpler version in a day and still operate it in production?* If yes, default to that unless there is a documented constraint (security, compliance, scale, or repeated duplication).
