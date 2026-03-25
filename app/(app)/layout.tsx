@@ -1,11 +1,17 @@
+import { redirect } from "next/navigation";
 import { ChatbotFab } from "@/components/app/chatbot-fab";
 import { SidebarNav } from "@/components/app/sidebar-nav";
 import { UserAvatarButton } from "@/components/app/user-avatar-button";
 import { getCurrentRole } from "@/lib/auth/session";
+import { isAdminMfaRequiredAndMissing } from "@/lib/auth/mfa";
 import { getVisibleSidebarItems } from "@/lib/navigation/sidebar-config";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const role = await getCurrentRole();
+  const mfaMissing = await isAdminMfaRequiredAndMissing();
+  if (mfaMissing) {
+    redirect("/mfa/setup");
+  }
   const items = getVisibleSidebarItems(role);
 
   return (

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { listArticles, listCustomers } from "@/lib/db/repository";
+import { getCurrentRole, getCurrentSession } from "@/lib/auth/session";
 import { toCsv } from "@/lib/integrations/csv";
 
 type Params = {
@@ -8,12 +8,11 @@ type Params = {
 };
 
 export async function GET(_: Request, { params }: Params) {
-  const cookieStore = await cookies();
-  const isAuthenticated = cookieStore.get("bauflip_mock_auth")?.value === "1";
-  const role = cookieStore.get("bauflip_mock_role")?.value ?? "office";
+  const session = await getCurrentSession();
+  const role = await getCurrentRole();
   const canExport = role === "admin" || role === "office";
 
-  if (!isAuthenticated) {
+  if (!session) {
     return NextResponse.json({ error: "Nicht autorisiert." }, { status: 401 });
   }
 

@@ -3,9 +3,10 @@ import Link from "next/link";
 import { ChevronLeft, Eye, KeyRound, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { TurnstileField } from "@/components/auth/turnstile-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { loginMockAction } from "@/app/(auth)/anmeldung/actions";
+import { loginAction } from "@/app/(auth)/anmeldung/actions";
 
 export default function AnmeldungPage() {
   return (
@@ -45,7 +46,7 @@ export default function AnmeldungPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-2">
-              <form action={loginMockAction} className="flex flex-col gap-4">
+              <form action={loginAction} className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="email">E-Mail</Label>
                   <div className="relative">
@@ -75,21 +76,10 @@ export default function AnmeldungPage() {
                     <Eye className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-slate-400" />
                   </div>
                 </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="role">Rolle (Mockup)</Label>
-                  <select
-                    id="role"
-                    name="role"
-                    className="h-11 rounded-lg border border-input bg-background px-3 text-sm"
-                    defaultValue="admin"
-                  >
-                    <option value="admin">Admin</option>
-                    <option value="monteur">Monteur</option>
-                  </select>
-                </div>
                 <Button type="submit" className="mt-2 h-11 bg-slate-800 hover:bg-slate-700">
                   Anmelden
                 </Button>
+                <TurnstileField />
               </form>
 
               <div className="mt-4 text-center">

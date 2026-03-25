@@ -2,11 +2,11 @@
 
 import { UserCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { logoutMockAction } from "@/app/(app)/logout-action";
+import { logoutAction } from "@/app/(app)/logout-action";
 
 export function UserAvatarButton() {
   return (
-    <form action={logoutMockAction}>
+    <form action={logoutAction}>
       <Button
         type="submit"
         variant="ghost"

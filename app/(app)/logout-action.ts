@@ -1,12 +1,12 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export async function logoutMockAction() {
-  const cookieStore = await cookies();
-  cookieStore.delete("bauflip_mock_auth");
-  cookieStore.delete("bauflip_mock_role");
-  cookieStore.delete("bauflip_mock_email");
+export async function logoutAction() {
+  const supabase = await createSupabaseServerClient();
+  if (supabase) {
+    await supabase.auth.signOut();
+  }
   redirect("/anmeldung");
 }
