@@ -6,13 +6,124 @@ import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { verifyTurnstileToken } from "@/lib/security/turnstile";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { ensureCurrentOrganizationId, requireAdminSession } from "@/lib/auth/organization";
+import { getCurrentSession } from "@/lib/auth/session";
+import { AVATAR_MAX_BYTES, AVATAR_MIME, extForAvatarMime } from "@/lib/storage/mime";
+import { isHexColor } from "@/lib/calendar/team-colors";
+import { profileSettingsSchema } from "@/lib/validations/forms";
+
+function extractAvatarPathFromPublicUrl(url: string): string | null {
+  try {
+    const marker = "/object/public/avatars/";
+    const i = url.indexOf(marker);
+    if (i === -1) {
+      return null;
+    }
+    return decodeURIComponent(url.slice(i + marker.length));
+  } catch {
+    return null;
+  }
+}
+
+function avatarStorageClient(supabase: SupabaseClient): SupabaseClient {
+  return createSupabaseAdminClient() ?? supabase;
+}
+
+export async function saveProfileSettingsAction(formData: FormData) {
+  const session = await getCurrentSession();
+  if (!session) {
+    throw new Error("Nicht angemeldet.");
+  }
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    throw new Error("Supabase ist nicht konfiguriert.");
+  }
+
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser();
+  if (!authUser || authUser.id !== session.user.id) {
+    throw new Error("Sitzung ungültig.");
+  }
+
+  const storage = avatarStorageClient(supabase);
+
+  const parsed = profileSettingsSchema.safeParse({
+    displayName: formData.get("displayName"),
+    calendarPosition: formData.get("calendarPosition"),
+  });
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Ungültige Eingabe.");
+  }
+  const displayName = parsed.data.displayName.trim();
+  const calendarColorRaw = String(formData.get("calendarColor") ?? "").trim();
+  const calendarColor =
+    calendarColorRaw === "" ? null : isHexColor(calendarColorRaw) ? calendarColorRaw : null;
+  if (calendarColorRaw !== "" && calendarColor === null) {
+    throw new Error("Kalenderfarbe als Hex angeben, z. B. #0ea5e9.");
+  }
+  const calendarPosition = parsed.data.calendarPosition;
+  const removeAvatar =
+    formData.get("removeAvatar") === "on" || String(formData.get("removeAvatar") ?? "") === "true";
+  const avatarFile = formData.get("avatar") as File | null;
+
+  let avatarUrl: string | null = session.profile.avatarUrl;
+
+  if (removeAvatar) {
+    avatarUrl = null;
+    const old = session.profile.avatarUrl;
+    if (old) {
+      const path = extractAvatarPathFromPublicUrl(old);
+      if (path) {
+        await storage.storage.from("avatars").remove([path]);
+      }
+    }
+  } else if (avatarFile && typeof avatarFile === "object" && avatarFile.size > 0) {
+    if (!AVATAR_MIME.has(avatarFile.type)) {
+      throw new Error("Nur JPEG, PNG, WebP oder GIF sind erlaubt.");
+    }
+    if (avatarFile.size > AVATAR_MAX_BYTES) {
+      throw new Error("Profilbild darf maximal 2 MB gross sein.");
+    }
+    const ext = extForAvatarMime(avatarFile.type);
+    const path = `${authUser.id}/avatar.${ext}`;
+    const buf = Buffer.from(await avatarFile.arrayBuffer());
+    const { error: uploadError } = await storage.storage.from("avatars").upload(path, buf, {
+      contentType: avatarFile.type,
+      upsert: true,
+    });
+    if (uploadError) {
+      throw new Error(uploadError.message);
+    }
+    const { data: pub } = supabase.storage.from("avatars").getPublicUrl(path);
+    avatarUrl = pub.publicUrl;
+  }
+
+  const { error: saveError } = await supabase
+    .from("profiles")
+    .update({
+      display_name: displayName || null,
+      avatar_url: avatarUrl,
+      calendar_color: calendarColor,
+      calendar_position: calendarPosition,
+    })
+    .eq("id", session.user.id);
+
+  if (saveError) {
+    throw new Error("Profil konnte nicht gespeichert werden.");
+  }
+
+  revalidatePath("/einstellungen");
+  revalidatePath("/");
+}
 
 export async function inviteEmployeeAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const roleInput = String(formData.get("role") ?? "").trim().toLowerCase();
   const turnstileToken = String(formData.get("turnstileToken") ?? "");
-  const role = roleInput === "admin" ? "admin" : "technician";
+  const role =
+    roleInput === "admin" ? "admin" : roleInput === "office" ? "office" : "technician";
 
   if (!email) {
     throw new Error("Bitte E-Mail eingeben.");
@@ -127,10 +238,8 @@ export async function acceptInviteOnboardingAction() {
   await supabase.from("profiles").upsert(
     {
       id: user.id,
-      email: normalizedEmail,
       display_name: displayName,
       role: invite.role,
-      avatar_url: null,
     },
     { onConflict: "id" },
   );

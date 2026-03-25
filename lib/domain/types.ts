@@ -33,10 +33,16 @@ export type NoteType = (typeof noteTypes)[number];
 export const roleTypes = ["admin", "office", "technician"] as const;
 export type RoleType = (typeof roleTypes)[number];
 
+/** Anzeige im Header: Firmenname und optionales Logo (organisations.logo_url). */
+export type OrganizationBranding = {
+  name: string;
+  logoUrl: string | null;
+};
+
 export const appPageKeys = [
   "uebersicht",
   "projekte",
-  "kunden",
+  "kanban",
   "kontakte",
   "termine",
   "artikel",
@@ -50,14 +56,53 @@ export const appPageKeys = [
 ] as const;
 export type AppPageKey = (typeof appPageKeys)[number];
 
-export type Customer = {
+export const contactPartyKinds = ["privat", "firma"] as const;
+export type ContactPartyKind = (typeof contactPartyKinds)[number];
+
+export const contactCategories = ["kunde", "lieferant", "partner", "sonstiges"] as const;
+export type ContactCategory = (typeof contactCategories)[number];
+
+/** Stammdaten Kontakt (früher «Kunde»): Kategorie über Dropdown getrennt. */
+export type Contact = {
   id: string;
+  organizationId: string | null;
+  contactNumber: string | null;
+  partyKind: ContactPartyKind;
+  category: ContactCategory;
   name: string;
+  uidNumber: string | null;
   email: string | null;
   phone: string | null;
+  mobile: string | null;
   street: string | null;
   postalCode: string | null;
   city: string | null;
+  website: string | null;
+  managedObjectLabel: string | null;
+  createdAt: string;
+};
+
+export type ContactPerson = {
+  id: string;
+  contactId: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+  mobile: string | null;
+  roleTitle: string | null;
+  createdAt: string;
+};
+
+export type ContactAddress = {
+  id: string;
+  contactId: string;
+  label: string;
+  street: string | null;
+  postalCode: string | null;
+  city: string | null;
+  country: string;
+  isPrimary: boolean;
   createdAt: string;
 };
 
@@ -67,11 +112,38 @@ export type UserProfile = {
   email: string;
   role: RoleType;
   avatarUrl: string | null;
+  /** Kalender / Termine: Hex z. B. #0ea5e9 */
+  calendarColor: string | null;
+  /** Reihenfolge in der Team-Legende (kleinere Zahl zuerst) */
+  calendarPosition: number;
+};
+
+/** Gebäude / Standort, typischerweise Eigentümer oder Verwalter-Kontakt zugeordnet. */
+export type SiteProperty = {
+  id: string;
+  organizationId: string | null;
+  name: string;
+  ownerContactId: string | null;
+  street: string | null;
+  postalCode: string | null;
+  city: string | null;
+  country: string;
+  mapsUrl: string | null;
+  createdAt: string;
+};
+
+/** Erweiterbare Arbeitsarten (Bestandsaufnahme, Rapport, …) — getrennt von `Project.type`. */
+export type ProjectWorkType = {
+  id: string;
+  organizationId: string | null;
+  name: string;
+  sortOrder: number;
+  createdAt: string;
 };
 
 export type Project = {
   id: string;
-  customerId: string;
+  contactId: string;
   title: string;
   type: ProjectType;
   status: ProjectStatus;
@@ -87,6 +159,18 @@ export type Project = {
   createdAt: string;
   updatedAt: string;
   closedAt: string | null;
+  tenantUnit: string | null;
+  sitePhone: string | null;
+  siteMobile: string | null;
+  referenceCode: string | null;
+  technicianNotes: string | null;
+  propertyId: string | null;
+  mapsUrl: string | null;
+  workTypeId: string | null;
+  contactPersonId: string | null;
+  serviceAddressId: string | null;
+  billingAddressId: string | null;
+  hintsAndNotes: string | null;
 };
 
 export type ProjectNote = {
@@ -109,6 +193,69 @@ export type Appointment = {
   accessNotes: string | null;
   keyHandlingNotes: string | null;
   createdAt: string;
+};
+
+/** Projektzeile für Listen (Kontaktname aus Join). */
+export type ProjectListRow = Project & {
+  contactName: string | null;
+};
+
+/** Termin für Monatskalender (Angereichert). */
+export type CalendarAppointmentItem = {
+  id: string;
+  projectId: string;
+  projectTitle: string;
+  kind: Appointment["kind"];
+  startsAt: string;
+  endsAt: string;
+  calendarColor: string;
+  technicianName: string | null;
+};
+
+/** Termin in der Kalenderwoche + Projekt-Kernfelder für die Übersichts-Leiste. */
+export type WeekTaskItem = {
+  appointmentId: string;
+  startsAt: string;
+  endsAt: string;
+  kind: Appointment["kind"];
+  projectId: string;
+  projectTitle: string;
+  projectStatus: ProjectStatus;
+  urgency: Project["urgency"];
+  assignedTechnicianId: string | null;
+  technicianName: string | null;
+  /** Aufgelöste Anzeigefarbe (Kante / Legende) */
+  calendarColor: string;
+};
+
+/** Punkt für Umsatz-Liniendiagramm (genehmigte Offerten; Zuteilung nach Genehmigungs- bzw. Erfassungsdatum). */
+export type RevenueSeriesPoint = {
+  key: string;
+  labelShort: string;
+  amountChf: number;
+};
+
+export type ApprovedRevenueSeries = {
+  points: RevenueSeriesPoint[];
+  bucket: "day" | "month";
+};
+
+/** Aggregierte Betriebskennzahlen für die Übersicht (Storenbau / Montage). */
+export type CompanyKpiSnapshot = {
+  /** Summe aus genehmigten Offerten (Positionen × Preis), CHF */
+  revenueApprovedChf: number;
+  /** Planungs-Indikator ohne Einkaufskosten in der DB (Anteil vom Umsatz) */
+  estimatedGrossContributionChf: number;
+  contactsCount: number;
+  activeProjectsCount: number;
+  completedProjectsCount: number;
+  openInvoicesCount: number;
+  /** Genehmigt / (Genehmigt + Abgelehnt), nur wenn mindestens eine Entscheidung existiert */
+  quoteWinRatePercent: number | null;
+  quotesDecidedCount: number;
+  appointmentsThisWeekCount: number;
+  purchaseOrdersInTransit: number;
+  supabaseConnected: boolean;
 };
 
 export type TechnicianReport = {
@@ -226,12 +373,32 @@ export type CalendarEvent = {
   createdAt: string;
 };
 
+export type ArticleCategoryTemplateScope = "storen" | "sonnenstoren" | "dl" | "generic";
+
+/** Produktkategorie (Dropdown, erweiterbar). `template_scope` steuert Hinweise zu Textplatzhaltern. */
+export type ArticleCategory = {
+  id: string;
+  name: string;
+  sortOrder: number;
+  templateScope: ArticleCategoryTemplateScope;
+  createdAt: string;
+};
+
 export type Article = {
   id: string;
   name: string;
+  /** Interne Artikelnummer */
   sku: string;
-  category: string;
+  categoryId: string;
+  categoryName: string | null;
+  categoryTemplateScope: ArticleCategoryTemplateScope;
   supplierId: string | null;
+  purchasePrice: number | null;
+  salePrice: number | null;
+  /** Berechnungseinheit (z. B. Stk, m, m²) */
+  unit: string;
+  descriptionLong: string | null;
+  descriptionShort: string | null;
   inStock: number;
   createdAt: string;
 };

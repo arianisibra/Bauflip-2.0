@@ -1,37 +1,42 @@
 import { assignAppointmentWithCalendarAction } from "@/app/(app)/actions";
-import { listProjects } from "@/lib/db/repository";
+import { listProjects, listAppointmentsInRange } from "@/lib/db/repository";
+import { TerminePlanFields } from "@/components/app/termine-plan-fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TermineCalendarClient } from "@/components/app/termine-calendar-client";
 
-export default async function TerminePage() {
-  const projects = await listProjects();
+type Props = {
+  searchParams: Promise<{ y?: string; m?: string }>;
+};
+
+export default async function TerminePage(props: Props) {
+  const sp = await props.searchParams;
+  const now = new Date();
+  const y = Number.isFinite(Number(sp.y)) ? Number(sp.y) : now.getFullYear();
+  const mRaw = Number.isFinite(Number(sp.m)) ? Number(sp.m) : now.getMonth() + 1;
+  const m = Math.min(12, Math.max(1, mRaw));
+  const start = new Date(y, m - 1, 1);
+  const end = new Date(y, m, 0, 23, 59, 59, 999);
+
+  const [projects, appointments] = await Promise.all([listProjects(), listAppointmentsInRange(start, end)]);
 
   return (
-    <section className="flex flex-col gap-4">
+    <section className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">Termine</h1>
-      <form action={assignAppointmentWithCalendarAction} className="rounded-lg border bg-white p-4">
+
+      <div className="rounded-lg border bg-card p-4 shadow-sm">
+        <TermineCalendarClient year={y} month={m} appointments={appointments} />
+      </div>
+
+      <form action={assignAppointmentWithCalendarAction} className="rounded-lg border bg-card p-4 shadow-sm">
+        <h2 className="text-lg font-medium">Neuen Termin planen</h2>
         <p className="mb-3 text-sm text-muted-foreground">
-          Zuweisung erzeugt automatisch Kalendereintrag für den Monteur (ICS-Mail).
+          Termin wird gespeichert; Monteur erhält Kalendereintrag (ICS-Mail). Mit verbundenem Google- oder Outlook-Kalender
+          zusätzlich in den externen Kalender übernommen (siehe Integrationen).
         </p>
         <div className="grid gap-3 md:grid-cols-2">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="projectId">Projekt</Label>
-            <select id="projectId" name="projectId" className="h-10 rounded-lg border border-input px-3">
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.title}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="kind">Terminart</Label>
-            <select id="kind" name="kind" className="h-10 rounded-lg border border-input px-3">
-              <option value="besichtigung">Besichtigung</option>
-              <option value="ausfuehrung">Ausführung</option>
-            </select>
-          </div>
+          <TerminePlanFields projects={projects.map((p) => ({ id: p.id, title: p.title }))} />
           <div className="flex flex-col gap-2">
             <Label htmlFor="startsAt">Start</Label>
             <Input id="startsAt" name="startsAt" type="datetime-local" required />

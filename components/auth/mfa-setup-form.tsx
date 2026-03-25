@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
+import { BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,7 +34,16 @@ export function MfaSetupForm() {
         throw new Error("Supabase ist nicht konfiguriert.");
       }
 
-      const mfaApi = (supabase.auth as { mfa?: { enroll?: (input: { factorType: "totp"; friendlyName: string }) => Promise<{ data?: TotpFactor; error?: { message?: string } }> } }).mfa;
+      const mfaApi = (
+        supabase.auth as unknown as {
+          mfa?: {
+            enroll?: (input: { factorType: "totp"; friendlyName: string }) => Promise<{
+              data?: TotpFactor;
+              error?: { message?: string } | null;
+            }>;
+          };
+        }
+      ).mfa;
       if (!mfaApi?.enroll) {
         throw new Error("MFA API ist nicht verfügbar.");
       }
@@ -69,12 +79,19 @@ export function MfaSetupForm() {
         throw new Error("MFA-Status ungültig.");
       }
 
-      const mfaApi = (supabase.auth as {
-        mfa?: {
-          challenge?: (input: { factorId: string }) => Promise<{ data?: { id: string }; error?: { message?: string } }>;
-          verify?: (input: { factorId: string; challengeId: string; code: string }) => Promise<{ error?: { message?: string } }>;
-        };
-      }).mfa;
+      const mfaApi = (
+        supabase.auth as unknown as {
+          mfa?: {
+            challenge?: (input: { factorId: string }) => Promise<{
+              data?: { id: string } | null;
+              error?: { message?: string } | null;
+            }>;
+            verify?: (input: { factorId: string; challengeId: string; code: string }) => Promise<{
+              error?: { message?: string } | null;
+            }>;
+          };
+        }
+      ).mfa;
       if (!mfaApi?.challenge || !mfaApi?.verify) {
         throw new Error("MFA API ist nicht verfügbar.");
       }
@@ -111,7 +128,7 @@ export function MfaSetupForm() {
       </p>
       {!factor ? (
         <Button onClick={enroll} disabled={busy}>
-          MFA einrichten
+          {busy ? <BauflipLoadingButtonLabel variant="onPrimary">Wird eingerichtet …</BauflipLoadingButtonLabel> : "MFA einrichten"}
         </Button>
       ) : null}
       {qrDataUrl ? (
@@ -131,7 +148,11 @@ export function MfaSetupForm() {
             maxLength={6}
           />
           <Button onClick={verify} disabled={busy || code.length < 6}>
-            MFA bestätigen
+            {busy ? (
+              <BauflipLoadingButtonLabel variant="onPrimary">Wird bestätigt …</BauflipLoadingButtonLabel>
+            ) : (
+              "MFA bestätigen"
+            )}
           </Button>
         </div>
       ) : null}

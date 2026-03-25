@@ -11,9 +11,9 @@ import {
   Cog,
   FolderKanban,
   Gauge,
+  Kanban,
   MessageSquare,
   PackageSearch,
-  Phone,
   ScrollText,
   Settings2,
   Upload,
@@ -25,8 +25,8 @@ import type { RoleType, SidebarItem } from "@/lib/domain/types";
 const iconByKey: Record<SidebarItem["key"], ComponentType<{ className?: string }>> = {
   uebersicht: Gauge,
   projekte: FolderKanban,
-  kunden: Users,
-  kontakte: Phone,
+  kanban: Kanban,
+  kontakte: Users,
   termine: CalendarDays,
   artikel: PackageSearch,
   rapporte: ScrollText,
@@ -78,7 +78,10 @@ export function SidebarNav({ role, items }: SidebarNavProps) {
             </p>
             {grouped[section].map((item) => {
               const Icon = iconByKey[item.key];
-              const isActive = pathname === item.href;
+              const isActive =
+                item.key === "kanban"
+                  ? pathname === item.href || pathname.endsWith("/kanban")
+                  : pathname === item.href;
               return (
                 <Link
                   key={item.href}

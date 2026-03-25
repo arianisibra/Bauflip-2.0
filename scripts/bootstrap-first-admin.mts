@@ -1,37 +1,45 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const adminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+const adminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim();
 const organizationName = process.env.BOOTSTRAP_ORGANIZATION_NAME ?? "Bauflip Organisation";
 
-if (!supabaseUrl || !serviceRoleKey || !adminEmail) {
+const missing: string[] = [];
+if (!supabaseUrl) missing.push("NEXT_PUBLIC_SUPABASE_URL");
+if (!serviceRoleKey) missing.push("SUPABASE_SERVICE_ROLE_KEY");
+if (!adminEmail) missing.push("BOOTSTRAP_ADMIN_EMAIL");
+
+if (missing.length > 0) {
   throw new Error(
-    "Missing env. Required: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, BOOTSTRAP_ADMIN_EMAIL",
+    `Missing or empty env in .env.local: ${missing.join(", ")}. ` +
+      "Tip: npm run bootstrap:first-admin loads .env.local via Node --env-file. " +
+      "Add BOOTSTRAP_ADMIN_EMAIL=deine@email.ch and paste the service_role key from Supabase Dashboard → Settings → API.",
   );
 }
 
-const admin = createClient(supabaseUrl, serviceRoleKey, {
+const admin = createClient(supabaseUrl as string, serviceRoleKey as string, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
+
+const bootstrapEmail = adminEmail as string;
 
 const { data: usersData, error: listError } = await admin.auth.admin.listUsers();
 if (listError) {
   throw new Error(`Could not list users: ${listError.message}`);
 }
 
-const authUser = usersData.users.find((user) => user.email?.toLowerCase() === adminEmail.toLowerCase());
+const authUser = usersData.users.find((user) => user.email?.toLowerCase() === bootstrapEmail.toLowerCase());
 if (!authUser) {
-  throw new Error(`No auth user found for ${adminEmail}. Create the user first via invite.`);
+  throw new Error(`No auth user found for ${bootstrapEmail}. Create the user first via invite.`);
 }
 
 const { error: profileError } = await admin.from("profiles").upsert(
   {
     id: authUser.id,
-    email: adminEmail.toLowerCase(),
-    display_name: authUser.user_metadata?.display_name ?? adminEmail.split("@")[0],
     role: "admin",
-    avatar_url: null,
+    display_name:
+      String(authUser.user_metadata?.display_name ?? "").trim() || bootstrapEmail.split("@")[0],
   },
   { onConflict: "id" },
 );
@@ -78,5 +86,5 @@ if (membershipError) {
 }
 
 console.log("Bootstrap completed.");
-console.log(`Admin: ${adminEmail}`);
+console.log(`Admin: ${bootstrapEmail}`);
 console.log(`Organization ID: ${organizationId}`);

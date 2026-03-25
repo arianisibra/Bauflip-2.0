@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Input } from "@/components/ui/input";
+import { BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
 import { Button } from "@/components/ui/button";
 import { updateModuleLabelAction } from "@/app/(app)/actions";
 
@@ -39,7 +40,7 @@ export function ModuleLabelEditor({ moduleKey, label, canEdit }: ModuleLabelEdit
           })
         }
       >
-        {isPending ? "Speichern..." : "Speichern"}
+        {isPending ? <BauflipLoadingButtonLabel variant="onPrimary">Speichern…</BauflipLoadingButtonLabel> : "Speichern"}
       </Button>
     </div>
   );

@@ -1,14 +1,14 @@
 "use client";
 
 import Script from "next/script";
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 declare global {
   interface Window {
     turnstile?: {
       render: (
         container: HTMLElement,
-        options: { sitekey: string; callback: (token: string) => void; theme?: "light" | "dark" },
+        options: Record<string, unknown>,
       ) => string;
       remove: (widgetId: string) => void;
     };
@@ -17,36 +17,59 @@ declare global {
 
 type TurnstileFieldProps = {
   inputName?: string;
+  /** Called when a token is issued, cleared, or on error (empty string). */
+  onToken?: (token: string) => void;
 };
 
-export function TurnstileField({ inputName = "turnstileToken" }: TurnstileFieldProps) {
+export function TurnstileField({ inputName = "turnstileToken", onToken }: TurnstileFieldProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const hiddenInputRef = useRef<HTMLInputElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
+  const onTokenRef = useRef(onToken);
+  useEffect(() => {
+    onTokenRef.current = onToken;
+  }, [onToken]);
   const widgetContainerId = useId().replace(/:/g, "");
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+  const [apiReady, setApiReady] = useState(false);
 
   useEffect(() => {
-    if (!siteKey || !window.turnstile || !containerRef.current) {
+    if (!apiReady || !siteKey || typeof window === "undefined" || !window.turnstile || !containerRef.current) {
       return;
     }
 
-    widgetIdRef.current = window.turnstile.render(containerRef.current, {
+    const el = containerRef.current;
+
+    widgetIdRef.current = window.turnstile.render(el, {
       sitekey: siteKey,
+      theme: "light",
       callback: (token: string) => {
         if (hiddenInputRef.current) {
           hiddenInputRef.current.value = token;
         }
+        onTokenRef.current?.(token);
       },
-      theme: "light",
+      "expired-callback": () => {
+        if (hiddenInputRef.current) {
+          hiddenInputRef.current.value = "";
+        }
+        onTokenRef.current?.("");
+      },
+      "error-callback": () => {
+        if (hiddenInputRef.current) {
+          hiddenInputRef.current.value = "";
+        }
+        onTokenRef.current?.("");
+      },
     });
 
     return () => {
       if (widgetIdRef.current && window.turnstile) {
         window.turnstile.remove(widgetIdRef.current);
+        widgetIdRef.current = null;
       }
     };
-  }, [siteKey]);
+  }, [apiReady, siteKey]);
 
   if (!siteKey) {
     return null;
@@ -54,7 +77,11 @@ export function TurnstileField({ inputName = "turnstileToken" }: TurnstileFieldP
 
   return (
     <div className="flex flex-col gap-2">
-      <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" strategy="afterInteractive" />
+      <Script
+        src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
+        strategy="afterInteractive"
+        onLoad={() => setApiReady(true)}
+      />
       <input ref={hiddenInputRef} type="hidden" name={inputName} />
       <div id={widgetContainerId} ref={containerRef} />
     </div>

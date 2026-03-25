@@ -1,9 +1,14 @@
 import type {
   Appointment,
   Article,
+  ArticleCategory,
   AuditEvent,
   CalendarEvent,
-  Customer,
+  Contact,
+  ContactAddress,
+  ContactPerson,
+  ProjectWorkType,
+  SiteProperty,
   Delivery,
   EmployeeStat,
   Invoice,
@@ -27,17 +32,86 @@ import type {
 
 const now = new Date().toISOString();
 
-export const mockCustomers: Customer[] = [
+export const mockContacts: Contact[] = [
   {
     id: "c-1",
+    organizationId: null,
+    contactNumber: "K-01",
+    partyKind: "firma",
+    category: "kunde",
     name: "Müller AG",
+    uidNumber: null,
     email: "info@mueller-ag.ch",
     phone: "+41 44 555 10 10",
+    mobile: null,
     street: "Bahnhofstrasse 8",
     postalCode: "8001",
     city: "Zürich",
+    website: "https://mueller-ag.ch",
+    managedObjectLabel: null,
     createdAt: now,
   },
+];
+
+export const mockContactPersons: ContactPerson[] = [
+  {
+    id: "cp-1",
+    contactId: "c-1",
+    firstName: "Anna",
+    lastName: "Schmidt",
+    email: "anna.schmidt@mueller-ag.ch",
+    phone: "+41 44 555 10 20",
+    mobile: null,
+    roleTitle: "Einkauf",
+    createdAt: now,
+  },
+];
+
+export const mockContactAddresses: ContactAddress[] = [
+  {
+    id: "ca-1",
+    contactId: "c-1",
+    label: "Hauptsitz",
+    street: "Bahnhofstrasse 8",
+    postalCode: "8001",
+    city: "Zürich",
+    country: "CH",
+    isPrimary: true,
+    createdAt: now,
+  },
+  {
+    id: "ca-2",
+    contactId: "c-1",
+    label: "Rechnung",
+    street: "Postfach 100",
+    postalCode: "8001",
+    city: "Zürich",
+    country: "CH",
+    isPrimary: false,
+    createdAt: now,
+  },
+];
+
+export const mockSiteProperties: SiteProperty[] = [
+  {
+    id: "sp-1",
+    organizationId: null,
+    name: "MFH Bahnhofstrasse 8",
+    ownerContactId: "c-1",
+    street: "Bahnhofstrasse 8",
+    postalCode: "8001",
+    city: "Zürich",
+    country: "CH",
+    mapsUrl: null,
+    createdAt: now,
+  },
+];
+
+export const mockProjectWorkTypes: ProjectWorkType[] = [
+  { id: "wt-1", organizationId: null, name: "Bestandsaufnahme", sortOrder: 10, createdAt: now },
+  { id: "wt-2", organizationId: null, name: "Rapport", sortOrder: 20, createdAt: now },
+  { id: "wt-3", organizationId: null, name: "Reparatur / Montage", sortOrder: 30, createdAt: now },
+  { id: "wt-4", organizationId: null, name: "Wartung", sortOrder: 40, createdAt: now },
 ];
 
 export const mockProfiles: UserProfile[] = [
@@ -47,6 +121,8 @@ export const mockProfiles: UserProfile[] = [
     email: "admin@bauflip.ch",
     role: "admin",
     avatarUrl: null,
+    calendarColor: "#8b5cf6",
+    calendarPosition: 1,
   },
   {
     id: "u-tech-1",
@@ -54,13 +130,15 @@ export const mockProfiles: UserProfile[] = [
     email: "monteur@bauflip.ch",
     role: "technician",
     avatarUrl: null,
+    calendarColor: "#0ea5e9",
+    calendarPosition: 2,
   },
 ];
 
 export const mockProjects: Project[] = [
   {
     id: "p-1",
-    customerId: "c-1",
+    contactId: "c-1",
     title: "Lamellenstoren Westfassade",
     type: "reparatur",
     status: "bericht_ausstehend",
@@ -77,6 +155,19 @@ export const mockProjects: Project[] = [
     createdAt: now,
     updatedAt: now,
     closedAt: null,
+    tenantUnit: "Whg. 3.1",
+    sitePhone: "+41 44 111 22 33",
+    siteMobile: null,
+    referenceCode: "REF-2025-001",
+    technicianNotes: "Motorzug prüfen, Leiter mitnehmen.",
+    propertyId: "sp-1",
+    mapsUrl:
+      "https://www.google.com/maps/search/?api=1&query=Bahnhofstrasse%208%2C%208001%20Z%C3%BCrich%2C%20CH",
+    workTypeId: "wt-1",
+    contactPersonId: "cp-1",
+    serviceAddressId: "ca-1",
+    billingAddressId: null,
+    hintsAndNotes: "Klingel Werkstatt, nicht Haupteingang.",
   },
 ];
 
@@ -106,7 +197,7 @@ export const mockAppointments: Appointment[] = [
     kind: "besichtigung",
     startsAt: now,
     endsAt: now,
-    assignedTechnicianId: null,
+    assignedTechnicianId: "u-tech-1",
     planningNotes: "Bitte Leiter und Messgerät mitnehmen.",
     accessNotes: "Seiteneingang.",
     keyHandlingNotes: "Schlüssel bei Nachbarin.",
@@ -189,13 +280,45 @@ export const mockProjectChatAttachments: ProjectChatAttachment[] = [];
 
 export const mockCalendarEvents: CalendarEvent[] = [];
 
+export const mockArticleCategories: ArticleCategory[] = [
+  {
+    id: "ac-sonst",
+    name: "Sonstiges",
+    sortOrder: 0,
+    templateScope: "generic",
+    createdAt: now,
+  },
+  {
+    id: "ac-1",
+    name: "Markisen + Stoff",
+    sortOrder: 10,
+    templateScope: "generic",
+    createdAt: now,
+  },
+  {
+    id: "ac-2",
+    name: "Faltrolladen Regapak",
+    sortOrder: 20,
+    templateScope: "generic",
+    createdAt: now,
+  },
+];
+
 export const mockArticles: Article[] = [
   {
     id: "art-1",
     name: "Markisenstoff Premium",
     sku: "MARK-STOFF-01",
-    category: "Markisen + Stoff",
+    categoryId: "ac-1",
+    categoryName: "Markisen + Stoff",
+    categoryTemplateScope: "generic",
     supplierId: null,
+    purchasePrice: 42.5,
+    salePrice: 89.0,
+    unit: "m",
+    descriptionLong:
+      "Markisenstoff Premium, xxxBEZEICHNUNGxxx — Breite xxxBREITExxx, Ort xxxORTxxx.",
+    descriptionShort: "xxxBEZEICHNUNGxxx, xxxORTxxx",
     inStock: 12,
     createdAt: now,
   },
@@ -203,8 +326,15 @@ export const mockArticles: Article[] = [
     id: "art-2",
     name: "Faltrolladen Regapak Set",
     sku: "REGAPAK-SET-01",
-    category: "Faltrolladen Regapak",
+    categoryId: "ac-2",
+    categoryName: "Faltrolladen Regapak",
+    categoryTemplateScope: "generic",
     supplierId: null,
+    purchasePrice: 120,
+    salePrice: 249,
+    unit: "Stk",
+    descriptionLong: null,
+    descriptionShort: null,
     inStock: 3,
     createdAt: now,
   },

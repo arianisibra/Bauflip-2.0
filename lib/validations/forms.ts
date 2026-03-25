@@ -19,12 +19,12 @@ export const intakeSchema = z.object({
   keyHandlingNotes: z.string().min(3, "Bitte Schlüsselhinweise ergänzen."),
   timingNotes: z.string().min(3, "Bitte Zeitfenster ergänzen."),
   internalNotes: z.string().optional(),
-  customerName: z.string().min(2, "Bitte Kundennamen erfassen."),
-  customerEmail: z.email("Bitte eine gültige E-Mail angeben.").or(z.literal("")),
-  customerPhone: z.string().min(6, "Bitte Telefonnummer erfassen."),
-  customerStreet: z.string().optional(),
-  customerPostalCode: z.string().optional(),
-  customerCity: z.string().optional(),
+  contactName: z.string().min(2, "Bitte Kontaktnamen erfassen."),
+  contactEmail: z.email("Bitte eine gültige E-Mail angeben.").or(z.literal("")),
+  contactPhone: z.string().min(6, "Bitte Telefonnummer erfassen."),
+  contactStreet: z.string().optional(),
+  contactPostalCode: z.string().optional(),
+  contactCity: z.string().optional(),
 });
 
 export const noteSchema = z.object({
@@ -46,9 +46,9 @@ export const appointmentSchema = z.object({
 export const reportSchema = z.object({
   projectId: z.string().min(1),
   outcome: z.enum(["direkt_geloest", "ersatzteil_noetig", "werkstatt_noetig", "vollersatz_noetig"]),
-  summary: z.string().min(10, "Bitte eine klare Diagnose erfassen."),
-  measurementsJson: z.string().min(2, "Messdaten fehlen."),
-  workDescription: z.string().min(5, "Bitte Massnahme beschreiben."),
+  summary: z.string().trim().min(10, "Bitte eine klare Diagnose erfassen (mindestens 10 Zeichen)."),
+  measurementsJson: z.string().trim().min(2, "Messdaten fehlen."),
+  workDescription: z.string().trim().min(5, "Bitte Massnahme beschreiben."),
   timeSpentMinutes: z.coerce.number().min(0).optional(),
 });
 
@@ -108,8 +108,32 @@ export const chatAttachmentSchema = z.object({
 });
 
 export const csvImportSchema = z.object({
-  type: z.enum(["customers", "articles"]),
+  type: z.enum(["contacts", "articles"]),
   csvText: z.string().min(1, "CSV-Inhalt fehlt."),
+});
+
+export const articleSaveSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1, "Name ist Pflicht."),
+  sku: z.string().min(1, "Artikelnummer ist Pflicht."),
+  categoryId: z.string().min(1, "Kategorie wählen."),
+  supplierId: z.string().optional(),
+  purchasePrice: z.string().optional(),
+  salePrice: z.string().optional(),
+  unit: z.string().min(1, "Einheit ist Pflicht."),
+  descriptionLong: z.string().optional(),
+  descriptionShort: z.string().optional(),
+  inStock: z.number().int().min(0),
+});
+
+export const articleCategoryCreateSchema = z.object({
+  name: z.string().min(1, "Kategoriename ist Pflicht."),
+  templateScope: z.enum(["storen", "sonnenstoren", "dl", "generic"]),
+});
+
+export const profileSettingsSchema = z.object({
+  displayName: z.string().min(1, "Anzeigename ist Pflicht."),
+  calendarPosition: z.coerce.number().int().min(0).max(9999),
 });
 
 export const stockDecisionSchema = z.object({
@@ -150,4 +174,80 @@ export const swissQrSchema = z.object({
   debtorCity: z.string().min(2),
   reference: z.string().min(2),
   message: z.string().min(1),
+});
+
+const contactPersonDraftSchema = z.object({
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  email: z.union([z.literal(""), z.string().email()]),
+  phone: z.string().optional(),
+  mobile: z.string().optional(),
+  roleTitle: z.string().optional(),
+});
+
+const contactAddressDraftSchema = z.object({
+  label: z.string().optional(),
+  street: z.string().optional(),
+  postalCode: z.string().optional(),
+  city: z.string().optional(),
+  country: z.string().min(2).optional(),
+  isPrimary: z.boolean().optional(),
+});
+
+export const projectStammdatenUpdateSchema = z.object({
+  projectId: z.string().min(1),
+  contactId: z.string().min(1),
+  title: z.string().min(2, "Titel ist zu kurz."),
+  tenantUnit: z.string().optional(),
+  sitePhone: z.string().optional(),
+  siteMobile: z.string().optional(),
+  referenceCode: z.string().optional(),
+  technicianNotes: z.string().optional(),
+  propertyId: z.string().optional(),
+  mapsUrl: z.union([z.literal(""), z.string().url()]).optional(),
+  workTypeId: z.string().optional(),
+  contactPersonId: z.string().optional(),
+  serviceAddressId: z.string().optional(),
+  billingAddressId: z.string().optional(),
+  hintsAndNotes: z.string().optional(),
+  nextOwnerUserId: z.string().optional(),
+  newWorkTypeName: z.string().optional(),
+  intakeOriginalText: z.string().optional(),
+  accessNotes: z.string().optional(),
+  keyHandlingNotes: z.string().optional(),
+  timingNotes: z.string().optional(),
+  internalNotes: z.string().optional(),
+});
+
+export const contactCreateSchema = z.object({
+  partyKind: z.enum(["privat", "firma"]),
+  category: z.enum(["kunde", "lieferant", "partner", "sonstiges"]),
+  contactNumber: z.string().optional(),
+  name: z.string().min(2, "Name ist Pflicht."),
+  uidNumber: z.string().optional(),
+  phone: z.string().optional(),
+  mobile: z.string().optional(),
+  email: z.string().email().or(z.literal("")),
+  website: z.union([z.literal(""), z.string().url()]).optional(),
+  street: z.string().optional(),
+  postalCode: z.string().optional(),
+  city: z.string().optional(),
+  managedObjectLabel: z.string().optional(),
+  persons: z.array(contactPersonDraftSchema).optional(),
+  addresses: z.array(contactAddressDraftSchema).optional(),
+});
+
+const contactPersonDraftWithIdSchema = contactPersonDraftSchema.extend({
+  id: z.string().optional(),
+});
+
+const contactAddressDraftWithIdSchema = contactAddressDraftSchema.extend({
+  id: z.string().optional(),
+});
+
+/** Bearbeiten inkl. Ansprechpartner & Zusatzadressen (id optional = neu). */
+export const contactUpdateSchema = contactCreateSchema.extend({
+  id: z.string().min(1, "Kontakt-ID fehlt."),
+  persons: z.array(contactPersonDraftWithIdSchema).optional(),
+  addresses: z.array(contactAddressDraftWithIdSchema).optional(),
 });

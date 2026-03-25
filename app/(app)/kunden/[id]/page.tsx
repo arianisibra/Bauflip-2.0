@@ -1,25 +1,8 @@
-import { notFound } from "next/navigation";
-import { listCustomers } from "@/lib/db/repository";
+import { redirect } from "next/navigation";
 
-type Params = {
-  params: Promise<{ id: string }>;
-};
+type Props = { params: Promise<{ id: string }> };
 
-export default async function KundeDetailPage({ params }: Params) {
+export default async function KundenDetailRedirectPage({ params }: Props) {
   const { id } = await params;
-  const customers = await listCustomers();
-  const customer = customers.find((item) => item.id === id);
-
-  if (!customer) {
-    notFound();
-  }
-
-  return (
-    <section className="flex flex-col gap-2">
-      <h1 className="text-2xl font-semibold">{customer.name}</h1>
-      <p className="text-sm text-muted-foreground">
-        Telefon: {customer.phone ?? "-"} · E-Mail: {customer.email ?? "-"}
-      </p>
-    </section>
-  );
+  redirect(`/kontakte/${id}`);
 }

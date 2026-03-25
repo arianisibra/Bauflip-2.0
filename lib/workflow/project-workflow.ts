@@ -1,11 +1,13 @@
 import type { Project, ProjectStatus, RoleType } from "@/lib/domain/types";
 
-type RequiredField =
+export type ProjectRequiredField =
   | "intakeOriginalText"
   | "accessNotes"
   | "keyHandlingNotes"
   | "timingNotes"
   | "internalNotes";
+
+type RequiredField = ProjectRequiredField;
 
 type TransitionRule = {
   to: ProjectStatus;
@@ -37,7 +39,7 @@ const transitions: Record<ProjectStatus, TransitionRule[]> = {
     {
       to: "termin_geplant",
       allowedRoles: ["office", "admin"],
-      requiredFields: ["intakeOriginalText", "accessNotes", "timingNotes"],
+      requiredFields: ["intakeOriginalText", "accessNotes", "keyHandlingNotes", "timingNotes"],
       nextOwnerRole: "technician",
     },
   ],
@@ -162,6 +164,15 @@ export function getAllowedTransitions(status: ProjectStatus): TransitionRule[] {
   return transitions[status] ?? [];
 }
 
+/** Deutsche Bezeichnungen für Pflichtfelder (Anzeige im geführten Prozess). */
+export const requiredFieldLabelsDe: Record<ProjectRequiredField, string> = {
+  intakeOriginalText: "Originalaussage Kunde",
+  accessNotes: "Zugang / Hinweise",
+  keyHandlingNotes: "Schlüssel / Zutritt",
+  timingNotes: "Zeitfenster",
+  internalNotes: "Interne Notiz",
+};
+
 export function getMissingFieldsForTransition(
   project: Project,
   targetStatus: ProjectStatus,
@@ -172,6 +183,13 @@ export function getMissingFieldsForTransition(
   }
 
   return rule.requiredFields.filter((field) => !hasValue(project[field]));
+}
+
+export function getMissingFieldLabelsForTransition(
+  project: Project,
+  targetStatus: ProjectStatus,
+): string[] {
+  return getMissingFieldsForTransition(project, targetStatus).map((f) => requiredFieldLabelsDe[f]);
 }
 
 export function assertCanTransition(

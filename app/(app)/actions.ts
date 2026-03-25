@@ -17,10 +17,11 @@ import {
   addStockDecision,
   addSupplierSubmission,
   addTechnicianReport,
-  createCustomer,
+  createContact,
   createProject,
   listArticles,
-  listCustomers,
+  listContacts,
+  listProjects,
   listProfilesByRole,
   listSupplierTemplates,
   moveKanbanCard,
@@ -30,11 +31,11 @@ import {
   getProjectBundle,
   updateProjectStatus,
 } from "@/lib/db/repository";
+import { PROJECT_FILE_MAX_BYTES, PROJECT_FILE_MIME, sanitizeFileBaseName } from "@/lib/storage/mime";
 import {
   appointmentSchema,
   chatAttachmentSchema,
   chatMessageSchema,
-  csvImportSchema,
   deliverySchema,
   intakeSchema,
   invoiceSchema,
@@ -52,8 +53,17 @@ import {
   transitionSchema,
 } from "@/lib/validations/forms";
 import { assertCanTransition } from "@/lib/workflow/project-workflow";
-import { getCurrentProfile } from "@/lib/auth/session";
-import { parseArticleCsv, parseCustomerCsv, toCsv } from "@/lib/integrations/csv";
+import { getCurrentProfile, getCurrentRole, getCurrentSession } from "@/lib/auth/session";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  articlesToStandardCsv,
+  contactsToStandardCsv,
+  parseArticleCsv,
+  parseContactCsv,
+  stripCsvBom,
+  validateArticleImportCsvHeaders,
+  validateContactImportCsvHeaders,
+} from "@/lib/integrations/csv";
 import { buildIcsInvite } from "@/lib/integrations/calendar";
 import { sendMailViaSmtp } from "@/lib/integrations/smtp";
 import { generateSwissQrCodeDataUrl } from "@/lib/integrations/swiss-qr";
@@ -72,17 +82,27 @@ export async function createIntakeAction(formData: FormData) {
     throw new Error(parsed.error.issues[0]?.message ?? "Ungültige Eingabe.");
   }
 
-  const customer = await createCustomer({
-    name: parsed.data.customerName,
-    email: parsed.data.customerEmail || null,
-    phone: parsed.data.customerPhone || null,
-    street: parsed.data.customerStreet || null,
-    postalCode: parsed.data.customerPostalCode || null,
-    city: parsed.data.customerCity || null,
+  const session = await getCurrentSession();
+
+  const contact = await createContact({
+    organizationId: session?.organizationId ?? null,
+    contactNumber: null,
+    partyKind: "firma",
+    category: "kunde",
+    name: parsed.data.contactName,
+    uidNumber: null,
+    email: parsed.data.contactEmail || null,
+    phone: parsed.data.contactPhone || null,
+    mobile: null,
+    street: parsed.data.contactStreet || null,
+    postalCode: parsed.data.contactPostalCode || null,
+    city: parsed.data.contactCity || null,
+    website: null,
+    managedObjectLabel: null,
   });
 
   const project = await createProject({
-    customerId: customer.id,
+    contactId: contact.id,
     title: parsed.data.title,
     type: parsed.data.type,
     status: "anfrage",
@@ -95,6 +115,18 @@ export async function createIntakeAction(formData: FormData) {
     keyHandlingNotes: parsed.data.keyHandlingNotes,
     timingNotes: parsed.data.timingNotes,
     internalNotes: parsed.data.internalNotes ?? null,
+    tenantUnit: null,
+    sitePhone: null,
+    siteMobile: null,
+    referenceCode: null,
+    technicianNotes: null,
+    propertyId: null,
+    mapsUrl: null,
+    workTypeId: null,
+    contactPersonId: null,
+    serviceAddressId: null,
+    billingAddressId: null,
+    hintsAndNotes: null,
   });
 
   await addProjectNote({
@@ -145,6 +177,7 @@ export async function addAppointmentAction(formData: FormData) {
     kind: parsed.data.kind,
     startsAt: parsed.data.startsAt,
     endsAt: parsed.data.endsAt,
+    assignedTechnicianId: null,
     planningNotes: parsed.data.planningNotes ?? null,
     accessNotes: parsed.data.accessNotes ?? null,
     keyHandlingNotes: parsed.data.keyHandlingNotes ?? null,
@@ -160,30 +193,44 @@ export async function addAppointmentAction(formData: FormData) {
   revalidatePath(`/projekte/${parsed.data.projectId}`);
 }
 
-export async function addTechnicianReportAction(formData: FormData) {
+export type AddTechnicianReportResult = { ok: true } | { ok: false; message: string };
+
+export async function addTechnicianReportAction(formData: FormData): Promise<AddTechnicianReportResult> {
   const payload = collectFormData(formData);
   const parsed = reportSchema.safeParse(payload);
   if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "Ungültiger Bericht.");
+    return {
+      ok: false,
+      message: parsed.error.issues[0]?.message ?? "Ungültiger Bericht.",
+    };
   }
 
-  await addTechnicianReport({
-    projectId: parsed.data.projectId,
-    outcome: parsed.data.outcome,
-    summary: parsed.data.summary,
-    measurementsJson: parsed.data.measurementsJson,
-    workDescription: parsed.data.workDescription,
-    timeSpentMinutes: parsed.data.timeSpentMinutes ?? null,
-  });
-  await addAuditEvent({
-    action: "rapport_erstellt",
-    projectId: parsed.data.projectId,
-    actorRole: "technician",
-    actorName: "System Benutzer",
-    payload: JSON.stringify({ outcome: parsed.data.outcome }),
-  });
+  try {
+    await addTechnicianReport({
+      projectId: parsed.data.projectId,
+      outcome: parsed.data.outcome,
+      summary: parsed.data.summary,
+      measurementsJson: parsed.data.measurementsJson,
+      workDescription: parsed.data.workDescription,
+      timeSpentMinutes: parsed.data.timeSpentMinutes ?? null,
+    });
+    await addAuditEvent({
+      action: "rapport_erstellt",
+      projectId: parsed.data.projectId,
+      actorRole: "technician",
+      actorName: "System Benutzer",
+      payload: JSON.stringify({ outcome: parsed.data.outcome }),
+    });
 
-  revalidatePath(`/projekte/${parsed.data.projectId}`);
+    revalidatePath(`/projekte/${parsed.data.projectId}`);
+    return { ok: true };
+  } catch (e) {
+    console.error(e);
+    return {
+      ok: false,
+      message: e instanceof Error ? e.message : "Bericht konnte nicht gespeichert werden.",
+    };
+  }
 }
 
 export async function addQuoteAction(formData: FormData) {
@@ -282,12 +329,15 @@ export async function transitionProjectAction(formData: FormData) {
     throw new Error("Ungültiger Statuswechsel.");
   }
 
+  const session = await getCurrentSession();
+  const role = session?.role ?? "office";
+
   const bundle = await getProjectBundle(parsed.data.projectId);
   if (!bundle) {
     throw new Error("Projekt nicht gefunden.");
   }
 
-  const decision = assertCanTransition(bundle.project, parsed.data.targetStatus, "office");
+  const decision = assertCanTransition(bundle.project, parsed.data.targetStatus, role);
   if (!decision.ok) {
     throw new Error(decision.reason);
   }
@@ -296,11 +346,12 @@ export async function transitionProjectAction(formData: FormData) {
   await addAuditEvent({
     action: "status_gewechselt",
     projectId: parsed.data.projectId,
-    actorRole: "office",
+    actorRole: role,
     actorName: "System Benutzer",
     payload: JSON.stringify({ to: parsed.data.targetStatus }),
   });
   revalidatePath(`/projekte/${parsed.data.projectId}`);
+  revalidatePath("/projekte");
 }
 
 export async function updateModuleLabelAction(formData: FormData) {
@@ -373,74 +424,212 @@ export async function addProjectChatAttachmentAction(formData: FormData) {
   revalidatePath(`/projekte/${parsed.data.projectId}`);
 }
 
+/** Lädt Bild/PDF in den Bucket project-files und verknüpft eine Chat-Nachricht. */
+export async function uploadProjectChatFileAction(formData: FormData) {
+  const session = await getCurrentSession();
+  if (!session) {
+    throw new Error("Nicht angemeldet.");
+  }
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    throw new Error("Supabase ist nicht konfiguriert.");
+  }
+  const projectId = String(formData.get("projectId") ?? "").trim();
+  const file = formData.get("file") as File | null;
+  if (!projectId) {
+    throw new Error("Projekt fehlt.");
+  }
+  if (!file || typeof file !== "object" || file.size === 0) {
+    throw new Error("Bitte eine Datei wählen.");
+  }
+  if (!session.organizationId) {
+    throw new Error("Keine Organisation. Bitte warten Sie auf die Freischaltung oder kontaktieren Sie einen Admin.");
+  }
+  if (!PROJECT_FILE_MIME.has(file.type)) {
+    throw new Error("Nur Bilder (JPEG, PNG, WebP, GIF) oder PDF / Word-Dokumente sind erlaubt.");
+  }
+  if (file.size > PROJECT_FILE_MAX_BYTES) {
+    throw new Error("Datei darf maximal 15 MB gross sein.");
+  }
+
+  const bundle = await getProjectBundle(projectId);
+  if (!bundle) {
+    throw new Error("Projekt nicht gefunden.");
+  }
+
+  const safe = sanitizeFileBaseName(file.name) || "datei";
+  const storagePath = `${session.organizationId}/${projectId}/${Date.now()}-${safe}`;
+  const buf = Buffer.from(await file.arrayBuffer());
+  const { error: uploadError } = await supabase.storage.from("project-files").upload(storagePath, buf, {
+    contentType: file.type,
+    upsert: false,
+  });
+  if (uploadError) {
+    throw new Error(uploadError.message);
+  }
+
+  const profile = session.profile;
+  const message = await addProjectChatMessage({
+    projectId,
+    appointmentId: null,
+    senderId: profile.id,
+    senderName: profile.displayName,
+    body: "📎 Datei geteilt",
+  });
+
+  await addProjectChatAttachment({
+    projectId,
+    messageId: message.id,
+    fileName: file.name,
+    fileType: file.type,
+    filePath: storagePath,
+  });
+
+  await addAuditEvent({
+    action: "chat_anhang_hochgeladen",
+    projectId,
+    actorRole: profile.role,
+    actorName: profile.displayName,
+    payload: JSON.stringify({ messageId: message.id, path: storagePath }),
+  });
+
+  revalidatePath(`/projekte/${projectId}`);
+}
+
 export async function assignAppointmentWithCalendarAction(formData: FormData) {
-  await addAppointmentAction(formData);
   const payload = collectFormData(formData);
-  const projectId = payload.projectId;
-  const startsAt = payload.startsAt;
-  const endsAt = payload.endsAt;
+  const parsed = appointmentSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Ungültiger Termin.");
+  }
 
   const technicians = await listProfilesByRole("technician");
   const technician = technicians[0];
-  if (!technician || !projectId || !startsAt || !endsAt) {
+  const appt = await addAppointment({
+    projectId: parsed.data.projectId,
+    kind: parsed.data.kind,
+    startsAt: parsed.data.startsAt,
+    endsAt: parsed.data.endsAt,
+    assignedTechnicianId: technician?.id ?? null,
+    planningNotes: parsed.data.planningNotes ?? null,
+    accessNotes: parsed.data.accessNotes ?? null,
+    keyHandlingNotes: parsed.data.keyHandlingNotes ?? null,
+  });
+
+  await addAuditEvent({
+    action: "termin_erstellt",
+    projectId: parsed.data.projectId,
+    actorRole: "office",
+    actorName: "System Benutzer",
+    payload: JSON.stringify({ kind: parsed.data.kind, startsAt: parsed.data.startsAt }),
+  });
+
+  revalidatePath(`/projekte/${parsed.data.projectId}`);
+  revalidatePath("/termine");
+
+  const projects = await listProjects();
+  const projectTitle = projects.find((p) => p.id === parsed.data.projectId)?.title ?? parsed.data.projectId;
+
+  if (!technician) {
     return;
   }
 
   const ics = buildIcsInvite({
-    title: "Bauflip Termin",
-    description: `Projekt ${projectId}`,
-    startsAt,
-    endsAt,
+    title: `Bauflip: ${projectTitle}`,
+    description: `Projekt ${parsed.data.projectId}`,
+    startsAt: parsed.data.startsAt,
+    endsAt: parsed.data.endsAt,
   });
 
   const mailResult = await sendMailViaSmtp({
     to: technician.email,
     subject: "Neuer Einsatztermin",
-    html: `<p>Sie haben einen neuen Termin erhalten.</p><p>Projekt: ${projectId}</p>`,
+    html: `<p>Sie haben einen neuen Termin erhalten.</p><p>${projectTitle}</p>`,
     attachments: [{ filename: "einsatz.ics", content: ics, contentType: "text/calendar" }],
   });
 
   await addCalendarEvent({
-    projectId,
-    appointmentId: `appt-${crypto.randomUUID()}`,
+    projectId: parsed.data.projectId,
+    appointmentId: appt.id,
     technicianId: technician.id,
     technicianEmail: technician.email,
     provider: "ics",
     providerEventId: mailResult.ok ? mailResult.messageId ?? null : null,
-    startsAt,
-    endsAt,
-    title: `Einsatz ${projectId}`,
+    startsAt: parsed.data.startsAt,
+    endsAt: parsed.data.endsAt,
+    title: `Einsatz ${projectTitle}`,
+  });
+
+  const { syncExternalCalendars } = await import("@/lib/calendar/sync-external-calendars");
+  await syncExternalCalendars({
+    appointment: appt,
+    projectTitle,
+    technician,
   });
 }
 
 export async function importCsvAction(formData: FormData) {
-  const payload = collectFormData(formData);
-  const parsed = csvImportSchema.safeParse(payload);
-  if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "Ungültiger CSV Import.");
+  const session = await getCurrentSession();
+  if (!session) {
+    throw new Error("Nicht angemeldet.");
+  }
+  const role = await getCurrentRole();
+  if (role !== "admin" && role !== "office") {
+    throw new Error("Kein Zugriff auf Import (nur Büro/Admin).");
   }
 
-  if (parsed.data.type === "articles") {
-    const articles = parseArticleCsv(parsed.data.csvText);
+  const typeRaw = formData.get("type");
+  const type = typeRaw === "articles" ? "articles" : "contacts";
+
+  const file = formData.get("file");
+  let csvText = "";
+  if (file instanceof File && file.size > 0) {
+    csvText = await file.text();
+  } else {
+    csvText = String(formData.get("csvText") ?? "").trim();
+  }
+  csvText = stripCsvBom(csvText);
+  if (!csvText.trim()) {
+    throw new Error("Bitte eine CSV-Datei auswählen oder den Inhalt einfügen.");
+  }
+
+  if (type === "articles") {
+    const headerErr = validateArticleImportCsvHeaders(csvText);
+    if (headerErr) {
+      throw new Error(headerErr);
+    }
+    const articles = parseArticleCsv(csvText).filter((r) => r.name.trim() && r.sku.trim());
+    if (articles.length === 0) {
+      throw new Error("Keine gültigen Zeilen: pro Artikel sind Name und SKU (Artikelnummer) erforderlich.");
+    }
     await upsertArticles(articles);
   } else {
-    const customers = parseCustomerCsv(parsed.data.csvText);
-    for (const customer of customers) {
-      await createCustomer(customer);
+    const headerErr = validateContactImportCsvHeaders(csvText);
+    if (headerErr) {
+      throw new Error(headerErr);
+    }
+    const rows = parseContactCsv(csvText).filter((r) => r.name.trim());
+    if (rows.length === 0) {
+      throw new Error("Keine gültigen Zeilen: pro Kontakt ist ein Name erforderlich.");
+    }
+    for (const row of rows) {
+      await createContact({
+        ...row,
+        organizationId: session.organizationId ?? null,
+      });
     }
   }
 
-  revalidatePath("/kunden");
+  revalidatePath("/kontakte");
   revalidatePath("/artikel");
+  revalidatePath("/import-export");
 }
 
-export async function exportCsvAction(type: "customers" | "articles") {
+export async function exportCsvAction(type: "contacts" | "articles") {
   if (type === "articles") {
-    const rows = await listArticles();
-    return toCsv(rows);
+    return articlesToStandardCsv(await listArticles());
   }
-  const rows = await listCustomers();
-  return toCsv(rows);
+  return contactsToStandardCsv(await listContacts());
 }
 
 export async function addStockDecisionAction(formData: FormData) {

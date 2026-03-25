@@ -3,9 +3,11 @@
 import { useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { unstable_rethrow } from "next/navigation";
 import { createIntakeAction } from "@/app/(app)/actions";
 import { intakeSchema } from "@/lib/validations/forms";
 import type { z } from "zod";
+import { BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -33,12 +35,12 @@ const defaultValues: IntakeValues = {
   keyHandlingNotes: "",
   timingNotes: "",
   internalNotes: "",
-  customerName: "",
-  customerEmail: "",
-  customerPhone: "",
-  customerStreet: "",
-  customerPostalCode: "",
-  customerCity: "",
+  contactName: "",
+  contactEmail: "",
+  contactPhone: "",
+  contactStreet: "",
+  contactPostalCode: "",
+  contactCity: "",
 };
 
 export function IntakeForm() {
@@ -49,17 +51,25 @@ export function IntakeForm() {
   });
 
   const onSubmit = form.handleSubmit((values) => {
+    form.clearErrors("root");
     startTransition(async () => {
       const formData = new FormData();
       for (const [key, value] of Object.entries(values)) {
         formData.set(key, value ?? "");
       }
-      await createIntakeAction(formData);
+      try {
+        await createIntakeAction(formData);
+      } catch (err) {
+        unstable_rethrow(err);
+        const message =
+          err instanceof Error ? err.message : "Speichern fehlgeschlagen. Bitte erneut versuchen.";
+        form.setError("root", { message });
+      }
     });
   });
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4">
+    <form noValidate onSubmit={onSubmit} className="flex flex-col gap-4">
       <Card>
         <CardHeader>
           <CardTitle>Neue Anfrage erfassen</CardTitle>
@@ -85,7 +95,7 @@ export function IntakeForm() {
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Quelle auswählen" />
+                      <SelectValue placeholder="Quelle auswählen" resolvedLabel={{ telefon: "Telefon", whatsapp: "WhatsApp", email: "E-Mail" }[field.value as string] ?? field.value} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
@@ -107,7 +117,7 @@ export function IntakeForm() {
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Typ auswählen" />
+                      <SelectValue placeholder="Typ auswählen" resolvedLabel={{ reparatur: "Reparatur", ersatz: "Ersatz", neuinstallation: "Neuinstallation" }[field.value as string] ?? field.value} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
@@ -129,7 +139,7 @@ export function IntakeForm() {
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Dringlichkeit auswählen" />
+                      <SelectValue placeholder="Dringlichkeit auswählen" resolvedLabel={{ normal: "Normal", hoch: "Hoch", kritisch: "Kritisch" }[field.value as string] ?? field.value} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
@@ -154,7 +164,6 @@ export function IntakeForm() {
                 <VoiceTextarea
                   id="intakeOriginalText"
                   placeholder="z.B. Lamellenstoren blockiert seit gestern..."
-                  required
                   value={field.value}
                   onValueChange={field.onChange}
                 />
@@ -174,12 +183,14 @@ export function IntakeForm() {
                 render={({ field }) => (
                   <VoiceTextarea
                     id="accessNotes"
-                    required
                     value={field.value}
                     onValueChange={field.onChange}
                   />
                 )}
               />
+              {form.formState.errors.accessNotes ? (
+                <p className="text-sm text-destructive">{form.formState.errors.accessNotes.message}</p>
+              ) : null}
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="keyHandlingNotes">Schlüssel</Label>
@@ -204,12 +215,14 @@ export function IntakeForm() {
                 render={({ field }) => (
                   <VoiceTextarea
                     id="timingNotes"
-                    required
                     value={field.value}
                     onValueChange={field.onChange}
                   />
                 )}
               />
+              {form.formState.errors.timingNotes ? (
+                <p className="text-sm text-destructive">{form.formState.errors.timingNotes.message}</p>
+              ) : null}
             </div>
           </div>
 
@@ -228,39 +241,69 @@ export function IntakeForm() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Kunde</CardTitle>
-          <CardDescription>Erfassen Sie den Kunden direkt mit allen nötigen Kontaktdaten.</CardDescription>
+          <CardTitle>Kontakt</CardTitle>
+          <CardDescription>Erfassen Sie den Kontakt direkt mit allen nötigen Stammdaten.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="flex flex-col gap-2">
-            <Label htmlFor="customerName">Name</Label>
-            <Input id="customerName" {...form.register("customerName")} />
+            <Label htmlFor="contactName">Name</Label>
+            <Input
+              id="contactName"
+              aria-invalid={!!form.formState.errors.contactName}
+              {...form.register("contactName")}
+            />
+            {form.formState.errors.contactName ? (
+              <p className="text-sm text-destructive">{form.formState.errors.contactName.message}</p>
+            ) : null}
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="customerPhone">Telefon</Label>
-            <Input id="customerPhone" {...form.register("customerPhone")} />
+            <Label htmlFor="contactPhone">Telefon</Label>
+            <Input
+              id="contactPhone"
+              aria-invalid={!!form.formState.errors.contactPhone}
+              {...form.register("contactPhone")}
+            />
+            {form.formState.errors.contactPhone ? (
+              <p className="text-sm text-destructive">{form.formState.errors.contactPhone.message}</p>
+            ) : null}
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="customerEmail">E-Mail</Label>
-            <Input id="customerEmail" {...form.register("customerEmail")} />
+            <Label htmlFor="contactEmail">E-Mail</Label>
+            <Input
+              id="contactEmail"
+              aria-invalid={!!form.formState.errors.contactEmail}
+              {...form.register("contactEmail")}
+            />
+            {form.formState.errors.contactEmail ? (
+              <p className="text-sm text-destructive">{form.formState.errors.contactEmail.message}</p>
+            ) : null}
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="customerStreet">Strasse</Label>
-            <Input id="customerStreet" {...form.register("customerStreet")} />
+            <Label htmlFor="contactStreet">Strasse</Label>
+            <Input id="contactStreet" {...form.register("contactStreet")} />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="customerPostalCode">PLZ</Label>
-            <Input id="customerPostalCode" {...form.register("customerPostalCode")} />
+            <Label htmlFor="contactPostalCode">PLZ</Label>
+            <Input id="contactPostalCode" {...form.register("contactPostalCode")} />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="customerCity">Ort</Label>
-            <Input id="customerCity" {...form.register("customerCity")} />
+            <Label htmlFor="contactCity">Ort</Label>
+            <Input id="contactCity" {...form.register("contactCity")} />
           </div>
         </CardContent>
       </Card>
 
+      {form.formState.errors.root ? (
+        <p className="text-sm text-destructive" role="alert">
+          {form.formState.errors.root.message}
+        </p>
+      ) : null}
       <Button type="submit" disabled={isPending}>
-        {isPending ? "Wird gespeichert..." : "Anfrage erfassen"}
+        {isPending ? (
+          <BauflipLoadingButtonLabel variant="onPrimary">Wird gespeichert…</BauflipLoadingButtonLabel>
+        ) : (
+          "Anfrage erfassen"
+        )}
       </Button>
     </form>
   );

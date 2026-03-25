@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,7 +62,11 @@ export function OnboardingForm() {
       </div>
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       <Button type="submit" disabled={isPending}>
-        Konto aktivieren
+        {isPending ? (
+          <BauflipLoadingButtonLabel variant="onPrimary">Konto wird aktiviert …</BauflipLoadingButtonLabel>
+        ) : (
+          "Konto aktivieren"
+        )}
       </Button>
     </form>
   );

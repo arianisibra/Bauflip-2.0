@@ -2,10 +2,10 @@ import type { AppPageKey, RoleType, SidebarItem } from "@/lib/domain/types";
 
 export const sidebarItems: SidebarItem[] = [
   { key: "uebersicht", label: "Übersicht", href: "/", section: "navigation" },
-  { key: "kunden", label: "Kunden", href: "/kunden", section: "navigation" },
   { key: "kontakte", label: "Kontakte", href: "/kontakte", section: "navigation" },
   { key: "termine", label: "Termine", href: "/termine", section: "navigation" },
   { key: "projekte", label: "Projekte", href: "/projekte", section: "navigation" },
+  { key: "kanban", label: "Kanban", href: "/kanban", section: "navigation" },
   { key: "artikel", label: "Artikel", href: "/artikel", section: "navigation" },
   { key: "rapporte", label: "Rapporte", href: "/rapporte", section: "einsatz" },
   { key: "team_chat", label: "Team-Chat", href: "/team-chat", section: "einsatz" },
@@ -18,8 +18,8 @@ export const sidebarItems: SidebarItem[] = [
 
 const roleVisibility: Record<RoleType, AppPageKey[]> = {
   admin: sidebarItems.map((item) => item.key),
-  office: ["uebersicht", "kunden", "kontakte", "termine", "projekte", "artikel", "team_chat", "bestellformular", "import_export", "einstellungen"],
-  technician: ["uebersicht", "projekte", "termine", "rapporte", "team_chat"],
+  office: ["uebersicht", "kontakte", "termine", "projekte", "kanban", "artikel", "team_chat", "bestellformular", "import_export", "einstellungen"],
+  technician: ["uebersicht", "projekte", "kanban", "termine", "rapporte", "team_chat"],
 };
 
 export function getVisibleSidebarItems(role: RoleType) {

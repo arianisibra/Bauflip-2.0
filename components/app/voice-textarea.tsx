@@ -10,6 +10,7 @@ type VoiceTextareaProps = {
   id?: string;
   placeholder?: string;
   required?: boolean;
+  minLength?: number;
   defaultValue?: string;
   value?: string;
   onValueChange?: (value: string) => void;
@@ -38,6 +39,7 @@ export function VoiceTextarea({
   id,
   placeholder,
   required,
+  minLength,
   defaultValue = "",
   value,
   onValueChange,
@@ -108,6 +110,7 @@ export function VoiceTextarea({
         name={name}
         placeholder={placeholder}
         required={required}
+        minLength={minLength}
         value={currentValue}
         onChange={(event) => updateValue(event.target.value)}
         className="pr-12"

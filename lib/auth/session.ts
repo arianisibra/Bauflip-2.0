@@ -1,5 +1,6 @@
 import type { User } from "@supabase/supabase-js";
 import type { RoleType, UserProfile } from "@/lib/domain/types";
+import { mapUserProfileRow } from "@/lib/db/repository";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type CurrentSession = {
@@ -52,10 +53,8 @@ export async function getCurrentSession(): Promise<CurrentSession | null> {
       .upsert(
         {
           id: user.id,
-          email: user.email ?? "",
           display_name: displayName,
           role,
-          avatar_url: null,
         },
         { onConflict: "id" },
       )
@@ -67,22 +66,28 @@ export async function getCurrentSession(): Promise<CurrentSession | null> {
         user,
         role,
         organizationId,
-        profile: inserted as unknown as UserProfile,
+        profile: mapUserProfileRow(inserted as Record<string, unknown>, user.email ?? ""),
       };
     }
   }
+
+  const row = profileResponse.data as Record<string, unknown> | null;
 
   return {
     user,
     role,
     organizationId,
-    profile: (profileResponse.data as unknown as UserProfile) ?? {
-      id: user.id,
-      displayName: user.email?.split("@")[0] ?? "Benutzer",
-      email: user.email ?? "",
-      role,
-      avatarUrl: null,
-    },
+    profile: row
+      ? mapUserProfileRow(row, user.email ?? "")
+      : {
+          id: user.id,
+          displayName: user.email?.split("@")[0] ?? "Benutzer",
+          email: user.email ?? "",
+          role,
+          avatarUrl: null,
+          calendarColor: null,
+          calendarPosition: 0,
+        },
   };
 }
 
@@ -103,5 +108,7 @@ export async function getCurrentProfile(): Promise<UserProfile> {
     email: "",
     role: "office",
     avatarUrl: null,
+    calendarColor: null,
+    calendarPosition: 0,
   };
 }
