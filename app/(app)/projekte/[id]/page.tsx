@@ -283,14 +283,31 @@ export default async function ProjektDetailPage({ params }: Params) {
                         <div key={q.id} className="rounded-md border bg-muted/20 px-3 py-2 text-sm">
                           <div className="flex items-center justify-between">
                             <span>Version {q.version}</span>
-                            <span className="text-xs text-muted-foreground capitalize">{q.status}</span>
+                            <span className="text-xs text-muted-foreground capitalize">
+                              {q.status}
+                              {q.deliveryChannel ? ` · ${q.deliveryChannel}` : ""}
+                            </span>
                           </div>
-                          <div className="mt-2 flex items-center gap-2">
-                            <form action={finalizeProjectDocumentAction}>
+                          <div className="mt-2 space-y-2">
+                            <form action={finalizeProjectDocumentAction} className="flex items-center gap-2">
                               <input type="hidden" name="projectId" value={bundle.project.id} />
                               <input type="hidden" name="documentType" value="quote" />
                               <input type="hidden" name="documentId" value={q.id} />
-                              <Button type="submit" size="sm" variant="outline" className="h-8 px-2 text-xs">Finalisieren & PDF</Button>
+                              <input type="hidden" name="deliveryChannel" value="post" />
+                              <Button type="submit" size="sm" variant="outline" className="h-8 px-2 text-xs">Per Post finalisieren</Button>
+                              <span className="text-xs text-muted-foreground">Kein Mailversand</span>
+                            </form>
+                            <form action={finalizeProjectDocumentAction} className="rounded-md border bg-background p-2">
+                              <input type="hidden" name="projectId" value={bundle.project.id} />
+                              <input type="hidden" name="documentType" value="quote" />
+                              <input type="hidden" name="documentId" value={q.id} />
+                              <input type="hidden" name="deliveryChannel" value="email" />
+                              <div className="grid gap-1">
+                                <Input name="emailTo" defaultValue={bundle.contact?.email ?? ""} placeholder="kunde@beispiel.ch" className="h-8 text-xs" />
+                                <Input name="emailSubject" defaultValue={`Offerte ${bundle.project.title}`} className="h-8 text-xs" />
+                                <VoiceTextarea name="emailHtml" defaultValue="<p>Guten Tag<br/>im Anhang erhalten Sie die Offerte als PDF.</p>" />
+                                <Button type="submit" size="sm" variant="outline" className="h-8 px-2 text-xs">Per E-Mail finalisieren</Button>
+                              </div>
                             </form>
                             {q.pdfPath ? (
                               <a
@@ -569,14 +586,31 @@ export default async function ProjektDetailPage({ params }: Params) {
                         <div key={inv.id} className="rounded-md border bg-muted/20 px-3 py-2 text-sm">
                           <div className="flex items-center justify-between">
                             <span className="font-medium">{inv.invoiceNumber ?? "Entwurf"}</span>
-                            <span className="text-xs text-muted-foreground capitalize">{inv.status}</span>
+                            <span className="text-xs text-muted-foreground capitalize">
+                              {inv.status}
+                              {inv.deliveryChannel ? ` · ${inv.deliveryChannel}` : ""}
+                            </span>
                           </div>
-                          <div className="mt-2 flex items-center gap-2">
-                            <form action={finalizeProjectDocumentAction}>
+                          <div className="mt-2 space-y-2">
+                            <form action={finalizeProjectDocumentAction} className="flex items-center gap-2">
                               <input type="hidden" name="projectId" value={bundle.project.id} />
                               <input type="hidden" name="documentType" value="invoice" />
                               <input type="hidden" name="documentId" value={inv.id} />
-                              <Button type="submit" size="sm" variant="outline" className="h-8 px-2 text-xs">Finalisieren & PDF</Button>
+                              <input type="hidden" name="deliveryChannel" value="post" />
+                              <Button type="submit" size="sm" variant="outline" className="h-8 px-2 text-xs">Per Post finalisieren</Button>
+                              <span className="text-xs text-muted-foreground">Kein Mailversand</span>
+                            </form>
+                            <form action={finalizeProjectDocumentAction} className="rounded-md border bg-background p-2">
+                              <input type="hidden" name="projectId" value={bundle.project.id} />
+                              <input type="hidden" name="documentType" value="invoice" />
+                              <input type="hidden" name="documentId" value={inv.id} />
+                              <input type="hidden" name="deliveryChannel" value="email" />
+                              <div className="grid gap-1">
+                                <Input name="emailTo" defaultValue={bundle.contact?.email ?? ""} placeholder="kunde@beispiel.ch" className="h-8 text-xs" />
+                                <Input name="emailSubject" defaultValue={`Rechnung ${bundle.project.title}`} className="h-8 text-xs" />
+                                <VoiceTextarea name="emailHtml" defaultValue="<p>Guten Tag<br/>im Anhang erhalten Sie die Rechnung als PDF.</p>" />
+                                <Button type="submit" size="sm" variant="outline" className="h-8 px-2 text-xs">Per E-Mail finalisieren</Button>
+                              </div>
                             </form>
                             {inv.pdfPath ? (
                               <a
@@ -632,7 +666,7 @@ export default async function ProjektDetailPage({ params }: Params) {
 
             <div className="grid gap-4 lg:grid-cols-2">
               {/* Team-Chat */}
-              <Card>
+              <Card id="team-chat">
                 <CardHeader>
                   <CardTitle>Team-Chat</CardTitle>
                   <CardDescription>Nachrichten, Fotos und Dokumente zum Projekt.</CardDescription>

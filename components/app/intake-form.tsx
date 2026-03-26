@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { unstable_rethrow } from "next/navigation";
@@ -22,6 +22,7 @@ import {
   SelectGroup,
 } from "@/components/ui/select";
 import { VoiceTextarea } from "@/components/app/voice-textarea";
+import type { Contact } from "@/lib/domain/types";
 
 type IntakeValues = z.infer<typeof intakeSchema>;
 
@@ -43,12 +44,25 @@ const defaultValues: IntakeValues = {
   contactCity: "",
 };
 
-export function IntakeForm() {
+export function IntakeForm({ contacts = [] }: { contacts?: Contact[] }) {
   const [isPending, startTransition] = useTransition();
+  const [selectedContactId, setSelectedContactId] = useState<string>("");
   const form = useForm<IntakeValues>({
     resolver: zodResolver(intakeSchema),
     defaultValues,
   });
+
+  const applyContactToFields = useCallback(
+    (contact: Contact) => {
+      form.setValue("contactName", contact.name ?? "", { shouldDirty: true });
+      form.setValue("contactEmail", contact.email ?? "", { shouldDirty: true });
+      form.setValue("contactPhone", contact.phone ?? contact.mobile ?? "", { shouldDirty: true });
+      form.setValue("contactStreet", contact.street ?? "", { shouldDirty: true });
+      form.setValue("contactPostalCode", contact.postalCode ?? "", { shouldDirty: true });
+      form.setValue("contactCity", contact.city ?? "", { shouldDirty: true });
+    },
+    [form],
+  );
 
   const onSubmit = form.handleSubmit((values) => {
     form.clearErrors("root");
@@ -245,6 +259,51 @@ export function IntakeForm() {
           <CardDescription>Erfassen Sie den Kontakt direkt mit allen nötigen Stammdaten.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
+          {contacts.length > 0 ? (
+            <div className="md:col-span-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+              <div className="flex flex-col gap-2">
+                <Label>Kontakt aus Liste übernehmen</Label>
+                <Select
+                  value={selectedContactId || undefined}
+                  onValueChange={(value) => {
+                    setSelectedContactId(value);
+                    const selected = contacts.find((c) => c.id === value);
+                    if (selected) {
+                      applyContactToFields(selected);
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Kontakt auswählen …" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectLabel>Kontaktdatenbank</SelectLabel>
+                      {contacts.map((contact) => (
+                        <SelectItem key={contact.id} value={contact.id}>
+                          {contact.name}
+                          {contact.city ? ` · ${contact.city}` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  const selected = contacts.find((c) => c.id === selectedContactId);
+                  if (selected) {
+                    applyContactToFields(selected);
+                  }
+                }}
+                disabled={!selectedContactId}
+              >
+                Kontakt übernehmen
+              </Button>
+            </div>
+          ) : null}
           <div className="flex flex-col gap-2">
             <Label htmlFor="contactName">Name</Label>
             <Input

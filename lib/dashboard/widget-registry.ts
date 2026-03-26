@@ -7,6 +7,7 @@ import {
   Gauge,
   LayoutGrid,
   Link2,
+  MessageSquare,
   Package,
   Truck,
   Users,
@@ -76,6 +77,12 @@ export const WIDGET_REGISTRY: WidgetMeta[] = [
     description: "Kurzüberblick Montage & Büro.",
     Icon: Users,
     roles: ["admin", "office"],
+  },
+  {
+    id: "chat_module",
+    title: "Chat",
+    description: "Separates Chat-Modul für Team-Kommunikation.",
+    Icon: MessageSquare,
   },
   {
     id: "shortcuts",

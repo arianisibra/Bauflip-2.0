@@ -9,6 +9,7 @@ export const widgetIds = [
   "offers_invoices",
   "logistics_pulse",
   "team_compact",
+  "chat_module",
   "shortcuts",
   "recent_projects",
 ] as const;

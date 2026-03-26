@@ -60,7 +60,9 @@ import {
   swissQrSchema,
   transitionSchema,
 } from "@/lib/validations/forms";
-import { assertCanTransition } from "@/lib/workflow/project-workflow";
+import { assertCanTransition, getAllowedTransitions, type ProjectRequiredField } from "@/lib/workflow/project-workflow";
+import { getWorkflowPhaseIndex } from "@/lib/workflow/project-workflow-rail";
+import { projectStatuses, type ProjectStatus } from "@/lib/domain/types";
 import { getCurrentProfile, getCurrentRole, getCurrentSession } from "@/lib/auth/session";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
@@ -414,14 +416,24 @@ async function uploadProjectDocumentPdf(params: {
   }
 
   const storagePath = `${params.organizationId}/${params.projectId}/${params.type}/${params.documentId}/v${params.nextPdfVersion}.pdf`;
-  const { error } = await supabase.storage.from("project-documents").upload(storagePath, Buffer.from(params.bytes), {
-    contentType: "application/pdf",
-    upsert: true,
-  });
-  if (error) {
-    throw new Error(error.message);
+  const buckets = ["project-documents", "project-files"] as const;
+  let lastError: string | null = null;
+  for (const bucket of buckets) {
+    const { error } = await supabase.storage.from(bucket).upload(storagePath, Buffer.from(params.bytes), {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+    if (!error) {
+      return storagePath;
+    }
+    lastError = error.message;
+    const lower = error.message.toLowerCase();
+    const canTryNext = lower.includes("bucket not found") || lower.includes("not found");
+    if (!canTryNext) {
+      throw new Error(error.message);
+    }
   }
-  return storagePath;
+  throw new Error(lastError ?? "PDF konnte nicht hochgeladen werden.");
 }
 
 export async function finalizeProjectDocumentAction(formData: FormData) {
@@ -443,11 +455,58 @@ export async function finalizeProjectDocumentAction(formData: FormData) {
   if (!bundle) {
     throw new Error("Projekt nicht gefunden.");
   }
+  const deliveryChannel = parsed.data.deliveryChannel ?? "post";
   const pdfBundle = {
     project: bundle.project,
     contactName: bundle.contact?.name ?? "Unbekannt",
     contactEmail: bundle.contact?.email ?? null,
     contactPhone: bundle.contact?.phone ?? null,
+  };
+
+  const maybeSendByEmail = async (bytes: Uint8Array) => {
+    if (deliveryChannel !== "email") {
+      return;
+    }
+    const to = parsed.data.emailTo?.trim() || bundle.contact?.email || "";
+    if (!to) {
+      throw new Error("Empfänger-E-Mail fehlt.");
+    }
+    const subject = parsed.data.emailSubject?.trim() || `Bauflip Dokument: ${bundle.project.title}`;
+    const html = parsed.data.emailHtml?.trim() || "<p>Im Anhang erhalten Sie das Dokument als PDF.</p>";
+    const result = await sendMailViaSmtp({
+      to,
+      subject,
+      html,
+      attachments: [{ filename: "dokument.pdf", content: Buffer.from(bytes), contentType: "application/pdf" }],
+    });
+    await addMailDispatchLog({
+      projectId: parsed.data.projectId,
+      to,
+      subject,
+      status: result.ok ? "gesendet" : "fehler",
+      errorMessage: result.ok ? null : result.error,
+    });
+    if (!result.ok) {
+      throw new Error(result.error);
+    }
+  };
+
+  const maybeAdvanceStatus = async (targetStatus: "offerte_gesendet" | "abgeschlossen") => {
+    if (bundle.project.status === targetStatus) {
+      return;
+    }
+    const decision = assertCanTransition(bundle.project, targetStatus, session.role);
+    if (!decision.ok) {
+      return;
+    }
+    await updateProjectStatus(parsed.data.projectId, targetStatus, decision.nextOwnerRole);
+    await addAuditEvent({
+      action: "status_gewechselt",
+      projectId: parsed.data.projectId,
+      actorRole: session.role,
+      actorName: session.profile.displayName,
+      payload: JSON.stringify({ to: targetStatus, reason: "document_finalize" }),
+    });
   };
 
   if (parsed.data.documentType === "quote") {
@@ -465,18 +524,22 @@ export async function finalizeProjectDocumentAction(formData: FormData) {
       nextPdfVersion,
       bytes,
     });
+    await maybeSendByEmail(bytes);
     await markQuoteFinalizedWithPdf({
       quoteId: quote.id,
       pdfPath,
       finalizedBy: session.profile.id,
       nextPdfVersion,
+      deliveryChannel,
+      deliveryRecipient: deliveryChannel === "email" ? (parsed.data.emailTo?.trim() || bundle.contact?.email || null) : null,
     });
+    await maybeAdvanceStatus("offerte_gesendet");
     await addAuditEvent({
       action: "offerte_finalisiert_pdf",
       projectId: parsed.data.projectId,
       actorRole: session.role,
       actorName: session.profile.displayName,
-      payload: JSON.stringify({ quoteId: quote.id, pdfPath, version: nextPdfVersion }),
+      payload: JSON.stringify({ quoteId: quote.id, pdfPath, version: nextPdfVersion, deliveryChannel }),
     });
   } else if (parsed.data.documentType === "invoice") {
     const invoice = await getInvoiceById(parsed.data.documentId);
@@ -493,18 +556,22 @@ export async function finalizeProjectDocumentAction(formData: FormData) {
       nextPdfVersion,
       bytes,
     });
+    await maybeSendByEmail(bytes);
     await markInvoiceFinalizedWithPdf({
       invoiceId: invoice.id,
       pdfPath,
       finalizedBy: session.profile.id,
       nextPdfVersion,
+      deliveryChannel,
+      deliveryRecipient: deliveryChannel === "email" ? (parsed.data.emailTo?.trim() || bundle.contact?.email || null) : null,
     });
+    await maybeAdvanceStatus("abgeschlossen");
     await addAuditEvent({
       action: "rechnung_finalisiert_pdf",
       projectId: parsed.data.projectId,
       actorRole: session.role,
       actorName: session.profile.displayName,
-      payload: JSON.stringify({ invoiceId: invoice.id, pdfPath, version: nextPdfVersion }),
+      payload: JSON.stringify({ invoiceId: invoice.id, pdfPath, version: nextPdfVersion, deliveryChannel }),
     });
   } else {
     const delivery = await getDeliveryById(parsed.data.documentId);
@@ -599,6 +666,116 @@ export async function moveKanbanCardAction(formData: FormData) {
   }
   await moveKanbanCard(parsed.data.cardId, parsed.data.columnId);
   revalidatePath("/projekte");
+}
+
+export async function moveProjectPhaseAction(formData: FormData) {
+  const payload = collectFormData(formData);
+  const projectId = String(payload.projectId ?? "").trim();
+  const targetPhaseIndex = Number(payload.targetPhaseIndex ?? NaN);
+  if (!projectId || !Number.isFinite(targetPhaseIndex)) {
+    throw new Error("Ungültige Kanban-Aktion.");
+  }
+
+  const session = await getCurrentSession();
+  if (!session) {
+    throw new Error("Nicht angemeldet.");
+  }
+
+  const bundle = await getProjectBundle(projectId);
+  if (!bundle) {
+    throw new Error("Projekt nicht gefunden.");
+  }
+
+  const current = bundle.project;
+  if (getWorkflowPhaseIndex(current.status) === targetPhaseIndex) {
+    return;
+  }
+
+  const targetStatuses = projectStatuses.filter((status) => getWorkflowPhaseIndex(status) === targetPhaseIndex);
+  if (targetStatuses.length === 0) {
+    throw new Error("Zielphase nicht gefunden.");
+  }
+
+  const path = findTransitionPath(current.status, targetStatuses);
+  if (!path || path.length === 0) {
+    throw new Error("Diese Verschiebung ist für den aktuellen Status nicht erlaubt.");
+  }
+
+  let currentState = { ...current };
+  for (const step of path) {
+    const decision = assertCanTransition(currentState, step.to, session.role);
+    if (!decision.ok) {
+      throw new Error(translateMissingFieldsInReason(decision.reason));
+    }
+    await updateProjectStatus(projectId, step.to, step.nextOwnerRole);
+    currentState = { ...currentState, status: step.to, nextOwnerRole: step.nextOwnerRole };
+  }
+
+  await addAuditEvent({
+    action: "status_gewechselt",
+    projectId,
+    actorRole: session.role,
+    actorName: session.profile.displayName,
+    payload: JSON.stringify({ from: current.status, to: currentState.status, reason: "kanban_drag_drop" }),
+  });
+
+  revalidatePath("/kanban");
+  revalidatePath("/projekte");
+  revalidatePath(`/projekte/${projectId}`);
+}
+
+function findTransitionPath(from: ProjectStatus, targets: ProjectStatus[]) {
+  const queue: Array<{
+    status: ProjectStatus;
+    path: Array<{ to: ProjectStatus; nextOwnerRole: "admin" | "office" | "technician" }>;
+  }> = [{ status: from, path: [] }];
+  const visited = new Set<ProjectStatus>([from]);
+  const targetSet = new Set<ProjectStatus>(targets);
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) {
+      break;
+    }
+    if (targetSet.has(current.status)) {
+      return current.path;
+    }
+    for (const transition of getAllowedTransitions(current.status)) {
+      const next = transition.to;
+      if (visited.has(next)) {
+        continue;
+      }
+      visited.add(next);
+      queue.push({
+        status: next,
+        path: [...current.path, { to: transition.to, nextOwnerRole: transition.nextOwnerRole }],
+      });
+    }
+  }
+  return null;
+}
+
+function translateMissingFieldsInReason(reason: string): string {
+  if (!reason.startsWith("Pflichtangaben fehlen:")) {
+    return reason;
+  }
+  const fieldsRaw = reason.replace("Pflichtangaben fehlen:", "").trim();
+  if (!fieldsRaw) {
+    return reason;
+  }
+  const map: Record<ProjectRequiredField, string> = {
+    intakeOriginalText: "Originalaussage Kunde",
+    accessNotes: "Zugang / Hinweise",
+    keyHandlingNotes: "Schlüssel / Zutritt",
+    timingNotes: "Zeitfenster",
+    internalNotes: "Interne Notiz",
+  };
+  const labels = fieldsRaw
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => map[item as ProjectRequiredField] ?? item);
+  return `Pflichtangaben fehlen: ${labels.join(", ")}`;
 }
 
 export async function addProjectChatMessageAction(formData: FormData) {

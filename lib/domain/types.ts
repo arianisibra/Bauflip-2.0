@@ -296,6 +296,9 @@ export type Quote = {
   totalNet: number;
   vatAmount: number;
   totalGross: number;
+  deliveryChannel: "email" | "post" | null;
+  deliverySentAt: string | null;
+  deliveryRecipient: string | null;
   createdAt: string;
 };
 
@@ -320,6 +323,9 @@ export type Delivery = {
   pdfVersion: number;
   finalizedAt: string | null;
   finalizedBy: string | null;
+  deliveryChannel: "email" | "post" | null;
+  deliverySentAt: string | null;
+  deliveryRecipient: string | null;
   createdAt: string;
 };
 
@@ -334,6 +340,9 @@ export type Invoice = {
   pdfVersion: number;
   finalizedAt: string | null;
   finalizedBy: string | null;
+  deliveryChannel: "email" | "post" | null;
+  deliverySentAt: string | null;
+  deliveryRecipient: string | null;
   createdAt: string;
 };
 

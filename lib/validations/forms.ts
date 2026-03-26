@@ -89,6 +89,10 @@ export const finalizeDocumentSchema = z.object({
   projectId: z.string().min(1),
   documentType: z.enum(["quote", "invoice", "delivery"]),
   documentId: z.string().min(1),
+  deliveryChannel: z.enum(["email", "post"]).optional(),
+  emailTo: z.string().optional(),
+  emailSubject: z.string().optional(),
+  emailHtml: z.string().optional(),
 });
 
 export const transitionSchema = z.object({

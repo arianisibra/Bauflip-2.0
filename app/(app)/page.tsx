@@ -16,7 +16,19 @@ import {
 import { defaultDashboardLayout } from "@/lib/dashboard/default-layout";
 import { sanitizeLayoutForRole } from "@/lib/dashboard/sanitize";
 import type { DashboardPageData } from "@/lib/dashboard/page-data";
+import type { DashboardLayout } from "@/lib/dashboard/types";
 import { hasSupabaseConfig } from "@/lib/supabase/server";
+
+function ensureChatModule(layout: DashboardLayout): DashboardLayout {
+  const hasChat = layout.items.some((item) => item.widgetId === "chat_module");
+  if (hasChat) {
+    return layout;
+  }
+  return {
+    ...layout,
+    items: [...layout.items, { instanceId: crypto.randomUUID(), widgetId: "chat_module" }],
+  };
+}
 
 export default async function ArbeitspoolPage() {
   const session = await getCurrentSession();
@@ -53,9 +65,8 @@ export default async function ArbeitspoolPage() {
     },
   };
 
-  const layout = sanitizeLayoutForRole(
-    storedLayout ?? defaultDashboardLayout(session.role),
-    session.role,
+  const layout = ensureChatModule(
+    sanitizeLayoutForRole(storedLayout ?? defaultDashboardLayout(session.role), session.role),
   );
 
   return (

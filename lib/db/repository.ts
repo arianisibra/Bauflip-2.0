@@ -303,6 +303,103 @@ function mapContactAddressRow(row: Record<string, unknown>): ContactAddress {
   };
 }
 
+function mapQuoteRow(row: Record<string, unknown>): Quote {
+  return {
+    id: String(row.id),
+    projectId: String(row.project_id ?? row.projectId ?? ""),
+    version: Number(row.version ?? 1),
+    status: String(row.status ?? "entwurf") as Quote["status"],
+    sentAt: row.sent_at ? String(row.sent_at) : row.sentAt ? String(row.sentAt) : null,
+    approvedAt: row.approved_at ? String(row.approved_at) : row.approvedAt ? String(row.approvedAt) : null,
+    pdfPath: row.pdf_path ? String(row.pdf_path) : row.pdfPath ? String(row.pdfPath) : null,
+    pdfGeneratedAt: row.pdf_generated_at ? String(row.pdf_generated_at) : row.pdfGeneratedAt ? String(row.pdfGeneratedAt) : null,
+    pdfVersion: Number(row.pdf_version ?? row.pdfVersion ?? 0),
+    finalizedAt: row.finalized_at ? String(row.finalized_at) : row.finalizedAt ? String(row.finalizedAt) : null,
+    finalizedBy: row.finalized_by ? String(row.finalized_by) : row.finalizedBy ? String(row.finalizedBy) : null,
+    warrantyText: row.warranty_text != null ? String(row.warranty_text) : row.warrantyText != null ? String(row.warrantyText) : null,
+    validityDays: row.validity_days != null ? Number(row.validity_days) : row.validityDays != null ? Number(row.validityDays) : null,
+    leadTimeText: row.lead_time_text != null ? String(row.lead_time_text) : row.leadTimeText != null ? String(row.leadTimeText) : null,
+    downPaymentPercent:
+      row.down_payment_percent != null ? Number(row.down_payment_percent) : row.downPaymentPercent != null ? Number(row.downPaymentPercent) : null,
+    paymentTermsText:
+      row.payment_terms_text != null ? String(row.payment_terms_text) : row.paymentTermsText != null ? String(row.paymentTermsText) : null,
+    salutationText: row.salutation_text != null ? String(row.salutation_text) : row.salutationText != null ? String(row.salutationText) : null,
+    textBlocks: row.text_blocks != null ? String(row.text_blocks) : row.textBlocks != null ? String(row.textBlocks) : null,
+    currency: String(row.currency ?? "CHF"),
+    discountPercent: Number(row.discount_percent ?? row.discountPercent ?? 0),
+    vatPercent: Number(row.vat_percent ?? row.vatPercent ?? 8.1),
+    subtotalNet: Number(row.subtotal_net ?? row.subtotalNet ?? 0),
+    discountAmount: Number(row.discount_amount ?? row.discountAmount ?? 0),
+    totalNet: Number(row.total_net ?? row.totalNet ?? 0),
+    vatAmount: Number(row.vat_amount ?? row.vatAmount ?? 0),
+    totalGross: Number(row.total_gross ?? row.totalGross ?? 0),
+    deliveryChannel:
+      row.delivery_channel != null
+        ? (String(row.delivery_channel) as Quote["deliveryChannel"])
+        : row.deliveryChannel != null
+          ? (String(row.deliveryChannel) as Quote["deliveryChannel"])
+          : null,
+    deliverySentAt:
+      row.delivery_sent_at != null ? String(row.delivery_sent_at) : row.deliverySentAt != null ? String(row.deliverySentAt) : null,
+    deliveryRecipient:
+      row.delivery_recipient != null ? String(row.delivery_recipient) : row.deliveryRecipient != null ? String(row.deliveryRecipient) : null,
+    createdAt: String(row.created_at ?? row.createdAt ?? ""),
+  };
+}
+
+function mapDeliveryRow(row: Record<string, unknown>): Delivery {
+  return {
+    id: String(row.id),
+    projectId: String(row.project_id ?? row.projectId ?? ""),
+    purchaseOrderId: row.purchase_order_id ? String(row.purchase_order_id) : row.purchaseOrderId ? String(row.purchaseOrderId) : null,
+    deliveryNoteNumber: row.delivery_note_number != null ? String(row.delivery_note_number) : row.deliveryNoteNumber != null ? String(row.deliveryNoteNumber) : null,
+    arrivedAt: String(row.arrived_at ?? row.arrivedAt ?? ""),
+    checkedByRole: String(row.checked_by_role ?? row.checkedByRole ?? "office") as Delivery["checkedByRole"],
+    pdfPath: row.pdf_path ? String(row.pdf_path) : row.pdfPath ? String(row.pdfPath) : null,
+    pdfGeneratedAt: row.pdf_generated_at ? String(row.pdf_generated_at) : row.pdfGeneratedAt ? String(row.pdfGeneratedAt) : null,
+    pdfVersion: Number(row.pdf_version ?? row.pdfVersion ?? 0),
+    finalizedAt: row.finalized_at ? String(row.finalized_at) : row.finalizedAt ? String(row.finalizedAt) : null,
+    finalizedBy: row.finalized_by ? String(row.finalized_by) : row.finalizedBy ? String(row.finalizedBy) : null,
+    deliveryChannel:
+      row.delivery_channel != null
+        ? (String(row.delivery_channel) as Delivery["deliveryChannel"])
+        : row.deliveryChannel != null
+          ? (String(row.deliveryChannel) as Delivery["deliveryChannel"])
+          : null,
+    deliverySentAt:
+      row.delivery_sent_at != null ? String(row.delivery_sent_at) : row.deliverySentAt != null ? String(row.deliverySentAt) : null,
+    deliveryRecipient:
+      row.delivery_recipient != null ? String(row.delivery_recipient) : row.deliveryRecipient != null ? String(row.deliveryRecipient) : null,
+    createdAt: String(row.created_at ?? row.createdAt ?? ""),
+  };
+}
+
+function mapInvoiceRow(row: Record<string, unknown>): Invoice {
+  return {
+    id: String(row.id),
+    projectId: String(row.project_id ?? row.projectId ?? ""),
+    invoiceNumber: row.invoice_number != null ? String(row.invoice_number) : row.invoiceNumber != null ? String(row.invoiceNumber) : null,
+    status: String(row.status ?? "entwurf") as Invoice["status"],
+    sentAt: row.sent_at ? String(row.sent_at) : row.sentAt ? String(row.sentAt) : null,
+    pdfPath: row.pdf_path ? String(row.pdf_path) : row.pdfPath ? String(row.pdfPath) : null,
+    pdfGeneratedAt: row.pdf_generated_at ? String(row.pdf_generated_at) : row.pdfGeneratedAt ? String(row.pdfGeneratedAt) : null,
+    pdfVersion: Number(row.pdf_version ?? row.pdfVersion ?? 0),
+    finalizedAt: row.finalized_at ? String(row.finalized_at) : row.finalizedAt ? String(row.finalizedAt) : null,
+    finalizedBy: row.finalized_by ? String(row.finalized_by) : row.finalizedBy ? String(row.finalizedBy) : null,
+    deliveryChannel:
+      row.delivery_channel != null
+        ? (String(row.delivery_channel) as Invoice["deliveryChannel"])
+        : row.deliveryChannel != null
+          ? (String(row.deliveryChannel) as Invoice["deliveryChannel"])
+          : null,
+    deliverySentAt:
+      row.delivery_sent_at != null ? String(row.delivery_sent_at) : row.deliverySentAt != null ? String(row.deliverySentAt) : null,
+    deliveryRecipient:
+      row.delivery_recipient != null ? String(row.delivery_recipient) : row.deliveryRecipient != null ? String(row.deliveryRecipient) : null,
+    createdAt: String(row.created_at ?? row.createdAt ?? ""),
+  };
+}
+
 export async function listProjects() {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
@@ -965,10 +1062,10 @@ export async function getProjectBundle(projectId: string): Promise<ProjectBundle
     notes: (notes as unknown as ProjectNote[]) ?? [],
     appointments: (appointments as unknown as Appointment[]) ?? [],
     reports: (reports as unknown as TechnicianReport[]) ?? [],
-    quotes: (quotes as unknown as Quote[]) ?? [],
+    quotes: ((quotes as Array<Record<string, unknown>> | null) ?? []).map(mapQuoteRow),
     orders: (orders as unknown as PurchaseOrder[]) ?? [],
-    deliveries: (deliveries as unknown as Delivery[]) ?? [],
-    invoices: (invoices as unknown as Invoice[]) ?? [],
+    deliveries: ((deliveries as Array<Record<string, unknown>> | null) ?? []).map(mapDeliveryRow),
+    invoices: ((invoices as Array<Record<string, unknown>> | null) ?? []).map(mapInvoiceRow),
   };
 }
 
@@ -1530,7 +1627,19 @@ export async function addTechnicianReport(input: Omit<TechnicianReport, "id" | "
 export async function addQuote(
   input: Omit<
     Quote,
-    "id" | "createdAt" | "status" | "sentAt" | "approvedAt" | "pdfPath" | "pdfGeneratedAt" | "pdfVersion" | "finalizedAt" | "finalizedBy"
+    | "id"
+    | "createdAt"
+    | "status"
+    | "sentAt"
+    | "approvedAt"
+    | "pdfPath"
+    | "pdfGeneratedAt"
+    | "pdfVersion"
+    | "finalizedAt"
+    | "finalizedBy"
+    | "deliveryChannel"
+    | "deliverySentAt"
+    | "deliveryRecipient"
   > & {
     items?: Array<{ description: string; quantity: number; unit: string; unitPrice: number }>;
   },
@@ -1548,6 +1657,9 @@ export async function addQuote(
       pdfVersion: 0,
       finalizedAt: null,
       finalizedBy: null,
+      deliveryChannel: null,
+      deliverySentAt: null,
+      deliveryRecipient: null,
       createdAt: new Date().toISOString(),
       ...quoteInput,
     };
@@ -1594,7 +1706,7 @@ export async function addQuote(
     }
   }
 
-  return data as unknown as Quote;
+  return mapQuoteRow(data as Record<string, unknown>);
 }
 
 export async function addPurchaseOrder(input: Omit<PurchaseOrder, "id" | "createdAt" | "status" | "emailSentAt">) {
@@ -1624,7 +1736,21 @@ export async function addPurchaseOrder(input: Omit<PurchaseOrder, "id" | "create
 }
 
 export async function addDelivery(
-  input: Omit<Delivery, "id" | "createdAt" | "arrivedAt" | "checkedByRole" | "pdfPath" | "pdfGeneratedAt" | "pdfVersion" | "finalizedAt" | "finalizedBy">,
+  input: Omit<
+    Delivery,
+    | "id"
+    | "createdAt"
+    | "arrivedAt"
+    | "checkedByRole"
+    | "pdfPath"
+    | "pdfGeneratedAt"
+    | "pdfVersion"
+    | "finalizedAt"
+    | "finalizedBy"
+    | "deliveryChannel"
+    | "deliverySentAt"
+    | "deliveryRecipient"
+  >,
 ) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
@@ -1637,6 +1763,9 @@ export async function addDelivery(
       pdfVersion: 0,
       finalizedAt: null,
       finalizedBy: null,
+      deliveryChannel: null,
+      deliverySentAt: null,
+      deliveryRecipient: null,
       createdAt: new Date().toISOString(),
       ...input,
     };
@@ -1654,11 +1783,25 @@ export async function addDelivery(
     throw new Error("Wareneingang konnte nicht erfasst werden.");
   }
 
-  return data as unknown as Delivery;
+  return mapDeliveryRow(data as Record<string, unknown>);
 }
 
 export async function addInvoice(
-  input: Omit<Invoice, "id" | "createdAt" | "status" | "sentAt" | "pdfPath" | "pdfGeneratedAt" | "pdfVersion" | "finalizedAt" | "finalizedBy">,
+  input: Omit<
+    Invoice,
+    | "id"
+    | "createdAt"
+    | "status"
+    | "sentAt"
+    | "pdfPath"
+    | "pdfGeneratedAt"
+    | "pdfVersion"
+    | "finalizedAt"
+    | "finalizedBy"
+    | "deliveryChannel"
+    | "deliverySentAt"
+    | "deliveryRecipient"
+  >,
 ) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
@@ -1671,6 +1814,9 @@ export async function addInvoice(
       pdfVersion: 0,
       finalizedAt: null,
       finalizedBy: null,
+      deliveryChannel: null,
+      deliverySentAt: null,
+      deliveryRecipient: null,
       createdAt: new Date().toISOString(),
       ...input,
     };
@@ -1687,7 +1833,7 @@ export async function addInvoice(
     throw new Error("Rechnungsentwurf konnte nicht erstellt werden.");
   }
 
-  return data as unknown as Invoice;
+  return mapInvoiceRow(data as Record<string, unknown>);
 }
 
 export async function getQuoteById(quoteId: string): Promise<Quote | null> {
@@ -1696,7 +1842,7 @@ export async function getQuoteById(quoteId: string): Promise<Quote | null> {
     return mockQuotes.find((q) => q.id === quoteId) ?? null;
   }
   const { data } = await supabase.from("quotes").select("*").eq("id", quoteId).maybeSingle();
-  return (data as unknown as Quote | null) ?? null;
+  return data ? mapQuoteRow(data as Record<string, unknown>) : null;
 }
 
 export async function getInvoiceById(invoiceId: string): Promise<Invoice | null> {
@@ -1705,7 +1851,7 @@ export async function getInvoiceById(invoiceId: string): Promise<Invoice | null>
     return mockInvoices.find((i) => i.id === invoiceId) ?? null;
   }
   const { data } = await supabase.from("invoices").select("*").eq("id", invoiceId).maybeSingle();
-  return (data as unknown as Invoice | null) ?? null;
+  return data ? mapInvoiceRow(data as Record<string, unknown>) : null;
 }
 
 export async function getDeliveryById(deliveryId: string): Promise<Delivery | null> {
@@ -1714,7 +1860,7 @@ export async function getDeliveryById(deliveryId: string): Promise<Delivery | nu
     return mockDeliveries.find((d) => d.id === deliveryId) ?? null;
   }
   const { data } = await supabase.from("deliveries").select("*").eq("id", deliveryId).maybeSingle();
-  return (data as unknown as Delivery | null) ?? null;
+  return data ? mapDeliveryRow(data as Record<string, unknown>) : null;
 }
 
 export async function markQuoteFinalizedWithPdf(input: {
@@ -1722,6 +1868,8 @@ export async function markQuoteFinalizedWithPdf(input: {
   pdfPath: string;
   finalizedBy: string | null;
   nextPdfVersion: number;
+  deliveryChannel: "email" | "post";
+  deliveryRecipient: string | null;
 }) {
   const now = new Date().toISOString();
   const supabase = await createSupabaseServerClient();
@@ -1737,6 +1885,9 @@ export async function markQuoteFinalizedWithPdf(input: {
     quote.pdfVersion = input.nextPdfVersion;
     quote.finalizedAt = now;
     quote.finalizedBy = input.finalizedBy;
+    quote.deliveryChannel = input.deliveryChannel;
+    quote.deliverySentAt = now;
+    quote.deliveryRecipient = input.deliveryRecipient;
     return quote;
   }
 
@@ -1750,6 +1901,9 @@ export async function markQuoteFinalizedWithPdf(input: {
       pdf_version: input.nextPdfVersion,
       finalized_at: now,
       finalized_by: input.finalizedBy,
+      delivery_channel: input.deliveryChannel,
+      delivery_sent_at: now,
+      delivery_recipient: input.deliveryRecipient,
     })
     .eq("id", input.quoteId)
     .select("*")
@@ -1757,7 +1911,7 @@ export async function markQuoteFinalizedWithPdf(input: {
   if (error || !data) {
     throw new Error("Offerte konnte nicht finalisiert werden.");
   }
-  return data as unknown as Quote;
+  return mapQuoteRow(data as Record<string, unknown>);
 }
 
 export async function markInvoiceFinalizedWithPdf(input: {
@@ -1765,6 +1919,8 @@ export async function markInvoiceFinalizedWithPdf(input: {
   pdfPath: string;
   finalizedBy: string | null;
   nextPdfVersion: number;
+  deliveryChannel: "email" | "post";
+  deliveryRecipient: string | null;
 }) {
   const now = new Date().toISOString();
   const supabase = await createSupabaseServerClient();
@@ -1780,6 +1936,9 @@ export async function markInvoiceFinalizedWithPdf(input: {
     invoice.pdfVersion = input.nextPdfVersion;
     invoice.finalizedAt = now;
     invoice.finalizedBy = input.finalizedBy;
+    invoice.deliveryChannel = input.deliveryChannel;
+    invoice.deliverySentAt = now;
+    invoice.deliveryRecipient = input.deliveryRecipient;
     return invoice;
   }
 
@@ -1793,6 +1952,9 @@ export async function markInvoiceFinalizedWithPdf(input: {
       pdf_version: input.nextPdfVersion,
       finalized_at: now,
       finalized_by: input.finalizedBy,
+      delivery_channel: input.deliveryChannel,
+      delivery_sent_at: now,
+      delivery_recipient: input.deliveryRecipient,
     })
     .eq("id", input.invoiceId)
     .select("*")
@@ -1800,7 +1962,7 @@ export async function markInvoiceFinalizedWithPdf(input: {
   if (error || !data) {
     throw new Error("Rechnung konnte nicht finalisiert werden.");
   }
-  return data as unknown as Invoice;
+  return mapInvoiceRow(data as Record<string, unknown>);
 }
 
 export async function markDeliveryFinalizedWithPdf(input: {
@@ -1839,7 +2001,7 @@ export async function markDeliveryFinalizedWithPdf(input: {
   if (error || !data) {
     throw new Error("Lieferschein konnte nicht finalisiert werden.");
   }
-  return data as unknown as Delivery;
+  return mapDeliveryRow(data as Record<string, unknown>);
 }
 
 export async function getProjectDocumentSignedUrl(input: {
@@ -1868,13 +2030,19 @@ export async function getProjectDocumentSignedUrl(input: {
     return null;
   }
 
-  const { data, error } = await supabase.storage
-    .from("project-documents")
-    .createSignedUrl(pdfPath, input.expiresSec ?? 900);
-  if (error || !data?.signedUrl) {
-    return null;
+  const buckets = ["project-documents", "project-files"] as const;
+  for (const bucket of buckets) {
+    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(pdfPath, input.expiresSec ?? 900);
+    if (!error && data?.signedUrl) {
+      return data.signedUrl;
+    }
+    const msg = error?.message?.toLowerCase() ?? "";
+    const canTryNext = msg.includes("bucket not found") || msg.includes("not found");
+    if (!canTryNext) {
+      return null;
+    }
   }
-  return data.signedUrl;
+  return null;
 }
 
 export async function updateProjectStatus(projectId: string, status: Project["status"], nextOwnerRole: Project["nextOwnerRole"]) {

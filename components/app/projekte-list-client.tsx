@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { ProjectListRow } from "@/lib/domain/types";
+import type { Contact, ProjectListRow } from "@/lib/domain/types";
 import { ProjektSheetEditor } from "@/components/app/projekt-sheet-editor";
 import { IntakeForm } from "@/components/app/intake-form";
 import { ListPageToolbar } from "@/components/app/list-page-toolbar";
@@ -24,9 +24,11 @@ function normalize(s: string) {
 
 export function ProjekteListClient({
   projects,
+  contacts,
   canEditProjectSheet,
 }: {
   projects: ProjectListRow[];
+  contacts: Contact[];
   canEditProjectSheet: boolean;
 }) {
   const [q, setQ] = useState("");
@@ -121,7 +123,7 @@ export function ProjekteListClient({
         className="max-w-2xl overflow-y-auto"
       >
         <div className="p-4">
-          <IntakeForm />
+          <IntakeForm contacts={contacts} />
         </div>
       </Sheet>
     </>

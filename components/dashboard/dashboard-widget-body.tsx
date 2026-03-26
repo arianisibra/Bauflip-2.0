@@ -193,13 +193,30 @@ export function DashboardWidgetBody({
         </div>
       );
 
+    case "chat_module":
+      const latestProject = sortRecent(projects)[0];
+      return (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">Direkter Einstieg in den Projektchat ohne Umweg über die Chat-Übersicht.</p>
+          {latestProject ? (
+            <Button
+              variant="outline"
+              className="w-fit justify-start gap-2"
+              nativeButton={false}
+              render={<Link href={`/projekte/${latestProject.id}#team-chat`} />}
+            >
+              <MessageSquare className="size-4 text-cyan-600" />
+              Direkt zum Chatfenster
+            </Button>
+          ) : (
+            <p className="text-sm text-muted-foreground">Noch kein Projekt vorhanden.</p>
+          )}
+        </div>
+      );
+
     case "shortcuts":
       return (
         <div className="grid gap-2 sm:grid-cols-2">
-          <Button variant="outline" className="justify-start gap-2" nativeButton={false} render={<Link href="/team-chat" />}>
-            <MessageSquare className="size-4 text-cyan-600" />
-            Team-Chat
-          </Button>
           <Button variant="outline" className="justify-start gap-2" nativeButton={false} render={<Link href="/projekte" />}>
             Projekte
           </Button>
