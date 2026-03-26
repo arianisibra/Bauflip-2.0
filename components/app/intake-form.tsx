@@ -34,6 +34,7 @@ const defaultValues: IntakeValues = {
   contactStreet: "",
   contactPostalCode: "",
   contactCity: "",
+  contactId: "",
 };
 
 const uuidLikePattern =
@@ -59,6 +60,7 @@ export function IntakeForm({ contacts = [] }: { contacts?: Contact[] }) {
 
   const applyContactToFields = useCallback(
     (contact: Contact) => {
+      form.setValue("contactId", contact.id, { shouldDirty: true });
       form.setValue("contactName", contact.name ?? "", { shouldDirty: true });
       form.setValue("contactEmail", contact.email ?? "", { shouldDirty: true });
       form.setValue("contactPhone", contact.phone ?? contact.mobile ?? "", { shouldDirty: true });
@@ -68,6 +70,8 @@ export function IntakeForm({ contacts = [] }: { contacts?: Contact[] }) {
     },
     [form],
   );
+
+  const linkedContactId = form.watch("contactId");
 
   const onSubmit = form.handleSubmit((values) => {
     form.clearErrors("root");
@@ -358,8 +362,28 @@ export function IntakeForm({ contacts = [] }: { contacts?: Contact[] }) {
                 </div>
                 <p className="text-xs text-muted-foreground">Kontakt wird beim Anklicken automatisch übernommen.</p>
               </div>
+              {linkedContactId ? (
+                <div className="flex flex-col gap-2 rounded-md border border-primary/25 bg-primary/5 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    Es wird <strong className="text-foreground">kein neuer Kontakt</strong> angelegt — diese Anfrage wird dem
+                    ausgewählten Stammdatensatz zugeordnet.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => {
+                      form.setValue("contactId", "", { shouldDirty: true });
+                    }}
+                  >
+                    Verknüpfung aufheben
+                  </Button>
+                </div>
+              ) : null}
             </div>
           ) : null}
+          <input type="hidden" {...form.register("contactId")} />
           <div className="flex flex-col gap-2">
             <Label htmlFor="contactName">Name</Label>
             <Input

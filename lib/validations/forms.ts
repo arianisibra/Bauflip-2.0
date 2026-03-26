@@ -25,6 +25,11 @@ export const intakeSchema = z.object({
   contactStreet: z.string().optional(),
   contactPostalCode: z.string().optional(),
   contactCity: z.string().optional(),
+  /** Wenn gesetzt: bestehenden Kontakt verwenden, keinen neuen anlegen */
+  contactId: z
+    .union([z.literal(""), z.string().uuid()])
+    .transform((v) => (v === "" ? undefined : v))
+    .optional(),
 });
 
 export const noteSchema = z.object({

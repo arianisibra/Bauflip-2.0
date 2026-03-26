@@ -37,6 +37,7 @@ import {
   markQuoteFinalizedWithPdf,
   upsertArticles,
   upsertModuleLabel,
+  getContactWithDetails,
   getProjectBundle,
   updateProjectStatus,
 } from "@/lib/db/repository";
@@ -210,22 +211,39 @@ export async function createIntakeAction(formData: FormData) {
 
   const session = await getCurrentSession();
 
-  const contact = await createContact({
-    organizationId: session?.organizationId ?? null,
-    contactNumber: null,
-    partyKind: "firma",
-    category: "kunde",
-    name: parsed.data.contactName,
-    uidNumber: null,
-    email: parsed.data.contactEmail || null,
-    phone: parsed.data.contactPhone || null,
-    mobile: null,
-    street: parsed.data.contactStreet || null,
-    postalCode: parsed.data.contactPostalCode || null,
-    city: parsed.data.contactCity || null,
-    website: null,
-    managedObjectLabel: null,
-  });
+  let contact;
+  if (parsed.data.contactId) {
+    const details = await getContactWithDetails(parsed.data.contactId);
+    if (!details) {
+      throw new Error("Kontakt nicht gefunden.");
+    }
+    const c = details.contact;
+    if (
+      session?.organizationId &&
+      c.organizationId &&
+      session.organizationId !== c.organizationId
+    ) {
+      throw new Error("Dieser Kontakt gehört nicht zu Ihrer Organisation.");
+    }
+    contact = c;
+  } else {
+    contact = await createContact({
+      organizationId: session?.organizationId ?? null,
+      contactNumber: null,
+      partyKind: "firma",
+      category: "kunde",
+      name: parsed.data.contactName,
+      uidNumber: null,
+      email: parsed.data.contactEmail || null,
+      phone: parsed.data.contactPhone || null,
+      mobile: null,
+      street: parsed.data.contactStreet || null,
+      postalCode: parsed.data.contactPostalCode || null,
+      city: parsed.data.contactCity || null,
+      website: null,
+      managedObjectLabel: null,
+    });
+  }
 
   const project = await createProject({
     contactId: contact.id,
