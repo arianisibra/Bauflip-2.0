@@ -2,6 +2,7 @@ import type { AppPageKey, RoleType, SidebarItem } from "@/lib/domain/types";
 
 export const sidebarItems: SidebarItem[] = [
   { key: "uebersicht", label: "Übersicht", href: "/", section: "navigation" },
+  { key: "mitarbeiter", label: "Mitarbeiter", href: "/mitarbeiter", section: "navigation" },
   { key: "kontakte", label: "Kontakte", href: "/kontakte", section: "navigation" },
   { key: "termine", label: "Termine", href: "/termine", section: "navigation" },
   { key: "projekte", label: "Projekte", href: "/projekte", section: "navigation" },

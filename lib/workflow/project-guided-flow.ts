@@ -30,6 +30,13 @@ export function getPrimaryNextStatus(status: ProjectStatus): ProjectStatus | nul
 export type BundleGateCounts = {
   besichtigungAppointments: number;
   ausfuehrungAppointments: number;
+  reports: number;
+  quotes: number;
+  quoteFinalized: number;
+  orders: number;
+  deliveries: number;
+  invoices: number;
+  invoiceFinalized: number;
 };
 
 /** Zusätzliche Bedingungen neben Stammdaten-Pflichtfeldern. */
@@ -47,6 +54,47 @@ export function getBundlePrerequisiteMessages(
   if (project.status === "ausfuehrung_geplant" && targetStatus === "ausfuehrung_erledigt") {
     if (bundle.ausfuehrungAppointments < 1) {
       msgs.push("Mindestens einen Ausführungstermin erfassen (Schritt «Ausführungstermin»).");
+    }
+  }
+  if (project.status === "bericht_ausstehend" && targetStatus === "bericht_fertig") {
+    if (bundle.reports < 1) {
+      msgs.push("Mindestens einen Technikerbericht erfassen (Schritt «Rapport & Bestandsaufnahme»).");
+    }
+  }
+  if (project.status === "bericht_fertig" && targetStatus === "offerte_in_arbeit") {
+    if (bundle.reports < 1) {
+      msgs.push("Rapport fehlt: zuerst Technikerbericht erfassen.");
+    }
+  }
+  if (project.status === "offerte_in_arbeit" && targetStatus === "offerte_gesendet") {
+    if (bundle.quotes < 1) {
+      msgs.push("Mindestens eine Offerte erstellen.");
+    }
+    if (bundle.quoteFinalized < 1) {
+      msgs.push("Offerte finalisieren (PDF/Post/E-Mail), bevor sie als gesendet gilt.");
+    }
+  }
+  if (project.status === "bestellung" && targetStatus === "bestellt") {
+    if (bundle.orders < 1) {
+      msgs.push("Mindestens eine Lieferanten-Bestellung erfassen.");
+    }
+  }
+  if (project.status === "bestellt" && targetStatus === "ware_eingetroffen") {
+    if (bundle.deliveries < 1) {
+      msgs.push("Wareneingang erfassen, bevor Material als eingetroffen markiert wird.");
+    }
+  }
+  if (project.status === "ausfuehrung_erledigt" && targetStatus === "rechnung") {
+    if (bundle.reports < 1) {
+      msgs.push("Fertigmeldung/Rapport fehlt: zuerst Leistung dokumentieren.");
+    }
+  }
+  if (project.status === "rechnung" && targetStatus === "abgeschlossen") {
+    if (bundle.invoices < 1) {
+      msgs.push("Mindestens eine Rechnung vorbereiten.");
+    }
+    if (bundle.invoiceFinalized < 1) {
+      msgs.push("Rechnung finalisieren (PDF/Post/E-Mail), bevor das Projekt abgeschlossen wird.");
     }
   }
   return msgs;

@@ -1,8 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getCurrentSession } from "@/lib/auth/session";
+import { getCurrentRole, getCurrentSession } from "@/lib/auth/session";
 import {
+  deleteProject,
   getProjectBundle,
   insertProjectWorkType,
   listAssignableProfiles,
@@ -15,6 +16,7 @@ import {
   listSupplierTemplates,
   updateProjectStammdaten,
 } from "@/lib/db/repository";
+import { getProjectFileSignedUrl } from "@/lib/storage/signed-urls";
 import { projectStammdatenUpdateSchema } from "@/lib/validations/forms";
 
 function nz(s: string | undefined | null): string | null {
@@ -35,9 +37,6 @@ export async function getContactProjectOptionsAction(contactId: string) {
 
 export async function getProjectSheetDataAction(projectId: string) {
   const session = await getCurrentSession();
-  if (!session) {
-    throw new Error("Nicht angemeldet.");
-  }
   const bundle = await getProjectBundle(projectId);
   if (!bundle) {
     throw new Error("Projekt nicht gefunden.");
@@ -51,8 +50,15 @@ export async function getProjectSheetDataAction(projectId: string) {
     listArticles(),
   ]);
   const { persons, addresses } = await getContactProjectOptionsAction(bundle.project.contactId);
+  const reportAttachments = await Promise.all(
+    (bundle.attachments ?? []).map(async (a) => ({
+      ...a,
+      href: await getProjectFileSignedUrl(a.filePath),
+    })),
+  );
   return {
     bundle,
+    reportAttachments,
     contacts,
     properties,
     workTypes,
@@ -61,7 +67,7 @@ export async function getProjectSheetDataAction(projectId: string) {
     addresses,
     supplierTemplates,
     articles,
-    actorRole: session.role,
+    actorRole: session?.role ?? "office",
   };
 }
 
@@ -107,4 +113,18 @@ export async function updateProjectStammdatenAction(values: unknown) {
 
   revalidatePath(`/projekte/${v.projectId}`);
   revalidatePath("/projekte");
+}
+
+export async function deleteProjectAction(projectId: string) {
+  const role = await getCurrentRole();
+  if (role !== "office" && role !== "admin") {
+    throw new Error("Keine Berechtigung.");
+  }
+  if (!projectId) {
+    throw new Error("Projekt-ID fehlt.");
+  }
+
+  await deleteProject(projectId);
+  revalidatePath("/projekte");
+  revalidatePath("/");
 }

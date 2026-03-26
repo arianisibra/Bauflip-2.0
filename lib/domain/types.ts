@@ -43,6 +43,7 @@ export const appPageKeys = [
   "uebersicht",
   "projekte",
   "kanban",
+  "mitarbeiter",
   "kontakte",
   "termine",
   "artikel",
@@ -396,6 +397,17 @@ export type ProjectChatAttachment = {
   fileType: string;
   filePath: string;
   uploadedAt: string;
+};
+
+export type ProjectAttachment = {
+  id: string;
+  projectId: string;
+  fileName: string;
+  fileType: string;
+  filePath: string;
+  sizeBytes: number | null;
+  uploadedBy: string | null;
+  createdAt: string;
 };
 
 export type CalendarEvent = {

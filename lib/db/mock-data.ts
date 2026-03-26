@@ -18,6 +18,7 @@ import type {
   MailProviderConfig,
   ModuleLabel,
   Project,
+  ProjectAttachment,
   ProjectChatAttachment,
   ProjectChatMessage,
   ProjectNote,
@@ -277,6 +278,7 @@ export const mockProjectChatMessages: ProjectChatMessage[] = [
 ];
 
 export const mockProjectChatAttachments: ProjectChatAttachment[] = [];
+export const mockProjectAttachments: ProjectAttachment[] = [];
 
 export const mockCalendarEvents: CalendarEvent[] = [];
 

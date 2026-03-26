@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
-import { getArticleById, insertArticleCategory, listArticleCategories, saveArticle } from "@/lib/db/repository";
+import { deleteArticle, getArticleById, insertArticleCategory, listArticleCategories, saveArticle } from "@/lib/db/repository";
 import { articleCategoryCreateSchema, articleSaveSchema } from "@/lib/validations/forms";
 
 function parseOptPrice(raw: string | undefined): number | null {
@@ -98,4 +98,16 @@ export async function createArticleCategoryAction(formData: FormData) {
     templateScope: parsed.data.templateScope,
   });
   revalidatePath("/artikel", "layout");
+}
+
+export async function deleteArticleAction(articleId: string) {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
+    throw new Error("Keine Berechtigung.");
+  }
+  if (!articleId?.trim()) {
+    throw new Error("Artikel-ID fehlt.");
+  }
+  await deleteArticle(articleId.trim());
+  revalidatePath("/artikel");
 }

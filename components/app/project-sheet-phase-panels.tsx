@@ -1,5 +1,7 @@
 "use client";
 
+import { useRef } from "react";
+import { CalendarClock } from "lucide-react";
 import {
   addAppointmentAction,
   addDeliveryAction,
@@ -9,6 +11,7 @@ import {
   addStockDecisionAction,
   finalizeProjectDocumentAction,
   generateSwissQrAction,
+  uploadProjectReportFileAction,
 } from "@/app/(app)/actions";
 import type { getProjectSheetDataAction } from "@/app/(app)/projekte/actions";
 import { PROJECT_WORKFLOW_STEPS } from "@/lib/workflow/project-workflow-rail";
@@ -29,6 +32,10 @@ type ProjectSheetPhasePanelsProps = {
   phaseIndex: number;
   currentPhaseIndex: number;
   bundle: SheetPayload["bundle"];
+  reportAttachments: Array<
+    SheetPayload["reportAttachments"][number]
+  >;
+  profiles: SheetPayload["profiles"];
   supplierTemplates: SheetPayload["supplierTemplates"];
   articles: SheetPayload["articles"];
   onAfterMutation: () => void | Promise<void>;
@@ -38,12 +45,21 @@ export function ProjectSheetPhasePanels({
   phaseIndex,
   currentPhaseIndex,
   bundle,
+  reportAttachments,
+  profiles,
   supplierTemplates,
   articles,
   onAfterMutation,
 }: ProjectSheetPhasePanelsProps) {
+  const technicians = profiles.filter((p) => p.role === "technician");
+  const technicianById = new Map(technicians.map((t) => [t.id, t]));
   const besichtigungAppointments = bundle.appointments.filter((a) => a.kind === "besichtigung");
   const ausfuehrungAppointments = bundle.appointments.filter((a) => a.kind === "ausfuehrung");
+  const latestReport = bundle.reports.at(-1) ?? null;
+  const latestQuote = bundle.quotes.at(-1) ?? null;
+  const latestInvoice = bundle.invoices.at(-1) ?? null;
+  const latestOrder = bundle.orders.at(-1) ?? null;
+  const latestDelivery = bundle.deliveries.at(-1) ?? null;
 
   if (phaseIndex === 0) {
     return null;
@@ -55,6 +71,18 @@ export function ProjectSheetPhasePanels({
         <GuidedPhaseSection id="termin" phaseIndex={1} currentPhaseIndex={currentPhaseIndex}>
           <div className="space-y-4">
             <PhaseHeader workflowStepIndex={1} />
+            <PhaseControlCard
+              rows={[
+                {
+                  label: "Besichtigungstermine",
+                  value: besichtigungAppointments.length > 0 ? `${besichtigungAppointments.length} erfasst` : "Fehlt",
+                },
+                {
+                  label: "Nächster Besitzer",
+                  value: "Monteur",
+                },
+              ]}
+            />
             <Card>
               <CardHeader>
                 <CardTitle>Besichtigungstermin</CardTitle>
@@ -76,17 +104,36 @@ export function ProjectSheetPhasePanels({
                     <Label htmlFor="sh-bes-start" className="text-sm">
                       Beginn
                     </Label>
-                    <Input id="sh-bes-start" name="startsAt" type="datetime-local" required />
+                    <DateTimeInput id="sh-bes-start" name="startsAt" required />
                   </div>
                   <div className="flex flex-col gap-1">
                     <Label htmlFor="sh-bes-end" className="text-sm">
                       Ende
                     </Label>
-                    <Input id="sh-bes-end" name="endsAt" type="datetime-local" required />
+                    <DateTimeInput id="sh-bes-end" name="endsAt" required />
                   </div>
                   <div className="flex flex-col gap-1">
                     <Label className="text-sm">Planungsnotiz</Label>
                     <VoiceTextarea name="planningNotes" placeholder="z. B. Zugang via Hauswart" />
+                  </div>
+                  <div className="flex flex-col gap-1 sm:col-span-2">
+                    <Label htmlFor="sh-bes-technician" className="text-sm">
+                      Monteur
+                    </Label>
+                    <select
+                      id="sh-bes-technician"
+                      name="assignedTechnicianId"
+                      required={technicians.length > 0}
+                      disabled={technicians.length === 0}
+                      className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="">{technicians.length > 0 ? "Monteur auswählen" : "Kein Monteur verfügbar"}</option>
+                      {technicians.map((tech) => (
+                        <option key={tech.id} value={tech.id}>
+                          {tech.displayName}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="sm:col-span-2">
                     <Button type="submit" size="sm">
@@ -99,8 +146,18 @@ export function ProjectSheetPhasePanels({
                   <div className="flex flex-col gap-2">
                     {besichtigungAppointments.map((a) => (
                       <div key={a.id} className="rounded-md border bg-muted/20 px-3 py-2 text-sm">
-                        <span className="font-medium">{new Date(a.startsAt).toLocaleString("de-CH")}</span>
-                        {a.planningNotes ? <span className="ml-2 text-muted-foreground">{a.planningNotes}</span> : null}
+                        <p className="font-medium">
+                          Beginn: {formatDateTime(a.startsAt)}
+                          {" · "}
+                          Ende: {formatDateTime(a.endsAt)}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Monteur:{" "}
+                          {a.assignedTechnicianId
+                            ? (technicianById.get(a.assignedTechnicianId)?.displayName ?? "Zugewiesen")
+                            : "Nicht zugewiesen"}
+                        </p>
+                        {a.planningNotes ? <p className="mt-1 text-xs text-muted-foreground">Notiz: {a.planningNotes}</p> : null}
                       </div>
                     ))}
                   </div>
@@ -118,6 +175,18 @@ export function ProjectSheetPhasePanels({
         <GuidedPhaseSection id="rapport" phaseIndex={2} currentPhaseIndex={currentPhaseIndex}>
           <div className="space-y-4">
             <PhaseHeader workflowStepIndex={2} />
+            <PhaseControlCard
+              rows={[
+                {
+                  label: "Rapporte",
+                  value: bundle.reports.length > 0 ? `${bundle.reports.length} erfasst` : "Fehlt",
+                },
+                {
+                  label: "Letzter Rapport",
+                  value: latestReport ? formatDateTime(latestReport.createdAt) : "Noch keiner",
+                },
+              ]}
+            />
             <Card>
               <CardHeader>
                 <CardTitle>Technikerbericht</CardTitle>
@@ -126,6 +195,51 @@ export function ProjectSheetPhasePanels({
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
+                <form
+                  action={async (fd) => {
+                    await uploadProjectReportFileAction(fd);
+                    await onAfterMutation();
+                  }}
+                  className="flex flex-col gap-2 rounded-md border p-3"
+                >
+                  <input type="hidden" name="projectId" value={bundle.project.id} />
+                  <Label className="text-sm">Datei zum Rapport hochladen (Bild, PDF, Word)</Label>
+                  <Input
+                    name="file"
+                    type="file"
+                    required
+                    accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  />
+                  <div>
+                    <Button type="submit" size="sm" variant="outline">
+                      Datei hochladen
+                    </Button>
+                  </div>
+                </form>
+                {reportAttachments.length > 0 ? (
+                  <div className="rounded-md border p-3">
+                    <p className="mb-2 text-sm font-medium">Rapport-Dateien</p>
+                    <ul className="flex flex-col gap-1 text-sm">
+                      {reportAttachments.map((a) => (
+                        <li key={a.id} className="flex items-center justify-between gap-2">
+                          {a.href ? (
+                            <a
+                              href={a.href}
+                              className="truncate text-primary underline-offset-4 hover:underline"
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {a.fileName}
+                            </a>
+                          ) : (
+                            <span className="truncate text-muted-foreground">{a.fileName}</span>
+                          )}
+                          <span className="shrink-0 text-xs text-muted-foreground">{formatDateTime(a.createdAt)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
                 <TechnicianReportForm
                   projectId={bundle.project.id}
                   variant="full"
@@ -177,6 +291,22 @@ export function ProjectSheetPhasePanels({
         <GuidedPhaseSection id="offerte" phaseIndex={3} currentPhaseIndex={currentPhaseIndex}>
           <div className="space-y-4">
             <PhaseHeader workflowStepIndex={3} />
+            <PhaseControlCard
+              rows={[
+                {
+                  label: "Offerten",
+                  value: bundle.quotes.length > 0 ? `${bundle.quotes.length} Version(en)` : "Fehlt",
+                },
+                {
+                  label: "Letzter Versand",
+                  value: latestQuote?.deliverySentAt ? formatDateTime(latestQuote.deliverySentAt) : "Noch nicht versendet",
+                },
+                {
+                  label: "Empfänger",
+                  value: latestQuote?.deliveryRecipient ?? "Kein Empfänger protokolliert",
+                },
+              ]}
+            />
             <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
               <Card className="h-full min-h-0">
                 <CardHeader>
@@ -203,6 +333,13 @@ export function ProjectSheetPhasePanels({
                             </span>
                           </div>
                           <div className="mt-2 space-y-2">
+                            <p className="text-xs text-muted-foreground">
+                              {q.finalizedAt
+                                ? `Finalisiert: ${formatDateTime(q.finalizedAt)}`
+                                : "Noch nicht finalisiert"}
+                              {q.deliverySentAt ? ` · Versand: ${formatDateTime(q.deliverySentAt)}` : ""}
+                              {q.deliveryRecipient ? ` · Empfänger: ${q.deliveryRecipient}` : ""}
+                            </p>
                             <form
                               action={async (fd) => {
                                 await finalizeProjectDocumentAction(fd);
@@ -304,6 +441,26 @@ export function ProjectSheetPhasePanels({
         <GuidedPhaseSection id="bestellung" phaseIndex={4} currentPhaseIndex={currentPhaseIndex}>
           <div className="space-y-4">
             <PhaseHeader workflowStepIndex={4} />
+            <PhaseControlCard
+              rows={[
+                {
+                  label: "Bestellungen",
+                  value: bundle.orders.length > 0 ? `${bundle.orders.length} erfasst` : "Fehlt",
+                },
+                {
+                  label: "Wareneingänge",
+                  value: bundle.deliveries.length > 0 ? `${bundle.deliveries.length} erfasst` : "Fehlt",
+                },
+                {
+                  label: "Letzte Bestellung",
+                  value: latestOrder ? formatDateTime(latestOrder.createdAt) : "Noch keine",
+                },
+                {
+                  label: "Letzter Wareneingang",
+                  value: latestDelivery ? formatDateTime(latestDelivery.arrivedAt) : "Noch keiner",
+                },
+              ]}
+            />
             <div className="grid gap-4 lg:grid-cols-2">
               <Card>
                 <CardHeader>
@@ -420,6 +577,18 @@ export function ProjectSheetPhasePanels({
         <GuidedPhaseSection id="ausfuehrung" phaseIndex={5} currentPhaseIndex={currentPhaseIndex}>
           <div className="space-y-4">
             <PhaseHeader workflowStepIndex={5} />
+            <PhaseControlCard
+              rows={[
+                {
+                  label: "Ausführungstermine",
+                  value: ausfuehrungAppointments.length > 0 ? `${ausfuehrungAppointments.length} erfasst` : "Fehlt",
+                },
+                {
+                  label: "Nächster Besitzer",
+                  value: "Monteur",
+                },
+              ]}
+            />
             <Card>
               <CardHeader>
                 <CardTitle>2. Termin planen</CardTitle>
@@ -437,11 +606,11 @@ export function ProjectSheetPhasePanels({
                   <input type="hidden" name="kind" value="ausfuehrung" />
                   <div className="flex flex-col gap-1 sm:col-span-2">
                     <Label className="text-sm">Beginn</Label>
-                    <Input name="startsAt" type="datetime-local" required />
+                    <DateTimeInput name="startsAt" required />
                   </div>
                   <div className="flex flex-col gap-1">
                     <Label className="text-sm">Ende</Label>
-                    <Input name="endsAt" type="datetime-local" required />
+                    <DateTimeInput name="endsAt" required />
                   </div>
                   <div className="flex flex-col gap-1">
                     <Label className="text-sm">Zugang / Hinweise</Label>
@@ -450,6 +619,25 @@ export function ProjectSheetPhasePanels({
                   <div className="flex flex-col gap-1">
                     <Label className="text-sm">Planungsnotiz</Label>
                     <VoiceTextarea name="planningNotes" placeholder="Zeitaufwand, besondere Vorbereitungen …" />
+                  </div>
+                  <div className="flex flex-col gap-1 sm:col-span-2">
+                    <Label htmlFor="sh-aus-technician" className="text-sm">
+                      Monteur
+                    </Label>
+                    <select
+                      id="sh-aus-technician"
+                      name="assignedTechnicianId"
+                      required={technicians.length > 0}
+                      disabled={technicians.length === 0}
+                      className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="">{technicians.length > 0 ? "Monteur auswählen" : "Kein Monteur verfügbar"}</option>
+                      {technicians.map((tech) => (
+                        <option key={tech.id} value={tech.id}>
+                          {tech.displayName}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="sm:col-span-2">
                     <Button type="submit" size="sm">
@@ -462,8 +650,18 @@ export function ProjectSheetPhasePanels({
                   <div className="flex flex-col gap-2">
                     {ausfuehrungAppointments.map((a) => (
                       <div key={a.id} className="rounded-md border bg-muted/20 px-3 py-2 text-sm">
-                        <span className="font-medium">{new Date(a.startsAt).toLocaleString("de-CH")}</span>
-                        {a.planningNotes ? <span className="ml-2 text-muted-foreground">{a.planningNotes}</span> : null}
+                        <p className="font-medium">
+                          Beginn: {formatDateTime(a.startsAt)}
+                          {" · "}
+                          Ende: {formatDateTime(a.endsAt)}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Monteur:{" "}
+                          {a.assignedTechnicianId
+                            ? (technicianById.get(a.assignedTechnicianId)?.displayName ?? "Zugewiesen")
+                            : "Nicht zugewiesen"}
+                        </p>
+                        {a.planningNotes ? <p className="mt-1 text-xs text-muted-foreground">Notiz: {a.planningNotes}</p> : null}
                         {a.accessNotes ? <p className="mt-1 text-xs text-muted-foreground">Zugang: {a.accessNotes}</p> : null}
                       </div>
                     ))}
@@ -482,6 +680,18 @@ export function ProjectSheetPhasePanels({
         <GuidedPhaseSection id="fertigmeldung" phaseIndex={6} currentPhaseIndex={currentPhaseIndex}>
           <div className="space-y-4">
             <PhaseHeader workflowStepIndex={6} />
+            <PhaseControlCard
+              rows={[
+                {
+                  label: "Fertigmeldungen/Rapporte",
+                  value: bundle.reports.length > 0 ? `${bundle.reports.length} vorhanden` : "Fehlt",
+                },
+                {
+                  label: "Interne Notizen",
+                  value: bundle.notes.length > 0 ? `${bundle.notes.length} Eintrag/Einträge` : "Noch keine",
+                },
+              ]}
+            />
             <div className="grid gap-4 lg:grid-cols-2">
               <Card>
                 <CardHeader>
@@ -543,6 +753,22 @@ export function ProjectSheetPhasePanels({
         <GuidedPhaseSection id="rechnung" phaseIndex={7} currentPhaseIndex={currentPhaseIndex}>
           <div className="space-y-4">
             <PhaseHeader workflowStepIndex={7} />
+            <PhaseControlCard
+              rows={[
+                {
+                  label: "Rechnungen",
+                  value: bundle.invoices.length > 0 ? `${bundle.invoices.length} erfasst` : "Fehlt",
+                },
+                {
+                  label: "Letzter Versand",
+                  value: latestInvoice?.deliverySentAt ? formatDateTime(latestInvoice.deliverySentAt) : "Noch nicht versendet",
+                },
+                {
+                  label: "Empfänger",
+                  value: latestInvoice?.deliveryRecipient ?? "Kein Empfänger protokolliert",
+                },
+              ]}
+            />
             <div className="grid gap-4 lg:grid-cols-2">
               <Card>
                 <CardHeader>
@@ -578,6 +804,13 @@ export function ProjectSheetPhasePanels({
                             </span>
                           </div>
                           <div className="mt-2 space-y-2">
+                            <p className="text-xs text-muted-foreground">
+                              {inv.finalizedAt
+                                ? `Finalisiert: ${formatDateTime(inv.finalizedAt)}`
+                                : "Noch nicht finalisiert"}
+                              {inv.deliverySentAt ? ` · Versand: ${formatDateTime(inv.deliverySentAt)}` : ""}
+                              {inv.deliveryRecipient ? ` · Empfänger: ${inv.deliveryRecipient}` : ""}
+                            </p>
                             <form
                               action={async (fd) => {
                                 await finalizeProjectDocumentAction(fd);
@@ -686,6 +919,82 @@ export function ProjectSheetPhasePanels({
     default:
       return null;
   }
+}
+
+function formatDateTime(value: string) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) {
+    return String(value || "—");
+  }
+  return d.toLocaleString("de-CH");
+}
+
+function DateTimeInput({
+  id,
+  name,
+  required,
+  defaultValue,
+}: {
+  id?: string;
+  name: string;
+  required?: boolean;
+  defaultValue?: string;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <div className="relative">
+      <Input
+        ref={inputRef}
+        id={id}
+        name={name}
+        type="datetime-local"
+        required={required}
+        defaultValue={defaultValue}
+        step={60}
+        lang="de-CH"
+        className="pr-10 [&::-webkit-calendar-picker-indicator]:opacity-0"
+      />
+      <button
+        type="button"
+        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        onClick={() => {
+          const input = inputRef.current;
+          if (!input) {
+            return;
+          }
+          const withPicker = input as HTMLInputElement & { showPicker?: () => void };
+          if (typeof withPicker.showPicker === "function") {
+            withPicker.showPicker();
+            return;
+          }
+          input.focus();
+        }}
+        aria-label="Datum und Zeit auswählen"
+      >
+        <CalendarClock className="size-4" />
+      </button>
+    </div>
+  );
+}
+
+function PhaseControlCard({ rows }: { rows: Array<{ label: string; value: string }> }) {
+  return (
+    <Card className="border-sky-200/70 bg-sky-50/40">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm">Kontrollpunkte für diesen Schritt</CardTitle>
+        <CardDescription>Diese Infos sollten vollständig sein, bevor es weitergeht.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-2 sm:grid-cols-2">
+        {rows.map((row) => (
+          <div key={row.label} className="rounded-md border border-sky-100 bg-white/70 px-3 py-2">
+            <p className="text-xs text-muted-foreground">{row.label}</p>
+            <p className="text-sm font-medium text-foreground">{row.value}</p>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
 }
 
 function PhaseHeader({ workflowStepIndex }: { workflowStepIndex: number }) {

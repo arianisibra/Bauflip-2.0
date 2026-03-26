@@ -118,6 +118,92 @@ export async function saveProfileSettingsAction(formData: FormData) {
   revalidatePath("/");
 }
 
+export type TeamMemberListItem = {
+  key: string;
+  displayName: string;
+  email: string;
+  role: "admin" | "office" | "technician";
+  status: "aktiv" | "eingeladen";
+  createdAt: string | null;
+};
+
+export async function listTeamMembersAction(): Promise<TeamMemberListItem[]> {
+  await requireAdminSession();
+  const organizationId = await ensureCurrentOrganizationId();
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return [];
+  }
+
+  const [membershipsResult, invitationsResult] = await Promise.all([
+    supabase
+      .from("organization_memberships")
+      .select("user_id, role, is_active, created_at, profiles(display_name)")
+      .eq("organization_id", organizationId)
+      .eq("is_active", true)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("invitations")
+      .select("id, email, role, created_at")
+      .eq("organization_id", organizationId)
+      .is("accepted_at", null)
+      .is("revoked_at", null)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  const memberships = (membershipsResult.data as Array<{
+    user_id: string;
+    role: "admin" | "office" | "technician";
+    is_active: boolean;
+    created_at: string | null;
+    profiles?: { display_name?: string | null } | Array<{ display_name?: string | null }> | null;
+  }> | null) ?? [];
+  const invitations = (invitationsResult.data as Array<{
+    id: string;
+    email: string;
+    role: "admin" | "office" | "technician";
+    created_at: string | null;
+  }> | null) ?? [];
+
+  const adminClient = createSupabaseAdminClient();
+  const emailByUserId = new Map<string, string>();
+  if (adminClient) {
+    const { data: usersData, error } = await adminClient.auth.admin.listUsers();
+    if (!error) {
+      for (const u of usersData.users) {
+        if (u.id && u.email) {
+          emailByUserId.set(u.id, u.email);
+        }
+      }
+    }
+  }
+
+  const activeItems: TeamMemberListItem[] = memberships.map((m) => {
+    const profileRaw = Array.isArray(m.profiles) ? m.profiles[0] ?? null : m.profiles ?? null;
+    const displayName = String(profileRaw?.display_name ?? "").trim();
+    const email = emailByUserId.get(m.user_id) ?? "—";
+    return {
+      key: `member:${m.user_id}`,
+      displayName: displayName || email.split("@")[0] || "Mitarbeiter",
+      email,
+      role: m.role,
+      status: "aktiv",
+      createdAt: m.created_at ?? null,
+    };
+  });
+
+  const pendingItems: TeamMemberListItem[] = invitations.map((inv) => ({
+    key: `invite:${inv.id}`,
+    displayName: inv.email.split("@")[0] || "Einladung",
+    email: inv.email,
+    role: inv.role,
+    status: "eingeladen",
+    createdAt: inv.created_at ?? null,
+  }));
+
+  return [...activeItems, ...pendingItems];
+}
+
 export async function inviteEmployeeAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const roleInput = String(formData.get("role") ?? "").trim().toLowerCase();

@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Contact } from "@/lib/domain/types";
+import { deleteContactAction } from "@/app/(app)/kontakte/actions";
+import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { KontaktSheetEditor } from "@/components/app/kontakt-sheet-editor";
 import { ListPageToolbar } from "@/components/app/list-page-toolbar";
@@ -31,6 +34,8 @@ export function KontakteListClient({ contacts }: { contacts: Contact[] }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Contact | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const router = useRouter();
 
   const filtered = useMemo(() => {
     if (!q.trim()) {
@@ -79,6 +84,7 @@ export function KontakteListClient({ contacts }: { contacts: Contact[] }) {
               <TableHead>Telefon</TableHead>
               <TableHead>E-Mail</TableHead>
               <TableHead>Ort</TableHead>
+              <TableHead className="w-[120px] text-right">Aktion</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -106,6 +112,37 @@ export function KontakteListClient({ contacts }: { contacts: Contact[] }) {
                   )}
                 </TableCell>
                 <TableCell>{c.city ?? "—"}</TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 border-red-200 text-red-700 hover:bg-red-50"
+                    disabled={deletingId === c.id}
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const ok = window.confirm(`Kontakt "${c.name}" wirklich löschen?`);
+                      if (!ok) {
+                        return;
+                      }
+                      try {
+                        setDeletingId(c.id);
+                        await deleteContactAction(c.id);
+                        if (selected?.id === c.id) {
+                          setOpen(false);
+                          setSelected(null);
+                        }
+                        router.refresh();
+                      } catch (err) {
+                        window.alert(err instanceof Error ? err.message : "Löschen fehlgeschlagen.");
+                      } finally {
+                        setDeletingId(null);
+                      }
+                    }}
+                  >
+                    Löschen
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

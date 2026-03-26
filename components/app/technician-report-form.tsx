@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { addTechnicianReportAction } from "@/app/(app)/actions";
 import type { Article } from "@/lib/domain/types";
 import { VoiceTextarea } from "@/components/app/voice-textarea";
@@ -27,6 +27,35 @@ const SERVICE_OPTIONS = [
   "Einstellung/Kalibrierung",
 ];
 
+const ORT_OPTIONS = [
+  "Balkon",
+  "Balkon Südseite",
+  "Balkon Nordseite",
+  "Terrasse",
+  "Terrasse Südseite",
+  "Fenster",
+  "Fassade",
+  "Wintergarten",
+  "Sitzplatz",
+  "Innenbereich",
+];
+
+const FARBE_OPTIONS = ["Weiss", "Anthrazit", "Schwarz", "Silber", "Beige", "Grau", "Braun", "RAL nach Auftrag"];
+const STOFFART_OPTIONS = ["Acryl", "Polyester", "Screen", "PVC", "Soltis", "Blackout"];
+const BEDIENUNG_OPTIONS = ["Kurbel", "Motor", "Funk", "Schalter", "Smart Home"];
+
+function mmOptions(min: number, max: number, step: number): string[] {
+  const out: string[] = [];
+  for (let v = min; v <= max; v += step) {
+    out.push(String(v));
+  }
+  return out;
+}
+
+const BREITE_OPTIONS = mmOptions(600, 7000, 50);
+const HOEHE_OPTIONS = mmOptions(600, 4000, 50);
+const AUSLADUNG_OPTIONS = mmOptions(1000, 5000, 100);
+
 export function TechnicianReportForm({
   projectId,
   variant,
@@ -40,6 +69,49 @@ export function TechnicianReportForm({
   const [selectedArticleId, setSelectedArticleId] = useState("");
   const [serviceList, setServiceList] = useState<string[]>([]);
   const [articleList, setArticleList] = useState<Array<{ id: string; name: string }>>([]);
+  const [measurements, setMeasurements] = useState({
+    bezeichnung: "",
+    breite: "",
+    hoehe: "",
+    farbeStoff: "",
+    farbeRahmen: "",
+    stoffart: "",
+    ort: "",
+    datum: "",
+    bedienung: "",
+    ausladung: "",
+  });
+
+  const selectedArticles = useMemo(
+    () => articleList.map((item) => articleOptions.find((a) => a.id === item.id)).filter(Boolean) as Article[],
+    [articleList, articleOptions],
+  );
+  const hasStorenArticle = selectedArticles.some((a) => a.categoryTemplateScope === "storen");
+  const hasSonnenstorenArticle = selectedArticles.some((a) => a.categoryTemplateScope === "sonnenstoren");
+  const hasDlArticle = selectedArticles.some((a) => a.categoryTemplateScope === "dl");
+  const effectiveBezeichnung = measurements.bezeichnung || articleList.map((a) => a.name).join(", ");
+  const measurementsJsonValue = JSON.stringify({
+    bezeichnung: effectiveBezeichnung,
+    breite: measurements.breite,
+    hoehe: measurements.hoehe,
+    farbeStoff: measurements.farbeStoff,
+    farbeRahmen: measurements.farbeRahmen,
+    stoffart: measurements.stoffart,
+    ort: measurements.ort,
+    datum: measurements.datum,
+    bedienung: measurements.bedienung,
+    ausladung: measurements.ausladung,
+    xxxBEZEICHNUNGxxx: effectiveBezeichnung,
+    xxxBREITExxx: measurements.breite,
+    xxxHOEHExxx: measurements.hoehe,
+    xxxFARBESTOFFxxx: measurements.farbeStoff,
+    xxxFARBERAHMENxxx: measurements.farbeRahmen,
+    xxxSTOFFARTxxx: measurements.stoffart,
+    xxxORTxxx: measurements.ort,
+    xxxDATUMxxx: measurements.datum,
+    xxxBEDIENUNGxxx: measurements.bedienung,
+    xxxAUSLADUNGxxx: measurements.ausladung,
+  });
 
   return (
     <form
@@ -188,14 +260,177 @@ export function TechnicianReportForm({
             )}
             <input type="hidden" name="articleSelections" value={JSON.stringify(articleList.map((a) => a.id))} />
           </div>
-          <div className="flex flex-col gap-1">
-            <Label className="text-sm">Masse &amp; Produktdetails (JSON)</Label>
-            <VoiceTextarea
-              name="measurementsJson"
-              placeholder='{"breite_mm": 1200, "hoehe_mm": 2400}'
-              required
-              minLength={2}
-            />
+          <div className="grid gap-2 rounded-md border p-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1 sm:col-span-2">
+              <Label className="text-sm">Artikelbezeichnung</Label>
+              <select
+                value={measurements.bezeichnung}
+                onChange={(e) => setMeasurements((prev) => ({ ...prev, bezeichnung: e.target.value }))}
+                className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={articleList.length === 0}
+                required={articleList.length > 0}
+              >
+                <option value="">{articleList.length > 0 ? "Artikel wählen …" : "Zuerst Artikel hinzufügen …"}</option>
+                {articleList.map((item) => (
+                  <option key={item.id} value={item.name}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 sm:col-span-2">
+              <Label className="text-sm">Ort</Label>
+              <select
+                value={measurements.ort}
+                onChange={(e) => setMeasurements((prev) => ({ ...prev, ort: e.target.value }))}
+                className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
+                required
+              >
+                <option value="">Ort wählen …</option>
+                {ORT_OPTIONS.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {hasStorenArticle ? (
+              <>
+                <div className="flex flex-col gap-1">
+                  <Label className="text-sm">Breite</Label>
+                  <select
+                    value={measurements.breite}
+                    onChange={(e) => setMeasurements((prev) => ({ ...prev, breite: e.target.value }))}
+                    className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
+                    required
+                  >
+                    <option value="">Breite wählen …</option>
+                    {BREITE_OPTIONS.map((mm) => (
+                      <option key={mm} value={mm}>
+                        {mm} mm
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label className="text-sm">Höhe</Label>
+                  <select
+                    value={measurements.hoehe}
+                    onChange={(e) => setMeasurements((prev) => ({ ...prev, hoehe: e.target.value }))}
+                    className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
+                    required
+                  >
+                    <option value="">Höhe wählen …</option>
+                    {HOEHE_OPTIONS.map((mm) => (
+                      <option key={mm} value={mm}>
+                        {mm} mm
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label className="text-sm">Farbe Stoff</Label>
+                  <select
+                    value={measurements.farbeStoff}
+                    onChange={(e) => setMeasurements((prev) => ({ ...prev, farbeStoff: e.target.value }))}
+                    className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
+                    required
+                  >
+                    <option value="">Farbe Stoff wählen …</option>
+                    {FARBE_OPTIONS.map((item) => (
+                      <option key={`stoff-${item}`} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label className="text-sm">Farbe Rahmen</Label>
+                  <select
+                    value={measurements.farbeRahmen}
+                    onChange={(e) => setMeasurements((prev) => ({ ...prev, farbeRahmen: e.target.value }))}
+                    className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
+                    required
+                  >
+                    <option value="">Farbe Rahmen wählen …</option>
+                    {FARBE_OPTIONS.map((item) => (
+                      <option key={`rahmen-${item}`} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label className="text-sm">Stoffart</Label>
+                  <select
+                    value={measurements.stoffart}
+                    onChange={(e) => setMeasurements((prev) => ({ ...prev, stoffart: e.target.value }))}
+                    className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
+                    required
+                  >
+                    <option value="">Stoffart wählen …</option>
+                    {STOFFART_OPTIONS.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label className="text-sm">Bedienung</Label>
+                  <select
+                    value={measurements.bedienung}
+                    onChange={(e) => setMeasurements((prev) => ({ ...prev, bedienung: e.target.value }))}
+                    className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
+                    required
+                  >
+                    <option value="">Bedienung wählen …</option>
+                    {BEDIENUNG_OPTIONS.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            ) : null}
+
+            {hasSonnenstorenArticle ? (
+              <div className="flex flex-col gap-1">
+                <Label className="text-sm">Ausladung</Label>
+                <select
+                  value={measurements.ausladung}
+                  onChange={(e) => setMeasurements((prev) => ({ ...prev, ausladung: e.target.value }))}
+                  className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
+                  required
+                >
+                  <option value="">Ausladung wählen …</option>
+                  {AUSLADUNG_OPTIONS.map((mm) => (
+                    <option key={mm} value={mm}>
+                      {mm} mm
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+
+            {hasDlArticle ? (
+              <div className="flex flex-col gap-1">
+                <Label className="text-sm">Datum (DL)</Label>
+                <Input
+                  type="date"
+                  value={measurements.datum}
+                  onChange={(e) => setMeasurements((prev) => ({ ...prev, datum: e.target.value }))}
+                  required
+                />
+              </div>
+            ) : null}
+
+            <p className="text-xs text-muted-foreground sm:col-span-2">
+              Felder werden je nach ausgewähltem Artikeltyp eingeblendet (Storen, Sonnenstoren, DL).
+            </p>
+            <input type="hidden" name="measurementsJson" value={measurementsJsonValue} />
           </div>
           <div className="flex flex-col gap-1">
             <Label className="text-sm">Massnahme / was muss gemacht werden</Label>

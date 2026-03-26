@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const PUBLIC_PATHS = ["/anmeldung"];
-const technicianAllowedPrefixes = ["/projekte", "/termine", "/rapporte", "/team-chat", "/anmeldung"];
+const technicianAllowedPrefixes = ["/projekte", "/termine", "/rapporte", "/team-chat", "/mitarbeiter", "/anmeldung"];
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -96,7 +96,7 @@ export async function proxy(request: NextRequest) {
 
   if (
     isAuthenticated &&
-    role === "monteur" &&
+    role === "technician" &&
     pathname !== "/" &&
     !technicianAllowedPrefixes.some((prefix) => pathname.startsWith(prefix))
   ) {

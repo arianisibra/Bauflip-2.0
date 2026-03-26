@@ -112,6 +112,38 @@ export function ProjectStammdatenForm({
     [addresses, serviceAddressId],
   );
 
+  useEffect(() => {
+    const currentMapsUrl = String(form.getValues("mapsUrl") ?? "").trim();
+    if (currentMapsUrl) {
+      return;
+    }
+    if (selectedServiceAddress) {
+      const url = buildGoogleMapsSearchUrl({
+        street: selectedServiceAddress.street,
+        postalCode: selectedServiceAddress.postalCode,
+        city: selectedServiceAddress.city,
+        country: selectedServiceAddress.country,
+      });
+      if (url) {
+        form.setValue("mapsUrl", url);
+      }
+      return;
+    }
+    if (selectedProperty) {
+      const url = selectedProperty.mapsUrl
+        ? selectedProperty.mapsUrl
+        : buildGoogleMapsSearchUrl({
+            street: selectedProperty.street,
+            postalCode: selectedProperty.postalCode,
+            city: selectedProperty.city,
+            country: selectedProperty.country,
+          });
+      if (url) {
+        form.setValue("mapsUrl", url);
+      }
+    }
+  }, [form, selectedProperty, selectedServiceAddress]);
+
   const onSubmit = form.handleSubmit((values) => {
     startTransition(async () => {
       await updateProjectStammdatenAction(values);

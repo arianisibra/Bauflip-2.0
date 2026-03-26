@@ -11,6 +11,7 @@ import {
   addInvoice,
   addProjectChatAttachment,
   addProjectChatMessage,
+  addProjectAttachment,
   addProjectNote,
   addPurchaseOrder,
   addQuote,
@@ -62,6 +63,7 @@ import {
 } from "@/lib/validations/forms";
 import { assertCanTransition, getAllowedTransitions, type ProjectRequiredField } from "@/lib/workflow/project-workflow";
 import { getWorkflowPhaseIndex } from "@/lib/workflow/project-workflow-rail";
+import { getBundlePrerequisiteMessages } from "@/lib/workflow/project-guided-flow";
 import { projectStatuses, type ProjectStatus } from "@/lib/domain/types";
 import { getCurrentProfile, getCurrentRole, getCurrentSession } from "@/lib/auth/session";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -83,6 +85,89 @@ function collectFormData(formData: FormData) {
   return Object.fromEntries(
     Object.entries(entries).map(([key, value]) => [key, typeof value === "string" ? value : ""]),
   );
+}
+
+async function assignAppointmentToTechnicianCalendar(params: {
+  appointmentId: string;
+  projectId: string;
+  kind: "besichtigung" | "ausfuehrung";
+  startsAt: string;
+  endsAt: string;
+  assignedTechnicianId: string;
+  actorRole: "admin" | "office" | "technician";
+  actorName: string;
+}) {
+  const technicians = await listProfilesByRole("technician");
+  const technician = technicians.find((t) => t.id === params.assignedTechnicianId);
+  if (!technician) {
+    throw new Error("Ausgewählter Monteur wurde nicht gefunden.");
+  }
+
+  const projects = await listProjects();
+  const projectTitle = projects.find((p) => p.id === params.projectId)?.title ?? params.projectId;
+  const calendarTitle = `Einsatz ${projectTitle}`;
+
+  const ics = buildIcsInvite({
+    title: `Bauflip: ${projectTitle}`,
+    description: `Projekt ${params.projectId}`,
+    startsAt: params.startsAt,
+    endsAt: params.endsAt,
+  });
+
+  const mailResult = await sendMailViaSmtp({
+    to: technician.email,
+    subject: "Neuer Einsatztermin",
+    html: `<p>Sie haben einen neuen Termin erhalten.</p><p>${projectTitle}</p>`,
+    attachments: [{ filename: "einsatz.ics", content: ics, contentType: "text/calendar" }],
+  });
+
+  await addCalendarEvent({
+    projectId: params.projectId,
+    appointmentId: params.appointmentId,
+    technicianId: technician.id,
+    technicianEmail: technician.email,
+    provider: "ics",
+    providerEventId: mailResult.ok ? mailResult.messageId ?? null : null,
+    startsAt: params.startsAt,
+    endsAt: params.endsAt,
+    title: calendarTitle,
+  });
+
+  const { syncExternalCalendars } = await import("@/lib/calendar/sync-external-calendars");
+  await syncExternalCalendars({
+    appointment: {
+      id: params.appointmentId,
+      projectId: params.projectId,
+      kind: params.kind,
+      startsAt: params.startsAt,
+      endsAt: params.endsAt,
+      assignedTechnicianId: technician.id,
+      planningNotes: null,
+      accessNotes: null,
+      keyHandlingNotes: null,
+      createdAt: new Date().toISOString(),
+    },
+    projectTitle,
+    technician,
+  });
+
+  await addAuditEvent({
+    action: "termin_zugewiesen",
+    projectId: params.projectId,
+    actorRole: params.actorRole,
+    actorName: params.actorName,
+    payload: JSON.stringify({
+      appointmentId: params.appointmentId,
+      technicianId: technician.id,
+      technicianName: technician.displayName,
+      technicianEmail: technician.email,
+      startsAt: params.startsAt,
+      endsAt: params.endsAt,
+      calendarTitle,
+      mailSent: mailResult.ok,
+      mailError: mailResult.ok ? null : mailResult.error,
+    }),
+  });
 }
 
 export async function createIntakeAction(formData: FormData) {
@@ -148,7 +233,7 @@ export async function createIntakeAction(formData: FormData) {
 
   revalidatePath("/");
   revalidatePath("/projekte");
-  redirect(`/projekte/${project.id}`);
+  redirect(`/projekte?openProjectId=${encodeURIComponent(project.id)}`);
 }
 
 export async function addProjectNoteAction(formData: FormData) {
@@ -181,13 +266,15 @@ export async function addAppointmentAction(formData: FormData) {
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Ungültiger Termin.");
   }
+  const session = await getCurrentSession();
+  const assignedTechnicianId = parsed.data.assignedTechnicianId?.trim() || null;
 
-  await addAppointment({
+  const appointment = await addAppointment({
     projectId: parsed.data.projectId,
     kind: parsed.data.kind,
     startsAt: parsed.data.startsAt,
     endsAt: parsed.data.endsAt,
-    assignedTechnicianId: null,
+    assignedTechnicianId,
     planningNotes: parsed.data.planningNotes ?? null,
     accessNotes: parsed.data.accessNotes ?? null,
     keyHandlingNotes: parsed.data.keyHandlingNotes ?? null,
@@ -195,12 +282,32 @@ export async function addAppointmentAction(formData: FormData) {
   await addAuditEvent({
     action: "termin_erstellt",
     projectId: parsed.data.projectId,
-    actorRole: "office",
-    actorName: "System Benutzer",
-    payload: JSON.stringify({ kind: parsed.data.kind, startsAt: parsed.data.startsAt }),
+    actorRole: session?.role ?? "office",
+    actorName: session?.profile.displayName ?? "System Benutzer",
+    payload: JSON.stringify({
+      kind: parsed.data.kind,
+      startsAt: parsed.data.startsAt,
+      endsAt: parsed.data.endsAt,
+      assignedTechnicianId,
+    }),
   });
 
+  if (assignedTechnicianId) {
+    await assignAppointmentToTechnicianCalendar({
+      appointmentId: appointment.id,
+      projectId: parsed.data.projectId,
+      kind: parsed.data.kind,
+      startsAt: parsed.data.startsAt,
+      endsAt: parsed.data.endsAt,
+      assignedTechnicianId,
+      actorRole: session?.role ?? "office",
+      actorName: session?.profile.displayName ?? "System Benutzer",
+    });
+  }
+
   revalidatePath(`/projekte/${parsed.data.projectId}`);
+  revalidatePath("/termine");
+  revalidatePath("/");
 }
 
 export type AddTechnicianReportResult = { ok: true } | { ok: false; message: string };
@@ -626,6 +733,21 @@ export async function transitionProjectAction(formData: FormData) {
     throw new Error(decision.reason);
   }
 
+  const prerequisiteMessages = getBundlePrerequisiteMessages(bundle.project, parsed.data.targetStatus, {
+    besichtigungAppointments: bundle.appointments.filter((a) => a.kind === "besichtigung").length,
+    ausfuehrungAppointments: bundle.appointments.filter((a) => a.kind === "ausfuehrung").length,
+    reports: bundle.reports.length,
+    quotes: bundle.quotes.length,
+    quoteFinalized: bundle.quotes.filter((q) => Boolean(q.finalizedAt) || Boolean(q.deliverySentAt)).length,
+    orders: bundle.orders.length,
+    deliveries: bundle.deliveries.length,
+    invoices: bundle.invoices.length,
+    invoiceFinalized: bundle.invoices.filter((inv) => Boolean(inv.finalizedAt) || Boolean(inv.deliverySentAt)).length,
+  });
+  if (prerequisiteMessages.length > 0) {
+    throw new Error(prerequisiteMessages.join(" "));
+  }
+
   await updateProjectStatus(parsed.data.projectId, parsed.data.targetStatus, decision.nextOwnerRole);
   await addAuditEvent({
     action: "status_gewechselt",
@@ -702,10 +824,25 @@ export async function moveProjectPhaseAction(formData: FormData) {
   }
 
   let currentState = { ...current };
+  const prerequisiteBundle = {
+    besichtigungAppointments: bundle.appointments.filter((a) => a.kind === "besichtigung").length,
+    ausfuehrungAppointments: bundle.appointments.filter((a) => a.kind === "ausfuehrung").length,
+    reports: bundle.reports.length,
+    quotes: bundle.quotes.length,
+    quoteFinalized: bundle.quotes.filter((q) => Boolean(q.finalizedAt) || Boolean(q.deliverySentAt)).length,
+    orders: bundle.orders.length,
+    deliveries: bundle.deliveries.length,
+    invoices: bundle.invoices.length,
+    invoiceFinalized: bundle.invoices.filter((inv) => Boolean(inv.finalizedAt) || Boolean(inv.deliverySentAt)).length,
+  };
   for (const step of path) {
     const decision = assertCanTransition(currentState, step.to, session.role);
     if (!decision.ok) {
       throw new Error(translateMissingFieldsInReason(decision.reason));
+    }
+    const prerequisiteMessages = getBundlePrerequisiteMessages(currentState, step.to, prerequisiteBundle);
+    if (prerequisiteMessages.length > 0) {
+      throw new Error(prerequisiteMessages.join(" "));
     }
     await updateProjectStatus(projectId, step.to, step.nextOwnerRole);
     currentState = { ...currentState, status: step.to, nextOwnerRole: step.nextOwnerRole };
@@ -890,6 +1027,71 @@ export async function uploadProjectChatFileAction(formData: FormData) {
   revalidatePath(`/projekte/${projectId}`);
 }
 
+/** Lädt Bild/PDF in den Bucket project-files und verknüpft ihn als Projekt/Rapport-Anhang. */
+export async function uploadProjectReportFileAction(formData: FormData) {
+  const session = await getCurrentSession();
+  if (!session) {
+    throw new Error("Nicht angemeldet.");
+  }
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    throw new Error("Supabase ist nicht konfiguriert.");
+  }
+  const projectId = String(formData.get("projectId") ?? "").trim();
+  const file = formData.get("file") as File | null;
+  if (!projectId) {
+    throw new Error("Projekt fehlt.");
+  }
+  if (!file || typeof file !== "object" || file.size === 0) {
+    throw new Error("Bitte eine Datei wählen.");
+  }
+  if (!session.organizationId) {
+    throw new Error("Keine Organisation. Bitte warten Sie auf die Freischaltung oder kontaktieren Sie einen Admin.");
+  }
+  if (!PROJECT_FILE_MIME.has(file.type)) {
+    throw new Error("Nur Bilder (JPEG, PNG, WebP, GIF) oder PDF / Word-Dokumente sind erlaubt.");
+  }
+  if (file.size > PROJECT_FILE_MAX_BYTES) {
+    throw new Error("Datei darf maximal 15 MB gross sein.");
+  }
+
+  const bundle = await getProjectBundle(projectId);
+  if (!bundle) {
+    throw new Error("Projekt nicht gefunden.");
+  }
+
+  const safe = sanitizeFileBaseName(file.name) || "datei";
+  const storagePath = `${session.organizationId}/${projectId}/reports/${Date.now()}-${safe}`;
+  const buf = Buffer.from(await file.arrayBuffer());
+  const { error: uploadError } = await supabase.storage.from("project-files").upload(storagePath, buf, {
+    contentType: file.type,
+    upsert: false,
+  });
+  if (uploadError) {
+    throw new Error(uploadError.message);
+  }
+
+  const profile = session.profile;
+  await addProjectAttachment({
+    projectId,
+    filePath: storagePath,
+    fileName: file.name,
+    fileType: file.type,
+    sizeBytes: file.size,
+    uploadedBy: profile.id,
+  });
+
+  await addAuditEvent({
+    action: "rapport_anhang_hochgeladen",
+    projectId,
+    actorRole: profile.role,
+    actorName: profile.displayName,
+    payload: JSON.stringify({ path: storagePath, fileName: file.name }),
+  });
+
+  revalidatePath(`/projekte/${projectId}`);
+}
+
 export async function assignAppointmentWithCalendarAction(formData: FormData) {
   const payload = collectFormData(formData);
   const parsed = appointmentSchema.safeParse(payload);
@@ -897,8 +1099,11 @@ export async function assignAppointmentWithCalendarAction(formData: FormData) {
     throw new Error(parsed.error.issues[0]?.message ?? "Ungültiger Termin.");
   }
 
+  const session = await getCurrentSession();
   const technicians = await listProfilesByRole("technician");
-  const technician = technicians[0];
+  const selectedId = parsed.data.assignedTechnicianId?.trim() || null;
+  const technician =
+    (selectedId ? technicians.find((t) => t.id === selectedId) : null) ?? technicians[0] ?? null;
   const appt = await addAppointment({
     projectId: parsed.data.projectId,
     kind: parsed.data.kind,
@@ -913,52 +1118,32 @@ export async function assignAppointmentWithCalendarAction(formData: FormData) {
   await addAuditEvent({
     action: "termin_erstellt",
     projectId: parsed.data.projectId,
-    actorRole: "office",
-    actorName: "System Benutzer",
-    payload: JSON.stringify({ kind: parsed.data.kind, startsAt: parsed.data.startsAt }),
+    actorRole: session?.role ?? "office",
+    actorName: session?.profile.displayName ?? "System Benutzer",
+    payload: JSON.stringify({
+      kind: parsed.data.kind,
+      startsAt: parsed.data.startsAt,
+      endsAt: parsed.data.endsAt,
+      assignedTechnicianId: technician?.id ?? null,
+    }),
   });
 
   revalidatePath(`/projekte/${parsed.data.projectId}`);
   revalidatePath("/termine");
-
-  const projects = await listProjects();
-  const projectTitle = projects.find((p) => p.id === parsed.data.projectId)?.title ?? parsed.data.projectId;
+  revalidatePath("/");
 
   if (!technician) {
     return;
   }
-
-  const ics = buildIcsInvite({
-    title: `Bauflip: ${projectTitle}`,
-    description: `Projekt ${parsed.data.projectId}`,
-    startsAt: parsed.data.startsAt,
-    endsAt: parsed.data.endsAt,
-  });
-
-  const mailResult = await sendMailViaSmtp({
-    to: technician.email,
-    subject: "Neuer Einsatztermin",
-    html: `<p>Sie haben einen neuen Termin erhalten.</p><p>${projectTitle}</p>`,
-    attachments: [{ filename: "einsatz.ics", content: ics, contentType: "text/calendar" }],
-  });
-
-  await addCalendarEvent({
-    projectId: parsed.data.projectId,
+  await assignAppointmentToTechnicianCalendar({
     appointmentId: appt.id,
-    technicianId: technician.id,
-    technicianEmail: technician.email,
-    provider: "ics",
-    providerEventId: mailResult.ok ? mailResult.messageId ?? null : null,
+    projectId: parsed.data.projectId,
+    kind: parsed.data.kind,
     startsAt: parsed.data.startsAt,
     endsAt: parsed.data.endsAt,
-    title: `Einsatz ${projectTitle}`,
-  });
-
-  const { syncExternalCalendars } = await import("@/lib/calendar/sync-external-calendars");
-  await syncExternalCalendars({
-    appointment: appt,
-    projectTitle,
-    technician,
+    assignedTechnicianId: technician.id,
+    actorRole: session?.role ?? "office",
+    actorName: session?.profile.displayName ?? "System Benutzer",
   });
 }
 

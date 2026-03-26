@@ -26,7 +26,7 @@ export function ProjectWorkflowRailSheet({
 
   return (
     <aside
-      className="w-full shrink-0 rounded-2xl border border-sky-200/80 bg-gradient-to-b from-sky-50/95 to-white shadow-sm ring-1 ring-sky-100/80 lg:sticky lg:top-4 lg:w-64 lg:self-start"
+      className="w-full shrink-0 overflow-hidden rounded-2xl border border-sky-200/80 bg-gradient-to-b from-sky-50/95 to-white shadow-sm ring-1 ring-sky-100/80 lg:sticky lg:top-4 lg:w-64 lg:self-start"
       aria-label="Ablauf für dieses Projekt"
     >
       <div className="border-b border-sky-100/90 px-3 py-2.5">
@@ -45,17 +45,8 @@ export function ProjectWorkflowRailSheet({
 
           return (
             <li key={step.id} className="relative flex gap-0">
-              {i > 0 ? (
-                <div
-                  className={cn(
-                    "absolute top-0 left-[1rem] h-3 w-px -translate-y-full",
-                    done || currentPipeline ? "bg-primary/45" : "bg-border",
-                  )}
-                  aria-hidden
-                />
-              ) : null}
-              <div className="flex w-full min-w-0 gap-2 pb-2">
-                <div className="flex flex-col items-center pt-0.5">
+              <div className="flex w-full min-w-0 gap-2 pb-1.5">
+                <div className="flex w-8 shrink-0 flex-col items-center pt-0.5">
                   <span
                     className={cn(
                       "flex size-8 shrink-0 items-center justify-center rounded-full border-2 text-[0.65rem] font-bold tabular-nums transition-colors",
@@ -72,8 +63,8 @@ export function ProjectWorkflowRailSheet({
                   {i < PROJECT_WORKFLOW_STEPS.length - 1 ? (
                     <div
                       className={cn(
-                        "mt-1 min-h-[1rem] w-px flex-1",
-                        done ? "bg-primary/40" : "bg-border",
+                        "mt-1 h-8 w-[3px] rounded-full",
+                        done ? "bg-primary/35" : "bg-sky-200/90",
                       )}
                       aria-hidden
                     />
@@ -115,10 +106,10 @@ export function ProjectWorkflowRailSheet({
           Erledigte Schritte können Sie erneut öffnen. «Weiter» schaltet den nächsten Schritt frei.
         </p>
         <Link
-          href={`/projekte/${projectId}`}
+          href={`/projekte?openProjectId=${encodeURIComponent(projectId)}`}
           className="mt-2 inline-block text-[0.7rem] font-medium text-primary underline-offset-4 hover:underline"
         >
-          Vollansicht Projekt (Chat, Mail, …)
+          Projekt in Sidepage öffnen
         </Link>
       </div>
     </aside>

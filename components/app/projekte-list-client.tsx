@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Contact, ProjectListRow } from "@/lib/domain/types";
+import { deleteProjectAction } from "@/app/(app)/projekte/actions";
 import { ProjektSheetEditor } from "@/components/app/projekt-sheet-editor";
 import { IntakeForm } from "@/components/app/intake-form";
 import { ListPageToolbar } from "@/components/app/list-page-toolbar";
@@ -26,15 +28,38 @@ export function ProjekteListClient({
   projects,
   contacts,
   canEditProjectSheet,
+  initialOpenProjectId,
 }: {
   projects: ProjectListRow[];
   contacts: Contact[];
   canEditProjectSheet: boolean;
+  initialOpenProjectId?: string;
 }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<ProjectListRow | null>(null);
   const [intakeOpen, setIntakeOpen] = useState(false);
+  const [pendingOpenProjectId, setPendingOpenProjectId] = useState(initialOpenProjectId ?? "");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    setPendingOpenProjectId(initialOpenProjectId ?? "");
+  }, [initialOpenProjectId]);
+
+  useEffect(() => {
+    if (!pendingOpenProjectId) {
+      return;
+    }
+    const project = projects.find((item) => item.id === pendingOpenProjectId);
+    if (!project) {
+      setPendingOpenProjectId("");
+      return;
+    }
+    setSelected(project);
+    setOpen(true);
+    setPendingOpenProjectId("");
+  }, [pendingOpenProjectId, projects]);
 
   const filtered = useMemo(() => {
     if (!q.trim()) {
@@ -72,6 +97,7 @@ export function ProjekteListClient({
               <TableHead>Status</TableHead>
               <TableHead>Dringlichkeit</TableHead>
               <TableHead>Nächster Schritt</TableHead>
+              <TableHead className="w-[120px] text-right">Aktion</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -82,6 +108,7 @@ export function ProjekteListClient({
                 onClick={() => {
                   setSelected(p);
                   setOpen(true);
+                  router.replace(`/projekte?openProjectId=${encodeURIComponent(p.id)}`, { scroll: false });
                 }}
               >
                 <TableCell className="font-medium">{p.title}</TableCell>
@@ -92,6 +119,37 @@ export function ProjekteListClient({
                 </TableCell>
                 <TableCell className="capitalize">{p.urgency}</TableCell>
                 <TableCell className="text-muted-foreground">{p.nextOwnerRole}</TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 border-red-200 text-red-700 hover:bg-red-50"
+                    disabled={deletingId === p.id}
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const ok = window.confirm(`Projekt "${p.title}" wirklich löschen?`);
+                      if (!ok) {
+                        return;
+                      }
+                      try {
+                        setDeletingId(p.id);
+                        await deleteProjectAction(p.id);
+                        if (selected?.id === p.id) {
+                          setOpen(false);
+                          setSelected(null);
+                        }
+                        router.refresh();
+                      } catch (err) {
+                        window.alert(err instanceof Error ? err.message : "Löschen fehlgeschlagen.");
+                      } finally {
+                        setDeletingId(null);
+                      }
+                    }}
+                  >
+                    Löschen
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -104,6 +162,14 @@ export function ProjekteListClient({
           setOpen(next);
           if (!next) {
             setSelected(null);
+            if (typeof window !== "undefined") {
+              const params = new URLSearchParams(window.location.search);
+              if (params.has("openProjectId")) {
+                params.delete("openProjectId");
+                const suffix = params.toString();
+                router.replace(suffix ? `/projekte?${suffix}` : "/projekte", { scroll: false });
+              }
+            }
           }
         }}
         className="max-w-6xl w-[min(100vw-1.5rem,80rem)]"
@@ -119,7 +185,6 @@ export function ProjekteListClient({
         open={intakeOpen}
         onOpenChange={setIntakeOpen}
         title="Neue Anfrage"
-        description="Originalinformation vollständig erfassen — nichts geht verloren."
         className="max-w-2xl overflow-y-auto"
       >
         <div className="p-4">

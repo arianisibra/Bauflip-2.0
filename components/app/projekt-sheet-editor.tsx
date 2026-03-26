@@ -135,6 +135,38 @@ export function ProjektSheetEditor({ projectId, open, canEdit }: Props) {
   );
 
   useEffect(() => {
+    const currentMapsUrl = String(form.getValues("mapsUrl") ?? "").trim();
+    if (currentMapsUrl) {
+      return;
+    }
+    if (selectedServiceAddress) {
+      const url = buildGoogleMapsSearchUrl({
+        street: selectedServiceAddress.street,
+        postalCode: selectedServiceAddress.postalCode,
+        city: selectedServiceAddress.city,
+        country: selectedServiceAddress.country,
+      });
+      if (url) {
+        form.setValue("mapsUrl", url);
+      }
+      return;
+    }
+    if (selectedProperty) {
+      const url = selectedProperty.mapsUrl
+        ? selectedProperty.mapsUrl
+        : buildGoogleMapsSearchUrl({
+            street: selectedProperty.street,
+            postalCode: selectedProperty.postalCode,
+            city: selectedProperty.city,
+            country: selectedProperty.country,
+          });
+      if (url) {
+        form.setValue("mapsUrl", url);
+      }
+    }
+  }, [form, selectedProperty, selectedServiceAddress]);
+
+  useEffect(() => {
     if (!open || !projectId) {
       setBundleReady(false);
       setPayload(null);
@@ -303,6 +335,13 @@ export function ProjektSheetEditor({ projectId, open, canEdit }: Props) {
   const guidedOptions = buildGuidedTransitionOptions(project, actorRole, {
     besichtigungAppointments: payload.bundle.appointments.filter((a) => a.kind === "besichtigung").length,
     ausfuehrungAppointments: payload.bundle.appointments.filter((a) => a.kind === "ausfuehrung").length,
+    reports: payload.bundle.reports.length,
+    quotes: payload.bundle.quotes.length,
+    quoteFinalized: payload.bundle.quotes.filter((q) => Boolean(q.finalizedAt) || Boolean(q.deliverySentAt)).length,
+    orders: payload.bundle.orders.length,
+    deliveries: payload.bundle.deliveries.length,
+    invoices: payload.bundle.invoices.length,
+    invoiceFinalized: payload.bundle.invoices.filter((inv) => Boolean(inv.finalizedAt) || Boolean(inv.deliverySentAt)).length,
   });
 
   const handleNavigateToStep = (stepId: string) => {
@@ -742,6 +781,8 @@ export function ProjektSheetEditor({ projectId, open, canEdit }: Props) {
               phaseIndex={viewPhaseIndex}
               currentPhaseIndex={guidedPhaseIndex}
               bundle={payload.bundle}
+              reportAttachments={payload.reportAttachments ?? []}
+              profiles={profiles}
               supplierTemplates={supplierTemplates}
               articles={articles}
               onAfterMutation={reloadSheetData}

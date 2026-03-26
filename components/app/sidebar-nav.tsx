@@ -20,10 +20,11 @@ import {
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { RoleType, SidebarItem } from "@/lib/domain/types";
+import type { SidebarItem } from "@/lib/domain/types";
 
 const iconByKey: Record<SidebarItem["key"], ComponentType<{ className?: string }>> = {
   uebersicht: Gauge,
+  mitarbeiter: Users,
   projekte: FolderKanban,
   kanban: Kanban,
   kontakte: Users,
@@ -39,11 +40,10 @@ const iconByKey: Record<SidebarItem["key"], ComponentType<{ className?: string }
 };
 
 type SidebarNavProps = {
-  role: RoleType;
   items: SidebarItem[];
 };
 
-export function SidebarNav({ role, items }: SidebarNavProps) {
+export function SidebarNav({ items }: SidebarNavProps) {
   const pathname = usePathname();
   const grouped = {
     navigation: items.filter((item) => item.section === "navigation"),

@@ -2,8 +2,11 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Article } from "@/lib/domain/types";
+import { deleteArticleAction } from "@/app/(app)/artikel/actions";
 import { ArtikelSheetEditor } from "@/components/app/artikel-sheet-editor";
+import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { ListPageToolbar } from "@/components/app/list-page-toolbar";
 import { Sheet } from "@/components/ui/sheet";
@@ -37,6 +40,8 @@ export function ArtikelListClient({
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Article | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const router = useRouter();
 
   const filtered = useMemo(() => {
     if (!q.trim()) {
@@ -86,6 +91,7 @@ export function ArtikelListClient({
               <TableHead>Einheit</TableHead>
               <TableHead>Kurzbeschreibung</TableHead>
               <TableHead className="text-right">Lager</TableHead>
+              <TableHead className="w-[120px] text-right">Aktion</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -108,6 +114,41 @@ export function ArtikelListClient({
                   {article.descriptionShort ?? "—"}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">{article.inStock}</TableCell>
+                <TableCell className="text-right">
+                  {canEditArticleSheet ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 border-red-200 text-red-700 hover:bg-red-50"
+                      disabled={deletingId === article.id}
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        const ok = window.confirm(`Artikel "${article.name}" wirklich löschen?`);
+                        if (!ok) {
+                          return;
+                        }
+                        try {
+                          setDeletingId(article.id);
+                          await deleteArticleAction(article.id);
+                          if (selected?.id === article.id) {
+                            setOpen(false);
+                            setSelected(null);
+                          }
+                          router.refresh();
+                        } catch (err) {
+                          window.alert(err instanceof Error ? err.message : "Löschen fehlgeschlagen.");
+                        } finally {
+                          setDeletingId(null);
+                        }
+                      }}
+                    >
+                      Löschen
+                    </Button>
+                  ) : (
+                    "—"
+                  )}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

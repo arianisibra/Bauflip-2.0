@@ -1,4 +1,5 @@
 import type { User } from "@supabase/supabase-js";
+import { cookies } from "next/headers";
 import type { RoleType, UserProfile } from "@/lib/domain/types";
 import { mapUserProfileRow } from "@/lib/db/repository";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -21,8 +22,35 @@ function mapRole(raw: string | null | undefined): RoleType {
 }
 
 export async function getCurrentSession(): Promise<CurrentSession | null> {
+  const cookieStore = await cookies();
+  const mockAuthEnabled =
+    process.env.NODE_ENV !== "production" || process.env.ALLOW_MOCK_AUTH === "true";
+  const mockAuthenticated = cookieStore.get("bauflip_mock_auth")?.value === "1";
+  const mockRole = mapRole(cookieStore.get("bauflip_mock_role")?.value);
+  const mockEmail = cookieStore.get("bauflip_mock_email")?.value ?? "mock@bauflip.ch";
+
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
+    if (mockAuthEnabled && mockAuthenticated) {
+      return {
+        user: {
+          id: "mock-user",
+          email: mockEmail,
+          user_metadata: { role: mockRole, display_name: mockRole === "admin" ? "Admin" : "Büro" },
+        } as unknown as User,
+        role: mockRole,
+        organizationId: null,
+        profile: {
+          id: "mock-user",
+          displayName: mockRole === "admin" ? "Admin" : mockRole === "technician" ? "Monteur" : "Büro",
+          email: mockEmail,
+          role: mockRole,
+          avatarUrl: null,
+          calendarColor: null,
+          calendarPosition: 0,
+        },
+      };
+    }
     return null;
   }
 
@@ -31,16 +59,44 @@ export async function getCurrentSession(): Promise<CurrentSession | null> {
   } = await supabase.auth.getUser();
 
   if (!user) {
+    if (mockAuthEnabled && mockAuthenticated) {
+      return {
+        user: {
+          id: "mock-user",
+          email: mockEmail,
+          user_metadata: { role: mockRole, display_name: mockRole === "admin" ? "Admin" : "Büro" },
+        } as unknown as User,
+        role: mockRole,
+        organizationId: null,
+        profile: {
+          id: "mock-user",
+          displayName: mockRole === "admin" ? "Admin" : mockRole === "technician" ? "Monteur" : "Büro",
+          email: mockEmail,
+          role: mockRole,
+          avatarUrl: null,
+          calendarColor: null,
+          calendarPosition: 0,
+        },
+      };
+    }
     return null;
   }
 
-  const [{ data: roleData }, { data: orgData }, profileResponse] = await Promise.all([
+  const [{ data: roleData }, { data: orgData }, membershipResponse, profileResponse] = await Promise.all([
     supabase.rpc("current_user_role"),
     supabase.rpc("current_organization_id"),
+    supabase
+      .from("organization_memberships")
+      .select("role")
+      .eq("user_id", user.id)
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle(),
     supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
   ]);
 
-  const role = mapRole((roleData as string | null | undefined) ?? user.user_metadata?.role);
+  const membershipRole = membershipResponse.data?.role as string | null | undefined;
+  const role = mapRole(membershipRole ?? (roleData as string | null | undefined) ?? user.user_metadata?.role);
   const organizationId = (orgData as string | null | undefined) ?? null;
 
   if (!profileResponse.data) {
@@ -77,9 +133,9 @@ export async function getCurrentSession(): Promise<CurrentSession | null> {
     user,
     role,
     organizationId,
-    profile: row
-      ? mapUserProfileRow(row, user.email ?? "")
-      : {
+    profile: (() => {
+      if (!row) {
+        return {
           id: user.id,
           displayName: user.email?.split("@")[0] ?? "Benutzer",
           email: user.email ?? "",
@@ -87,7 +143,12 @@ export async function getCurrentSession(): Promise<CurrentSession | null> {
           avatarUrl: null,
           calendarColor: null,
           calendarPosition: 0,
-        },
+        };
+      }
+      // Ensure profile role stays consistent with resolved session role.
+      const mapped = mapUserProfileRow(row, user.email ?? "");
+      return { ...mapped, role };
+    })(),
   };
 }
 

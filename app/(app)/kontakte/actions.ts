@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
 import {
   createContact,
+  deleteContact,
   deleteContactAddress,
   deleteContactPerson,
   getContactWithDetails,
@@ -250,4 +251,17 @@ export async function createContactFromFormAction(values: unknown) {
 
   revalidatePath("/kontakte");
   redirect(`/kontakte/${contact.id}`);
+}
+
+export async function deleteContactAction(contactId: string) {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
+    throw new Error("Keine Berechtigung.");
+  }
+  if (!contactId?.trim()) {
+    throw new Error("Kontakt-ID fehlt.");
+  }
+
+  await deleteContact(contactId.trim());
+  revalidatePath("/kontakte");
 }

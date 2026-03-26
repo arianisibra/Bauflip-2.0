@@ -18,6 +18,7 @@ import type {
   MailDispatchLog,
   ModuleLabel,
   Project,
+  ProjectAttachment,
   ProjectChatAttachment,
   ProjectChatMessage,
   ProjectNote,
@@ -62,6 +63,7 @@ import {
   mockProfiles,
   mockProjects,
   mockProjectChatAttachments,
+  mockProjectAttachments,
   mockProjectChatMessages,
   mockQuotes,
   mockReports,
@@ -103,6 +105,7 @@ type ProjectBundle = {
   serviceAddress: ContactAddress | null;
   billingAddress: ContactAddress | null;
   notes: ProjectNote[];
+  attachments: ProjectAttachment[];
   appointments: Appointment[];
   reports: TechnicianReport[];
   quotes: Quote[];
@@ -113,6 +116,21 @@ type ProjectBundle = {
 
 function id(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
+}
+
+function getNextProjectNumberFromCodes(codes: Array<string | null | undefined>, year: number) {
+  const prefix = `${year}-`;
+  let max = 999;
+  for (const code of codes) {
+    if (!code || !code.startsWith(prefix)) {
+      continue;
+    }
+    const n = Number(code.slice(prefix.length));
+    if (Number.isFinite(n) && n > max) {
+      max = n;
+    }
+  }
+  return `${year}-${max + 1}`;
 }
 
 function isRoleType(v: unknown): v is RoleType {
@@ -998,6 +1016,7 @@ export async function getProjectBundle(projectId: string): Promise<ProjectBundle
         ? mockContactAddresses.find((a) => a.id === project.billingAddressId) ?? null
         : null,
       notes: mockNotes.filter((item) => item.projectId === projectId),
+      attachments: mockProjectAttachments.filter((item) => item.projectId === projectId),
       appointments: mockAppointments.filter((item) => item.projectId === projectId),
       reports: mockReports.filter((item) => item.projectId === projectId),
       quotes: mockQuotes.filter((item) => item.projectId === projectId),
@@ -1007,10 +1026,11 @@ export async function getProjectBundle(projectId: string): Promise<ProjectBundle
     };
   }
 
-  const [{ data: project }, { data: notes }, { data: appointments }, { data: reports }, { data: quotes }, { data: orders }, { data: deliveries }, { data: invoices }] =
+  const [{ data: project }, { data: notes }, { data: attachments }, { data: appointments }, { data: reports }, { data: quotes }, { data: orders }, { data: deliveries }, { data: invoices }] =
     await Promise.all([
       supabase.from("projects").select("*").eq("id", projectId).single(),
       supabase.from("project_notes").select("*").eq("project_id", projectId).order("created_at"),
+      supabase.from("project_attachments").select("*").eq("project_id", projectId).order("created_at"),
       supabase.from("appointments").select("*").eq("project_id", projectId).order("starts_at"),
       supabase.from("technician_reports").select("*").eq("project_id", projectId).order("created_at"),
       supabase.from("quotes").select("*").eq("project_id", projectId).order("created_at"),
@@ -1060,6 +1080,7 @@ export async function getProjectBundle(projectId: string): Promise<ProjectBundle
     serviceAddress: saRow ? mapContactAddressRow(saRow as Record<string, unknown>) : null,
     billingAddress: baRow ? mapContactAddressRow(baRow as Record<string, unknown>) : null,
     notes: (notes as unknown as ProjectNote[]) ?? [],
+    attachments: ((attachments as Array<Record<string, unknown>> | null) ?? []).map(mapProjectAttachmentRow),
     appointments: (appointments as unknown as Appointment[]) ?? [],
     reports: (reports as unknown as TechnicianReport[]) ?? [],
     quotes: ((quotes as Array<Record<string, unknown>> | null) ?? []).map(mapQuoteRow),
@@ -1312,12 +1333,50 @@ export async function deleteContactAddress(addressId: string): Promise<void> {
   }
 }
 
+export async function deleteContact(contactId: string): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const idx = mockContacts.findIndex((c) => c.id === contactId);
+    if (idx !== -1) {
+      mockContacts.splice(idx, 1);
+    }
+    for (let i = mockContactPersons.length - 1; i >= 0; i -= 1) {
+      if (mockContactPersons[i]?.contactId === contactId) {
+        mockContactPersons.splice(i, 1);
+      }
+    }
+    for (let i = mockContactAddresses.length - 1; i >= 0; i -= 1) {
+      if (mockContactAddresses[i]?.contactId === contactId) {
+        mockContactAddresses.splice(i, 1);
+      }
+    }
+    return;
+  }
+  const { error } = await supabase.from("contacts").delete().eq("id", contactId);
+  if (error) {
+    const msg = error.message?.toLowerCase() ?? "";
+    if (msg.includes("violates foreign key constraint") || msg.includes("foreign key")) {
+      throw new Error("Kontakt wird in Projekten verwendet und kann nicht gelöscht werden.");
+    }
+    throw new Error(error.message || "Kontakt konnte nicht gelöscht werden.");
+  }
+}
+
 export async function createProject(input: Omit<Project, "id" | "createdAt" | "updatedAt" | "closedAt">) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
     const now = new Date().toISOString();
+    const year = new Date(now).getFullYear();
+    const referenceCode =
+      input.referenceCode && input.referenceCode.trim().length > 0
+        ? input.referenceCode
+        : getNextProjectNumberFromCodes(
+            mockProjects.map((p) => p.referenceCode),
+            year,
+          );
     const project: Project = {
       ...input,
+      referenceCode,
       id: id("p"),
       createdAt: now,
       updatedAt: now,
@@ -1356,10 +1415,26 @@ export async function createProject(input: Omit<Project, "id" | "createdAt" | "u
   }).select("*").single();
 
   if (error || !data) {
-    throw new Error("Projekt konnte nicht erstellt werden.");
+    throw new Error(error?.message ?? "Projekt konnte nicht erstellt werden.");
   }
 
   return mapProjectRow(data as Record<string, unknown>);
+}
+
+export async function deleteProject(projectId: string): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const idx = mockProjects.findIndex((p) => p.id === projectId);
+    if (idx !== -1) {
+      mockProjects.splice(idx, 1);
+    }
+    return;
+  }
+
+  const { error } = await supabase.from("projects").delete().eq("id", projectId);
+  if (error) {
+    throw new Error(error.message || "Projekt konnte nicht gelöscht werden.");
+  }
 }
 
 export async function listSiteProperties(): Promise<SiteProperty[]> {
@@ -2238,6 +2313,19 @@ function mapChatAttachmentRow(row: Record<string, unknown>): ProjectChatAttachme
   };
 }
 
+function mapProjectAttachmentRow(row: Record<string, unknown>): ProjectAttachment {
+  return {
+    id: String(row.id),
+    projectId: String(row.project_id),
+    fileName: String(row.file_name ?? ""),
+    fileType: String(row.mime_type ?? ""),
+    filePath: String(row.file_path ?? ""),
+    sizeBytes: row.size_bytes == null ? null : Number(row.size_bytes),
+    uploadedBy: row.uploaded_by == null ? null : String(row.uploaded_by),
+    createdAt: String(row.created_at ?? ""),
+  };
+}
+
 export async function listProjectChat(projectId: string) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
@@ -2301,6 +2389,31 @@ export async function addProjectChatAttachment(input: Omit<ProjectChatAttachment
     throw new Error("Anhang konnte nicht gespeichert werden.");
   }
   return mapChatAttachmentRow(data as Record<string, unknown>);
+}
+
+export async function addProjectAttachment(input: Omit<ProjectAttachment, "id" | "createdAt">) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const item: ProjectAttachment = {
+      id: id("pa"),
+      createdAt: new Date().toISOString(),
+      ...input,
+    };
+    mockProjectAttachments.push(item);
+    return item;
+  }
+  const { data, error } = await supabase.from("project_attachments").insert({
+    project_id: input.projectId,
+    file_path: input.filePath,
+    file_name: input.fileName,
+    mime_type: input.fileType || null,
+    size_bytes: input.sizeBytes,
+    uploaded_by: input.uploadedBy,
+  }).select("*").single();
+  if (error || !data) {
+    throw new Error("Datei konnte nicht gespeichert werden.");
+  }
+  return mapProjectAttachmentRow(data as Record<string, unknown>);
 }
 
 export async function addCalendarEvent(input: Omit<CalendarEvent, "id" | "createdAt">) {
@@ -2500,6 +2613,25 @@ export async function saveArticle(
     throw new Error("Artikel konnte nicht erstellt werden.");
   }
   return mapArticleRow(data as Record<string, unknown>);
+}
+
+export async function deleteArticle(articleId: string): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const idx = mockArticles.findIndex((a) => a.id === articleId);
+    if (idx !== -1) {
+      mockArticles.splice(idx, 1);
+    }
+    return;
+  }
+  const { error } = await supabase.from("articles").delete().eq("id", articleId);
+  if (error) {
+    const msg = error.message?.toLowerCase() ?? "";
+    if (msg.includes("violates foreign key constraint") || msg.includes("foreign key")) {
+      throw new Error("Artikel wird in Belegen verwendet und kann nicht gelöscht werden.");
+    }
+    throw new Error(error.message || "Artikel konnte nicht gelöscht werden.");
+  }
 }
 
 export async function upsertArticles(items: ArticleImportRow[]) {

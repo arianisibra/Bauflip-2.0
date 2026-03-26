@@ -21,7 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="h-screen overflow-hidden bg-slate-100">
       <div className="flex h-full">
         <div className="overflow-hidden">
-          <SidebarNav role={role} items={items} />
+          <SidebarNav items={items} />
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col">
