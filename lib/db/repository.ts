@@ -112,6 +112,8 @@ type ProjectBundle = {
   orders: PurchaseOrder[];
   deliveries: Delivery[];
   invoices: Invoice[];
+  stockDecisions: StockDecision[];
+  supplierSubmissions: SupplierOrderSubmission[];
 };
 
 function id(prefix: string) {
@@ -321,6 +323,61 @@ function mapContactAddressRow(row: Record<string, unknown>): ContactAddress {
   };
 }
 
+function mapAppointmentRow(row: Record<string, unknown>): Appointment {
+  return {
+    id: String(row.id),
+    projectId: String(row.project_id ?? row.projectId ?? ""),
+    kind: (String(row.kind) as Appointment["kind"]) ?? "besichtigung",
+    startsAt: String(row.starts_at ?? row.startsAt ?? ""),
+    endsAt: String(row.ends_at ?? row.endsAt ?? ""),
+    assignedTechnicianId: (row.assigned_technician_id as string | null) ?? (row.assignedTechnicianId as string | null) ?? null,
+    planningNotes: (row.planning_notes as string | null) ?? (row.planningNotes as string | null) ?? null,
+    accessNotes: (row.access_notes as string | null) ?? (row.accessNotes as string | null) ?? null,
+    keyHandlingNotes: (row.key_handling_notes as string | null) ?? (row.keyHandlingNotes as string | null) ?? null,
+    createdAt: String(row.created_at ?? row.createdAt ?? new Date().toISOString()),
+  };
+}
+
+function mapTechnicianReportRow(row: Record<string, unknown>): TechnicianReport {
+  return {
+    id: String(row.id),
+    projectId: String(row.project_id ?? row.projectId ?? ""),
+    outcome: String(row.outcome ?? "direkt_geloest") as TechnicianReport["outcome"],
+    summary: String(row.summary ?? ""),
+    measurementsJson: String(row.measurements_json ?? row.measurementsJson ?? "{}"),
+    workDescription: String(row.work_description ?? row.workDescription ?? ""),
+    timeSpentMinutes:
+      row.time_spent_minutes != null
+        ? Number(row.time_spent_minutes)
+        : row.timeSpentMinutes != null
+          ? Number(row.timeSpentMinutes)
+          : null,
+    createdAt: String(row.created_at ?? row.createdAt ?? new Date().toISOString()),
+  };
+}
+
+function mapStockDecisionRow(row: Record<string, unknown>): StockDecision {
+  return {
+    id: String(row.id),
+    projectId: String(row.project_id ?? row.projectId ?? ""),
+    decision: String(row.decision ?? "ab_lager") as StockDecision["decision"],
+    notes: String(row.notes ?? ""),
+    decidedByRole: String(row.decided_by_role ?? row.decidedByRole ?? "office") as StockDecision["decidedByRole"],
+    createdAt: String(row.created_at ?? row.createdAt ?? new Date().toISOString()),
+  };
+}
+
+function mapSupplierOrderSubmissionRow(row: Record<string, unknown>): SupplierOrderSubmission {
+  return {
+    id: String(row.id),
+    projectId: String(row.project_id ?? row.projectId ?? ""),
+    templateId: String(row.template_id ?? row.templateId ?? ""),
+    valuesJson: String(row.values_json ?? row.valuesJson ?? "{}"),
+    status: String(row.status ?? "entwurf") as SupplierOrderSubmission["status"],
+    createdAt: String(row.created_at ?? row.createdAt ?? new Date().toISOString()),
+  };
+}
+
 function mapQuoteRow(row: Record<string, unknown>): Quote {
   return {
     id: String(row.id),
@@ -415,6 +472,17 @@ function mapInvoiceRow(row: Record<string, unknown>): Invoice {
     deliveryRecipient:
       row.delivery_recipient != null ? String(row.delivery_recipient) : row.deliveryRecipient != null ? String(row.deliveryRecipient) : null,
     createdAt: String(row.created_at ?? row.createdAt ?? ""),
+  };
+}
+
+function mapPurchaseOrderRow(row: Record<string, unknown>): PurchaseOrder {
+  return {
+    id: String(row.id),
+    projectId: String(row.project_id ?? row.projectId ?? ""),
+    supplierId: String(row.supplier_id ?? row.supplierId ?? ""),
+    status: String(row.status ?? "entwurf") as PurchaseOrder["status"],
+    emailSentAt: row.email_sent_at ? String(row.email_sent_at) : row.emailSentAt ? String(row.emailSentAt) : null,
+    createdAt: String(row.created_at ?? row.createdAt ?? new Date().toISOString()),
   };
 }
 
@@ -958,6 +1026,7 @@ export async function getContactWithDetails(contactId: string): Promise<{
   contact: Contact;
   persons: ContactPerson[];
   addresses: ContactAddress[];
+  siteProperties: SiteProperty[];
 } | null> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
@@ -969,13 +1038,15 @@ export async function getContactWithDetails(contactId: string): Promise<{
       contact,
       persons: mockContactPersons.filter((p) => p.contactId === contactId),
       addresses: mockContactAddresses.filter((a) => a.contactId === contactId),
+      siteProperties: mockSiteProperties.filter((p) => p.ownerContactId === contactId),
     };
   }
 
-  const [{ data: row }, { data: personRows }, { data: addressRows }] = await Promise.all([
+  const [{ data: row }, { data: personRows }, { data: addressRows }, { data: propertyRows }] = await Promise.all([
     supabase.from("contacts").select("*").eq("id", contactId).maybeSingle(),
     supabase.from("contact_persons").select("*").eq("contact_id", contactId).order("created_at"),
     supabase.from("contact_addresses").select("*").eq("contact_id", contactId).order("created_at"),
+    supabase.from("site_properties").select("*").eq("owner_contact_id", contactId).order("name", { ascending: true }),
   ]);
 
   if (!row) {
@@ -986,6 +1057,7 @@ export async function getContactWithDetails(contactId: string): Promise<{
     contact: mapContactRow(row as Record<string, unknown>),
     persons: (personRows ?? []).map((r) => mapContactPersonRow(r as Record<string, unknown>)),
     addresses: (addressRows ?? []).map((r) => mapContactAddressRow(r as Record<string, unknown>)),
+    siteProperties: (propertyRows ?? []).map((r) => mapSitePropertyRow(r as Record<string, unknown>)),
   };
 }
 
@@ -1023,10 +1095,12 @@ export async function getProjectBundle(projectId: string): Promise<ProjectBundle
       orders: mockOrders.filter((item) => item.projectId === projectId),
       deliveries: mockDeliveries.filter((item) => item.projectId === projectId),
       invoices: mockInvoices.filter((item) => item.projectId === projectId),
+      stockDecisions: mockStockDecisions.filter((item) => item.projectId === projectId),
+      supplierSubmissions: mockSupplierSubmissions.filter((item) => item.projectId === projectId),
     };
   }
 
-  const [{ data: project }, { data: notes }, { data: attachments }, { data: appointments }, { data: reports }, { data: quotes }, { data: orders }, { data: deliveries }, { data: invoices }] =
+  const [{ data: project }, { data: notes }, { data: attachments }, { data: appointments }, { data: reports }, { data: quotes }, { data: orders }, { data: deliveries }, { data: invoices }, { data: stockDecisions }, { data: supplierSubmissions }] =
     await Promise.all([
       supabase.from("projects").select("*").eq("id", projectId).single(),
       supabase.from("project_notes").select("*").eq("project_id", projectId).order("created_at"),
@@ -1037,6 +1111,8 @@ export async function getProjectBundle(projectId: string): Promise<ProjectBundle
       supabase.from("purchase_orders").select("*").eq("project_id", projectId).order("created_at"),
       supabase.from("deliveries").select("*").eq("project_id", projectId).order("arrived_at"),
       supabase.from("invoices").select("*").eq("project_id", projectId).order("created_at"),
+      supabase.from("stock_decisions").select("*").eq("project_id", projectId).order("created_at"),
+      supabase.from("supplier_order_form_submissions").select("*").eq("project_id", projectId).order("created_at"),
     ]);
 
   if (!project) {
@@ -1081,12 +1157,16 @@ export async function getProjectBundle(projectId: string): Promise<ProjectBundle
     billingAddress: baRow ? mapContactAddressRow(baRow as Record<string, unknown>) : null,
     notes: (notes as unknown as ProjectNote[]) ?? [],
     attachments: ((attachments as Array<Record<string, unknown>> | null) ?? []).map(mapProjectAttachmentRow),
-    appointments: (appointments as unknown as Appointment[]) ?? [],
-    reports: (reports as unknown as TechnicianReport[]) ?? [],
+    appointments: ((appointments as Array<Record<string, unknown>> | null) ?? []).map(mapAppointmentRow),
+    reports: ((reports as Array<Record<string, unknown>> | null) ?? []).map(mapTechnicianReportRow),
     quotes: ((quotes as Array<Record<string, unknown>> | null) ?? []).map(mapQuoteRow),
-    orders: (orders as unknown as PurchaseOrder[]) ?? [],
+    orders: ((orders as Array<Record<string, unknown>> | null) ?? []).map(mapPurchaseOrderRow),
     deliveries: ((deliveries as Array<Record<string, unknown>> | null) ?? []).map(mapDeliveryRow),
     invoices: ((invoices as Array<Record<string, unknown>> | null) ?? []).map(mapInvoiceRow),
+    stockDecisions: ((stockDecisions as Array<Record<string, unknown>> | null) ?? []).map(mapStockDecisionRow),
+    supplierSubmissions: ((supplierSubmissions as Array<Record<string, unknown>> | null) ?? []).map(
+      mapSupplierOrderSubmissionRow,
+    ),
   };
 }
 
@@ -1455,6 +1535,72 @@ export async function listSiteProperties(): Promise<SiteProperty[]> {
   return (data as Record<string, unknown>[]).map(mapSitePropertyRow);
 }
 
+export async function insertSiteProperty(input: {
+  organizationId: string | null;
+  ownerContactId: string | null;
+  name: string;
+  street?: string | null;
+  postalCode?: string | null;
+  city?: string | null;
+  country?: string | null;
+  mapsUrl?: string | null;
+}): Promise<SiteProperty> {
+  const supabase = await createSupabaseServerClient();
+  const name = input.name.trim();
+  if (!name) {
+    throw new Error("Objektname fehlt.");
+  }
+  if (!supabase) {
+    const row: SiteProperty = {
+      id: id("sp"),
+      organizationId: input.organizationId ?? null,
+      ownerContactId: input.ownerContactId ?? null,
+      name,
+      street: input.street ?? null,
+      postalCode: input.postalCode ?? null,
+      city: input.city ?? null,
+      country: input.country?.trim() || "CH",
+      mapsUrl: input.mapsUrl ?? null,
+      createdAt: new Date().toISOString(),
+    };
+    mockSiteProperties.push(row);
+    return row;
+  }
+  const { data, error } = await supabase
+    .from("site_properties")
+    .insert({
+      organization_id: input.organizationId ?? null,
+      owner_contact_id: input.ownerContactId ?? null,
+      name,
+      street: input.street ?? null,
+      postal_code: input.postalCode ?? null,
+      city: input.city ?? null,
+      country: input.country?.trim() || "CH",
+      maps_url: input.mapsUrl ?? null,
+    })
+    .select("*")
+    .single();
+  if (error || !data) {
+    throw new Error(error?.message ?? "Objekt konnte nicht angelegt werden.");
+  }
+  return mapSitePropertyRow(data as Record<string, unknown>);
+}
+
+export async function deleteSiteProperty(propertyId: string): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const idx = mockSiteProperties.findIndex((p) => p.id === propertyId);
+    if (idx !== -1) {
+      mockSiteProperties.splice(idx, 1);
+    }
+    return;
+  }
+  const { error } = await supabase.from("site_properties").delete().eq("id", propertyId);
+  if (error) {
+    throw new Error(error.message || "Objekt konnte nicht gelöscht werden.");
+  }
+}
+
 export async function listProjectWorkTypes(): Promise<ProjectWorkType[]> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
@@ -1675,6 +1821,23 @@ export async function addAppointment(input: Omit<Appointment, "id" | "createdAt"
   return data as unknown as Appointment;
 }
 
+export async function deleteAppointment(appointmentId: string) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const idx = mockAppointments.findIndex((item) => item.id === appointmentId);
+    if (idx < 0) {
+      throw new Error("Termin nicht gefunden.");
+    }
+    mockAppointments.splice(idx, 1);
+    return;
+  }
+
+  const { error } = await supabase.from("appointments").delete().eq("id", appointmentId);
+  if (error) {
+    throw new Error("Termin konnte nicht gelöscht werden.");
+  }
+}
+
 export async function addTechnicianReport(input: Omit<TechnicianReport, "id" | "createdAt">) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
@@ -1742,34 +1905,23 @@ export async function addQuote(
     return quote;
   }
 
-  const { data, error } = await supabase.from("quotes").insert({
+  const quoteId = crypto.randomUUID();
+  // Keep INSERT compatible with lean quotes schema in production DB.
+  const { error } = await supabase.from("quotes").insert({
+    id: quoteId,
     project_id: quoteInput.projectId,
     version: quoteInput.version,
-    warranty_text: quoteInput.warrantyText ?? null,
-    validity_days: quoteInput.validityDays ?? null,
-    lead_time_text: quoteInput.leadTimeText ?? null,
-    down_payment_percent: quoteInput.downPaymentPercent ?? null,
-    payment_terms_text: quoteInput.paymentTermsText ?? null,
-    salutation_text: quoteInput.salutationText ?? null,
-    text_blocks: quoteInput.textBlocks ?? null,
-    currency: quoteInput.currency ?? "CHF",
-    discount_percent: quoteInput.discountPercent ?? 0,
-    vat_percent: quoteInput.vatPercent ?? 8.1,
-    subtotal_net: quoteInput.subtotalNet ?? 0,
-    discount_amount: quoteInput.discountAmount ?? 0,
-    total_net: quoteInput.totalNet ?? 0,
-    vat_amount: quoteInput.vatAmount ?? 0,
-    total_gross: quoteInput.totalGross ?? 0,
-  }).select("*").single();
+  });
 
-  if (error || !data) {
-    throw new Error("Offerte konnte nicht erstellt werden.");
+  if (error) {
+    const detail = [error.code, error.message, error.details, error.hint].filter(Boolean).join(" | ");
+    throw new Error(detail || "Offerte konnte nicht erstellt werden.");
   }
 
   if (items.length > 0) {
     const { error: itemError } = await supabase.from("quote_items").insert(
       items.map((item) => ({
-        quote_id: String((data as Record<string, unknown>).id),
+        quote_id: quoteId,
         description: item.description,
         quantity: item.quantity,
         unit: item.unit,
@@ -1777,11 +1929,43 @@ export async function addQuote(
       })),
     );
     if (itemError) {
-      throw new Error("Offertenpositionen konnten nicht gespeichert werden.");
+      const detail = [itemError.code, itemError.message, itemError.details, itemError.hint].filter(Boolean).join(" | ");
+      throw new Error(detail || "Offertenpositionen konnten nicht gespeichert werden.");
     }
   }
 
-  return mapQuoteRow(data as Record<string, unknown>);
+  return {
+    id: quoteId,
+    projectId: quoteInput.projectId,
+    version: quoteInput.version,
+    status: "entwurf",
+    sentAt: null,
+    approvedAt: null,
+    pdfPath: null,
+    pdfGeneratedAt: null,
+    pdfVersion: 0,
+    finalizedAt: null,
+    finalizedBy: null,
+    warrantyText: quoteInput.warrantyText ?? null,
+    validityDays: quoteInput.validityDays ?? null,
+    leadTimeText: quoteInput.leadTimeText ?? null,
+    downPaymentPercent: quoteInput.downPaymentPercent ?? null,
+    paymentTermsText: quoteInput.paymentTermsText ?? null,
+    salutationText: quoteInput.salutationText ?? null,
+    textBlocks: quoteInput.textBlocks ?? null,
+    currency: quoteInput.currency ?? "CHF",
+    discountPercent: quoteInput.discountPercent ?? 0,
+    vatPercent: quoteInput.vatPercent ?? 8.1,
+    subtotalNet: quoteInput.subtotalNet ?? 0,
+    discountAmount: quoteInput.discountAmount ?? 0,
+    totalNet: quoteInput.totalNet ?? 0,
+    vatAmount: quoteInput.vatAmount ?? 0,
+    totalGross: quoteInput.totalGross ?? 0,
+    deliveryChannel: null,
+    deliverySentAt: null,
+    deliveryRecipient: null,
+    createdAt: new Date().toISOString(),
+  } as Quote;
 }
 
 export async function addPurchaseOrder(input: Omit<PurchaseOrder, "id" | "createdAt" | "status" | "emailSentAt">) {
@@ -1807,7 +1991,7 @@ export async function addPurchaseOrder(input: Omit<PurchaseOrder, "id" | "create
     throw new Error("Bestellung konnte nicht erstellt werden.");
   }
 
-  return data as unknown as PurchaseOrder;
+  return mapPurchaseOrderRow(data as Record<string, unknown>);
 }
 
 export async function addDelivery(
@@ -2845,6 +3029,22 @@ export async function addStockDecision(input: Omit<StockDecision, "id" | "create
     throw new Error("Lagerentscheidung konnte nicht gespeichert werden.");
   }
   return data as unknown as StockDecision;
+}
+
+export async function deleteStockDecision(stockDecisionId: string) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const idx = mockStockDecisions.findIndex((item) => item.id === stockDecisionId);
+    if (idx < 0) {
+      throw new Error("Lagerentscheid nicht gefunden.");
+    }
+    mockStockDecisions.splice(idx, 1);
+    return;
+  }
+  const { error } = await supabase.from("stock_decisions").delete().eq("id", stockDecisionId);
+  if (error) {
+    throw new Error("Lagerentscheidung konnte nicht gelöscht werden.");
+  }
 }
 
 export async function addMailDispatchLog(input: Omit<MailDispatchLog, "id" | "sentAt">) {

@@ -34,6 +34,10 @@ const SERVICE_CATALOG = [
   { id: "s5", label: "Fahrtpauschale", unit: "Pauschal", unitPrice: 65 },
 ];
 
+function parseLocaleNumber(input: string): number {
+  return Number(String(input).trim().replace(",", "."));
+}
+
 export function QuoteDraftForm({
   projectId,
   suggestedVersion,
@@ -80,41 +84,67 @@ export function QuoteDraftForm({
       <input type="hidden" name="projectId" value={projectId} />
       <input type="hidden" name="version" value={String(suggestedVersion)} />
 
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="flex flex-col gap-1">
+        <Label className="text-sm">Gültigkeit (Tage)</Label>
+        <select name="validityDays" className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none" defaultValue="30">
+          <option value="14">14 Tage</option>
+          <option value="30">30 Tage</option>
+          <option value="60">60 Tage</option>
+          <option value="90">90 Tage</option>
+        </select>
+      </div>
+
+      <div className="grid gap-2 xl:grid-cols-2">
         <div className="flex flex-col gap-1">
-          <Label className="text-sm">Version</Label>
-          <Input value={String(suggestedVersion)} readOnly className="h-9" />
+          <Label className="text-sm">Garantie</Label>
+          <select
+            name="warrantyText"
+            defaultValue="24 Monate"
+            className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
+          >
+            <option value="12 Monate">12 Monate</option>
+            <option value="24 Monate">24 Monate</option>
+            <option value="36 Monate">36 Monate</option>
+            <option value="Keine Garantie">Keine Garantie</option>
+            <option value="Nach Herstellerangaben">Nach Herstellerangaben</option>
+          </select>
         </div>
         <div className="flex flex-col gap-1">
-          <Label className="text-sm">Gültigkeit (Tage)</Label>
-          <select name="validityDays" className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none" defaultValue="30">
-            <option value="14">14 Tage</option>
-            <option value="30">30 Tage</option>
-            <option value="60">60 Tage</option>
-            <option value="90">90 Tage</option>
+          <Label className="text-sm">Lieferfrist</Label>
+          <select
+            name="leadTimeText"
+            defaultValue="1 Woche"
+            className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
+          >
+            <option value="Sofort / ab Lager">Sofort / ab Lager</option>
+            <option value="1 Woche">1 Woche</option>
+            <option value="2 Wochen">2 Wochen</option>
+            <option value="3-4 Wochen">3-4 Wochen</option>
+            <option value="6-8 Wochen">6-8 Wochen</option>
+            <option value="Nach Absprache">Nach Absprache</option>
           </select>
         </div>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2">
-        <div className="flex flex-col gap-1">
-          <Label className="text-sm">Garantie</Label>
-          <Input name="warrantyText" placeholder="z. B. 24 Monate auf Material" className="h-9" />
-        </div>
-        <div className="flex flex-col gap-1">
-          <Label className="text-sm">Lieferfrist</Label>
-          <Input name="leadTimeText" placeholder="z. B. 3–4 Wochen ab Freigabe" className="h-9" />
-        </div>
-      </div>
-
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-2 xl:grid-cols-2">
         <div className="flex flex-col gap-1">
           <Label className="text-sm">Akontozahlung (%)</Label>
           <Input name="downPaymentPercent" type="number" min={0} max={100} step="0.1" defaultValue={0} className="h-9" />
         </div>
         <div className="flex flex-col gap-1">
           <Label className="text-sm">Zahlungskonditionen</Label>
-          <Input name="paymentTermsText" placeholder="z. B. 30 Tage netto" className="h-9" />
+          <select
+            name="paymentTermsText"
+            defaultValue="30 Tage netto"
+            className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
+          >
+            <option value="Sofort zahlbar">Sofort zahlbar</option>
+            <option value="10 Tage netto">10 Tage netto</option>
+            <option value="20 Tage netto">20 Tage netto</option>
+            <option value="30 Tage netto">30 Tage netto</option>
+            <option value="50% bei Auftrag, Rest bei Abschluss">50% bei Auftrag, Rest bei Abschluss</option>
+            <option value="Nach Absprache">Nach Absprache</option>
+          </select>
         </div>
       </div>
 
@@ -129,11 +159,11 @@ export function QuoteDraftForm({
 
       <div className="rounded-md border p-3">
         <p className="text-sm font-medium">Offertenpositionen: Dienstleistungen</p>
-        <div className="mt-2 flex items-center gap-2">
+        <div className="mt-2 grid gap-2 md:grid-cols-[minmax(0,1fr)_96px_auto] md:items-center">
           <select
             value={selectedServiceId}
             onChange={(e) => setSelectedServiceId(e.target.value)}
-            className="h-9 flex-1 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
+            className="h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
           >
             <option value="">Dienstleistung wählen …</option>
             {SERVICE_CATALOG.map((s) => (
@@ -142,15 +172,24 @@ export function QuoteDraftForm({
               </option>
             ))}
           </select>
-          <Input value={serviceQty} onChange={(e) => setServiceQty(e.target.value)} type="number" min={0.1} step="0.1" className="h-9 w-24" />
+          <Input
+            value={serviceQty}
+            onChange={(e) => setServiceQty(e.target.value)}
+            type="number"
+            min={0.1}
+            step="0.1"
+            className="h-9 w-full"
+          />
           <Button
             type="button"
             size="sm"
             variant="outline"
+            className="w-full sm:w-auto"
             onClick={() => {
               const s = SERVICE_CATALOG.find((x) => x.id === selectedServiceId);
-              const qty = Number(serviceQty);
+              const qty = parseLocaleNumber(serviceQty);
               if (!s || !Number.isFinite(qty) || qty <= 0) {
+                window.alert("Bitte zuerst eine Dienstleistung wählen und eine gültige Menge eingeben.");
                 return;
               }
               setPositions((prev) => [
@@ -176,11 +215,11 @@ export function QuoteDraftForm({
 
       <div className="rounded-md border p-3">
         <p className="text-sm font-medium">Offertenpositionen: Artikel</p>
-        <div className="mt-2 flex items-center gap-2">
+        <div className="mt-2 grid gap-2 md:grid-cols-[minmax(0,1fr)_96px_auto] md:items-center">
           <select
             value={selectedArticleId}
             onChange={(e) => setSelectedArticleId(e.target.value)}
-            className="h-9 flex-1 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
+            className="h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
           >
             <option value="">Artikel wählen …</option>
             {articleOptions.map((a) => (
@@ -189,15 +228,24 @@ export function QuoteDraftForm({
               </option>
             ))}
           </select>
-          <Input value={articleQty} onChange={(e) => setArticleQty(e.target.value)} type="number" min={1} step="1" className="h-9 w-24" />
+          <Input
+            value={articleQty}
+            onChange={(e) => setArticleQty(e.target.value)}
+            type="number"
+            min={1}
+            step="1"
+            className="h-9 w-full"
+          />
           <Button
             type="button"
             size="sm"
             variant="outline"
+            className="w-full sm:w-auto"
             onClick={() => {
               const a = articleOptions.find((x) => x.id === selectedArticleId);
-              const qty = Number(articleQty);
+              const qty = parseLocaleNumber(articleQty);
               if (!a || !Number.isFinite(qty) || qty <= 0) {
+                window.alert("Bitte zuerst einen Artikel wählen und eine gültige Menge eingeben.");
                 return;
               }
               setPositions((prev) => [
@@ -246,14 +294,30 @@ export function QuoteDraftForm({
         )}
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-2 xl:grid-cols-2">
         <div className="flex flex-col gap-1">
           <Label className="text-sm">Rabatt (%)</Label>
-          <Input value={discountPercent} onChange={(e) => setDiscountPercent(e.target.value)} type="number" min={0} max={100} step="0.1" className="h-9" />
+          <Input
+            value={discountPercent}
+            onChange={(e) => setDiscountPercent(e.target.value.replace(",", "."))}
+            type="number"
+            min={0}
+            max={100}
+            step="0.1"
+            className="h-9"
+          />
         </div>
         <div className="flex flex-col gap-1">
           <Label className="text-sm">MWST (%)</Label>
-          <Input value={vatPercent} onChange={(e) => setVatPercent(e.target.value)} type="number" min={0} max={100} step="0.1" className="h-9" />
+          <Input
+            value={vatPercent}
+            onChange={(e) => setVatPercent(e.target.value.replace(",", "."))}
+            type="number"
+            min={0}
+            max={100}
+            step="0.1"
+            className="h-9"
+          />
         </div>
       </div>
 

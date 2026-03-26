@@ -19,7 +19,7 @@ export default async function KontaktDetailPage({ params }: Props) {
     notFound();
   }
 
-  const { contact, persons, addresses } = bundle;
+  const { contact, persons, addresses, siteProperties } = bundle;
 
   return (
     <section className="flex flex-col gap-6">
@@ -115,6 +115,29 @@ export default async function KontaktDetailPage({ params }: Props) {
                     .filter(Boolean)
                     .join(", ")}
                 </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {siteProperties.length > 0 ? (
+        <div>
+          <h2 className="mb-2 text-lg font-medium">Objekte (Standorte)</h2>
+          <ul className="flex flex-col gap-3">
+            {siteProperties.map((sp) => (
+              <li key={sp.id} className="rounded-lg border bg-white p-3">
+                <p className="font-medium">{sp.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  {[sp.street, `${sp.postalCode ?? ""} ${sp.city ?? ""}`.trim(), sp.country]
+                    .filter(Boolean)
+                    .join(", ") || "—"}
+                </p>
+                {sp.mapsUrl ? (
+                  <a href={sp.mapsUrl} className="mt-1 inline-block text-sm text-primary underline" target="_blank" rel="noreferrer">
+                    Google Maps öffnen
+                  </a>
+                ) : null}
               </li>
             ))}
           </ul>

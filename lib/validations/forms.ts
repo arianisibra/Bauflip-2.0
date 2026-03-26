@@ -92,6 +92,8 @@ export const finalizeDocumentSchema = z.object({
   documentId: z.string().min(1),
   deliveryChannel: z.enum(["email", "post"]).optional(),
   emailTo: z.string().optional(),
+  emailCc: z.string().optional(),
+  emailBcc: z.string().optional(),
   emailSubject: z.string().optional(),
   emailHtml: z.string().optional(),
 });
@@ -157,6 +159,11 @@ export const articleCategoryCreateSchema = z.object({
 export const profileSettingsSchema = z.object({
   displayName: z.string().min(1, "Anzeigename ist Pflicht."),
   calendarPosition: z.coerce.number().int().min(0).max(9999),
+  billingIban: z.string().optional(),
+  billingCreditorName: z.string().optional(),
+  billingCreditorStreet: z.string().optional(),
+  billingCreditorPostalCode: z.string().optional(),
+  billingCreditorCity: z.string().optional(),
 });
 
 export const stockDecisionSchema = z.object({
@@ -184,17 +191,13 @@ export const smtpSendSchema = z.object({
 });
 
 export const swissQrSchema = z.object({
-  iban: z.string().min(5),
-  creditorName: z.string().min(2),
-  creditorStreet: z.string().min(2),
-  creditorPostalCode: z.string().min(2),
-  creditorCity: z.string().min(2),
   amount: z.string().min(1),
   currency: z.enum(["CHF", "EUR"]),
   debtorName: z.string().min(2),
   debtorStreet: z.string().min(2),
   debtorPostalCode: z.string().min(2),
   debtorCity: z.string().min(2),
+  debtorCountry: z.string().min(2).max(2).optional(),
   reference: z.string().min(2),
   message: z.string().min(1),
 });

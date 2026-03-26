@@ -7,6 +7,7 @@ import {
   addCalendarEvent,
   addMailDispatchLog,
   addAppointment,
+  deleteAppointment,
   addDelivery,
   addInvoice,
   addProjectChatAttachment,
@@ -16,6 +17,7 @@ import {
   addPurchaseOrder,
   addQuote,
   addStockDecision,
+  deleteStockDecision,
   addSupplierSubmission,
   addTechnicianReport,
   createContact,
@@ -85,6 +87,35 @@ function collectFormData(formData: FormData) {
   return Object.fromEntries(
     Object.entries(entries).map(([key, value]) => [key, typeof value === "string" ? value : ""]),
   );
+}
+
+async function buildNextInvoiceNumber(): Promise<string> {
+  const year = new Date().getFullYear();
+  const prefix = `RE-${year}-`;
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return `${prefix}${String(Date.now()).slice(-3)}`;
+  }
+  const { data } = await supabase
+    .from("invoices")
+    .select("invoice_number")
+    .like("invoice_number", `${prefix}%`)
+    .order("created_at", { ascending: false })
+    .limit(500);
+  const rows = (data ?? []) as Array<{ invoice_number?: string | null }>;
+  let max = 0;
+  for (const row of rows) {
+    const num = String(row.invoice_number ?? "");
+    const m = num.match(/^RE-(\d{4})-(\d+)$/);
+    if (!m || Number(m[1]) !== year) {
+      continue;
+    }
+    const n = Number(m[2]);
+    if (Number.isFinite(n) && n > max) {
+      max = n;
+    }
+  }
+  return `${prefix}${String(max + 1).padStart(3, "0")}`;
 }
 
 async function assignAppointmentToTechnicianCalendar(params: {
@@ -268,6 +299,17 @@ export async function addAppointmentAction(formData: FormData) {
   }
   const session = await getCurrentSession();
   const assignedTechnicianId = parsed.data.assignedTechnicianId?.trim() || null;
+  if (!assignedTechnicianId) {
+    throw new Error("Bitte Monteur auswählen.");
+  }
+  const startsAtDate = new Date(parsed.data.startsAt);
+  const endsAtDate = new Date(parsed.data.endsAt);
+  if (Number.isNaN(startsAtDate.getTime()) || Number.isNaN(endsAtDate.getTime())) {
+    throw new Error("Bitte gültige Start- und Endzeit erfassen.");
+  }
+  if (endsAtDate.getTime() <= startsAtDate.getTime()) {
+    throw new Error("Ende muss nach Beginn liegen.");
+  }
 
   const appointment = await addAppointment({
     projectId: parsed.data.projectId,
@@ -306,6 +348,33 @@ export async function addAppointmentAction(formData: FormData) {
   }
 
   revalidatePath(`/projekte/${parsed.data.projectId}`);
+  revalidatePath("/projekte");
+  revalidatePath("/termine");
+  revalidatePath("/");
+}
+
+export async function deleteAppointmentAction(formData: FormData) {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
+    throw new Error("Keine Berechtigung.");
+  }
+  const appointmentId = String(formData.get("appointmentId") ?? "").trim();
+  const projectId = String(formData.get("projectId") ?? "").trim();
+  if (!appointmentId) {
+    throw new Error("Termin-ID fehlt.");
+  }
+  await deleteAppointment(appointmentId);
+  await addAuditEvent({
+    action: "termin_geloescht",
+    projectId: projectId || null,
+    actorRole: session.role,
+    actorName: session.profile.displayName ?? "System Benutzer",
+    payload: JSON.stringify({ appointmentId }),
+  });
+  if (projectId) {
+    revalidatePath(`/projekte/${projectId}`);
+  }
+  revalidatePath("/projekte");
   revalidatePath("/termine");
   revalidatePath("/");
 }
@@ -378,6 +447,11 @@ export async function addTechnicianReportAction(formData: FormData): Promise<Add
 }
 
 export async function addQuoteAction(formData: FormData) {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
+    throw new Error("Keine Berechtigung: Offerten dürfen nur von Büro oder Admin erstellt werden.");
+  }
+
   const payload = collectFormData(formData);
   const parsed = quoteSchema.safeParse(payload);
   if (!parsed.success) {
@@ -411,32 +485,44 @@ export async function addQuoteAction(formData: FormData) {
   const vatAmount = totalNet * (vatPercent / 100);
   const totalGross = totalNet + vatAmount;
 
-  await addQuote({
-    projectId: parsed.data.projectId,
-    version: parsed.data.version,
-    warrantyText: parsed.data.warrantyText?.trim() ? parsed.data.warrantyText.trim() : null,
-    validityDays: parsed.data.validityDays ?? null,
-    leadTimeText: parsed.data.leadTimeText?.trim() ? parsed.data.leadTimeText.trim() : null,
-    downPaymentPercent: parsed.data.downPaymentPercent ?? null,
-    paymentTermsText: parsed.data.paymentTermsText?.trim() ? parsed.data.paymentTermsText.trim() : null,
-    salutationText: parsed.data.salutationText?.trim() ? parsed.data.salutationText.trim() : null,
-    textBlocks: parsed.data.textBlocks?.trim() ? parsed.data.textBlocks.trim() : null,
-    currency: "CHF",
-    discountPercent,
-    vatPercent,
-    subtotalNet,
-    discountAmount,
-    totalNet,
-    vatAmount,
-    totalGross,
-    items: quoteItems,
-  });
+  const bundle = await getProjectBundle(parsed.data.projectId);
+  if (!bundle) {
+    throw new Error("Projekt nicht gefunden.");
+  }
+  const nextVersion = bundle.quotes.reduce((max, q) => Math.max(max, q.version), 0) + 1;
+
+  try {
+    await addQuote({
+      projectId: parsed.data.projectId,
+      version: nextVersion,
+      warrantyText: parsed.data.warrantyText?.trim() ? parsed.data.warrantyText.trim() : null,
+      validityDays: parsed.data.validityDays ?? null,
+      leadTimeText: parsed.data.leadTimeText?.trim() ? parsed.data.leadTimeText.trim() : null,
+      downPaymentPercent: parsed.data.downPaymentPercent ?? null,
+      paymentTermsText: parsed.data.paymentTermsText?.trim() ? parsed.data.paymentTermsText.trim() : null,
+      salutationText: parsed.data.salutationText?.trim() ? parsed.data.salutationText.trim() : null,
+      textBlocks: parsed.data.textBlocks?.trim() ? parsed.data.textBlocks.trim() : null,
+      currency: "CHF",
+      discountPercent,
+      vatPercent,
+      subtotalNet,
+      discountAmount,
+      totalNet,
+      vatAmount,
+      totalGross,
+      items: quoteItems,
+    });
+  } catch (error) {
+    throw new Error(
+      `Offerte konnte nicht erstellt werden: ${error instanceof Error ? error.message : "Unbekannter Fehler"}`,
+    );
+  }
   await addAuditEvent({
     action: "offerte_erstellt",
     projectId: parsed.data.projectId,
-    actorRole: "office",
-    actorName: "System Benutzer",
-    payload: JSON.stringify({ version: parsed.data.version, totalGross, totalNet, positions: quoteItems.length }),
+    actorRole: session.role,
+    actorName: session.profile.displayName,
+    payload: JSON.stringify({ version: nextVersion, totalGross, totalNet, positions: quoteItems.length }),
   });
 
   revalidatePath(`/projekte/${parsed.data.projectId}`);
@@ -494,16 +580,17 @@ export async function addInvoiceAction(formData: FormData) {
     throw new Error(parsed.error.issues[0]?.message ?? "Ungültige Rechnung.");
   }
 
+  const autoInvoiceNumber = await buildNextInvoiceNumber();
   await addInvoice({
     projectId: parsed.data.projectId,
-    invoiceNumber: parsed.data.invoiceNumber || null,
+    invoiceNumber: autoInvoiceNumber,
   });
   await addAuditEvent({
     action: "rechnung_vorbereitet",
     projectId: parsed.data.projectId,
     actorRole: "admin",
     actorName: "System Benutzer",
-    payload: JSON.stringify({ invoiceNumber: parsed.data.invoiceNumber ?? null }),
+    payload: JSON.stringify({ invoiceNumber: autoInvoiceNumber }),
   });
 
   revalidatePath(`/projekte/${parsed.data.projectId}`);
@@ -578,10 +665,16 @@ export async function finalizeProjectDocumentAction(formData: FormData) {
     if (!to) {
       throw new Error("Empfänger-E-Mail fehlt.");
     }
+    const cc = parsed.data.emailCc?.trim() || "";
+    const bcc = parsed.data.emailBcc?.trim() || "";
     const subject = parsed.data.emailSubject?.trim() || `Bauflip Dokument: ${bundle.project.title}`;
-    const html = parsed.data.emailHtml?.trim() || "<p>Im Anhang erhalten Sie das Dokument als PDF.</p>";
+    const html =
+      parsed.data.emailHtml?.trim() ||
+      `<p>Guten Tag</p><p>im Anhang erhalten Sie das Dokument als PDF.</p><p>Freundliche Grüsse<br/>${session.profile.displayName}</p>`;
     const result = await sendMailViaSmtp({
       to,
+      cc: cc || undefined,
+      bcc: bcc || undefined,
       subject,
       html,
       attachments: [{ filename: "dokument.pdf", content: Buffer.from(bytes), contentType: "application/pdf" }],
@@ -730,16 +823,18 @@ export async function transitionProjectAction(formData: FormData) {
 
   const decision = assertCanTransition(bundle.project, parsed.data.targetStatus, role);
   if (!decision.ok) {
-    throw new Error(decision.reason);
+    throw new Error(translateMissingFieldsInReason(decision.reason));
   }
 
   const prerequisiteMessages = getBundlePrerequisiteMessages(bundle.project, parsed.data.targetStatus, {
     besichtigungAppointments: bundle.appointments.filter((a) => a.kind === "besichtigung").length,
     ausfuehrungAppointments: bundle.appointments.filter((a) => a.kind === "ausfuehrung").length,
     reports: bundle.reports.length,
+    directResolvedReports: bundle.reports.filter((r) => r.outcome === "direkt_geloest").length,
     quotes: bundle.quotes.length,
     quoteFinalized: bundle.quotes.filter((q) => Boolean(q.finalizedAt) || Boolean(q.deliverySentAt)).length,
     orders: bundle.orders.length,
+    stockDecisionAbLager: bundle.stockDecisions.filter((s) => s.decision === "ab_lager").length,
     deliveries: bundle.deliveries.length,
     invoices: bundle.invoices.length,
     invoiceFinalized: bundle.invoices.filter((inv) => Boolean(inv.finalizedAt) || Boolean(inv.deliverySentAt)).length,
@@ -753,7 +848,7 @@ export async function transitionProjectAction(formData: FormData) {
     action: "status_gewechselt",
     projectId: parsed.data.projectId,
     actorRole: role,
-    actorName: "System Benutzer",
+    actorName: session?.profile.displayName ?? "System Benutzer",
     payload: JSON.stringify({ to: parsed.data.targetStatus }),
   });
   revalidatePath(`/projekte/${parsed.data.projectId}`);
@@ -828,9 +923,11 @@ export async function moveProjectPhaseAction(formData: FormData) {
     besichtigungAppointments: bundle.appointments.filter((a) => a.kind === "besichtigung").length,
     ausfuehrungAppointments: bundle.appointments.filter((a) => a.kind === "ausfuehrung").length,
     reports: bundle.reports.length,
+    directResolvedReports: bundle.reports.filter((r) => r.outcome === "direkt_geloest").length,
     quotes: bundle.quotes.length,
     quoteFinalized: bundle.quotes.filter((q) => Boolean(q.finalizedAt) || Boolean(q.deliverySentAt)).length,
     orders: bundle.orders.length,
+    stockDecisionAbLager: bundle.stockDecisions.filter((s) => s.decision === "ab_lager").length,
     deliveries: bundle.deliveries.length,
     invoices: bundle.invoices.length,
     invoiceFinalized: bundle.invoices.filter((inv) => Boolean(inv.finalizedAt) || Boolean(inv.deliverySentAt)).length,
@@ -1212,6 +1309,10 @@ export async function exportCsvAction(type: "contacts" | "articles") {
 }
 
 export async function addStockDecisionAction(formData: FormData) {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
+    throw new Error("Keine Berechtigung.");
+  }
   const payload = collectFormData(formData);
   const parsed = stockDecisionSchema.safeParse(payload);
   if (!parsed.success) {
@@ -1221,15 +1322,36 @@ export async function addStockDecisionAction(formData: FormData) {
     projectId: parsed.data.projectId,
     decision: parsed.data.decision,
     notes: parsed.data.notes,
-    decidedByRole: "admin",
+    decidedByRole: session.role,
   });
   if (parsed.data.decision === "bestellen") {
     await updateProjectStatus(parsed.data.projectId, "bestellung", "admin");
   }
   revalidatePath(`/projekte/${parsed.data.projectId}`);
+  revalidatePath("/projekte");
+}
+
+export async function deleteStockDecisionAction(formData: FormData) {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
+    throw new Error("Keine Berechtigung.");
+  }
+  const stockDecisionId = String(formData.get("stockDecisionId") ?? "").trim();
+  const projectId = String(formData.get("projectId") ?? "").trim();
+  if (!stockDecisionId) {
+    throw new Error("Lagerentscheid-ID fehlt.");
+  }
+  await deleteStockDecision(stockDecisionId);
+  revalidatePath(`/projekte/${projectId}`);
+  revalidatePath("/projekte");
 }
 
 export async function submitSupplierTemplateAction(formData: FormData) {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
+    throw new Error("Keine Berechtigung.");
+  }
+
   const payload = collectFormData(formData);
   const parsed = supplierTemplateSubmissionSchema.safeParse(payload);
   if (!parsed.success) {
@@ -1245,20 +1367,76 @@ export async function submitSupplierTemplateAction(formData: FormData) {
   if (missingFields.length > 0) {
     throw new Error(`Pflichtfelder fehlen: ${missingFields.join(", ")}`);
   }
+
+  const contacts = await listContacts();
+  const supplierContact =
+    contacts.find((c) => c.id === template.supplierId) ??
+    contacts.find((c) => c.category === "lieferant" && c.name === template.supplierName) ??
+    null;
+  const supplierEmail = supplierContact?.email?.trim() ?? "";
+  if (!supplierEmail) {
+    throw new Error(`Für Lieferant "${template.supplierName}" ist keine E-Mail-Adresse hinterlegt.`);
+  }
+
+  const mailSubject = values.titel?.trim()
+    ? `Bestellung: ${values.titel.trim()}`
+    : `Bestellung: ${template.name}`;
+  const mailRows = Object.entries(values)
+    .filter(([, value]) => String(value ?? "").trim().length > 0)
+    .map(([key, value]) => `<li><strong>${key}:</strong> ${String(value)}</li>`)
+    .join("");
+  const mailHtml = `
+    <p>Guten Tag</p>
+    <p>wir senden Ihnen eine Bestellung aus unserem Projektworkflow.</p>
+    <ul>${mailRows}</ul>
+    <p>Freundliche Grüsse<br/>${session.profile.displayName}</p>
+  `;
+  const mailResult = await sendMailViaSmtp({
+    to: supplierEmail,
+    subject: mailSubject,
+    html: mailHtml,
+  });
+  await addMailDispatchLog({
+    projectId: parsed.data.projectId,
+    to: supplierEmail,
+    subject: mailSubject,
+    status: mailResult.ok ? "gesendet" : "fehler",
+    errorMessage: mailResult.ok ? null : mailResult.error,
+  });
+  if (!mailResult.ok) {
+    throw new Error(mailResult.error);
+  }
+
   await addSupplierSubmission({
     projectId: parsed.data.projectId,
     templateId: parsed.data.templateId,
     valuesJson: parsed.data.valuesJson,
     status: "eingereicht",
   });
+  const projectBundle = await getProjectBundle(parsed.data.projectId);
+  const hasOrderForSupplier = projectBundle?.orders.some((o) => o.supplierId === template.supplierId) ?? false;
+  if (!hasOrderForSupplier) {
+    await addPurchaseOrder({
+      projectId: parsed.data.projectId,
+      supplierId: template.supplierId,
+    });
+    await addAuditEvent({
+      action: "bestellung_erstellt",
+      projectId: parsed.data.projectId,
+      actorRole: session.role,
+      actorName: session.profile.displayName,
+      payload: JSON.stringify({ supplierId: template.supplierId, source: "supplier_template_submission" }),
+    });
+  }
   await addAuditEvent({
     action: "bestellformular_eingereicht",
     projectId: parsed.data.projectId,
-    actorRole: "admin",
-    actorName: "Admin",
+    actorRole: session.role,
+    actorName: session.profile.displayName,
     payload: parsed.data.valuesJson,
   });
   revalidatePath(`/projekte/${parsed.data.projectId}`);
+  revalidatePath("/projekte");
 }
 
 export async function sendDocumentMailAction(formData: FormData) {
@@ -1305,18 +1483,60 @@ export async function sendDocumentMailAction(formData: FormData) {
   }
 }
 
-export async function generateSwissQrAction(formData: FormData) {
+export async function generateSwissQrAction(formData: FormData): Promise<string> {
   const payload = collectFormData(formData);
   const parsed = swissQrSchema.safeParse(payload);
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "QR-Daten unvollständig.");
   }
-  const qrCode = await generateSwissQrCodeDataUrl(parsed.data);
+  const session = await getCurrentSession();
+  if (!session?.organizationId) {
+    throw new Error("Keine Organisation gefunden. Bitte Firmeneinstellungen prüfen.");
+  }
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    throw new Error("Supabase ist nicht konfiguriert.");
+  }
+  const { data: org, error: orgError } = await supabase
+    .from("organizations")
+    .select(
+      "name, billing_iban, billing_creditor_name, billing_creditor_street, billing_creditor_postal_code, billing_creditor_city",
+    )
+    .eq("id", session.organizationId)
+    .maybeSingle();
+  if (orgError) {
+    const schemaCacheMissingColumn =
+      orgError.code === "PGRST204" && String(orgError.message ?? "").includes("billing_creditor_");
+    if (schemaCacheMissingColumn) {
+      throw new Error("DB-Migration für Firmeneinstellungen fehlt. Bitte Migrationen ausführen und Seite neu laden.");
+    }
+    throw new Error(orgError.message || "Firmendaten konnten nicht geladen werden.");
+  }
+  const row = (org ?? {}) as Record<string, unknown>;
+  const iban = String(row.billing_iban ?? "").trim();
+  const creditorName = String(row.billing_creditor_name ?? row.name ?? "").trim();
+  const creditorStreet = String(row.billing_creditor_street ?? "").trim();
+  const creditorPostalCode = String(row.billing_creditor_postal_code ?? "").trim();
+  const creditorCity = String(row.billing_creditor_city ?? "").trim();
+  if (!iban || !creditorName || !creditorStreet || !creditorPostalCode || !creditorCity) {
+    throw new Error("Bitte zuerst in den Firmeneinstellungen IBAN und Gläubigeradresse hinterlegen.");
+  }
+
+  const qrCode = await generateSwissQrCodeDataUrl({
+    ...parsed.data,
+    iban,
+    creditorName,
+    creditorStreet,
+    creditorPostalCode,
+    creditorCity,
+    debtorCountry: (parsed.data.debtorCountry ?? "CH").toUpperCase(),
+  });
   await addAuditEvent({
     action: "qr_rechnung_generiert",
     projectId: null,
-    actorRole: "admin",
-    actorName: "System Benutzer",
+    actorRole: session.role,
+    actorName: session.profile.displayName,
     payload: JSON.stringify({ preview: qrCode.slice(0, 120) }),
   });
+  return qrCode;
 }

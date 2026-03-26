@@ -39,6 +39,7 @@ type ProjectGuidedProcessProps = {
   totalSteps: number;
   currentStepLabel: string;
   currentStepHint: string;
+  currentStatusLabel?: string;
   stepAnchorId: string;
   completed: boolean;
   steps: GuidedStepDisplay[];
@@ -98,7 +99,8 @@ function GuidedStatusTransitionForms({
                   await transitionProjectAction(fd);
                   await onAfterStatusTransition?.();
                 } catch (err) {
-                  setError(err instanceof Error ? err.message : "Statuswechsel fehlgeschlagen.");
+                  const msg = err instanceof Error ? err.message : "Statuswechsel fehlgeschlagen.";
+                  setError(msg);
                 }
               });
             }}
@@ -147,6 +149,7 @@ export function ProjectGuidedProcess({
   totalSteps,
   currentStepLabel,
   currentStepHint,
+  currentStatusLabel,
   stepAnchorId,
   completed,
   steps,
@@ -163,13 +166,13 @@ export function ProjectGuidedProcess({
     typeof focusedStepIndex === "number" && focusedStepIndex !== phaseIndex && !completed;
 
   const cardClass = compact
-    ? "border-border/70 bg-card shadow-none"
+    ? "border-border/70 bg-card shadow-sm"
     : "border-primary/25 bg-gradient-to-br from-sky-50/80 to-background shadow-sm";
 
   return (
     <div className={compact ? "space-y-3" : "space-y-4"}>
       <Card className={cardClass}>
-        <CardHeader className={compact ? "space-y-1 pb-2 pt-4" : "pb-2"}>
+        <CardHeader className={compact ? "space-y-1 border-b border-border/60 pb-3 pt-4" : "pb-2"}>
           <CardTitle className={compact ? "text-sm font-semibold" : "text-base"}>
             {compact ? "Weiter im Ablauf" : "Geführter Ablauf"}
           </CardTitle>
@@ -179,7 +182,7 @@ export function ProjectGuidedProcess({
             </CardDescription>
           ) : null}
         </CardHeader>
-        <CardContent className={cn("flex flex-col", compact ? "gap-3 pb-4 pt-0" : "gap-4")}>
+        <CardContent className={cn("flex flex-col", compact ? "gap-3 pb-4 pt-3" : "gap-4")}>
           {showPills ? (
             <ol className="flex flex-wrap gap-2">
               {steps.map((s, i) => {
@@ -236,17 +239,22 @@ export function ProjectGuidedProcess({
               <div
                 className={cn(
                   "rounded-lg px-3 py-2",
-                  compact ? "border border-border/60 bg-muted/20" : "border border-dashed border-primary/30 bg-primary/5",
+                  compact ? "border border-border/70 bg-muted/25" : "border border-dashed border-primary/30 bg-primary/5",
                 )}
               >
                 {compact ? (
-                  <p className="text-xs text-muted-foreground">Ablauf-Stand im System</p>
+                  <p className="text-xs text-muted-foreground">Ablauf-Stand</p>
                 ) : (
                   <p className="text-xs font-semibold uppercase tracking-wide text-primary">
                     Aktuell · Schritt {phaseIndex + 1} von {totalSteps}
                   </p>
                 )}
-                <p className={cn("font-semibold text-foreground", compact ? "mt-0.5 text-sm" : "mt-1 text-sm")}>{currentStepLabel}</p>
+                <p className={cn("font-semibold text-foreground", compact ? "mt-0.5 text-[1.02rem]" : "mt-1 text-sm")}>{currentStepLabel}</p>
+                {currentStatusLabel ? (
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Status: <span className="font-medium text-foreground">{currentStatusLabel}</span>
+                  </p>
+                ) : null}
                 <p className="mt-0.5 text-xs text-muted-foreground">{currentStepHint}</p>
               </div>
 

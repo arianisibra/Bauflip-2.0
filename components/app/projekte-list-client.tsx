@@ -76,6 +76,8 @@ export function ProjekteListClient({
       );
     });
   }, [projects, q]);
+  const hasSearch = q.trim().length > 0;
+  const showEmptyState = filtered.length === 0;
 
   return (
     <>
@@ -88,72 +90,95 @@ export function ProjekteListClient({
       </div>
 
       <div className="rounded-lg border bg-card shadow-sm">
-        <Table className="[&_tbody_tr:nth-child(even)]:bg-sky-50/40 dark:[&_tbody_tr:nth-child(even)]:bg-muted/25">
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead>Projekt</TableHead>
-              <TableHead>Kunde</TableHead>
-              <TableHead>Typ</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Dringlichkeit</TableHead>
-              <TableHead>Nächster Schritt</TableHead>
-              <TableHead className="w-[120px] text-right">Aktion</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.map((p) => (
-              <TableRow
-                key={p.id}
-                className="cursor-pointer"
-                onClick={() => {
-                  setSelected(p);
-                  setOpen(true);
-                  router.replace(`/projekte?openProjectId=${encodeURIComponent(p.id)}`, { scroll: false });
-                }}
-              >
-                <TableCell className="font-medium">{p.title}</TableCell>
-                <TableCell>{p.contactName ?? "—"}</TableCell>
-                <TableCell className="capitalize">{p.type}</TableCell>
-                <TableCell>
-                  <StatusBadge status={p.status} />
-                </TableCell>
-                <TableCell className="capitalize">{p.urgency}</TableCell>
-                <TableCell className="text-muted-foreground">{p.nextOwnerRole}</TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 border-red-200 text-red-700 hover:bg-red-50"
-                    disabled={deletingId === p.id}
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      const ok = window.confirm(`Projekt "${p.title}" wirklich löschen?`);
-                      if (!ok) {
-                        return;
-                      }
-                      try {
-                        setDeletingId(p.id);
-                        await deleteProjectAction(p.id);
-                        if (selected?.id === p.id) {
-                          setOpen(false);
-                          setSelected(null);
-                        }
-                        router.refresh();
-                      } catch (err) {
-                        window.alert(err instanceof Error ? err.message : "Löschen fehlgeschlagen.");
-                      } finally {
-                        setDeletingId(null);
-                      }
-                    }}
-                  >
-                    Löschen
-                  </Button>
-                </TableCell>
+        {showEmptyState ? (
+          <div className="flex flex-col items-start gap-3 px-5 py-8 sm:px-8">
+            <h2 className="text-base font-semibold">
+              {hasSearch ? "Keine passenden Projekte gefunden" : "Noch keine Projekte vorhanden"}
+            </h2>
+            <p className="max-w-2xl text-sm text-muted-foreground">
+              {hasSearch
+                ? "Passen Sie die Suche an oder leeren Sie den Suchbegriff, um wieder alle Projekte zu sehen."
+                : "Erfassen Sie die erste Anfrage, damit sie hier im Ablauf erscheint und als Sidepage geöffnet werden kann."}
+            </p>
+            <div className="flex gap-2">
+              {hasSearch ? (
+                <Button size="sm" variant="outline" onClick={() => setQ("")}>
+                  Suche zurücksetzen
+                </Button>
+              ) : null}
+              <Button size="sm" onClick={() => setIntakeOpen(true)}>
+                + Erste Anfrage erfassen
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Table className="[&_tbody_tr:nth-child(even)]:bg-sky-50/40 dark:[&_tbody_tr:nth-child(even)]:bg-muted/25">
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Projekt</TableHead>
+                <TableHead>Kunde</TableHead>
+                <TableHead>Typ</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Dringlichkeit</TableHead>
+                <TableHead>Nächster Schritt</TableHead>
+                <TableHead className="w-[120px] text-right">Aktion</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((p) => (
+                <TableRow
+                  key={p.id}
+                  className="cursor-pointer"
+                  onClick={() => {
+                    setSelected(p);
+                    setOpen(true);
+                    router.replace(`/projekte?openProjectId=${encodeURIComponent(p.id)}`, { scroll: false });
+                  }}
+                >
+                  <TableCell className="font-medium">{p.title}</TableCell>
+                  <TableCell>{p.contactName ?? "—"}</TableCell>
+                  <TableCell className="capitalize">{p.type}</TableCell>
+                  <TableCell>
+                    <StatusBadge status={p.status} />
+                  </TableCell>
+                  <TableCell className="capitalize">{p.urgency}</TableCell>
+                  <TableCell className="text-muted-foreground">{p.nextOwnerRole}</TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 border-red-200 text-red-700 hover:bg-red-50"
+                      disabled={deletingId === p.id}
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        const ok = window.confirm(`Projekt "${p.title}" wirklich löschen?`);
+                        if (!ok) {
+                          return;
+                        }
+                        try {
+                          setDeletingId(p.id);
+                          await deleteProjectAction(p.id);
+                          if (selected?.id === p.id) {
+                            setOpen(false);
+                            setSelected(null);
+                          }
+                          router.refresh();
+                        } catch (err) {
+                          window.alert(err instanceof Error ? err.message : "Löschen fehlgeschlagen.");
+                        } finally {
+                          setDeletingId(null);
+                        }
+                      }}
+                    >
+                      Löschen
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </div>
 
       <Sheet

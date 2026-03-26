@@ -5,10 +5,12 @@ import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
 import {
   createContact,
+  deleteSiteProperty,
   deleteContact,
   deleteContactAddress,
   deleteContactPerson,
   getContactWithDetails,
+  insertSiteProperty,
   insertContactAddress,
   insertContactPerson,
   updateContact,
@@ -46,6 +48,18 @@ function isEmptyAddress(a: {
     (a.postalCode?.trim() ?? "") === "" &&
     (a.city?.trim() ?? "") === ""
   );
+}
+
+function deriveDefaultSitePropertyName(input: { managedObjectLabel?: string | null; name: string }) {
+  const managed = input.managedObjectLabel?.trim();
+  if (managed) {
+    return managed;
+  }
+  return `${input.name.trim()} Hauptobjekt`;
+}
+
+function hasRootAddressBits(input: { street?: string | null; postalCode?: string | null; city?: string | null }) {
+  return Boolean(input.street?.trim() || input.postalCode?.trim() || input.city?.trim());
 }
 
 export async function getContactBundleAction(contactId: string) {
@@ -143,6 +157,7 @@ export async function updateContactFromFormAction(values: unknown) {
   }
 
   let primaryAssigned = false;
+  let addressCountAfterUpdate = 0;
   for (const a of v.addresses ?? []) {
     if (isEmptyAddress(a)) {
       if (a.id?.trim()) {
@@ -165,6 +180,7 @@ export async function updateContactFromFormAction(values: unknown) {
         country,
         isPrimary,
       });
+      addressCountAfterUpdate += 1;
     } else {
       await insertContactAddress({
         contactId: id,
@@ -175,11 +191,42 @@ export async function updateContactFromFormAction(values: unknown) {
         country,
         isPrimary,
       });
+      addressCountAfterUpdate += 1;
+    }
+  }
+
+  if (addressCountAfterUpdate === 0 && hasRootAddressBits(v)) {
+    await insertContactAddress({
+      contactId: id,
+      label: "Hauptadresse",
+      street: v.street?.trim() || null,
+      postalCode: v.postalCode?.trim() || null,
+      city: v.city?.trim() || null,
+      country: "CH",
+      isPrimary: true,
+    });
+  }
+
+  if (existing.siteProperties.length === 0) {
+    const hasAddressBits = hasRootAddressBits(v);
+    const hasObjectName = Boolean(v.managedObjectLabel?.trim() || v.name.trim());
+    if (hasObjectName || hasAddressBits) {
+      await insertSiteProperty({
+        organizationId: session.organizationId ?? null,
+        ownerContactId: id,
+        name: deriveDefaultSitePropertyName({ managedObjectLabel: v.managedObjectLabel, name: v.name }),
+        street: v.street?.trim() || null,
+        postalCode: v.postalCode?.trim() || null,
+        city: v.city?.trim() || null,
+        country: "CH",
+        mapsUrl: null,
+      });
     }
   }
 
   revalidatePath("/kontakte");
   revalidatePath(`/kontakte/${id}`);
+  revalidatePath("/projekte");
 }
 
 export async function createContactFromFormAction(values: unknown) {
@@ -230,6 +277,7 @@ export async function createContactFromFormAction(values: unknown) {
   }
 
   let primaryAssigned = false;
+  let insertedAddressCount = 0;
   for (const a of v.addresses ?? []) {
     if ((a.label?.trim() ?? "") === "") {
       continue;
@@ -247,9 +295,38 @@ export async function createContactFromFormAction(values: unknown) {
       country: a.country?.trim() || "CH",
       isPrimary,
     });
+    insertedAddressCount += 1;
+  }
+
+  if (insertedAddressCount === 0 && hasRootAddressBits(v)) {
+    await insertContactAddress({
+      contactId: contact.id,
+      label: "Hauptadresse",
+      street: v.street?.trim() || null,
+      postalCode: v.postalCode?.trim() || null,
+      city: v.city?.trim() || null,
+      country: "CH",
+      isPrimary: true,
+    });
+  }
+
+  const hasAddressBits = hasRootAddressBits(v);
+  const hasObjectName = Boolean(v.managedObjectLabel?.trim() || v.name.trim());
+  if (hasObjectName || hasAddressBits) {
+    await insertSiteProperty({
+      organizationId: session?.organizationId ?? null,
+      ownerContactId: contact.id,
+      name: deriveDefaultSitePropertyName({ managedObjectLabel: v.managedObjectLabel, name: v.name }),
+      street: v.street?.trim() || null,
+      postalCode: v.postalCode?.trim() || null,
+      city: v.city?.trim() || null,
+      country: "CH",
+      mapsUrl: null,
+    });
   }
 
   revalidatePath("/kontakte");
+  revalidatePath("/projekte");
   redirect(`/kontakte/${contact.id}`);
 }
 
@@ -264,4 +341,56 @@ export async function deleteContactAction(contactId: string) {
 
   await deleteContact(contactId.trim());
   revalidatePath("/kontakte");
+}
+
+export async function createSitePropertyForContactAction(input: {
+  contactId: string;
+  name: string;
+  street?: string;
+  postalCode?: string;
+  city?: string;
+  country?: string;
+  mapsUrl?: string;
+}) {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
+    throw new Error("Keine Berechtigung.");
+  }
+  const contactId = input.contactId?.trim();
+  const name = input.name?.trim();
+  if (!contactId) {
+    throw new Error("Kontakt-ID fehlt.");
+  }
+  if (!name) {
+    throw new Error("Objektname fehlt.");
+  }
+  await insertSiteProperty({
+    organizationId: session.organizationId ?? null,
+    ownerContactId: contactId,
+    name,
+    street: input.street?.trim() || null,
+    postalCode: input.postalCode?.trim() || null,
+    city: input.city?.trim() || null,
+    country: input.country?.trim() || "CH",
+    mapsUrl: input.mapsUrl?.trim() || null,
+  });
+  revalidatePath("/kontakte");
+  revalidatePath(`/kontakte/${contactId}`);
+  revalidatePath("/projekte");
+}
+
+export async function deleteSitePropertyForContactAction(input: { contactId: string; propertyId: string }) {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
+    throw new Error("Keine Berechtigung.");
+  }
+  const contactId = input.contactId?.trim();
+  const propertyId = input.propertyId?.trim();
+  if (!contactId || !propertyId) {
+    throw new Error("Objekt- oder Kontakt-ID fehlt.");
+  }
+  await deleteSiteProperty(propertyId);
+  revalidatePath("/kontakte");
+  revalidatePath(`/kontakte/${contactId}`);
+  revalidatePath("/projekte");
 }

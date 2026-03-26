@@ -52,11 +52,21 @@ export async function saveProfileSettingsAction(formData: FormData) {
   const parsed = profileSettingsSchema.safeParse({
     displayName: formData.get("displayName"),
     calendarPosition: formData.get("calendarPosition"),
+    billingIban: formData.get("billingIban"),
+    billingCreditorName: formData.get("billingCreditorName"),
+    billingCreditorStreet: formData.get("billingCreditorStreet"),
+    billingCreditorPostalCode: formData.get("billingCreditorPostalCode"),
+    billingCreditorCity: formData.get("billingCreditorCity"),
   });
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Ungültige Eingabe.");
   }
   const displayName = parsed.data.displayName.trim();
+  const billingIban = String(parsed.data.billingIban ?? "").trim();
+  const billingCreditorName = String(parsed.data.billingCreditorName ?? "").trim();
+  const billingCreditorStreet = String(parsed.data.billingCreditorStreet ?? "").trim();
+  const billingCreditorPostalCode = String(parsed.data.billingCreditorPostalCode ?? "").trim();
+  const billingCreditorCity = String(parsed.data.billingCreditorCity ?? "").trim();
   const calendarColorRaw = String(formData.get("calendarColor") ?? "").trim();
   const calendarColor =
     calendarColorRaw === "" ? null : isHexColor(calendarColorRaw) ? calendarColorRaw : null;
@@ -112,6 +122,44 @@ export async function saveProfileSettingsAction(formData: FormData) {
 
   if (saveError) {
     throw new Error("Profil konnte nicht gespeichert werden.");
+  }
+
+  if (session.role === "admin" && session.organizationId) {
+    const anyBillingFieldFilled = Boolean(
+      billingIban || billingCreditorName || billingCreditorStreet || billingCreditorPostalCode || billingCreditorCity,
+    );
+    if (
+      anyBillingFieldFilled &&
+      (!billingIban || !billingCreditorStreet || !billingCreditorPostalCode || !billingCreditorCity)
+    ) {
+      throw new Error("Für QR-Rechnung bitte IBAN, Strasse, PLZ und Ort vollständig ausfüllen.");
+    }
+
+    const orgClient = createSupabaseAdminClient() ?? supabase;
+    const { error: orgError } = await orgClient
+      .from("organizations")
+      .update({
+        billing_iban: billingIban || null,
+        billing_creditor_name: billingCreditorName || null,
+        billing_creditor_street: billingCreditorStreet || null,
+        billing_creditor_postal_code: billingCreditorPostalCode || null,
+        billing_creditor_city: billingCreditorCity || null,
+      })
+      .eq("id", session.organizationId);
+    if (orgError) {
+      const schemaCacheMissingColumn =
+        orgError.code === "PGRST204" &&
+        String(orgError.message ?? "").includes("billing_creditor_");
+      if (schemaCacheMissingColumn) {
+        // DB migration for QR billing fields is not applied yet.
+        // Keep profile save successful and avoid blocking the whole settings form.
+        revalidatePath("/einstellungen");
+        revalidatePath("/");
+        return;
+      }
+      const detail = [orgError.code, orgError.message, orgError.details, orgError.hint].filter(Boolean).join(" | ");
+      throw new Error(detail || "Firmeneinstellungen konnten nicht gespeichert werden.");
+    }
   }
 
   revalidatePath("/einstellungen");

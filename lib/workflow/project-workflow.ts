@@ -40,7 +40,7 @@ const transitions: Record<ProjectStatus, TransitionRule[]> = {
       to: "termin_geplant",
       allowedRoles: ["office", "admin"],
       requiredFields: ["intakeOriginalText", "accessNotes", "keyHandlingNotes", "timingNotes"],
-      nextOwnerRole: "technician",
+      nextOwnerRole: "admin",
     },
   ],
   termin_geplant: [
@@ -68,7 +68,7 @@ const transitions: Record<ProjectStatus, TransitionRule[]> = {
   bericht_ausstehend: [
     {
       to: "bericht_fertig",
-      allowedRoles: ["technician", "office"],
+      allowedRoles: ["technician", "office", "admin"],
       requiredFields: ["intakeOriginalText"],
       nextOwnerRole: "office",
     },
@@ -132,7 +132,7 @@ const transitions: Record<ProjectStatus, TransitionRule[]> = {
   ausfuehrung_geplant: [
     {
       to: "ausfuehrung_erledigt",
-      allowedRoles: ["technician", "office"],
+      allowedRoles: ["technician", "office", "admin"],
       requiredFields: ["intakeOriginalText"],
       nextOwnerRole: "office",
     },

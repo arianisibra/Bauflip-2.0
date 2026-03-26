@@ -5,9 +5,15 @@ import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { getContactBundleAction, updateContactFromFormAction } from "@/app/(app)/kontakte/actions";
+import {
+  createSitePropertyForContactAction,
+  deleteSitePropertyForContactAction,
+  getContactBundleAction,
+  updateContactFromFormAction,
+} from "@/app/(app)/kontakte/actions";
 import { contactUpdateSchema } from "@/lib/validations/forms";
 import type { z } from "zod";
+import type { SiteProperty } from "@/lib/domain/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -99,6 +105,17 @@ export function KontaktSheetEditor({ contactId, open, onTitleChange }: Props) {
   const [bundleReady, setBundleReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [siteProperties, setSiteProperties] = useState<SiteProperty[]>([]);
+  const [sitePending, startSiteTransition] = useTransition();
+  const [siteError, setSiteError] = useState<string | null>(null);
+  const [newSite, setNewSite] = useState({
+    name: "",
+    street: "",
+    postalCode: "",
+    city: "",
+    country: "CH",
+    mapsUrl: "",
+  });
 
   const form = useForm<ContactUpdateValues>({
     resolver: zodResolver(contactUpdateSchema),
@@ -131,6 +148,7 @@ export function KontaktSheetEditor({ contactId, open, onTitleChange }: Props) {
           return;
         }
         form.reset(bundleToForm(bundle));
+        setSiteProperties(bundle.siteProperties ?? []);
         setBundleReady(true);
       } catch (e) {
         if (!cancelled) {
@@ -151,6 +169,7 @@ export function KontaktSheetEditor({ contactId, open, onTitleChange }: Props) {
         if (contactId) {
           const fresh = await getContactBundleAction(contactId);
           form.reset(bundleToForm(fresh));
+          setSiteProperties(fresh.siteProperties ?? []);
         }
         router.refresh();
       } catch (e) {
@@ -429,6 +448,140 @@ export function KontaktSheetEditor({ contactId, open, onTitleChange }: Props) {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="space-y-3 border-t border-border/60 pt-6">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Objekte (Standorte)</h3>
+        <div className="flex flex-col gap-3">
+          {siteProperties.length > 0 ? (
+            siteProperties.map((sp) => (
+              <div key={sp.id} className="rounded-lg border border-border/70 bg-muted/20 p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-medium">{sp.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {[sp.street, `${sp.postalCode ?? ""} ${sp.city ?? ""}`.trim(), sp.country].filter(Boolean).join(", ") || "—"}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-xs text-muted-foreground"
+                    disabled={sitePending}
+                    onClick={() => {
+                      if (!contactId) {
+                        return;
+                      }
+                      const ok = window.confirm(`Objekt "${sp.name}" wirklich löschen?`);
+                      if (!ok) {
+                        return;
+                      }
+                      setSiteError(null);
+                      startSiteTransition(async () => {
+                        try {
+                          await deleteSitePropertyForContactAction({ contactId, propertyId: sp.id });
+                          const fresh = await getContactBundleAction(contactId);
+                          setSiteProperties(fresh.siteProperties ?? []);
+                          router.refresh();
+                        } catch (e) {
+                          setSiteError(e instanceof Error ? e.message : "Objekt konnte nicht gelöscht werden.");
+                        }
+                      });
+                    }}
+                  >
+                    <Trash2 className="mr-1 size-3.5" />
+                    Löschen
+                  </Button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">Noch kein Objekt zu diesem Kontakt erfasst.</p>
+          )}
+
+          <div className="grid gap-2.5 rounded-lg border border-border/70 bg-muted/20 p-3 sm:grid-cols-2 sm:gap-3">
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <Label className="text-xs text-muted-foreground">Objektname</Label>
+              <Input
+                className="h-9"
+                placeholder="z. B. MFH Seefeld"
+                value={newSite.name}
+                onChange={(e) => setNewSite((prev) => ({ ...prev, name: e.target.value }))}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <Label className="text-xs text-muted-foreground">Strasse</Label>
+              <Input className="h-9" value={newSite.street} onChange={(e) => setNewSite((prev) => ({ ...prev, street: e.target.value }))} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-muted-foreground">PLZ</Label>
+              <Input
+                className="h-9"
+                value={newSite.postalCode}
+                onChange={(e) => setNewSite((prev) => ({ ...prev, postalCode: e.target.value }))}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-muted-foreground">Ort</Label>
+              <Input className="h-9" value={newSite.city} onChange={(e) => setNewSite((prev) => ({ ...prev, city: e.target.value }))} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-muted-foreground">Land</Label>
+              <Input
+                className="h-9"
+                value={newSite.country}
+                onChange={(e) => setNewSite((prev) => ({ ...prev, country: e.target.value }))}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-muted-foreground">Google Maps URL</Label>
+              <Input
+                className="h-9"
+                placeholder="https://…"
+                value={newSite.mapsUrl}
+                onChange={(e) => setNewSite((prev) => ({ ...prev, mapsUrl: e.target.value }))}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={sitePending}
+                onClick={() => {
+                  if (!contactId) {
+                    return;
+                  }
+                  setSiteError(null);
+                  startSiteTransition(async () => {
+                    try {
+                      await createSitePropertyForContactAction({
+                        contactId,
+                        name: newSite.name,
+                        street: newSite.street,
+                        postalCode: newSite.postalCode,
+                        city: newSite.city,
+                        country: newSite.country,
+                        mapsUrl: newSite.mapsUrl,
+                      });
+                      const fresh = await getContactBundleAction(contactId);
+                      setSiteProperties(fresh.siteProperties ?? []);
+                      setNewSite({ name: "", street: "", postalCode: "", city: "", country: "CH", mapsUrl: "" });
+                      router.refresh();
+                    } catch (e) {
+                      setSiteError(e instanceof Error ? e.message : "Objekt konnte nicht erstellt werden.");
+                    }
+                  });
+                }}
+              >
+                <Plus className="mr-1 size-3.5" />
+                Objekt hinzufügen
+              </Button>
+            </div>
+          </div>
+          {siteError ? <p className="text-sm text-destructive">{siteError}</p> : null}
         </div>
       </section>
 

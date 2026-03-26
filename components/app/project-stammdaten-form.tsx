@@ -7,7 +7,7 @@ import type { Contact, ContactAddress, ContactPerson, Project, ProjectWorkType, 
 import { projectStammdatenUpdateSchema } from "@/lib/validations/forms";
 import type { z } from "zod";
 import { getContactProjectOptionsAction, updateProjectStammdatenAction } from "@/app/(app)/projekte/actions";
-import { buildGoogleMapsSearchUrl } from "@/lib/maps/google-maps";
+import { buildGoogleMapsDirectionsUrl, buildGoogleMapsSearchUrl } from "@/lib/maps/google-maps";
 import { BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,6 +37,12 @@ type Props = {
 
 const empty = "";
 
+function normAddressPart(v: string | null | undefined) {
+  return String(v ?? "")
+    .trim()
+    .toLowerCase();
+}
+
 export function ProjectStammdatenForm({
   project,
   contacts,
@@ -50,6 +56,7 @@ export function ProjectStammdatenForm({
   const [isPending, startTransition] = useTransition();
   const [persons, setPersons] = useState<ContactPerson[]>(initialPersons);
   const [addresses, setAddresses] = useState<ContactAddress[]>(initialAddresses);
+  const [sameAsContactPerson, setSameAsContactPerson] = useState(false);
 
   const defaultValues: FormValues = useMemo(
     () => ({
@@ -87,6 +94,11 @@ export function ProjectStammdatenForm({
   const contactId = form.watch("contactId");
   const serviceAddressId = form.watch("serviceAddressId");
   const propertyId = form.watch("propertyId");
+  const contactPersonId = form.watch("contactPersonId");
+  const propertiesForContact = useMemo(
+    () => properties.filter((p) => !contactId || p.ownerContactId === contactId),
+    [properties, contactId],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -95,22 +107,77 @@ export function ProjectStammdatenForm({
       if (!cancelled) {
         setPersons(p);
         setAddresses(a);
+
+        // Kontaktwechsel soll abhängige Felder sinnvoll vorbesetzen.
+        const currentPersonId = String(form.getValues("contactPersonId") ?? "").trim();
+        const currentServiceAddressId = String(form.getValues("serviceAddressId") ?? "").trim();
+        const currentBillingAddressId = String(form.getValues("billingAddressId") ?? "").trim();
+
+        const firstPersonId = p[0]?.id ?? "";
+        const primaryAddressId = (a.find((item) => item.isPrimary)?.id ?? a[0]?.id) ?? "";
+
+        if (!currentPersonId || !p.some((item) => item.id === currentPersonId)) {
+          form.setValue("contactPersonId", firstPersonId);
+        }
+        if (!currentServiceAddressId || !a.some((item) => item.id === currentServiceAddressId)) {
+          form.setValue("serviceAddressId", primaryAddressId);
+        }
+        if (!currentBillingAddressId || !a.some((item) => item.id === currentBillingAddressId)) {
+          form.setValue("billingAddressId", primaryAddressId);
+        }
+        const currentPropertyId = String(form.getValues("propertyId") ?? "").trim();
+        const firstPropertyId = (properties.find((prop) => prop.ownerContactId === contactId)?.id ?? "");
+        if (!currentPropertyId || !properties.some((prop) => prop.id === currentPropertyId && prop.ownerContactId === contactId)) {
+          form.setValue("propertyId", firstPropertyId);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [contactId]);
+  }, [contactId, properties, form]);
 
   const selectedProperty = useMemo(
-    () => properties.find((x) => x.id === propertyId) ?? null,
-    [properties, propertyId],
+    () => propertiesForContact.find((x) => x.id === propertyId) ?? null,
+    [propertiesForContact, propertyId],
   );
 
   const selectedServiceAddress = useMemo(
     () => addresses.find((x) => x.id === serviceAddressId) ?? null,
     [addresses, serviceAddressId],
   );
+  const selectedContactPerson = useMemo(
+    () => persons.find((x) => x.id === contactPersonId) ?? null,
+    [persons, contactPersonId],
+  );
+
+  useEffect(() => {
+    if (!sameAsContactPerson) {
+      return;
+    }
+    form.setValue("sitePhone", selectedContactPerson?.phone ?? "");
+    form.setValue("siteMobile", selectedContactPerson?.mobile ?? "");
+  }, [form, sameAsContactPerson, selectedContactPerson]);
+
+  useEffect(() => {
+    if (!propertyId || !selectedProperty || addresses.length === 0) {
+      return;
+    }
+    const match = addresses.find((a) => {
+      return (
+        normAddressPart(a.street) === normAddressPart(selectedProperty.street) &&
+        normAddressPart(a.postalCode) === normAddressPart(selectedProperty.postalCode) &&
+        normAddressPart(a.city) === normAddressPart(selectedProperty.city)
+      );
+    });
+    const fallbackId = (addresses.find((a) => a.isPrimary)?.id ?? addresses[0]?.id) || "";
+    const targetId = match?.id ?? fallbackId;
+    if (!targetId) {
+      return;
+    }
+    form.setValue("serviceAddressId", targetId);
+    form.setValue("billingAddressId", targetId);
+  }, [propertyId, selectedProperty, addresses, form]);
 
   useEffect(() => {
     const currentMapsUrl = String(form.getValues("mapsUrl") ?? "").trim();
@@ -150,38 +217,32 @@ export function ProjectStammdatenForm({
     });
   });
 
-  const fillMapsFromProperty = () => {
-    if (!selectedProperty) {
+  const openRoutePlanner = () => {
+    const fromServiceAddress = selectedServiceAddress
+      ? buildGoogleMapsDirectionsUrl({
+          street: selectedServiceAddress.street,
+          postalCode: selectedServiceAddress.postalCode,
+          city: selectedServiceAddress.city,
+          country: selectedServiceAddress.country,
+        })
+      : "";
+    const fromProperty = selectedProperty
+      ? selectedProperty.mapsUrl ||
+        buildGoogleMapsDirectionsUrl({
+          street: selectedProperty.street,
+          postalCode: selectedProperty.postalCode,
+          city: selectedProperty.city,
+          country: selectedProperty.country,
+        })
+      : "";
+    const currentMapsUrl = String(form.getValues("mapsUrl") ?? "").trim();
+    const href = fromServiceAddress || fromProperty || currentMapsUrl;
+    if (!href) {
+      window.alert("Bitte zuerst Objekt oder Einsatzadresse auswählen.");
       return;
     }
-    if (selectedProperty.mapsUrl) {
-      form.setValue("mapsUrl", selectedProperty.mapsUrl);
-      return;
-    }
-    const url = buildGoogleMapsSearchUrl({
-      street: selectedProperty.street,
-      postalCode: selectedProperty.postalCode,
-      city: selectedProperty.city,
-      country: selectedProperty.country,
-    });
-    if (url) {
-      form.setValue("mapsUrl", url);
-    }
-  };
-
-  const fillMapsFromServiceAddress = () => {
-    if (!selectedServiceAddress) {
-      return;
-    }
-    const url = buildGoogleMapsSearchUrl({
-      street: selectedServiceAddress.street,
-      postalCode: selectedServiceAddress.postalCode,
-      city: selectedServiceAddress.city,
-      country: selectedServiceAddress.country,
-    });
-    if (url) {
-      form.setValue("mapsUrl", url);
-    }
+    form.setValue("mapsUrl", href);
+    window.open(href, "_blank", "noopener,noreferrer");
   };
 
   if (readOnly) {
@@ -304,11 +365,30 @@ export function ProjectStammdatenForm({
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="sitePhone">Telefon (Objekt / Erreichbarkeit)</Label>
-              <Input id="sitePhone" {...form.register("sitePhone")} />
+              <Input id="sitePhone" disabled={sameAsContactPerson} {...form.register("sitePhone")} />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="siteMobile">Mobil</Label>
-              <Input id="siteMobile" {...form.register("siteMobile")} />
+              <Input id="siteMobile" disabled={sameAsContactPerson} {...form.register("siteMobile")} />
+            </div>
+            <div className="flex items-center gap-2 md:col-span-2">
+              <input
+                id="psf-same-as-person"
+                type="checkbox"
+                className="size-4 rounded border border-input"
+                checked={sameAsContactPerson}
+                onChange={(e) => {
+                  const next = e.target.checked;
+                  setSameAsContactPerson(next);
+                  if (next) {
+                    form.setValue("sitePhone", selectedContactPerson?.phone ?? "");
+                    form.setValue("siteMobile", selectedContactPerson?.mobile ?? "");
+                  }
+                }}
+              />
+              <Label htmlFor="psf-same-as-person" className="text-sm font-normal">
+                Telefon/Mobil gleich wie Ansprechpartner
+              </Label>
             </div>
           </div>
 
@@ -323,12 +403,12 @@ export function ProjectStammdatenForm({
                     <SelectTrigger>
                       <SelectValue
                         placeholder="—"
-                        resolvedLabel={field.value ? (properties.find((p) => p.id === field.value)?.name ?? "") : ""}
+                        resolvedLabel={field.value ? (propertiesForContact.find((p) => p.id === field.value)?.name ?? "") : ""}
                       />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={empty}>—</SelectItem>
-                      {properties.map((p) => (
+                      {propertiesForContact.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
                           {p.name}
                         </SelectItem>
@@ -337,21 +417,16 @@ export function ProjectStammdatenForm({
                   </Select>
                 )}
               />
-              <p className="text-xs text-muted-foreground">
-                Objekte (Standorte) können in der Datenbank dem Verwalter/Eigentümer-Kontakt zugeordnet werden; neue Einträge derzeit über Verwaltung/SQL anlegbar.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2 md:col-span-2">
-              <Button type="button" variant="outline" size="sm" onClick={fillMapsFromProperty}>
-                Maps-Link aus Objekt
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={fillMapsFromServiceAddress}>
-                Maps-Link aus Einsatzadresse
-              </Button>
+              {propertiesForContact.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Für diesen Kontakt ist noch kein Objekt hinterlegt.</p>
+              ) : null}
             </div>
             <div className="flex flex-col gap-2 md:col-span-2">
-              <Label htmlFor="mapsUrl">Google Maps (Link für Monteure)</Label>
-              <Input id="mapsUrl" {...form.register("mapsUrl")} placeholder="https://…" />
+              <Label>Routenplaner</Label>
+              <Button type="button" variant="outline" onClick={openRoutePlanner}>
+                Google Maps Routenplaner öffnen
+              </Button>
+              <input type="hidden" {...form.register("mapsUrl")} />
             </div>
           </div>
 

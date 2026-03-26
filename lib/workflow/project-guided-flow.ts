@@ -31,9 +31,11 @@ export type BundleGateCounts = {
   besichtigungAppointments: number;
   ausfuehrungAppointments: number;
   reports: number;
+  directResolvedReports: number;
   quotes: number;
   quoteFinalized: number;
   orders: number;
+  stockDecisionAbLager: number;
   deliveries: number;
   invoices: number;
   invoiceFinalized: number;
@@ -56,6 +58,11 @@ export function getBundlePrerequisiteMessages(
       msgs.push("Mindestens einen Ausführungstermin erfassen (Schritt «Ausführungstermin»).");
     }
   }
+  if (project.status === "besichtigung" && targetStatus === "ausfuehrung_erledigt") {
+    if (bundle.directResolvedReports < 1) {
+      msgs.push("«Ausführung erledigt» ist erst möglich, wenn ein Rapport mit Entscheid «Direkt gelöst» erfasst wurde.");
+    }
+  }
   if (project.status === "bericht_ausstehend" && targetStatus === "bericht_fertig") {
     if (bundle.reports < 1) {
       msgs.push("Mindestens einen Technikerbericht erfassen (Schritt «Rapport & Bestandsaufnahme»).");
@@ -75,8 +82,8 @@ export function getBundlePrerequisiteMessages(
     }
   }
   if (project.status === "bestellung" && targetStatus === "bestellt") {
-    if (bundle.orders < 1) {
-      msgs.push("Mindestens eine Lieferanten-Bestellung erfassen.");
+    if (bundle.orders < 1 && bundle.stockDecisionAbLager < 1) {
+      msgs.push("Mindestens eine Lieferanten-Bestellung erfassen oder Lagerentscheid «Ab Lager verfügbar» setzen.");
     }
   }
   if (project.status === "bestellt" && targetStatus === "ware_eingetroffen") {
@@ -120,6 +127,12 @@ export function buildGuidedTransitionOptions(
 
   return rules
     .filter((r) => r.allowedRoles.includes(role))
+    .filter((r) => {
+      if (project.status === "besichtigung" && r.to === "ausfuehrung_erledigt") {
+        return bundle.directResolvedReports > 0;
+      }
+      return true;
+    })
     .map((r) => {
       const missingFieldLabels = getMissingFieldLabelsForTransition(project, r.to);
       const prerequisiteMessages = getBundlePrerequisiteMessages(project, r.to, bundle);

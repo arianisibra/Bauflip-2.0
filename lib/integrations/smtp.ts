@@ -2,6 +2,8 @@ import nodemailer from "nodemailer";
 
 type MailInput = {
   to: string;
+  cc?: string;
+  bcc?: string;
   subject: string;
   html: string;
   attachments?: Array<{ filename: string; content: Buffer | string; contentType?: string }>;
@@ -40,6 +42,8 @@ export async function sendMailViaSmtp(input: MailInput) {
     const response = await transport.sendMail({
       from,
       to: input.to,
+      cc: input.cc,
+      bcc: input.bcc,
       subject: input.subject,
       html: input.html,
       attachments: input.attachments,

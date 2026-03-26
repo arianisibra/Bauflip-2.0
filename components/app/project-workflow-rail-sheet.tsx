@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Check } from "lucide-react";
 import type { ProjectStatus } from "@/lib/domain/types";
 import { statusLabels } from "@/lib/workflow/project-workflow";
@@ -8,7 +7,6 @@ import { PROJECT_WORKFLOW_STEPS, getWorkflowPhaseIndex } from "@/lib/workflow/pr
 import { cn } from "@/lib/utils";
 
 type ProjectWorkflowRailSheetProps = {
-  projectId: string;
   status: ProjectStatus;
   /** Welche Phase der Nutzer gerade im Inhaltsbereich sieht (0–7). */
   viewPhaseIndex: number;
@@ -16,7 +14,6 @@ type ProjectWorkflowRailSheetProps = {
 };
 
 export function ProjectWorkflowRailSheet({
-  projectId,
   status,
   viewPhaseIndex,
   onSelectPhase,
@@ -105,12 +102,6 @@ export function ProjectWorkflowRailSheet({
         <p className="text-[0.65rem] leading-snug text-muted-foreground">
           Erledigte Schritte können Sie erneut öffnen. «Weiter» schaltet den nächsten Schritt frei.
         </p>
-        <Link
-          href={`/projekte?openProjectId=${encodeURIComponent(projectId)}`}
-          className="mt-2 inline-block text-[0.7rem] font-medium text-primary underline-offset-4 hover:underline"
-        >
-          Projekt in Sidepage öffnen
-        </Link>
       </div>
     </aside>
   );

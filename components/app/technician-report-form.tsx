@@ -70,7 +70,6 @@ export function TechnicianReportForm({
   const [serviceList, setServiceList] = useState<string[]>([]);
   const [articleList, setArticleList] = useState<Array<{ id: string; name: string }>>([]);
   const [measurements, setMeasurements] = useState({
-    bezeichnung: "",
     breite: "",
     hoehe: "",
     farbeStoff: "",
@@ -89,7 +88,7 @@ export function TechnicianReportForm({
   const hasStorenArticle = selectedArticles.some((a) => a.categoryTemplateScope === "storen");
   const hasSonnenstorenArticle = selectedArticles.some((a) => a.categoryTemplateScope === "sonnenstoren");
   const hasDlArticle = selectedArticles.some((a) => a.categoryTemplateScope === "dl");
-  const effectiveBezeichnung = measurements.bezeichnung || articleList.map((a) => a.name).join(", ");
+  const effectiveBezeichnung = articleList.map((a) => a.name).join(", ");
   const measurementsJsonValue = JSON.stringify({
     bezeichnung: effectiveBezeichnung,
     breite: measurements.breite,
@@ -210,38 +209,31 @@ export function TechnicianReportForm({
           </div>
           <div className="flex flex-col gap-1">
             <Label className="text-sm">Artikel aus Artikelliste</Label>
-            <div className="flex items-center gap-2">
-              <select
-                value={selectedArticleId}
-                onChange={(e) => setSelectedArticleId(e.target.value)}
-                className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
-              >
-                <option value="">Artikel wählen …</option>
-                {articleOptions.map((article) => (
-                  <option key={article.id} value={article.id}>
-                    {article.name}
-                  </option>
-                ))}
-              </select>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  if (!selectedArticleId || articleList.some((a) => a.id === selectedArticleId)) {
-                    return;
-                  }
-                  const article = articleOptions.find((a) => a.id === selectedArticleId);
-                  if (!article) {
-                    return;
-                  }
-                  setArticleList((prev) => [...prev, { id: article.id, name: article.name }]);
-                  setSelectedArticleId("");
-                }}
-              >
-                Hinzufügen
-              </Button>
-            </div>
+            <select
+              value={selectedArticleId}
+              onChange={(e) => {
+                const nextId = e.target.value;
+                setSelectedArticleId(nextId);
+                if (!nextId || articleList.some((a) => a.id === nextId)) {
+                  return;
+                }
+                const article = articleOptions.find((a) => a.id === nextId);
+                if (!article) {
+                  return;
+                }
+                setArticleList((prev) => [...prev, { id: article.id, name: article.name }]);
+                setSelectedArticleId("");
+              }}
+              disabled={articleOptions.length === 0}
+              className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <option value="">{articleOptions.length > 0 ? "Artikel wählen …" : "Keine Artikel verfügbar"}</option>
+              {articleOptions.map((article) => (
+                <option key={article.id} value={article.id}>
+                  {article.name}
+                </option>
+              ))}
+            </select>
             {articleList.length > 0 ? (
               <div className="flex flex-wrap gap-1">
                 {articleList.map((item) => (
@@ -261,23 +253,9 @@ export function TechnicianReportForm({
             <input type="hidden" name="articleSelections" value={JSON.stringify(articleList.map((a) => a.id))} />
           </div>
           <div className="grid gap-2 rounded-md border p-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1 sm:col-span-2">
-              <Label className="text-sm">Artikelbezeichnung</Label>
-              <select
-                value={measurements.bezeichnung}
-                onChange={(e) => setMeasurements((prev) => ({ ...prev, bezeichnung: e.target.value }))}
-                className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={articleList.length === 0}
-                required={articleList.length > 0}
-              >
-                <option value="">{articleList.length > 0 ? "Artikel wählen …" : "Zuerst Artikel hinzufügen …"}</option>
-                {articleList.map((item) => (
-                  <option key={item.id} value={item.name}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <p className="text-xs text-muted-foreground sm:col-span-2">
+              Artikel werden oben ausgewählt. Die Bezeichnung wird automatisch aus den gewählten Artikeln übernommen.
+            </p>
             <div className="flex flex-col gap-1 sm:col-span-2">
               <Label className="text-sm">Ort</Label>
               <select
