@@ -30,6 +30,7 @@ import { ProjectWorkflowRailSheet } from "@/components/app/project-workflow-rail
 import { BauflipLoading, BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
 import { PROJECT_WORKFLOW_STEPS, getWorkflowPhaseIndex } from "@/lib/workflow/project-workflow-rail";
 import { buildGuidedTransitionOptions, getGuidedStepMeta } from "@/lib/workflow/project-guided-flow";
+import { cn } from "@/lib/utils";
 
 type FormValues = z.infer<typeof projectStammdatenUpdateSchema>;
 
@@ -298,6 +299,7 @@ export function ProjektSheetEditor({ projectId, open, canEdit }: Props) {
   const guidedPhaseIndex = guidedPhaseMeta.phaseIndex;
   const actorRole = payload.actorRole ?? "office";
   const supplierTemplates = payload.supplierTemplates ?? [];
+  const articles = payload.articles ?? [];
   const guidedOptions = buildGuidedTransitionOptions(project, actorRole, {
     besichtigungAppointments: payload.bundle.appointments.filter((a) => a.kind === "besichtigung").length,
     ausfuehrungAppointments: payload.bundle.appointments.filter((a) => a.kind === "ausfuehrung").length,
@@ -718,15 +720,17 @@ export function ProjektSheetEditor({ projectId, open, canEdit }: Props) {
           focusedStepIndex={viewPhaseIndex}
           onAfterStatusTransition={reloadSheetData}
         />
-        {viewPhaseIndex < guidedPhaseIndex ? (
-          <div
-            className="rounded-lg border border-border/80 bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
-            role="status"
-          >
-            Sie lesen einen <span className="font-medium text-foreground">früheren</span> Schritt. Ablauf-Stand im
-            System: <span className="font-medium text-foreground">{guidedPhaseMeta.stepLabel}</span>.
-          </div>
-        ) : null}
+        <div
+          className={cn(
+            "min-h-[3.25rem] rounded-lg border border-border/80 bg-muted/30 px-4 py-3 text-sm text-muted-foreground",
+            viewPhaseIndex < guidedPhaseIndex ? "opacity-100" : "pointer-events-none opacity-0",
+          )}
+          role="status"
+          aria-hidden={viewPhaseIndex < guidedPhaseIndex ? undefined : true}
+        >
+          Sie lesen einen <span className="font-medium text-foreground">früheren</span> Schritt. Ablauf-Stand im
+          System: <span className="font-medium text-foreground">{guidedPhaseMeta.stepLabel}</span>.
+        </div>
         {viewPhaseIndex === 0 ? (
           stammdatenForm
         ) : (
@@ -739,6 +743,7 @@ export function ProjektSheetEditor({ projectId, open, canEdit }: Props) {
               currentPhaseIndex={guidedPhaseIndex}
               bundle={payload.bundle}
               supplierTemplates={supplierTemplates}
+              articles={articles}
               onAfterMutation={reloadSheetData}
             />
           </div>

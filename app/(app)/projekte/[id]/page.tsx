@@ -5,6 +5,7 @@ import {
   listContactAddressesForContact,
   listContactPersonsForContact,
   listContacts,
+  listArticles,
   listProjectChat,
   listProjectWorkTypes,
   listSiteProperties,
@@ -27,6 +28,7 @@ import { TechnicianReportForm } from "@/components/app/technician-report-form";
 import { VoiceTextarea } from "@/components/app/voice-textarea";
 import { StockDecisionSelect } from "@/components/app/stock-decision-select";
 import { SupplierOrderForm } from "@/components/app/supplier-order-form";
+import { QuoteDraftForm } from "@/components/app/quote-draft-form";
 import {
   addAppointmentAction,
   addDeliveryAction,
@@ -35,7 +37,7 @@ import {
   addStockDecisionAction,
   addOrderAction,
   addProjectNoteAction,
-  addQuoteAction,
+  finalizeProjectDocumentAction,
   generateSwissQrAction,
   sendDocumentMailAction,
   uploadProjectChatFileAction,
@@ -72,13 +74,14 @@ export default async function ProjektDetailPage({ params }: Params) {
   const supplierTemplates = await listSupplierTemplates();
   const session = await getCurrentSession();
   const contactId = bundle.project.contactId;
-  const [contacts, properties, workTypes, profiles, personOptions, addressOptions] = await Promise.all([
+  const [contacts, properties, workTypes, profiles, personOptions, addressOptions, articles] = await Promise.all([
     listContacts(),
     listSiteProperties(),
     listProjectWorkTypes(),
     listAssignableProfiles(),
     listContactPersonsForContact(contactId),
     listContactAddressesForContact(contactId),
+    listArticles(),
   ]);
   const stammdatenReadOnly = session?.role === "technician";
 
@@ -259,27 +262,47 @@ export default async function ProjektDetailPage({ params }: Params) {
               <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Offerte &amp; Freigabe</h2>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              <Card>
+            <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
+              <Card className="h-full min-h-0">
                 <CardHeader>
                   <CardTitle>Offerte erstellen</CardTitle>
                   <CardDescription>
                     Basierend auf Monteur-Rapport. Material + Arbeit. Per Mail versenden.
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="flex flex-col gap-3">
-                  <form action={addQuoteAction} className="flex flex-col gap-2 rounded-md border p-3">
-                    <input type="hidden" name="projectId" value={bundle.project.id} />
-                    <Label htmlFor="version" className="text-sm">Version</Label>
-                    <Input id="version" name="version" type="number" defaultValue={1} className="h-9" />
-                    <Button type="submit" size="sm">Offerte erfassen</Button>
-                  </form>
+                <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
+                  <QuoteDraftForm
+                    projectId={bundle.project.id}
+                    suggestedVersion={(bundle.quotes?.length ?? 0) + 1}
+                    articleOptions={articles}
+                    className="flex min-h-0 flex-1 flex-col gap-2 rounded-md border p-3"
+                  />
                   {bundle.quotes.length > 0 ? (
-                    <div className="flex flex-col gap-1.5">
+                    <div className="flex shrink-0 flex-col gap-1.5">
                       {bundle.quotes.map((q) => (
-                        <div key={q.id} className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2 text-sm">
-                          <span>Version {q.version}</span>
-                          <span className="text-xs text-muted-foreground capitalize">{q.status}</span>
+                        <div key={q.id} className="rounded-md border bg-muted/20 px-3 py-2 text-sm">
+                          <div className="flex items-center justify-between">
+                            <span>Version {q.version}</span>
+                            <span className="text-xs text-muted-foreground capitalize">{q.status}</span>
+                          </div>
+                          <div className="mt-2 flex items-center gap-2">
+                            <form action={finalizeProjectDocumentAction}>
+                              <input type="hidden" name="projectId" value={bundle.project.id} />
+                              <input type="hidden" name="documentType" value="quote" />
+                              <input type="hidden" name="documentId" value={q.id} />
+                              <Button type="submit" size="sm" variant="outline" className="h-8 px-2 text-xs">Finalisieren & PDF</Button>
+                            </form>
+                            {q.pdfPath ? (
+                              <a
+                                href={`/api/project-documents/quote/${q.id}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+                              >
+                                PDF öffnen
+                              </a>
+                            ) : null}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -287,20 +310,22 @@ export default async function ProjektDetailPage({ params }: Params) {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="h-full min-h-0">
                 <CardHeader>
                   <CardTitle>Lagerentscheidung</CardTitle>
                   <CardDescription>
                     Nach Offert-Freigabe: ab Lager lieferbar oder Bestellung nötig?
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="flex flex-col gap-3">
-                  <form action={addStockDecisionAction} className="flex flex-col gap-2 rounded-md border p-3">
+                <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
+                  <form action={addStockDecisionAction} className="flex min-h-0 flex-1 flex-col gap-2 rounded-md border p-3">
                     <input type="hidden" name="projectId" value={bundle.project.id} />
                     <Label className="text-sm">Entscheid</Label>
                     <StockDecisionSelect />
-                    <VoiceTextarea name="notes" placeholder="Begründung / Bemerkung" required />
-                    <Button className="mt-1" type="submit" size="sm">Entscheid speichern</Button>
+                    <div className="min-h-[5rem] flex-1">
+                      <VoiceTextarea name="notes" placeholder="Begründung / Bemerkung" required />
+                    </div>
+                    <Button className="mt-auto w-fit" type="submit" size="sm">Entscheid speichern</Button>
                   </form>
                 </CardContent>
               </Card>
@@ -370,8 +395,28 @@ export default async function ProjektDetailPage({ params }: Params) {
                     <div className="flex flex-col gap-1.5">
                       {bundle.deliveries.map((d) => (
                         <div key={d.id} className="rounded-md border bg-muted/20 px-3 py-2 text-sm">
-                          <span className="font-medium">{d.deliveryNoteNumber ?? "Kein Lieferschein"}</span>
-                          <span className="ml-2 text-xs text-muted-foreground">{new Date(d.arrivedAt).toLocaleDateString("de-CH")}</span>
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{d.deliveryNoteNumber ?? "Kein Lieferschein"}</span>
+                            <span className="ml-2 text-xs text-muted-foreground">{new Date(d.arrivedAt).toLocaleDateString("de-CH")}</span>
+                          </div>
+                          <div className="mt-2 flex items-center gap-2">
+                            <form action={finalizeProjectDocumentAction}>
+                              <input type="hidden" name="projectId" value={bundle.project.id} />
+                              <input type="hidden" name="documentType" value="delivery" />
+                              <input type="hidden" name="documentId" value={d.id} />
+                              <Button type="submit" size="sm" variant="outline" className="h-8 px-2 text-xs">Lieferschein PDF erzeugen</Button>
+                            </form>
+                            {d.pdfPath ? (
+                              <a
+                                href={`/api/project-documents/delivery/${d.id}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+                              >
+                                PDF öffnen
+                              </a>
+                            ) : null}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -521,9 +566,29 @@ export default async function ProjektDetailPage({ params }: Params) {
                   {bundle.invoices.length > 0 ? (
                     <div className="flex flex-col gap-1.5">
                       {bundle.invoices.map((inv) => (
-                        <div key={inv.id} className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2 text-sm">
-                          <span className="font-medium">{inv.invoiceNumber ?? "Entwurf"}</span>
-                          <span className="text-xs text-muted-foreground capitalize">{inv.status}</span>
+                        <div key={inv.id} className="rounded-md border bg-muted/20 px-3 py-2 text-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{inv.invoiceNumber ?? "Entwurf"}</span>
+                            <span className="text-xs text-muted-foreground capitalize">{inv.status}</span>
+                          </div>
+                          <div className="mt-2 flex items-center gap-2">
+                            <form action={finalizeProjectDocumentAction}>
+                              <input type="hidden" name="projectId" value={bundle.project.id} />
+                              <input type="hidden" name="documentType" value="invoice" />
+                              <input type="hidden" name="documentId" value={inv.id} />
+                              <Button type="submit" size="sm" variant="outline" className="h-8 px-2 text-xs">Finalisieren & PDF</Button>
+                            </form>
+                            {inv.pdfPath ? (
+                              <a
+                                href={`/api/project-documents/invoice/${inv.id}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+                              >
+                                PDF öffnen
+                              </a>
+                            ) : null}
+                          </div>
                         </div>
                       ))}
                     </div>

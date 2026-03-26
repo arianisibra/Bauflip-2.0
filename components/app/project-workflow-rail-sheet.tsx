@@ -32,7 +32,7 @@ export function ProjectWorkflowRailSheet({
       <div className="border-b border-sky-100/90 px-3 py-2.5">
         <p className="text-xs font-semibold leading-snug text-slate-900">Geführter Prozess</p>
         <p className="mt-0.5 text-[0.7rem] leading-snug text-muted-foreground">Vom Eingang bis zum Abschluss</p>
-        <p className="mt-1.5 text-[0.7rem] leading-snug text-muted-foreground">
+        <p className="mt-1.5 min-h-[1.1rem] text-[0.7rem] leading-snug text-muted-foreground">
           Jetzt: <span className="font-medium text-foreground">{statusLabels[status]}</span>
         </p>
       </div>
@@ -48,7 +48,7 @@ export function ProjectWorkflowRailSheet({
               {i > 0 ? (
                 <div
                   className={cn(
-                    "absolute top-0 left-[1.125rem] h-3 w-px -translate-y-full",
+                    "absolute top-0 left-[1rem] h-3 w-px -translate-y-full",
                     done || currentPipeline ? "bg-primary/45" : "bg-border",
                   )}
                   aria-hidden

@@ -276,6 +276,26 @@ export type Quote = {
   status: "entwurf" | "gesendet" | "genehmigt" | "abgelehnt";
   sentAt: string | null;
   approvedAt: string | null;
+  pdfPath: string | null;
+  pdfGeneratedAt: string | null;
+  pdfVersion: number;
+  finalizedAt: string | null;
+  finalizedBy: string | null;
+  warrantyText: string | null;
+  validityDays: number | null;
+  leadTimeText: string | null;
+  downPaymentPercent: number | null;
+  paymentTermsText: string | null;
+  salutationText: string | null;
+  textBlocks: string | null;
+  currency: string;
+  discountPercent: number;
+  vatPercent: number;
+  subtotalNet: number;
+  discountAmount: number;
+  totalNet: number;
+  vatAmount: number;
+  totalGross: number;
   createdAt: string;
 };
 
@@ -295,6 +315,11 @@ export type Delivery = {
   deliveryNoteNumber: string | null;
   arrivedAt: string;
   checkedByRole: RoleType;
+  pdfPath: string | null;
+  pdfGeneratedAt: string | null;
+  pdfVersion: number;
+  finalizedAt: string | null;
+  finalizedBy: string | null;
   createdAt: string;
 };
 
@@ -304,6 +329,11 @@ export type Invoice = {
   invoiceNumber: string | null;
   status: "entwurf" | "gesendet" | "bezahlt";
   sentAt: string | null;
+  pdfPath: string | null;
+  pdfGeneratedAt: string | null;
+  pdfVersion: number;
+  finalizedAt: string | null;
+  finalizedBy: string | null;
   createdAt: string;
 };
 

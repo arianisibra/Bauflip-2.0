@@ -49,12 +49,24 @@ export const reportSchema = z.object({
   summary: z.string().trim().min(10, "Bitte eine klare Diagnose erfassen (mindestens 10 Zeichen)."),
   measurementsJson: z.string().trim().min(2, "Messdaten fehlen."),
   workDescription: z.string().trim().min(5, "Bitte Massnahme beschreiben."),
+  serviceSelections: z.string().optional(),
+  articleSelections: z.string().optional(),
   timeSpentMinutes: z.coerce.number().min(0).optional(),
 });
 
 export const quoteSchema = z.object({
   projectId: z.string().min(1),
   version: z.coerce.number().min(1),
+  warrantyText: z.string().optional(),
+  validityDays: z.coerce.number().int().min(1).max(365).optional(),
+  leadTimeText: z.string().optional(),
+  downPaymentPercent: z.coerce.number().min(0).max(100).optional(),
+  paymentTermsText: z.string().optional(),
+  salutationText: z.string().optional(),
+  textBlocks: z.string().optional(),
+  discountPercent: z.coerce.number().min(0).max(100).optional(),
+  vatPercent: z.coerce.number().min(0).max(100).optional(),
+  quoteItemsJson: z.string().optional(),
 });
 
 export const orderSchema = z.object({
@@ -71,6 +83,12 @@ export const deliverySchema = z.object({
 export const invoiceSchema = z.object({
   projectId: z.string().min(1),
   invoiceNumber: z.string().optional(),
+});
+
+export const finalizeDocumentSchema = z.object({
+  projectId: z.string().min(1),
+  documentType: z.enum(["quote", "invoice", "delivery"]),
+  documentId: z.string().min(1),
 });
 
 export const transitionSchema = z.object({

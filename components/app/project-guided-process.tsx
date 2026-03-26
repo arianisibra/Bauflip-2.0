@@ -248,21 +248,6 @@ export function ProjectGuidedProcess({
                 )}
                 <p className={cn("font-semibold text-foreground", compact ? "mt-0.5 text-sm" : "mt-1 text-sm")}>{currentStepLabel}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">{currentStepHint}</p>
-                {sheetMode && onNavigateToStep && viewingDiffersFromPipeline ? (
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="sm"
-                    className="mt-1 h-auto p-0 text-xs"
-                    onClick={() => onNavigateToStep(stepAnchorId)}
-                  >
-                    Zum aktuellen Ablauf-Schritt springen ↓
-                  </Button>
-                ) : !sheetMode ? (
-                  <Button variant="link" size="sm" className="mt-1 h-auto p-0 text-xs" nativeButton={false} render={<Link href={`#${stepAnchorId}`} />}>
-                    Zu diesem Abschnitt springen ↓
-                  </Button>
-                ) : null}
               </div>
 
               {options.length === 0 ? (

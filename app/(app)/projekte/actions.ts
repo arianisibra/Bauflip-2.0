@@ -9,6 +9,7 @@ import {
   listContactAddressesForContact,
   listContactPersonsForContact,
   listContacts,
+  listArticles,
   listProjectWorkTypes,
   listSiteProperties,
   listSupplierTemplates,
@@ -41,12 +42,13 @@ export async function getProjectSheetDataAction(projectId: string) {
   if (!bundle) {
     throw new Error("Projekt nicht gefunden.");
   }
-  const [contacts, properties, workTypes, profiles, supplierTemplates] = await Promise.all([
+  const [contacts, properties, workTypes, profiles, supplierTemplates, articles] = await Promise.all([
     listContacts(),
     listSiteProperties(),
     listProjectWorkTypes(),
     listAssignableProfiles(),
     listSupplierTemplates(),
+    listArticles(),
   ]);
   const { persons, addresses } = await getContactProjectOptionsAction(bundle.project.contactId);
   return {
@@ -58,6 +60,7 @@ export async function getProjectSheetDataAction(projectId: string) {
     persons,
     addresses,
     supplierTemplates,
+    articles,
     actorRole: session.role,
   };
 }

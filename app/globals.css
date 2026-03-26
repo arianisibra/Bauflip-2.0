@@ -126,5 +126,7 @@
   }
   html {
     @apply font-sans;
+    /* Verhindert horizontales Springen, wenn die vertikale Scrollbar ein-/ausblendet */
+    scrollbar-gutter: stable;
   }
 }

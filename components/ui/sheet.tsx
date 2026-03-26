@@ -97,7 +97,7 @@ export function Sheet({ open, onOpenChange, title, description, children, footer
               <X className="size-4" />
             </Dialog.Close>
           </div>
-          <div className="flex-1 overflow-y-auto px-5 py-5">{children}</div>
+          <div className="flex-1 overflow-y-auto px-5 py-5 [scrollbar-gutter:stable]">{children}</div>
           {footer ? <div className="border-t border-border/80 bg-muted/20 px-5 py-4">{footer}</div> : null}
         </Dialog.Content>
       </Dialog.Portal>

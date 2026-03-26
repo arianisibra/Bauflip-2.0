@@ -19,6 +19,9 @@ import {
   addTechnicianReport,
   createContact,
   createProject,
+  getDeliveryById,
+  getInvoiceById,
+  getQuoteById,
   listArticles,
   listContacts,
   listProjects,
@@ -26,17 +29,22 @@ import {
   listSupplierTemplates,
   moveKanbanCard,
   renameKanbanColumn,
+  markDeliveryFinalizedWithPdf,
+  markInvoiceFinalizedWithPdf,
+  markQuoteFinalizedWithPdf,
   upsertArticles,
   upsertModuleLabel,
   getProjectBundle,
   updateProjectStatus,
 } from "@/lib/db/repository";
 import { PROJECT_FILE_MAX_BYTES, PROJECT_FILE_MIME, sanitizeFileBaseName } from "@/lib/storage/mime";
+import { generateDeliveryPdf, generateInvoicePdf, generateQuotePdf } from "@/lib/documents/project-document-pdf";
 import {
   appointmentSchema,
   chatAttachmentSchema,
   chatMessageSchema,
   deliverySchema,
+  finalizeDocumentSchema,
   intakeSchema,
   invoiceSchema,
   kanbanColumnRenameSchema,
@@ -206,11 +214,38 @@ export async function addTechnicianReportAction(formData: FormData): Promise<Add
   }
 
   try {
+    let parsedMeasurements: Record<string, unknown> = {};
+    try {
+      parsedMeasurements = JSON.parse(parsed.data.measurementsJson) as Record<string, unknown>;
+    } catch {
+      parsedMeasurements = { raw: parsed.data.measurementsJson };
+    }
+    const selectedServices = (() => {
+      try {
+        const arr = JSON.parse(parsed.data.serviceSelections ?? "[]");
+        return Array.isArray(arr) ? arr.filter((x) => typeof x === "string") : [];
+      } catch {
+        return [];
+      }
+    })();
+    const selectedArticles = (() => {
+      try {
+        const arr = JSON.parse(parsed.data.articleSelections ?? "[]");
+        return Array.isArray(arr) ? arr.filter((x) => typeof x === "string") : [];
+      } catch {
+        return [];
+      }
+    })();
+
     await addTechnicianReport({
       projectId: parsed.data.projectId,
       outcome: parsed.data.outcome,
       summary: parsed.data.summary,
-      measurementsJson: parsed.data.measurementsJson,
+      measurementsJson: JSON.stringify({
+        ...parsedMeasurements,
+        serviceSelections: selectedServices,
+        articleSelections: selectedArticles,
+      }),
       workDescription: parsed.data.workDescription,
       timeSpentMinutes: parsed.data.timeSpentMinutes ?? null,
     });
@@ -240,16 +275,59 @@ export async function addQuoteAction(formData: FormData) {
     throw new Error(parsed.error.issues[0]?.message ?? "Ungültige Offerte.");
   }
 
+  const quoteItems = (() => {
+    try {
+      const arr = JSON.parse(parsed.data.quoteItemsJson ?? "[]");
+      if (!Array.isArray(arr)) {
+        return [] as Array<{ description: string; quantity: number; unit: string; unitPrice: number }>;
+      }
+      return arr
+        .map((raw) => ({
+          description: String((raw as { description?: unknown }).description ?? "").trim(),
+          quantity: Number((raw as { quantity?: unknown }).quantity ?? 0),
+          unit: String((raw as { unit?: unknown }).unit ?? "Stk").trim(),
+          unitPrice: Number((raw as { unitPrice?: unknown }).unitPrice ?? 0),
+        }))
+        .filter((i) => i.description.length > 0 && Number.isFinite(i.quantity) && i.quantity > 0 && Number.isFinite(i.unitPrice));
+    } catch {
+      return [] as Array<{ description: string; quantity: number; unit: string; unitPrice: number }>;
+    }
+  })();
+
+  const subtotalNet = quoteItems.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
+  const discountPercent = parsed.data.discountPercent ?? 0;
+  const vatPercent = parsed.data.vatPercent ?? 8.1;
+  const discountAmount = subtotalNet * (discountPercent / 100);
+  const totalNet = subtotalNet - discountAmount;
+  const vatAmount = totalNet * (vatPercent / 100);
+  const totalGross = totalNet + vatAmount;
+
   await addQuote({
     projectId: parsed.data.projectId,
     version: parsed.data.version,
+    warrantyText: parsed.data.warrantyText?.trim() ? parsed.data.warrantyText.trim() : null,
+    validityDays: parsed.data.validityDays ?? null,
+    leadTimeText: parsed.data.leadTimeText?.trim() ? parsed.data.leadTimeText.trim() : null,
+    downPaymentPercent: parsed.data.downPaymentPercent ?? null,
+    paymentTermsText: parsed.data.paymentTermsText?.trim() ? parsed.data.paymentTermsText.trim() : null,
+    salutationText: parsed.data.salutationText?.trim() ? parsed.data.salutationText.trim() : null,
+    textBlocks: parsed.data.textBlocks?.trim() ? parsed.data.textBlocks.trim() : null,
+    currency: "CHF",
+    discountPercent,
+    vatPercent,
+    subtotalNet,
+    discountAmount,
+    totalNet,
+    vatAmount,
+    totalGross,
+    items: quoteItems,
   });
   await addAuditEvent({
     action: "offerte_erstellt",
     projectId: parsed.data.projectId,
     actorRole: "office",
     actorName: "System Benutzer",
-    payload: JSON.stringify({ version: parsed.data.version }),
+    payload: JSON.stringify({ version: parsed.data.version, totalGross, totalNet, positions: quoteItems.length }),
   });
 
   revalidatePath(`/projekte/${parsed.data.projectId}`);
@@ -318,6 +396,145 @@ export async function addInvoiceAction(formData: FormData) {
     actorName: "System Benutzer",
     payload: JSON.stringify({ invoiceNumber: parsed.data.invoiceNumber ?? null }),
   });
+
+  revalidatePath(`/projekte/${parsed.data.projectId}`);
+}
+
+async function uploadProjectDocumentPdf(params: {
+  organizationId: string;
+  projectId: string;
+  type: "quote" | "invoice" | "delivery";
+  documentId: string;
+  nextPdfVersion: number;
+  bytes: Uint8Array;
+}) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    throw new Error("Supabase ist nicht konfiguriert.");
+  }
+
+  const storagePath = `${params.organizationId}/${params.projectId}/${params.type}/${params.documentId}/v${params.nextPdfVersion}.pdf`;
+  const { error } = await supabase.storage.from("project-documents").upload(storagePath, Buffer.from(params.bytes), {
+    contentType: "application/pdf",
+    upsert: true,
+  });
+  if (error) {
+    throw new Error(error.message);
+  }
+  return storagePath;
+}
+
+export async function finalizeProjectDocumentAction(formData: FormData) {
+  const payload = collectFormData(formData);
+  const parsed = finalizeDocumentSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Ungültige Finalisierung.");
+  }
+
+  const session = await getCurrentSession();
+  if (!session) {
+    throw new Error("Nicht angemeldet.");
+  }
+  if (!session.organizationId) {
+    throw new Error("Keine Organisation im Benutzerkontext.");
+  }
+
+  const bundle = await getProjectBundle(parsed.data.projectId);
+  if (!bundle) {
+    throw new Error("Projekt nicht gefunden.");
+  }
+  const pdfBundle = {
+    project: bundle.project,
+    contactName: bundle.contact?.name ?? "Unbekannt",
+    contactEmail: bundle.contact?.email ?? null,
+    contactPhone: bundle.contact?.phone ?? null,
+  };
+
+  if (parsed.data.documentType === "quote") {
+    const quote = await getQuoteById(parsed.data.documentId);
+    if (!quote || quote.projectId !== parsed.data.projectId) {
+      throw new Error("Offerte nicht gefunden.");
+    }
+    const nextPdfVersion = (quote.pdfVersion ?? 0) + 1;
+    const bytes = await generateQuotePdf(pdfBundle, quote);
+    const pdfPath = await uploadProjectDocumentPdf({
+      organizationId: session.organizationId,
+      projectId: parsed.data.projectId,
+      type: "quote",
+      documentId: quote.id,
+      nextPdfVersion,
+      bytes,
+    });
+    await markQuoteFinalizedWithPdf({
+      quoteId: quote.id,
+      pdfPath,
+      finalizedBy: session.profile.id,
+      nextPdfVersion,
+    });
+    await addAuditEvent({
+      action: "offerte_finalisiert_pdf",
+      projectId: parsed.data.projectId,
+      actorRole: session.role,
+      actorName: session.profile.displayName,
+      payload: JSON.stringify({ quoteId: quote.id, pdfPath, version: nextPdfVersion }),
+    });
+  } else if (parsed.data.documentType === "invoice") {
+    const invoice = await getInvoiceById(parsed.data.documentId);
+    if (!invoice || invoice.projectId !== parsed.data.projectId) {
+      throw new Error("Rechnung nicht gefunden.");
+    }
+    const nextPdfVersion = (invoice.pdfVersion ?? 0) + 1;
+    const bytes = await generateInvoicePdf(pdfBundle, invoice);
+    const pdfPath = await uploadProjectDocumentPdf({
+      organizationId: session.organizationId,
+      projectId: parsed.data.projectId,
+      type: "invoice",
+      documentId: invoice.id,
+      nextPdfVersion,
+      bytes,
+    });
+    await markInvoiceFinalizedWithPdf({
+      invoiceId: invoice.id,
+      pdfPath,
+      finalizedBy: session.profile.id,
+      nextPdfVersion,
+    });
+    await addAuditEvent({
+      action: "rechnung_finalisiert_pdf",
+      projectId: parsed.data.projectId,
+      actorRole: session.role,
+      actorName: session.profile.displayName,
+      payload: JSON.stringify({ invoiceId: invoice.id, pdfPath, version: nextPdfVersion }),
+    });
+  } else {
+    const delivery = await getDeliveryById(parsed.data.documentId);
+    if (!delivery || delivery.projectId !== parsed.data.projectId) {
+      throw new Error("Lieferschein nicht gefunden.");
+    }
+    const nextPdfVersion = (delivery.pdfVersion ?? 0) + 1;
+    const bytes = await generateDeliveryPdf(pdfBundle, delivery);
+    const pdfPath = await uploadProjectDocumentPdf({
+      organizationId: session.organizationId,
+      projectId: parsed.data.projectId,
+      type: "delivery",
+      documentId: delivery.id,
+      nextPdfVersion,
+      bytes,
+    });
+    await markDeliveryFinalizedWithPdf({
+      deliveryId: delivery.id,
+      pdfPath,
+      finalizedBy: session.profile.id,
+      nextPdfVersion,
+    });
+    await addAuditEvent({
+      action: "lieferschein_finalisiert_pdf",
+      projectId: parsed.data.projectId,
+      actorRole: session.role,
+      actorName: session.profile.displayName,
+      payload: JSON.stringify({ deliveryId: delivery.id, pdfPath, version: nextPdfVersion }),
+    });
+  }
 
   revalidatePath(`/projekte/${parsed.data.projectId}`);
 }

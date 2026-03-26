@@ -1527,7 +1527,15 @@ export async function addTechnicianReport(input: Omit<TechnicianReport, "id" | "
   return data as unknown as TechnicianReport;
 }
 
-export async function addQuote(input: Omit<Quote, "id" | "createdAt" | "status" | "sentAt" | "approvedAt">) {
+export async function addQuote(
+  input: Omit<
+    Quote,
+    "id" | "createdAt" | "status" | "sentAt" | "approvedAt" | "pdfPath" | "pdfGeneratedAt" | "pdfVersion" | "finalizedAt" | "finalizedBy"
+  > & {
+    items?: Array<{ description: string; quantity: number; unit: string; unitPrice: number }>;
+  },
+) {
+  const { items = [], ...quoteInput } = input;
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
     const quote: Quote = {
@@ -1535,20 +1543,55 @@ export async function addQuote(input: Omit<Quote, "id" | "createdAt" | "status" 
       status: "entwurf",
       sentAt: null,
       approvedAt: null,
+      pdfPath: null,
+      pdfGeneratedAt: null,
+      pdfVersion: 0,
+      finalizedAt: null,
+      finalizedBy: null,
       createdAt: new Date().toISOString(),
-      ...input,
+      ...quoteInput,
     };
     mockQuotes.push(quote);
     return quote;
   }
 
   const { data, error } = await supabase.from("quotes").insert({
-    project_id: input.projectId,
-    version: input.version,
+    project_id: quoteInput.projectId,
+    version: quoteInput.version,
+    warranty_text: quoteInput.warrantyText ?? null,
+    validity_days: quoteInput.validityDays ?? null,
+    lead_time_text: quoteInput.leadTimeText ?? null,
+    down_payment_percent: quoteInput.downPaymentPercent ?? null,
+    payment_terms_text: quoteInput.paymentTermsText ?? null,
+    salutation_text: quoteInput.salutationText ?? null,
+    text_blocks: quoteInput.textBlocks ?? null,
+    currency: quoteInput.currency ?? "CHF",
+    discount_percent: quoteInput.discountPercent ?? 0,
+    vat_percent: quoteInput.vatPercent ?? 8.1,
+    subtotal_net: quoteInput.subtotalNet ?? 0,
+    discount_amount: quoteInput.discountAmount ?? 0,
+    total_net: quoteInput.totalNet ?? 0,
+    vat_amount: quoteInput.vatAmount ?? 0,
+    total_gross: quoteInput.totalGross ?? 0,
   }).select("*").single();
 
   if (error || !data) {
     throw new Error("Offerte konnte nicht erstellt werden.");
+  }
+
+  if (items.length > 0) {
+    const { error: itemError } = await supabase.from("quote_items").insert(
+      items.map((item) => ({
+        quote_id: String((data as Record<string, unknown>).id),
+        description: item.description,
+        quantity: item.quantity,
+        unit: item.unit,
+        unit_price: item.unitPrice,
+      })),
+    );
+    if (itemError) {
+      throw new Error("Offertenpositionen konnten nicht gespeichert werden.");
+    }
   }
 
   return data as unknown as Quote;
@@ -1580,13 +1623,20 @@ export async function addPurchaseOrder(input: Omit<PurchaseOrder, "id" | "create
   return data as unknown as PurchaseOrder;
 }
 
-export async function addDelivery(input: Omit<Delivery, "id" | "createdAt" | "arrivedAt" | "checkedByRole">) {
+export async function addDelivery(
+  input: Omit<Delivery, "id" | "createdAt" | "arrivedAt" | "checkedByRole" | "pdfPath" | "pdfGeneratedAt" | "pdfVersion" | "finalizedAt" | "finalizedBy">,
+) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
     const delivery: Delivery = {
       id: id("d"),
       arrivedAt: new Date().toISOString(),
       checkedByRole: "office",
+      pdfPath: null,
+      pdfGeneratedAt: null,
+      pdfVersion: 0,
+      finalizedAt: null,
+      finalizedBy: null,
       createdAt: new Date().toISOString(),
       ...input,
     };
@@ -1607,13 +1657,20 @@ export async function addDelivery(input: Omit<Delivery, "id" | "createdAt" | "ar
   return data as unknown as Delivery;
 }
 
-export async function addInvoice(input: Omit<Invoice, "id" | "createdAt" | "status" | "sentAt">) {
+export async function addInvoice(
+  input: Omit<Invoice, "id" | "createdAt" | "status" | "sentAt" | "pdfPath" | "pdfGeneratedAt" | "pdfVersion" | "finalizedAt" | "finalizedBy">,
+) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
     const invoice: Invoice = {
       id: id("i"),
       status: "entwurf",
       sentAt: null,
+      pdfPath: null,
+      pdfGeneratedAt: null,
+      pdfVersion: 0,
+      finalizedAt: null,
+      finalizedBy: null,
       createdAt: new Date().toISOString(),
       ...input,
     };
@@ -1631,6 +1688,193 @@ export async function addInvoice(input: Omit<Invoice, "id" | "createdAt" | "stat
   }
 
   return data as unknown as Invoice;
+}
+
+export async function getQuoteById(quoteId: string): Promise<Quote | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return mockQuotes.find((q) => q.id === quoteId) ?? null;
+  }
+  const { data } = await supabase.from("quotes").select("*").eq("id", quoteId).maybeSingle();
+  return (data as unknown as Quote | null) ?? null;
+}
+
+export async function getInvoiceById(invoiceId: string): Promise<Invoice | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return mockInvoices.find((i) => i.id === invoiceId) ?? null;
+  }
+  const { data } = await supabase.from("invoices").select("*").eq("id", invoiceId).maybeSingle();
+  return (data as unknown as Invoice | null) ?? null;
+}
+
+export async function getDeliveryById(deliveryId: string): Promise<Delivery | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return mockDeliveries.find((d) => d.id === deliveryId) ?? null;
+  }
+  const { data } = await supabase.from("deliveries").select("*").eq("id", deliveryId).maybeSingle();
+  return (data as unknown as Delivery | null) ?? null;
+}
+
+export async function markQuoteFinalizedWithPdf(input: {
+  quoteId: string;
+  pdfPath: string;
+  finalizedBy: string | null;
+  nextPdfVersion: number;
+}) {
+  const now = new Date().toISOString();
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const quote = mockQuotes.find((q) => q.id === input.quoteId);
+    if (!quote) {
+      throw new Error("Offerte nicht gefunden.");
+    }
+    quote.status = "gesendet";
+    quote.sentAt = now;
+    quote.pdfPath = input.pdfPath;
+    quote.pdfGeneratedAt = now;
+    quote.pdfVersion = input.nextPdfVersion;
+    quote.finalizedAt = now;
+    quote.finalizedBy = input.finalizedBy;
+    return quote;
+  }
+
+  const { data, error } = await supabase
+    .from("quotes")
+    .update({
+      status: "gesendet",
+      sent_at: now,
+      pdf_path: input.pdfPath,
+      pdf_generated_at: now,
+      pdf_version: input.nextPdfVersion,
+      finalized_at: now,
+      finalized_by: input.finalizedBy,
+    })
+    .eq("id", input.quoteId)
+    .select("*")
+    .single();
+  if (error || !data) {
+    throw new Error("Offerte konnte nicht finalisiert werden.");
+  }
+  return data as unknown as Quote;
+}
+
+export async function markInvoiceFinalizedWithPdf(input: {
+  invoiceId: string;
+  pdfPath: string;
+  finalizedBy: string | null;
+  nextPdfVersion: number;
+}) {
+  const now = new Date().toISOString();
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const invoice = mockInvoices.find((i) => i.id === input.invoiceId);
+    if (!invoice) {
+      throw new Error("Rechnung nicht gefunden.");
+    }
+    invoice.status = "gesendet";
+    invoice.sentAt = now;
+    invoice.pdfPath = input.pdfPath;
+    invoice.pdfGeneratedAt = now;
+    invoice.pdfVersion = input.nextPdfVersion;
+    invoice.finalizedAt = now;
+    invoice.finalizedBy = input.finalizedBy;
+    return invoice;
+  }
+
+  const { data, error } = await supabase
+    .from("invoices")
+    .update({
+      status: "gesendet",
+      sent_at: now,
+      pdf_path: input.pdfPath,
+      pdf_generated_at: now,
+      pdf_version: input.nextPdfVersion,
+      finalized_at: now,
+      finalized_by: input.finalizedBy,
+    })
+    .eq("id", input.invoiceId)
+    .select("*")
+    .single();
+  if (error || !data) {
+    throw new Error("Rechnung konnte nicht finalisiert werden.");
+  }
+  return data as unknown as Invoice;
+}
+
+export async function markDeliveryFinalizedWithPdf(input: {
+  deliveryId: string;
+  pdfPath: string;
+  finalizedBy: string | null;
+  nextPdfVersion: number;
+}) {
+  const now = new Date().toISOString();
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const delivery = mockDeliveries.find((d) => d.id === input.deliveryId);
+    if (!delivery) {
+      throw new Error("Lieferschein nicht gefunden.");
+    }
+    delivery.pdfPath = input.pdfPath;
+    delivery.pdfGeneratedAt = now;
+    delivery.pdfVersion = input.nextPdfVersion;
+    delivery.finalizedAt = now;
+    delivery.finalizedBy = input.finalizedBy;
+    return delivery;
+  }
+
+  const { data, error } = await supabase
+    .from("deliveries")
+    .update({
+      pdf_path: input.pdfPath,
+      pdf_generated_at: now,
+      pdf_version: input.nextPdfVersion,
+      finalized_at: now,
+      finalized_by: input.finalizedBy,
+    })
+    .eq("id", input.deliveryId)
+    .select("*")
+    .single();
+  if (error || !data) {
+    throw new Error("Lieferschein konnte nicht finalisiert werden.");
+  }
+  return data as unknown as Delivery;
+}
+
+export async function getProjectDocumentSignedUrl(input: {
+  type: "quote" | "invoice" | "delivery";
+  id: string;
+  expiresSec?: number;
+}): Promise<string | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return null;
+  }
+
+  let pdfPath: string | null = null;
+  if (input.type === "quote") {
+    const { data } = await supabase.from("quotes").select("pdf_path").eq("id", input.id).maybeSingle();
+    pdfPath = data?.pdf_path ? String(data.pdf_path) : null;
+  } else if (input.type === "invoice") {
+    const { data } = await supabase.from("invoices").select("pdf_path").eq("id", input.id).maybeSingle();
+    pdfPath = data?.pdf_path ? String(data.pdf_path) : null;
+  } else {
+    const { data } = await supabase.from("deliveries").select("pdf_path").eq("id", input.id).maybeSingle();
+    pdfPath = data?.pdf_path ? String(data.pdf_path) : null;
+  }
+
+  if (!pdfPath) {
+    return null;
+  }
+
+  const { data, error } = await supabase.storage
+    .from("project-documents")
+    .createSignedUrl(pdfPath, input.expiresSec ?? 900);
+  if (error || !data?.signedUrl) {
+    return null;
+  }
+  return data.signedUrl;
 }
 
 export async function updateProjectStatus(projectId: string, status: Project["status"], nextOwnerRole: Project["nextOwnerRole"]) {
