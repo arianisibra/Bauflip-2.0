@@ -43,12 +43,6 @@ const typeLabel: Record<string, string> = {
   neuinstallation: "Neuinstallation",
 };
 
-const urgencyLabel: Record<string, string> = {
-  normal: "Normal",
-  hoch: "Hoch",
-  kritisch: "Kritisch",
-};
-
 const sourceLabel: Record<string, string> = {
   whatsapp: "WhatsApp",
   telefon: "Telefon",
@@ -431,7 +425,6 @@ export function ProjektSheetEditor({ projectId, open, canEdit }: Props) {
 
   const kopfSummary = [
     typeLabel[project.type] ?? project.type,
-    urgencyLabel[project.urgency] ?? project.urgency,
     sourceLabel[project.source] ?? project.source,
     `Geändert ${new Date(project.updatedAt).toLocaleString("de-CH")}`,
   ].join(" · ");

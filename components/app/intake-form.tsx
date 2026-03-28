@@ -22,7 +22,6 @@ const defaultValues: IntakeValues = {
   title: "",
   source: "telefon",
   type: "reparatur",
-  urgency: "normal",
   intakeOriginalText: "",
   accessNotes: "",
   keyHandlingNotes: "",
@@ -137,7 +136,7 @@ export function IntakeForm({ contacts = [] }: { contacts?: Contact[] }) {
             ) : null}
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2">
             <div className="flex flex-col gap-2">
               <Label>Quelle</Label>
               <Controller
@@ -176,28 +175,6 @@ export function IntakeForm({ contacts = [] }: { contacts?: Contact[] }) {
                         <SelectItem value="reparatur">Reparatur</SelectItem>
                         <SelectItem value="ersatz">Ersatz</SelectItem>
                         <SelectItem value="neuinstallation">Neuinstallation</SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label>Dringlichkeit</Label>
-              <Controller
-                control={form.control}
-                name="urgency"
-                render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Dringlichkeit auswählen" resolvedLabel={{ normal: "Normal", hoch: "Hoch", kritisch: "Kritisch" }[field.value as string] ?? field.value} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectLabel>Priorität</SelectLabel>
-                        <SelectItem value="normal">Normal</SelectItem>
-                        <SelectItem value="hoch">Hoch</SelectItem>
-                        <SelectItem value="kritisch">Kritisch</SelectItem>
                       </SelectGroup>
                     </SelectContent>
                   </Select>

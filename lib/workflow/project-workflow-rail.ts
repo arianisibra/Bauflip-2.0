@@ -8,7 +8,7 @@ export const PROJECT_WORKFLOW_STEPS = [
   {
     id: "eingang",
     label: "Auftragseingang & Erfassung",
-    hint: "Eingang, Kunde, Problem, Dringlichkeit & Hinweise",
+    hint: "Eingang, Kunde, Problem & Hinweise",
   },
   {
     id: "termin",

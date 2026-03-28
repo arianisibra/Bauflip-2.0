@@ -48,7 +48,6 @@ export default async function ArbeitspoolPage() {
   ]);
 
   const openCount = projects.filter((project) => project.status !== "abgeschlossen").length;
-  const urgentCount = projects.filter((project) => project.urgency === "kritisch").length;
   const invoiceReadyCount = projects.filter((project) => project.status === "rechnung").length;
 
   const dashboardData: DashboardPageData = {
@@ -60,7 +59,6 @@ export default async function ArbeitspoolPage() {
     role: session.role,
     snapshot: {
       openCount,
-      urgentCount,
       invoiceReadyCount,
     },
   };

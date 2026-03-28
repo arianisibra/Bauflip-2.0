@@ -9,9 +9,6 @@ export const intakeSchema = z.object({
   type: z.enum(projectTypes, {
     message: "Bitte wählen Sie den Projekttyp.",
   }),
-  urgency: z.enum(["normal", "hoch", "kritisch"], {
-    message: "Bitte wählen Sie die Dringlichkeit.",
-  }),
   intakeOriginalText: z
     .string()
     .min(10, "Die Originalaussage des Kunden ist Pflicht."),

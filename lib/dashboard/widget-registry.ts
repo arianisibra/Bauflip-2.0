@@ -1,6 +1,5 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  AlarmSmoke,
   BarChart3,
   CalendarRange,
   ClipboardList,
@@ -28,7 +27,7 @@ export const WIDGET_REGISTRY: WidgetMeta[] = [
   {
     id: "snapshot_kpis",
     title: "Tagesüberblick",
-    description: "Offene Projekte, Dringlichkeit, Termine, Rechnungsreife.",
+    description: "Offene Projekte, Termine, Rechnungsreife.",
     Icon: Gauge,
   },
   {
@@ -50,12 +49,6 @@ export const WIDGET_REGISTRY: WidgetMeta[] = [
     description: "Verteilung der Aufträge nach Bearbeitungsstand.",
     Icon: LayoutGrid,
     roles: ["admin", "office"],
-  },
-  {
-    id: "urgent_projects",
-    title: "Dringende Fälle",
-    description: "Projekte mit Priorität «kritisch».",
-    Icon: AlarmSmoke,
   },
   {
     id: "offers_invoices",

@@ -71,7 +71,6 @@ export function ProjekteListClient({
         normalize(p.title).includes(n) ||
         normalize(p.contactName ?? "").includes(n) ||
         normalize(statusLabels[p.status]).includes(n) ||
-        normalize(p.urgency).includes(n) ||
         normalize(p.type).includes(n)
       );
     });
@@ -119,7 +118,6 @@ export function ProjekteListClient({
                 <TableHead>Kunde</TableHead>
                 <TableHead>Typ</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Dringlichkeit</TableHead>
                 <TableHead>Nächster Schritt</TableHead>
                 <TableHead className="w-[120px] text-right">Aktion</TableHead>
               </TableRow>
@@ -141,7 +139,6 @@ export function ProjekteListClient({
                   <TableCell>
                     <StatusBadge status={p.status} />
                   </TableCell>
-                  <TableCell className="capitalize">{p.urgency}</TableCell>
                   <TableCell className="text-muted-foreground">{p.nextOwnerRole}</TableCell>
                   <TableCell className="text-right">
                     <Button

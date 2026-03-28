@@ -19,7 +19,6 @@ const I = {
 const managerOrder: { instanceId: string; widgetId: WidgetId }[] = [
   { instanceId: I.a, widgetId: "snapshot_kpis" },
   { instanceId: I.b, widgetId: "week_tasks" },
-  { instanceId: I.c, widgetId: "urgent_projects" },
   { instanceId: I.d, widgetId: "betrieb_erfolg" },
   { instanceId: I.e, widgetId: "pipeline_status" },
   { instanceId: I.f, widgetId: "offers_invoices" },
@@ -33,7 +32,6 @@ const managerOrder: { instanceId: string; widgetId: WidgetId }[] = [
 const fieldOrder: { instanceId: string; widgetId: WidgetId }[] = [
   { instanceId: I.a, widgetId: "snapshot_kpis" },
   { instanceId: I.b, widgetId: "week_tasks" },
-  { instanceId: I.c, widgetId: "urgent_projects" },
   { instanceId: I.d, widgetId: "chat_module" },
   { instanceId: I.e, widgetId: "recent_projects" },
   { instanceId: I.f, widgetId: "shortcuts" },

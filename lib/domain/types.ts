@@ -151,7 +151,6 @@ export type Project = {
   nextOwnerRole: RoleType;
   nextOwnerUserId: string | null;
   source: "whatsapp" | "telefon" | "email";
-  urgency: "normal" | "hoch" | "kritisch";
   intakeOriginalText: string;
   accessNotes: string | null;
   keyHandlingNotes: string | null;
@@ -222,7 +221,6 @@ export type WeekTaskItem = {
   projectId: string;
   projectTitle: string;
   projectStatus: ProjectStatus;
-  urgency: Project["urgency"];
   assignedTechnicianId: string | null;
   technicianName: string | null;
   /** Aufgelöste Anzeigefarbe (Kante / Legende) */

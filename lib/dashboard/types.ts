@@ -5,7 +5,6 @@ export const widgetIds = [
   "betrieb_erfolg",
   "week_tasks",
   "pipeline_status",
-  "urgent_projects",
   "offers_invoices",
   "logistics_pulse",
   "team_compact",
@@ -38,10 +37,30 @@ export const dashboardLayoutSchema = z.object({
   ),
 });
 
+const relaxedLayoutSchema = z.object({
+  version: z.literal(1),
+  items: z.array(
+    z.object({
+      instanceId: z.string().min(1),
+      widgetId: z.string(),
+    }),
+  ),
+});
+
+const allowedWidgetIds = new Set<string>(widgetIds);
+
 export function parseDashboardLayout(raw: unknown): DashboardLayout | null {
-  const parsed = dashboardLayoutSchema.safeParse(raw);
-  if (!parsed.success) {
+  const strict = dashboardLayoutSchema.safeParse(raw);
+  if (strict.success) {
+    return strict.data as DashboardLayout;
+  }
+  const loose = relaxedLayoutSchema.safeParse(raw);
+  if (!loose.success) {
     return null;
   }
-  return parsed.data as DashboardLayout;
+  const items = loose.data.items.filter((i) => allowedWidgetIds.has(i.widgetId)) as DashboardWidgetPlacement[];
+  if (items.length === 0) {
+    return null;
+  }
+  return { version: 1, items };
 }

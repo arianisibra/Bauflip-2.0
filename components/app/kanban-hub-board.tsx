@@ -117,9 +117,6 @@ export function KanbanHubBoard({ projects }: KanbanHubBoardProps) {
                       <p className="mt-1 text-xs text-muted-foreground">{p.contactName ?? "—"}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-1.5">
                         <StatusBadge status={p.status} />
-                        <span className="rounded-md bg-muted/80 px-1.5 py-0.5 text-[0.65rem] capitalize text-muted-foreground">
-                          {p.urgency}
-                        </span>
                       </div>
                       <p className="mt-1.5 text-[0.65rem] text-muted-foreground">{statusLabels[p.status]}</p>
                     </Link>

@@ -106,7 +106,7 @@ export function WeekTasksStrip({ tasks, teamProfiles = [], embedded = false }: W
                   </div>
                   <CardTitle className="text-base leading-snug">{task.projectTitle}</CardTitle>
                   <CardDescription>
-                    {kindLabel[task.kind]} · Dringlichkeit: {task.urgency}
+                    {kindLabel[task.kind]}
                     {task.technicianName ? (
                       <span className="mt-1 block text-foreground">
                         <span

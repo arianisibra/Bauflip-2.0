@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/app/status-badge";
 import { CompanyKpiDashboardContent } from "@/components/app/company-kpi-dashboard";
@@ -32,17 +32,11 @@ export function DashboardWidgetBody({
   switch (widgetId) {
     case "snapshot_kpis":
       return (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <Card>
             <CardHeader>
               <CardDescription>Offene Projekte</CardDescription>
               <CardTitle className="text-2xl tabular-nums">{snapshot.openCount}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardDescription>Kritisch</CardDescription>
-              <CardTitle className="text-2xl tabular-nums">{snapshot.urgentCount}</CardTitle>
             </CardHeader>
           </Card>
           <Card>
@@ -95,34 +89,6 @@ export function DashboardWidgetBody({
                   />
                 </div>
                 <span className="w-8 shrink-0 text-right tabular-nums font-medium">{n}</span>
-              </div>
-            ))
-          )}
-        </div>
-      );
-    }
-
-    case "urgent_projects": {
-      const urgent = projects.filter((p) => p.urgency === "kritisch" && p.status !== "abgeschlossen");
-      return (
-        <div className="flex flex-col gap-2">
-          {urgent.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Keine kritischen Aufträge im offenen Bestand.</p>
-          ) : (
-            urgent.slice(0, 8).map((p) => (
-              <div
-                key={p.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200/60 bg-amber-50/40 px-3 py-2 dark:border-amber-500/30 dark:bg-amber-950/20"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{p.title}</p>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    <StatusBadge status={p.status} />
-                  </div>
-                </div>
-                <Button size="sm" variant="outline" nativeButton={false} render={<Link href={`/projekte/${p.id}`} />}>
-                  Öffnen
-                </Button>
               </div>
             ))
           )}

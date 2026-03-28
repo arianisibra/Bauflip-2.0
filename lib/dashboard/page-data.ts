@@ -18,7 +18,6 @@ export type DashboardPageData = {
   role: RoleType;
   snapshot: {
     openCount: number;
-    urgentCount: number;
     invoiceReadyCount: number;
   };
 };

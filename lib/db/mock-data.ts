@@ -146,7 +146,6 @@ export const mockProjects: Project[] = [
     nextOwnerRole: "technician",
     nextOwnerUserId: null,
     source: "telefon",
-    urgency: "hoch",
     intakeOriginalText:
       "Kunde meldet: Lamellenstoren blockiert seit gestern, lautes Geräusch beim Hochfahren.",
     accessNotes: "Zugang über Seiteneingang links, Klingel Werkstatt.",

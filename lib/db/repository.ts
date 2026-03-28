@@ -166,7 +166,6 @@ function mapProjectRow(row: Record<string, unknown>): Project {
     nextOwnerRole: row.next_owner_role as Project["nextOwnerRole"],
     nextOwnerUserId: row.next_owner_user_id ? String(row.next_owner_user_id) : null,
     source: row.source as Project["source"],
-    urgency: row.urgency as Project["urgency"],
     intakeOriginalText: String(row.intake_original_text ?? ""),
     accessNotes: row.access_notes != null ? String(row.access_notes) : null,
     keyHandlingNotes: row.key_handling_notes != null ? String(row.key_handling_notes) : null,
@@ -666,7 +665,6 @@ function listWeekTasksMock(weekStart: Date, weekEnd: Date): WeekTaskItem[] {
       projectId: p.id,
       projectTitle: p.title,
       projectStatus: p.status,
-      urgency: p.urgency,
       assignedTechnicianId: tid,
       technicianName: prof?.displayName ?? null,
       calendarColor: resolveCalendarColor(prof?.calendarColor ?? null, tid),
@@ -690,7 +688,6 @@ function listWeekTasksMock(weekStart: Date, weekEnd: Date): WeekTaskItem[] {
         projectId: p.id,
         projectTitle: p.title,
         projectStatus: p.status,
-        urgency: p.urgency,
         assignedTechnicianId: tid,
         technicianName: prof?.displayName ?? null,
         calendarColor: resolveCalendarColor(prof?.calendarColor ?? null, tid),
@@ -721,8 +718,7 @@ export async function listWeekTasks(referenceDate = new Date()): Promise<WeekTas
       projects (
         id,
         title,
-        status,
-        urgency
+        status
       )
     `,
     )
@@ -741,7 +737,7 @@ export async function listWeekTasks(referenceDate = new Date()): Promise<WeekTas
     starts_at: string;
     ends_at: string;
     assigned_technician_id: string | null;
-    projects: { title: string; status: string; urgency: string } | { title: string; status: string; urgency: string }[] | null;
+    projects: { title: string; status: string } | { title: string; status: string }[] | null;
   }[];
 
   const techIds = [...new Set(rows.map((r) => r.assigned_technician_id).filter(Boolean))] as string[];
@@ -774,7 +770,6 @@ export async function listWeekTasks(referenceDate = new Date()): Promise<WeekTas
         projectId: row.project_id,
         projectTitle: pr.title,
         projectStatus: pr.status as ProjectStatus,
-        urgency: pr.urgency as WeekTaskItem["urgency"],
         assignedTechnicianId: tid,
         technicianName: tp?.display_name ?? null,
         calendarColor: resolveCalendarColor(tp?.calendar_color ?? null, tid),
@@ -1504,7 +1499,6 @@ export async function createProject(input: Omit<Project, "id" | "createdAt" | "u
     next_owner_role: input.nextOwnerRole,
     next_owner_user_id: input.nextOwnerUserId,
     source: input.source,
-    urgency: input.urgency,
     intake_original_text: input.intakeOriginalText,
     access_notes: input.accessNotes,
     key_handling_notes: input.keyHandlingNotes,

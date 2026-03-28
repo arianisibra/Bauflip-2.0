@@ -51,7 +51,7 @@ Legende: **Daten** = Modell/Felder · **UI** = wo es passiert · **Gap** = fehlt
 | Aspekt | In Bauflip |
 |--------|------------|
 | Kanal WhatsApp / Telefon / E-Mail | `Project.source`: `whatsapp` \| `telefon` \| `email` (Anfrage-Formular) |
-| Kunde, Problem/Wunsch, Dringlichkeit | `Intake` + `Project`: Kontaktfelder, `intakeOriginalText`, `urgency` |
+| Kunde, Problem/Wunsch | `Intake` + `Project`: Kontaktfelder, `intakeOriginalText` |
 | Nichts verlieren, chaotische Infos | `intakeOriginalText` + `VoiceTextarea` auf Anfrage und Projekt; **kein separates „Sprachnotiz“-Asset** außerhalb Text/Chat — **Gap:** strukturierte Ablage von Sprachdateien optional |
 
 **UI:** `/anfrage/neu` — `components/app/intake-form.tsx`

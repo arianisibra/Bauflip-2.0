@@ -254,7 +254,6 @@ export async function createIntakeAction(formData: FormData) {
     nextOwnerRole: "office",
     nextOwnerUserId: null,
     source: parsed.data.source,
-    urgency: parsed.data.urgency,
     intakeOriginalText: parsed.data.intakeOriginalText,
     accessNotes: parsed.data.accessNotes,
     keyHandlingNotes: parsed.data.keyHandlingNotes,
