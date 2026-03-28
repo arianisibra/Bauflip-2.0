@@ -1,24 +1,26 @@
-import { listSupplierTemplates } from "@/lib/db/repository";
-import { SupplierOrderForm } from "@/components/app/supplier-order-form";
+import { redirect } from "next/navigation";
+import { BestellformularCmsClient } from "@/components/app/bestellformular-cms-client";
+import { getCurrentSession } from "@/lib/auth/session";
+import { listSupplierContactNames, listSupplierTemplates } from "@/lib/db/repository";
 
 export default async function BestellformularPage() {
-  const templates = await listSupplierTemplates();
-  const template = templates[0];
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "admin" && session.role !== "office")) {
+    redirect("/");
+  }
+
+  const [templates, supplierNames] = await Promise.all([
+    listSupplierTemplates(),
+    listSupplierContactNames(),
+  ]);
 
   return (
     <section className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">Bestellformular</h1>
+      <h1 className="text-2xl font-semibold">Bestellformular-CMS</h1>
       <p className="text-sm text-muted-foreground">
-        Lieferantenspezifische Pflichtfelder. Abschluss nur mit vollständigen Angaben.
+        Lieferantenspezifische Formulare einfach konfigurieren: Felder, Pflichtfelder, Dropdowns und Reihenfolge.
       </p>
-
-      {template ? (
-        <div className="rounded-lg border bg-white p-4">
-          <SupplierOrderForm projectId="p-1" template={template} />
-        </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">Noch keine Lieferantenvorlage vorhanden.</p>
-      )}
+      <BestellformularCmsClient templates={templates} supplierNames={supplierNames} />
     </section>
   );
 }

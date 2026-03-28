@@ -29,6 +29,8 @@ import type {
   OrganizationBranding,
   StockDecision,
   SupplierOrderSubmission,
+  SupplierOrderFieldDefinition,
+  SupplierEntity,
   SupplierOrderTemplate,
   TechnicianReport,
   UserProfile,
@@ -75,6 +77,7 @@ import {
 } from "@/lib/db/mock-data";
 import { getWeekBounds } from "@/lib/date/week-bounds";
 import { resolveCalendarColor } from "@/lib/calendar/team-colors";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function getOrganizationBranding(organizationId: string | null): Promise<OrganizationBranding> {
@@ -1020,6 +1023,33 @@ export async function listContacts(): Promise<Contact[]> {
   }
 
   return (data as Record<string, unknown>[]).map((row) => mapContactRow(row));
+}
+
+export async function listSupplierContactNames(): Promise<string[]> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return Array.from(
+      new Set(
+        mockContacts
+          .filter((c) => c.category === "lieferant")
+          .map((c) => c.name.trim())
+          .filter((n) => n.length > 0),
+      ),
+    ).sort((a, b) => a.localeCompare(b, "de-CH"));
+  }
+  const { data } = await supabase
+    .from("contacts")
+    .select("name")
+    .eq("category", "lieferant")
+    .order("name", { ascending: true });
+  const rows = (data ?? []) as Array<{ name: string }>;
+  return Array.from(
+    new Set(
+      rows
+        .map((r) => String(r.name ?? "").trim())
+        .filter((n) => n.length > 0),
+    ),
+  ).sort((a, b) => a.localeCompare(b, "de-CH"));
 }
 
 export async function getContactWithDetails(contactId: string): Promise<{
@@ -2963,16 +2993,303 @@ export async function addAuditEvent(input: Omit<AuditEvent, "id" | "createdAt">)
   return data as unknown as AuditEvent;
 }
 
+function normalizeSupplierKey(v: string | null | undefined) {
+  return String(v ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function humanizeFieldKey(key: string) {
+  const text = key.replace(/_/g, " ").trim();
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function parseFieldSchema(raw: unknown, requiredFieldsFallback: string[]): SupplierOrderFieldDefinition[] {
+  if (Array.isArray(raw)) {
+    const normalized: SupplierOrderFieldDefinition[] = [];
+    for (const item of raw) {
+      if (!item || typeof item !== "object") {
+        continue;
+      }
+      const rec = item as Record<string, unknown>;
+      const key = String(rec.key ?? "").trim();
+      if (!key) {
+        continue;
+      }
+      const typeRaw = String(rec.type ?? "text").trim();
+      const type: SupplierOrderFieldDefinition["type"] =
+        typeRaw === "number" || typeRaw === "select" || typeRaw === "article" ? typeRaw : "text";
+      const options = Array.isArray(rec.options)
+        ? rec.options.map((o) => String(o).trim()).filter((o) => o.length > 0)
+        : undefined;
+      const showWhen = Array.isArray(rec.showWhen)
+        ? rec.showWhen
+            .map((item) => {
+              if (!item || typeof item !== "object") {
+                return null;
+              }
+              const c = item as Record<string, unknown>;
+              const operatorRaw = String(c.operator ?? "equals");
+              return {
+                fieldKey: String(c.fieldKey ?? "").trim(),
+                operator: operatorRaw === "not_equals" ? "not_equals" : "equals",
+                value: String(c.value ?? "").trim(),
+              };
+            })
+            .filter((c): c is { fieldKey: string; operator: "equals" | "not_equals"; value: string } =>
+              c !== null && c.fieldKey.length > 0 && c.value.length > 0,
+            )
+        : undefined;
+      const requireWhen = Array.isArray(rec.requireWhen)
+        ? rec.requireWhen
+            .map((item) => {
+              if (!item || typeof item !== "object") {
+                return null;
+              }
+              const c = item as Record<string, unknown>;
+              const operatorRaw = String(c.operator ?? "equals");
+              return {
+                fieldKey: String(c.fieldKey ?? "").trim(),
+                operator: operatorRaw === "not_equals" ? "not_equals" : "equals",
+                value: String(c.value ?? "").trim(),
+              };
+            })
+            .filter((c): c is { fieldKey: string; operator: "equals" | "not_equals"; value: string } =>
+              c !== null && c.fieldKey.length > 0 && c.value.length > 0,
+            )
+        : undefined;
+      normalized.push({
+        key,
+        label: String(rec.label ?? humanizeFieldKey(key)),
+        type,
+        required: Boolean(rec.required),
+        options,
+        placeholder: rec.placeholder == null ? undefined : String(rec.placeholder),
+        helpText: rec.helpText == null ? undefined : String(rec.helpText),
+        showWhen,
+        requireWhen,
+      });
+    }
+    if (normalized.length > 0) {
+      return normalized;
+    }
+  }
+  return requiredFieldsFallback.map((key) => ({
+    key,
+    label: humanizeFieldKey(key),
+    type: key.toLowerCase().includes("artikel") ? "article" : "text",
+    required: true,
+  }));
+}
+
+type DefaultSupplierTemplateSpec = {
+  supplierName: string;
+  name: string;
+  fieldDefinitions: SupplierOrderFieldDefinition[];
+};
+
+const DEFAULT_SUPPLIER_TEMPLATE_SPECS: DefaultSupplierTemplateSpec[] = [
+  {
+    supplierName: "Lamex",
+    name: "Lamellenstoren",
+    fieldDefinitions: [
+      { key: "storen_typ", label: "Storentyp", type: "select", required: true, options: ["LX90", "LX70", "C80", "C65", "F60", "F80", "F50"] },
+      {
+        key: "lamellenfarbe",
+        label: "Lamellenfarbe",
+        type: "select",
+        required: true,
+        options: [
+          "010 Weiss",
+          "071 Braun",
+          "110 Beige",
+          "120 Terracotta",
+          "130 Grau",
+          "140 Alu",
+          "220 Moos Grün",
+          "240 Hellbeige",
+          "303 Rubin Rot",
+          "330 Purpurrot",
+          "440 Asurblau",
+          "716 Anthrazitgrau",
+          "720 Chromgelb",
+          "737 Staubgrün",
+          "780 Bronze",
+          "901 Reinweiss",
+          "903 Taubenblau",
+          "904 Lichtgrau",
+          "906 Ultramarin Blau",
+          "907 Grau Alu",
+          "908 Türkis Blau",
+          "909 Grün Beige",
+          "IGP 71386",
+          "RAL 7022 Umbragrau",
+          "RAL 8019 Graubraun",
+          "RAL 9005 Tiefschwarz",
+        ],
+      },
+      { key: "position", label: "Position", type: "text", required: true },
+      { key: "anzahl_storren", label: "Anzahl Storren", type: "number", required: true },
+      { key: "raumstock", label: "Raumstock", type: "text", required: true },
+      { key: "bk_mm", label: "BK (mm)", type: "number", required: true },
+      { key: "hk_mm", label: "HK (mm)", type: "number", required: true },
+      { key: "hoehenpaket_mm", label: "Höhenpaket (mm)", type: "number", required: true },
+      {
+        key: "antriebsart",
+        label: "Antriebsart",
+        type: "select",
+        required: true,
+        options: ["Getriebe", "Motor links", "Motor gekuppelt", "Motor rechts gekuppelt", "Ohne Antrieb", "Behangersatz"],
+      },
+      { key: "antriebsseite", label: "Antriebsseite", type: "select", required: true, options: ["Links", "Mitte", "Rechts"] },
+      { key: "motor_getriebemass_mm", label: "Motor/Getriebemass (mm)", type: "number", required: false },
+      { key: "kurbellaenge_mm", label: "Kurbellänge (mm)", type: "number", required: false },
+      { key: "kurbeltyp", label: "Kurbeltyp", type: "text", required: false },
+      { key: "plattenvierkant_mm", label: "Plattenvierkant (mm)", type: "number", required: false },
+      { key: "kupplungsdistanz_mm", label: "Kupplungsdistanz (mm)", type: "number", required: false },
+      { key: "unterschienenfarbe", label: "Unterschienenfarbe", type: "text", required: false },
+      { key: "fuehrungstyp", label: "Führungstyp", type: "text", required: false },
+      { key: "fuehrungsfarbe", label: "Führungsfarbe", type: "text", required: false },
+      { key: "selbsttragesystem", label: "Selbsttragesystem", type: "select", required: false, options: ["Ja", "Nein"] },
+      { key: "os_verstellt", label: "OS verstellt", type: "select", required: false, options: ["Ja", "Nein"] },
+      { key: "arbeitsstellung", label: "Arbeitsstellung", type: "text", required: false },
+    ],
+  },
+  {
+    supplierName: "Storosol",
+    name: "Stoffe",
+    fieldDefinitions: [
+      { key: "artikel", label: "Artikel", type: "article", required: true },
+      { key: "stofftyp", label: "Stofftyp", type: "text", required: true },
+      { key: "farbe", label: "Farbe", type: "text", required: true },
+      { key: "breite_mm", label: "Breite (mm)", type: "number", required: true },
+      { key: "hoehe_mm", label: "Höhe (mm)", type: "number", required: true },
+      { key: "lieferadresse", label: "Lieferadresse", type: "text", required: true },
+      { key: "bemerkung", label: "Bemerkung", type: "text", required: false },
+    ],
+  },
+  {
+    supplierName: "Stobag",
+    name: "Gelenkarmmarkise",
+    fieldDefinitions: [
+      { key: "artikel", label: "Artikel", type: "article", required: true },
+      { key: "modell", label: "Modell", type: "text", required: true },
+      { key: "farbe_rahmen", label: "Rahmenfarbe", type: "text", required: true },
+      { key: "stoff", label: "Stoff", type: "text", required: true },
+      { key: "breite_mm", label: "Breite (mm)", type: "number", required: true },
+      { key: "ausladung_mm", label: "Ausladung (mm)", type: "number", required: true },
+      { key: "antrieb", label: "Antrieb", type: "select", required: true, options: ["Motor", "Kurbel"] },
+    ],
+  },
+  {
+    supplierName: "Ragazzi",
+    name: "Rollladen",
+    fieldDefinitions: [
+      { key: "artikel", label: "Artikel", type: "article", required: true },
+      { key: "typ", label: "Typ", type: "text", required: true },
+      { key: "farbe", label: "Farbe", type: "text", required: true },
+      { key: "breite_mm", label: "Breite (mm)", type: "number", required: true },
+      { key: "hoehe_mm", label: "Höhe (mm)", type: "number", required: true },
+      { key: "antrieb", label: "Antrieb", type: "select", required: true, options: ["Gurt", "Kurbel", "Motor"] },
+    ],
+  },
+  {
+    supplierName: "Regazzi",
+    name: "Regapack Faltrollladen",
+    fieldDefinitions: [
+      { key: "artikel", label: "Artikel", type: "article", required: true },
+      { key: "typ", label: "Typ", type: "text", required: true },
+      { key: "farbe", label: "Farbe", type: "text", required: true },
+      { key: "breite_mm", label: "Breite (mm)", type: "number", required: true },
+      { key: "hoehe_mm", label: "Höhe (mm)", type: "number", required: true },
+      { key: "fuehrung", label: "Führung", type: "text", required: false },
+    ],
+  },
+  {
+    supplierName: "Intern",
+    name: "Reparatur & Ersatzteile",
+    fieldDefinitions: [
+      { key: "artikel", label: "Artikel", type: "article", required: true },
+      { key: "ersatzteil", label: "Ersatzteil / Reparaturteil", type: "text", required: true },
+      { key: "menge", label: "Menge", type: "number", required: true },
+      { key: "defektbeschreibung", label: "Defektbeschreibung", type: "text", required: true },
+      { key: "prioritaet", label: "Priorität", type: "select", required: true, options: ["Normal", "Hoch", "Kritisch"] },
+      { key: "bemerkung", label: "Bemerkung", type: "text", required: false },
+    ],
+  },
+];
+
+function templateSpecForRow(row: { supplierName: string; name: string }): DefaultSupplierTemplateSpec | undefined {
+  const supplierKey = normalizeSupplierKey(row.supplierName);
+  const nameKey = normalizeSupplierKey(row.name);
+  return DEFAULT_SUPPLIER_TEMPLATE_SPECS.find(
+    (spec) => normalizeSupplierKey(spec.supplierName) === supplierKey && normalizeSupplierKey(spec.name) === nameKey,
+  );
+}
+
 function mapSupplierOrderTemplateRow(row: Record<string, unknown>): SupplierOrderTemplate {
   const requiredRaw = row.required_fields ?? row.requiredFields;
   const requiredFields = Array.isArray(requiredRaw) ? requiredRaw.map((f) => String(f)) : [];
-  return {
+  const base = {
     id: String(row.id ?? ""),
     supplierId: String(row.supplier_id ?? row.supplierId ?? ""),
     supplierName: String(row.supplier_name ?? row.supplierName ?? ""),
     name: String(row.name ?? ""),
     requiredFields,
   };
+  const spec = templateSpecForRow(base);
+  const fieldSchemaRaw = row.field_schema ?? row.fieldSchema;
+  const fieldDefinitions = parseFieldSchema(fieldSchemaRaw, requiredFields);
+  return {
+    ...base,
+    fieldDefinitions: fieldDefinitions.length > 0 ? fieldDefinitions : spec?.fieldDefinitions ?? [],
+  };
+}
+
+async function ensureDefaultSupplierTemplates() {
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return;
+  }
+  const { data: suppliersRaw } = await admin.from("suppliers").select("id,name");
+  const suppliers = ((suppliersRaw ?? []) as Array<{ id: string; name: string }>).map((s) => ({
+    id: String(s.id),
+    name: String(s.name),
+  }));
+
+  for (const spec of DEFAULT_SUPPLIER_TEMPLATE_SPECS) {
+    let supplierId =
+      suppliers.find((s) => normalizeSupplierKey(s.name) === normalizeSupplierKey(spec.supplierName))?.id ?? "";
+    if (!supplierId) {
+      const { data: inserted } = await admin
+        .from("suppliers")
+        .insert({ name: spec.supplierName })
+        .select("id")
+        .maybeSingle();
+      supplierId = String((inserted as { id?: string } | null)?.id ?? "");
+      if (!supplierId) {
+        continue;
+      }
+      suppliers.push({ id: supplierId, name: spec.supplierName });
+    }
+    const { data: existing } = await admin
+      .from("supplier_order_form_templates")
+      .select("id")
+      .eq("supplier_name", spec.supplierName)
+      .eq("name", spec.name)
+      .limit(1);
+    if ((existing ?? []).length > 0) {
+      continue;
+    }
+    await admin.from("supplier_order_form_templates").insert({
+      supplier_id: supplierId,
+      supplier_name: spec.supplierName,
+      name: spec.name,
+      required_fields: spec.fieldDefinitions.filter((f) => f.required).map((f) => f.key),
+      field_schema: spec.fieldDefinitions,
+    });
+  }
 }
 
 export async function listSupplierTemplates() {
@@ -2980,9 +3297,135 @@ export async function listSupplierTemplates() {
   if (!supabase) {
     return mockSupplierTemplates;
   }
-  const { data } = await supabase.from("supplier_order_form_templates").select("*").order("name");
+  const admin = createSupabaseAdminClient() ?? supabase;
+  const { data } = await admin
+    .from("supplier_order_form_templates")
+    .select("*")
+    .order("supplier_name", { ascending: true })
+    .order("name", { ascending: true })
+    .order("created_at", { ascending: false });
   const rows = (data ?? []) as Record<string, unknown>[];
-  return rows.map(mapSupplierOrderTemplateRow);
+  const mapped = rows.map(mapSupplierOrderTemplateRow);
+  const unique = new Map<string, SupplierOrderTemplate>();
+  for (const item of mapped) {
+    const key = `${normalizeSupplierKey(item.supplierName)}__${normalizeSupplierKey(item.name)}`;
+    if (!unique.has(key)) {
+      unique.set(key, item);
+    }
+  }
+  return Array.from(unique.values());
+}
+
+export async function listSuppliers(): Promise<SupplierEntity[]> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return [];
+  }
+  const admin = createSupabaseAdminClient() ?? supabase;
+  const { data } = await admin.from("suppliers").select("id,name").order("name");
+  const rows = (data ?? []) as Array<{ id: string; name: string }>;
+  const unique = new Map<string, SupplierEntity>();
+  for (const row of rows) {
+    const name = String(row.name ?? "").trim();
+    if (!name) {
+      continue;
+    }
+    const key = normalizeSupplierKey(name);
+    if (!unique.has(key)) {
+      unique.set(key, { id: String(row.id), name });
+    }
+  }
+  return Array.from(unique.values()).sort((a, b) => a.name.localeCompare(b.name, "de-CH"));
+}
+
+export async function ensureSupplierByName(nameInput: string): Promise<SupplierEntity> {
+  const name = String(nameInput ?? "").trim();
+  if (!name) {
+    throw new Error("Lieferantenname ist Pflicht.");
+  }
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    throw new Error("Lieferant kann im Mock-Modus nicht erstellt werden.");
+  }
+  const admin = createSupabaseAdminClient() ?? supabase;
+  const { data } = await admin
+    .from("suppliers")
+    .select("id,name")
+    .ilike("name", name)
+    .limit(10);
+  const rows = (data ?? []) as Array<{ id: string; name: string }>;
+  const existing = rows.find((r) => normalizeSupplierKey(r.name) === normalizeSupplierKey(name));
+  if (existing) {
+    return { id: String(existing.id), name: String(existing.name) };
+  }
+  const { data: inserted, error } = await admin.from("suppliers").insert({ name }).select("id,name").single();
+  if (error || !inserted) {
+    throw new Error("Lieferant konnte nicht erstellt werden.");
+  }
+  return { id: String((inserted as { id: string }).id), name: String((inserted as { name: string }).name) };
+}
+
+export async function createSupplierTemplate(input: {
+  supplierId: string;
+  supplierName: string;
+  name: string;
+  fieldDefinitions: SupplierOrderFieldDefinition[];
+}) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    throw new Error("Template-Erstellung im Mock-Modus nicht unterstützt.");
+  }
+  const admin = createSupabaseAdminClient() ?? supabase;
+  const requiredFields = input.fieldDefinitions.filter((f) => f.required).map((f) => f.key);
+  const { data, error } = await admin.from("supplier_order_form_templates").insert({
+    supplier_id: input.supplierId,
+    supplier_name: input.supplierName,
+    name: input.name,
+    required_fields: requiredFields,
+    field_schema: input.fieldDefinitions,
+  }).select("*").single();
+  if (error || !data) {
+    throw new Error("Bestellformular konnte nicht erstellt werden.");
+  }
+  return mapSupplierOrderTemplateRow(data as Record<string, unknown>);
+}
+
+export async function updateSupplierTemplate(input: {
+  id: string;
+  supplierId: string;
+  supplierName: string;
+  name: string;
+  fieldDefinitions: SupplierOrderFieldDefinition[];
+}) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    throw new Error("Template-Bearbeitung im Mock-Modus nicht unterstützt.");
+  }
+  const admin = createSupabaseAdminClient() ?? supabase;
+  const requiredFields = input.fieldDefinitions.filter((f) => f.required).map((f) => f.key);
+  const { data, error } = await admin.from("supplier_order_form_templates").update({
+    supplier_id: input.supplierId,
+    supplier_name: input.supplierName,
+    name: input.name,
+    required_fields: requiredFields,
+    field_schema: input.fieldDefinitions,
+  }).eq("id", input.id).select("*").single();
+  if (error || !data) {
+    throw new Error("Bestellformular konnte nicht gespeichert werden.");
+  }
+  return mapSupplierOrderTemplateRow(data as Record<string, unknown>);
+}
+
+export async function deleteSupplierTemplate(templateId: string) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    throw new Error("Template-Löschen im Mock-Modus nicht unterstützt.");
+  }
+  const admin = createSupabaseAdminClient() ?? supabase;
+  const { error } = await admin.from("supplier_order_form_templates").delete().eq("id", templateId);
+  if (error) {
+    throw new Error("Bestellformular konnte nicht gelöscht werden.");
+  }
 }
 
 export async function addSupplierSubmission(input: Omit<SupplierOrderSubmission, "id" | "createdAt">) {

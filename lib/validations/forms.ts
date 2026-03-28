@@ -183,6 +183,77 @@ export const supplierTemplateSubmissionSchema = z.object({
   valuesJson: z.string().min(2),
 });
 
+const supplierTemplateFieldSchema = z.object({
+  key: z.string().optional().default(""),
+  label: z.string().trim().min(1, "Feld-Label ist Pflicht."),
+  type: z.enum(["text", "number", "select", "article"]),
+  required: z.boolean(),
+  options: z.array(z.string().trim().min(1)).optional(),
+  placeholder: z.string().optional(),
+  helpText: z.string().optional(),
+  showWhen: z.array(z.object({
+    fieldKey: z.string().trim().min(1),
+    operator: z.enum(["equals", "not_equals"]),
+    value: z.string().trim().min(1),
+  })).optional(),
+  requireWhen: z.array(z.object({
+    fieldKey: z.string().trim().min(1),
+    operator: z.enum(["equals", "not_equals"]),
+    value: z.string().trim().min(1),
+  })).optional(),
+});
+
+export const supplierTemplateSaveSchema = z.object({
+  id: z.string().optional(),
+  supplierId: z.string().optional().default(""),
+  supplierName: z.string().trim().min(1, "Lieferantenname ist Pflicht."),
+  name: z.string().trim().min(1, "Formularname ist Pflicht."),
+  fieldDefinitions: z.array(supplierTemplateFieldSchema).min(1, "Mindestens ein Feld ist erforderlich."),
+}).superRefine((data, ctx) => {
+  const seen = new Set<string>();
+  const allKeys = new Set<string>();
+  for (const field of data.fieldDefinitions) {
+    const key = (field.key ?? "").trim().toLowerCase();
+    if (key) {
+      allKeys.add(key);
+    }
+  }
+  for (const field of data.fieldDefinitions) {
+    if (field.type === "select" && (!field.options || field.options.length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Dropdown-Feld "${field.label}" braucht mindestens eine Option.`,
+      });
+    }
+    const key = (field.key ?? "").trim().toLowerCase();
+    if (!key) {
+      continue;
+    }
+    if (seen.has(key)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Feld-Schlüssel doppelt: ${field.key}`,
+      });
+      continue;
+    }
+    seen.add(key);
+
+    for (const condition of [...(field.showWhen ?? []), ...(field.requireWhen ?? [])]) {
+      const ref = condition.fieldKey.trim().toLowerCase();
+      if (!allKeys.has(ref)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Bedingung verweist auf unbekanntes Feld: ${condition.fieldKey}`,
+        });
+      }
+    }
+  }
+});
+
+export const supplierTemplateDeleteSchema = z.object({
+  templateId: z.string().min(1),
+});
+
 export const smtpSendSchema = z.object({
   projectId: z.string().optional(),
   to: z.email("Bitte gültige E-Mail angeben."),

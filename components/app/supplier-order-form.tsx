@@ -7,27 +7,106 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { submitSupplierTemplateAction } from "@/app/(app)/actions";
-import type { Article, SupplierOrderTemplate } from "@/lib/domain/types";
+import type { Article, SupplierOrderFieldDefinition, SupplierOrderTemplate } from "@/lib/domain/types";
+import {
+  getRequiredSupplierFieldKeys,
+  getVisibleSupplierFields,
+  isSupplierFieldRequired,
+} from "@/lib/forms/supplier-conditions";
 
 type SupplierOrderFormProps = {
   projectId: string;
   template: SupplierOrderTemplate;
   articleOptions?: Article[];
+  /** If true the form is in "draft/technician" mode (save, not send) */
+  draftMode?: boolean;
   onSubmitted?: () => void;
 };
 
-function isArticleField(fieldName: string) {
-  const n = fieldName.toLowerCase();
-  return n.includes("artikel") || n.includes("article");
+function FieldInput({
+  def,
+  value,
+  onChange,
+  hasError,
+  articleOptions,
+}: {
+  def: SupplierOrderFieldDefinition;
+  value: string;
+  onChange: (v: string) => void;
+  hasError: boolean;
+  articleOptions: Article[];
+}) {
+  const baseSelect =
+    "h-9 w-full rounded-lg border bg-transparent px-2.5 text-sm outline-none focus:ring-1 focus:ring-ring";
+  const errBorder = hasError ? "border-destructive" : "border-input";
+
+  switch (def.type) {
+    case "select":
+      return (
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={`${baseSelect} ${errBorder}`}
+        >
+          <option value="">Bitte wählen …</option>
+          {(def.options ?? []).map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      );
+    case "article":
+      return (
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={`${baseSelect} ${errBorder}`}
+        >
+          <option value="">Artikel wählen …</option>
+          {articleOptions.map((a) => (
+            <option key={a.id} value={a.name}>
+              {a.name}
+              {a.sku ? ` (${a.sku})` : ""}
+            </option>
+          ))}
+        </select>
+      );
+    case "number":
+      return (
+        <Input
+          type="number"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={hasError ? "border-destructive" : ""}
+          placeholder={def.placeholder}
+        />
+      );
+    default:
+      return (
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={hasError ? "border-destructive" : ""}
+          placeholder={def.placeholder}
+        />
+      );
+  }
 }
 
-export function SupplierOrderForm({ projectId, template, articleOptions = [], onSubmitted }: SupplierOrderFormProps) {
+export function SupplierOrderForm({
+  projectId,
+  template,
+  articleOptions = [],
+  draftMode = false,
+  onSubmitted,
+}: SupplierOrderFormProps) {
+  const fields: SupplierOrderFieldDefinition[] = template.fieldDefinitions ?? [];
   const [values, setValues] = useState<Record<string, string>>({});
   const [missing, setMissing] = useState<string[]>([]);
   const [isPending, startTransition] = useTransition();
   const [orderTitle, setOrderTitle] = useState(template.name);
-
-  const requiredFields = template.requiredFields ?? [];
+  const visibleFields = getVisibleSupplierFields(fields, values);
 
   useEffect(() => {
     setOrderTitle(template.name);
@@ -37,73 +116,92 @@ export function SupplierOrderForm({ projectId, template, articleOptions = [], on
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const nextMissing = requiredFields.filter((field) => !values[field]?.trim());
+    const requiredKeys = new Set(getRequiredSupplierFieldKeys(fields, values));
+    const nextMissing = visibleFields
+      .filter((f) => requiredKeys.has(f.key) && !values[f.key]?.trim())
+      .map((f) => f.label);
     setMissing(nextMissing);
     if (nextMissing.length > 0) {
       return;
     }
 
     startTransition(async () => {
-      const formData = new FormData();
-      formData.set("projectId", projectId);
-      formData.set("templateId", template.id);
-      formData.set("valuesJson", JSON.stringify({ titel: orderTitle.trim(), ...values }));
-      await submitSupplierTemplateAction(formData);
-      onSubmitted?.();
+      try {
+        const formData = new FormData();
+        formData.set("projectId", projectId);
+        formData.set("templateId", template.id);
+        formData.set(
+          "valuesJson",
+          JSON.stringify({ titel: orderTitle.trim(), ...values }),
+        );
+        if (draftMode) {
+          formData.set("draftOnly", "1");
+        }
+        await submitSupplierTemplateAction(formData);
+        window.alert(
+          draftMode
+            ? "Bestellformular als Entwurf gespeichert."
+            : "Bestellformular wurde eingereicht und per E-Mail versendet.",
+        );
+        onSubmitted?.();
+      } catch (err) {
+        window.alert(
+          err instanceof Error ? err.message : "Bestellformular konnte nicht gespeichert werden.",
+        );
+      }
     });
   };
 
   return (
-    <form onSubmit={onSubmit} className="rounded-md border p-3">
-      <div className="mb-3 flex flex-col gap-1">
+    <form onSubmit={onSubmit} className="flex flex-col gap-3 rounded-md border p-4">
+      {/* Title */}
+      <div className="flex flex-col gap-1">
         <Label htmlFor={`${template.id}-titel`}>Titel</Label>
         <Input
           id={`${template.id}-titel`}
           value={orderTitle}
-          onChange={(event) => setOrderTitle(event.target.value)}
+          onChange={(e) => setOrderTitle(e.target.value)}
           placeholder="z. B. Stoff Nachbestellung Balkon Süd"
         />
       </div>
-      {requiredFields.map((field) => (
-        <div key={field} className="mb-2 flex flex-col gap-1">
-          <Label htmlFor={`${template.id}-${field}`}>{field} *</Label>
-          {isArticleField(field) ? (
-            <select
-              id={`${template.id}-${field}`}
-              value={values[field] ?? ""}
-              onChange={(event) => setValues((current) => ({ ...current, [field]: event.target.value }))}
-              className={`h-9 rounded-lg border bg-transparent px-2.5 text-sm outline-none ${
-                missing.includes(field) ? "border-destructive" : "border-input"
-              }`}
-            >
-              <option value="">Artikel wählen …</option>
-              {articleOptions.map((article) => (
-                <option key={article.id} value={article.name}>
-                  {article.name}
-                  {article.sku ? ` (${article.sku})` : ""}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <Input
-              id={`${template.id}-${field}`}
-              value={values[field] ?? ""}
-              onChange={(event) => setValues((current) => ({ ...current, [field]: event.target.value }))}
-              className={missing.includes(field) ? "border-destructive" : ""}
-            />
-          )}
+
+      {/* Dynamic fields from fieldDefinitions */}
+      {visibleFields.map((def) => (
+        <div key={def.key} className="flex flex-col gap-1">
+          <Label htmlFor={`${template.id}-${def.key}`}>
+            {def.label}
+            {isSupplierFieldRequired(def, values) ? " *" : ""}
+          </Label>
+          {def.helpText ? (
+            <p className="text-xs text-muted-foreground">{def.helpText}</p>
+          ) : null}
+          <FieldInput
+            def={def}
+            value={values[def.key] ?? ""}
+            onChange={(v) => setValues((prev) => ({ ...prev, [def.key]: v }))}
+            hasError={missing.includes(def.label)}
+            articleOptions={articleOptions}
+          />
         </div>
       ))}
+
+      {/* Validation hint */}
       {missing.length > 0 ? (
-        <p className="mb-2 text-xs text-destructive">
+        <p className="text-xs text-destructive">
           Pflichtfelder fehlen: {missing.join(", ")}
         </p>
       ) : null}
-      <Button type="submit" disabled={isPending}>
+
+      {/* Submit */}
+      <Button type="submit" disabled={isPending} className="w-fit">
         {isPending ? (
-          <BauflipLoadingButtonLabel variant="onPrimary">Wird gespeichert…</BauflipLoadingButtonLabel>
+          <BauflipLoadingButtonLabel variant="onPrimary">
+            Wird gespeichert…
+          </BauflipLoadingButtonLabel>
+        ) : draftMode ? (
+          "Entwurf speichern"
         ) : (
-          "Bestellformular abschliessen"
+          "Bestellformular absenden"
         )}
       </Button>
     </form>

@@ -82,6 +82,7 @@ import {
 import { buildIcsInvite } from "@/lib/integrations/calendar";
 import { sendMailViaSmtp } from "@/lib/integrations/smtp";
 import { generateSwissQrCodeDataUrl } from "@/lib/integrations/swiss-qr";
+import { getRequiredSupplierFieldKeys } from "@/lib/forms/supplier-conditions";
 
 function collectFormData(formData: FormData) {
   const entries = Object.fromEntries(formData.entries());
@@ -1366,8 +1367,15 @@ export async function deleteStockDecisionAction(formData: FormData) {
 
 export async function submitSupplierTemplateAction(formData: FormData) {
   const session = await getCurrentSession();
-  if (!session || (session.role !== "office" && session.role !== "admin")) {
+  if (!session) {
     throw new Error("Keine Berechtigung.");
+  }
+
+  const draftOnly = formData.get("draftOnly") === "1";
+
+  // Technician may save drafts; office/admin may also send
+  if (!draftOnly && session.role !== "office" && session.role !== "admin") {
+    throw new Error("Nur Büro/Admin darf Bestellformulare absenden.");
   }
 
   const payload = collectFormData(formData);
@@ -1381,11 +1389,41 @@ export async function submitSupplierTemplateAction(formData: FormData) {
     throw new Error("Lieferantenvorlage nicht gefunden.");
   }
   const values = JSON.parse(parsed.data.valuesJson) as Record<string, string>;
-  const missingFields = template.requiredFields.filter((field) => !values[field] || !values[field].trim());
+
+  // Validate required fields from fieldDefinitions
+  const fieldDefs = template.fieldDefinitions ?? [];
+  const requiredKeys = fieldDefs.length > 0
+    ? getRequiredSupplierFieldKeys(fieldDefs, values)
+    : template.requiredFields;
+  const missingFields = requiredKeys.filter((field) => !values[field] || !values[field].trim());
   if (missingFields.length > 0) {
-    throw new Error(`Pflichtfelder fehlen: ${missingFields.join(", ")}`);
+    const missingLabels = missingFields.map((key) => {
+      const def = fieldDefs.find((f) => f.key === key);
+      return def?.label ?? key;
+    });
+    throw new Error(`Pflichtfelder fehlen: ${missingLabels.join(", ")}`);
   }
 
+  if (draftOnly) {
+    // Save as draft — no email, no purchase order
+    await addSupplierSubmission({
+      projectId: parsed.data.projectId,
+      templateId: parsed.data.templateId,
+      valuesJson: parsed.data.valuesJson,
+      status: "entwurf",
+    });
+    await addAuditEvent({
+      action: "bestellformular_entwurf",
+      projectId: parsed.data.projectId,
+      actorRole: session.role,
+      actorName: session.profile.displayName ?? "System",
+      payload: parsed.data.valuesJson,
+    });
+    revalidatePath("/projekte");
+    return;
+  }
+
+  // Full send mode (office/admin)
   const contacts = await listContacts();
   const supplierContact =
     contacts.find((c) => c.id === template.supplierId) ??
@@ -1399,9 +1437,15 @@ export async function submitSupplierTemplateAction(formData: FormData) {
   const mailSubject = values.titel?.trim()
     ? `Bestellung: ${values.titel.trim()}`
     : `Bestellung: ${template.name}`;
+
+  // Use human-readable field labels in email
   const mailRows = Object.entries(values)
     .filter(([, value]) => String(value ?? "").trim().length > 0)
-    .map(([key, value]) => `<li><strong>${key}:</strong> ${String(value)}</li>`)
+    .map(([key, value]) => {
+      const def = fieldDefs.find((f) => f.key === key);
+      const label = def?.label ?? key;
+      return `<li><strong>${label}:</strong> ${String(value)}</li>`;
+    })
     .join("");
   const mailHtml = `
     <p>Guten Tag</p>
@@ -1442,7 +1486,7 @@ export async function submitSupplierTemplateAction(formData: FormData) {
       action: "bestellung_erstellt",
       projectId: parsed.data.projectId,
       actorRole: session.role,
-      actorName: session.profile.displayName,
+      actorName: session.profile.displayName ?? "System",
       payload: JSON.stringify({ supplierId: template.supplierId, source: "supplier_template_submission" }),
     });
   }
@@ -1450,7 +1494,7 @@ export async function submitSupplierTemplateAction(formData: FormData) {
     action: "bestellformular_eingereicht",
     projectId: parsed.data.projectId,
     actorRole: session.role,
-    actorName: session.profile.displayName,
+    actorName: session.profile.displayName ?? "System",
     payload: parsed.data.valuesJson,
   });
   revalidatePath(`/projekte/${parsed.data.projectId}`);

@@ -501,6 +501,33 @@ export type SupplierOrderTemplate = {
   supplierName: string;
   name: string;
   requiredFields: string[];
+  fieldDefinitions?: SupplierOrderFieldDefinition[];
+};
+
+export type SupplierEntity = {
+  id: string;
+  name: string;
+};
+
+export type SupplierOrderFieldType = "text" | "number" | "select" | "article";
+export type SupplierFieldConditionOperator = "equals" | "not_equals";
+
+export type SupplierFieldCondition = {
+  fieldKey: string;
+  operator: SupplierFieldConditionOperator;
+  value: string;
+};
+
+export type SupplierOrderFieldDefinition = {
+  key: string;
+  label: string;
+  type: SupplierOrderFieldType;
+  required: boolean;
+  options?: string[];
+  placeholder?: string;
+  helpText?: string;
+  showWhen?: SupplierFieldCondition[];
+  requireWhen?: SupplierFieldCondition[];
 };
 
 export type SupplierOrderSubmission = {

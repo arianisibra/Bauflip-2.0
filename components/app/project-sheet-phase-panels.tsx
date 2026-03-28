@@ -7,7 +7,6 @@ import {
   addAppointmentAction,
   addDeliveryAction,
   addInvoiceAction,
-  addOrderAction,
   addProjectNoteAction,
   addStockDecisionAction,
   deleteStockDecisionAction,
@@ -432,6 +431,89 @@ export function ProjectSheetPhasePanels({
                 ))}
               </CardContent>
             </Card>
+
+            {/* Bestellformulare vor Ort (Monteur) */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Bestellformulare vor Ort</CardTitle>
+                <CardDescription>
+                  Monteur wählt Lieferantenformular und erfasst Bestelldaten direkt vor Ort.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                {supplierTemplates.length > 0 ? (
+                  <>
+                    <div className="flex flex-col gap-1">
+                      <Label className="text-sm">Lieferant / Formular</Label>
+                      <select
+                        value={selectedTemplateId}
+                        onChange={(e) => setSelectedTemplateId(e.target.value)}
+                        className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
+                      >
+                        {supplierTemplates.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.supplierName} — {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {selectedSupplierTemplate && !mutationsLocked ? (
+                      <SupplierOrderForm
+                        key={`draft-${selectedSupplierTemplate.id}`}
+                        projectId={bundle.project.id}
+                        template={selectedSupplierTemplate}
+                        articleOptions={articles}
+                        draftMode
+                        onSubmitted={onAfterMutation}
+                      />
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Keine Lieferantenvorlagen verfügbar.</p>
+                )}
+                {/* Already submitted drafts */}
+                {supplierSubmissions.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Erfasste Bestellformulare</p>
+                    {supplierSubmissions.map((sub) => {
+                      const tmpl = supplierTemplateById.get(sub.templateId);
+                      let vals: Record<string, string> = {};
+                      try {
+                        const parsed = JSON.parse(sub.valuesJson ?? "{}") as Record<string, unknown>;
+                        vals = Object.fromEntries(
+                          Object.entries(parsed).map(([k, v]) => [k, String(v ?? "").trim()]),
+                        );
+                      } catch {
+                        vals = {};
+                      }
+                      const entries = Object.entries(vals).filter(([, v]) => v.length > 0);
+                      return (
+                        <div key={sub.id} className="rounded-md border bg-muted/20 px-3 py-2 text-xs">
+                          <p className="font-medium text-foreground">
+                            {tmpl?.supplierName ?? "Lieferant"} · {vals.titel ?? tmpl?.name ?? "Formular"} ·{" "}
+                            <span className="capitalize">{sub.status}</span> · {formatDateTime(sub.createdAt)}
+                          </p>
+                          {entries.length > 0 ? (
+                            <div className="mt-1 space-y-0.5 text-muted-foreground">
+                              {entries
+                                .filter(([k]) => k !== "titel")
+                                .map(([key, value]) => {
+                                  const fieldDef = tmpl?.fieldDefinitions?.find((f) => f.key === key);
+                                  return (
+                                    <p key={`${sub.id}-${key}`}>
+                                      <span className="font-medium text-foreground">{fieldDef?.label ?? key}:</span> {value}
+                                    </p>
+                                  );
+                                })}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
           </div>
         </GuidedPhaseSection>
       );
@@ -684,26 +766,83 @@ export function ProjectSheetPhasePanels({
               <Card>
                 <CardHeader>
                   <CardTitle>Lieferanten-Bestellung</CardTitle>
-                  <CardDescription>Lieferantenspezifisches Formular — Admin prüft Vollständigkeit vor Versand.</CardDescription>
+                  <CardDescription>
+                    Vom Monteur erfasste Bestellformulare prüfen und bei Bedarf neu erfassen oder absenden.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-3">
-                  {supplierTemplates.length > 0 ? (
+                  {/* Review existing submissions */}
+                  {supplierSubmissions.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Erfasste Bestellformulare ({supplierSubmissions.length})</p>
+                      {supplierSubmissions.map((sub) => {
+                        const tmpl = supplierTemplateById.get(sub.templateId);
+                        let vals: Record<string, string> = {};
+                        try {
+                          const parsed = JSON.parse(sub.valuesJson ?? "{}") as Record<string, unknown>;
+                          vals = Object.fromEntries(
+                            Object.entries(parsed).map(([k, v]) => [k, String(v ?? "").trim()]),
+                          );
+                        } catch {
+                          vals = {};
+                        }
+                        const entries = Object.entries(vals).filter(([, v]) => v.length > 0);
+                        return (
+                          <div key={sub.id} className="rounded-md border bg-muted/20 px-3 py-2 text-xs">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-medium text-foreground">
+                                {tmpl?.supplierName ?? "Lieferant"} · {vals.titel ?? tmpl?.name ?? "Formular"}
+                              </p>
+                              <span className={cn(
+                                "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium capitalize",
+                                sub.status === "eingereicht"
+                                  ? "bg-green-100 text-green-800"
+                                  : "bg-amber-100 text-amber-800",
+                              )}>
+                                {sub.status}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 text-muted-foreground">{formatDateTime(sub.createdAt)}</p>
+                            {entries.length > 0 ? (
+                              <div className="mt-1 space-y-0.5 text-muted-foreground">
+                                {entries
+                                  .filter(([k]) => k !== "titel")
+                                  .map(([key, value]) => {
+                                    const fieldDef = tmpl?.fieldDefinitions?.find((f) => f.key === key);
+                                    return (
+                                      <p key={`${sub.id}-${key}`}>
+                                        <span className="font-medium text-foreground">{fieldDef?.label ?? key}:</span> {value}
+                                      </p>
+                                    );
+                                  })}
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Noch keine Bestellformulare vom Monteur erfasst.</p>
+                  )}
+
+                  {/* Admin/Office: new order form */}
+                  {supplierTemplates.length > 0 && !mutationsLocked ? (
                     <div className="flex flex-col gap-2 rounded-md border p-3">
-                      <Label className="text-sm">Lieferant / Formular auswählen</Label>
+                      <Label className="text-sm">Neues Formular erfassen / absenden</Label>
                       <select
-                        value={selectedSupplierTemplate?.id ?? ""}
-                        onChange={(event) => setSelectedTemplateId(event.target.value)}
+                        value={selectedTemplateId}
+                        onChange={(e) => setSelectedTemplateId(e.target.value)}
                         className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
                       >
-                        {supplierTemplates.map((template) => (
-                          <option key={template.id} value={template.id}>
-                            {template.supplierName}
+                        {supplierTemplates.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.supplierName} — {t.name}
                           </option>
                         ))}
                       </select>
-                      {selectedSupplierTemplate && !mutationsLocked ? (
+                      {selectedSupplierTemplate ? (
                         <SupplierOrderForm
-                          key={selectedSupplierTemplate.id}
+                          key={`send-${selectedSupplierTemplate.id}`}
                           projectId={bundle.project.id}
                           template={selectedSupplierTemplate}
                           articleOptions={articles}
@@ -711,26 +850,9 @@ export function ProjectSheetPhasePanels({
                         />
                       ) : null}
                     </div>
-                  ) : (
-                    <form
-                      action={async (fd) => {
-                        if (mutationsLocked) {
-                          window.alert(mutationLockReason);
-                          return;
-                        }
-                        await addOrderAction(fd);
-                        await onAfterMutation();
-                      }}
-                      className="flex flex-col gap-2 rounded-md border p-3"
-                    >
-                      <input type="hidden" name="projectId" value={bundle.project.id} />
-                      <Label className="text-sm">Lieferant (ID)</Label>
-                      <Input name="supplierId" placeholder="Lieferant-UUID" />
-                      <Button type="submit" size="sm" disabled={mutationsLocked}>
-                        Bestellung erfassen
-                      </Button>
-                    </form>
-                  )}
+                  ) : null}
+
+                  {/* Purchase orders */}
                   {bundle.orders.length > 0 ? (
                     <div className="flex flex-col gap-1.5">
                       {bundle.orders.map((o) => (
@@ -739,43 +861,6 @@ export function ProjectSheetPhasePanels({
                           <span className="text-xs text-muted-foreground capitalize">{o.status}</span>
                         </div>
                       ))}
-                    </div>
-                  ) : null}
-                  {supplierSubmissions.length > 0 ? (
-                    <div className="space-y-2 rounded-md border p-3">
-                      <p className="text-sm font-medium">Was bestellt wurde</p>
-                      {supplierSubmissions.map((submission) => {
-                        const template = supplierTemplateById.get(submission.templateId);
-                        let values: Record<string, string> = {};
-                        try {
-                          const parsed = JSON.parse(submission.valuesJson ?? "{}") as Record<string, unknown>;
-                          values = Object.fromEntries(
-                            Object.entries(parsed).map(([k, v]) => [k, String(v ?? "").trim()]),
-                          );
-                        } catch {
-                          values = {};
-                        }
-                        const entries = Object.entries(values).filter(([, value]) => value.length > 0);
-                        return (
-                          <div key={submission.id} className="rounded-md border bg-muted/20 px-3 py-2 text-xs">
-                            <p className="font-medium text-foreground">
-                              {template?.supplierName ?? "Lieferant"} · {template?.name ?? "Bestellformular"} ·{" "}
-                              {formatDateTime(submission.createdAt)}
-                            </p>
-                            {entries.length > 0 ? (
-                              <div className="mt-1 space-y-0.5 text-muted-foreground">
-                                {entries.map(([key, value]) => (
-                                  <p key={`${submission.id}-${key}`}>
-                                    <span className="font-medium text-foreground">{key}:</span> {value}
-                                  </p>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="mt-1 text-muted-foreground">Keine Details gespeichert.</p>
-                            )}
-                          </div>
-                        );
-                      })}
                     </div>
                   ) : null}
                 </CardContent>
