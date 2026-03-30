@@ -6,10 +6,7 @@ import { CompanyKpiDashboardContent } from "@/components/app/company-kpi-dashboa
 import { WeekTasksStrip } from "@/components/app/week-tasks-strip";
 import type { DashboardPageData } from "@/lib/dashboard/page-data";
 import type { WidgetId } from "@/lib/dashboard/types";
-import { statusLabels } from "@/lib/workflow/project-workflow";
-import type { ProjectStatus } from "@/lib/domain/types";
-import { projectStatuses } from "@/lib/domain/types";
-import { MessageSquare, Phone } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 
 function projectTime(p: { updatedAt?: string; updated_at?: string; createdAt?: string; created_at?: string }) {
   const u = p.updatedAt ?? p.updated_at ?? p.createdAt ?? p.created_at ?? "";
@@ -32,23 +29,23 @@ export function DashboardWidgetBody({
   switch (widgetId) {
     case "snapshot_kpis":
       return (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <Card>
-            <CardHeader>
-              <CardDescription>Offene Projekte</CardDescription>
-              <CardTitle className="text-2xl tabular-nums">{snapshot.openCount}</CardTitle>
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
+          <Card size="sm" className="border-border/60 bg-muted/15 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.06]">
+            <CardHeader className="gap-0.5 pb-2 pt-3">
+              <CardDescription className="text-xs">Offene Projekte</CardDescription>
+              <CardTitle className="text-xl font-semibold tabular-nums tracking-tight">{snapshot.openCount}</CardTitle>
             </CardHeader>
           </Card>
-          <Card>
-            <CardHeader>
-              <CardDescription>Termine diese Woche</CardDescription>
-              <CardTitle className="text-2xl tabular-nums">{kpis.appointmentsThisWeekCount}</CardTitle>
+          <Card size="sm" className="border-border/60 bg-muted/15 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.06]">
+            <CardHeader className="gap-0.5 pb-2 pt-3">
+              <CardDescription className="text-xs">Termine diese Woche</CardDescription>
+              <CardTitle className="text-xl font-semibold tabular-nums tracking-tight">{kpis.appointmentsThisWeekCount}</CardTitle>
             </CardHeader>
           </Card>
-          <Card>
-            <CardHeader>
-              <CardDescription>Bereit für Rechnung</CardDescription>
-              <CardTitle className="text-2xl tabular-nums">{snapshot.invoiceReadyCount}</CardTitle>
+          <Card size="sm" className="col-span-2 border-border/60 bg-muted/15 shadow-sm ring-1 ring-black/[0.03] lg:col-span-1 dark:ring-white/[0.06]">
+            <CardHeader className="gap-0.5 pb-2 pt-3">
+              <CardDescription className="text-xs">Bereit für Rechnung</CardDescription>
+              <CardTitle className="text-xl font-semibold tabular-nums tracking-tight">{snapshot.invoiceReadyCount}</CardTitle>
             </CardHeader>
           </Card>
         </div>
@@ -60,72 +57,22 @@ export function DashboardWidgetBody({
     case "week_tasks":
       return <WeekTasksStrip tasks={weekTasks} teamProfiles={teamCalendarProfiles} embedded />;
 
-    case "pipeline_status": {
-      const counts = new Map<ProjectStatus, number>();
-      for (const s of projectStatuses) {
-        counts.set(s, 0);
-      }
-      for (const p of projects) {
-        const st = p.status as ProjectStatus;
-        counts.set(st, (counts.get(st) ?? 0) + 1);
-      }
-      const entries = [...counts.entries()]
-        .filter(([, n]) => n > 0)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10);
-      const max = Math.max(1, ...entries.map(([, n]) => n));
-      return (
-        <div className="flex flex-col gap-2">
-          {entries.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Noch keine Projekte erfasst.</p>
-          ) : (
-            entries.map(([status, n]) => (
-              <div key={status} className="flex items-center gap-3 text-sm">
-                <span className="w-40 shrink-0 truncate text-muted-foreground sm:w-48">{statusLabels[status]}</span>
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-primary/70"
-                    style={{ width: `${(n / max) * 100}%` }}
-                  />
-                </div>
-                <span className="w-8 shrink-0 text-right tabular-nums font-medium">{n}</span>
-              </div>
-            ))
-          )}
-        </div>
-      );
-    }
-
     case "offers_invoices":
       return (
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-lg border bg-muted/30 px-3 py-2">
-            <p className="text-xs text-muted-foreground">Offerte → Abschluss</p>
-            <p className="text-lg font-semibold">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="rounded-lg border border-border/60 bg-muted/20 px-2.5 py-2 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.06]">
+            <p className="text-xs font-medium text-muted-foreground">Offerte → Abschluss</p>
+            <p className="mt-0.5 text-lg font-semibold tabular-nums tracking-tight">
               {kpis.quoteWinRatePercent === null ? "—" : `${kpis.quoteWinRatePercent} %`}
             </p>
           </div>
-          <div className="rounded-lg border bg-muted/30 px-3 py-2">
-            <p className="text-xs text-muted-foreground">Offene Rechnungen</p>
-            <p className="text-lg font-semibold tabular-nums">{kpis.openInvoicesCount}</p>
+          <div className="rounded-lg border border-border/60 bg-muted/20 px-2.5 py-2 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.06]">
+            <p className="text-xs font-medium text-muted-foreground">Offene Rechnungen</p>
+            <p className="mt-0.5 text-lg font-semibold tabular-nums tracking-tight">{kpis.openInvoicesCount}</p>
           </div>
-          <div className="rounded-lg border bg-muted/30 px-3 py-2">
-            <p className="text-xs text-muted-foreground">Kontakte (gesamt)</p>
-            <p className="text-lg font-semibold tabular-nums">{kpis.contactsCount}</p>
-          </div>
-        </div>
-      );
-
-    case "logistics_pulse":
-      return (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-lg border bg-muted/30 px-3 py-2">
-            <p className="text-xs text-muted-foreground">Bestellungen unterwegs</p>
-            <p className="text-lg font-semibold tabular-nums">{kpis.purchaseOrdersInTransit}</p>
-          </div>
-          <div className="rounded-lg border bg-muted/30 px-3 py-2">
-            <p className="text-xs text-muted-foreground">Termine diese Woche</p>
-            <p className="text-lg font-semibold tabular-nums">{kpis.appointmentsThisWeekCount}</p>
+          <div className="rounded-lg border border-border/60 bg-muted/20 px-2.5 py-2 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.06]">
+            <p className="text-xs font-medium text-muted-foreground">Kontakte (gesamt)</p>
+            <p className="mt-0.5 text-lg font-semibold tabular-nums tracking-tight">{kpis.contactsCount}</p>
           </div>
         </div>
       );
@@ -135,23 +82,23 @@ export function DashboardWidgetBody({
         return <p className="text-sm text-muted-foreground">Noch keine Team-Metriken vorhanden.</p>;
       }
       return (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto rounded-lg border border-border/50">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b text-left text-xs text-muted-foreground">
-                <th className="pb-2 pr-3 font-medium">Name</th>
-                <th className="pb-2 pr-3 text-right font-medium">Offen</th>
-                <th className="pb-2 pr-3 text-right font-medium">Heute</th>
-                <th className="pb-2 text-right font-medium">Std.</th>
+              <tr className="border-b border-border/60 bg-muted/30 text-left text-xs font-medium text-muted-foreground">
+                <th className="px-3 py-2">Name</th>
+                <th className="px-3 py-2 text-right">Offen</th>
+                <th className="px-3 py-2 text-right">Heute</th>
+                <th className="px-3 py-2 text-right">Std.</th>
               </tr>
             </thead>
             <tbody>
               {employeeStats.map((row) => (
-                <tr key={row.profileId} className="border-b border-border/50 last:border-0">
-                  <td className="py-2 pr-3 font-medium">{row.profileName}</td>
-                  <td className="py-2 pr-3 text-right tabular-nums">{row.offeneProjekte}</td>
-                  <td className="py-2 pr-3 text-right tabular-nums">{row.abgeschlosseneHeute}</td>
-                  <td className="py-2 text-right tabular-nums">{row.stundenDieseWoche}</td>
+                <tr key={row.profileId} className="border-b border-border/40 last:border-0">
+                  <td className="px-3 py-1.5 font-medium">{row.profileName}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{row.offeneProjekte}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{row.abgeschlosseneHeute}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{row.stundenDieseWoche}</td>
                 </tr>
               ))}
             </tbody>
@@ -163,10 +110,10 @@ export function DashboardWidgetBody({
       const latestProject = sortRecent(projects)[0];
       return (
         <div className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">Direkter Einstieg in den Projektchat ohne Umweg über die Chat-Übersicht.</p>
           {latestProject ? (
             <Button
               variant="outline"
+              size="sm"
               className="w-fit justify-start gap-2"
               nativeButton={false}
               render={<Link href={`/projekte/${latestProject.id}#team-chat`} />}
@@ -180,29 +127,10 @@ export function DashboardWidgetBody({
         </div>
       );
 
-    case "shortcuts":
-      return (
-        <div className="grid gap-2 sm:grid-cols-2">
-          <Button variant="outline" className="justify-start gap-2" nativeButton={false} render={<Link href="/projekte" />}>
-            Projekte
-          </Button>
-          <Button variant="outline" className="justify-start gap-2" nativeButton={false} render={<Link href="/rapporte" />}>
-            Rapporte
-          </Button>
-          <Button variant="outline" className="justify-start gap-2" nativeButton={false} render={<Link href="/termine" />}>
-            Termine
-          </Button>
-          <Button variant="outline" className="justify-start gap-2" nativeButton={false} render={<Link href="/projekte" />}>
-            <Phone className="size-4" />
-            Neue Anfrage
-          </Button>
-        </div>
-      );
-
     case "recent_projects": {
       const recent = sortRecent(projects).slice(0, 6);
       return (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
           {recent.length === 0 ? (
             <p className="text-sm text-muted-foreground">Noch keine Projekte.</p>
           ) : (
@@ -210,7 +138,7 @@ export function DashboardWidgetBody({
               <Link
                 key={p.id}
                 href={`/projekte/${p.id}`}
-                className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm transition-colors hover:bg-muted/50"
+                className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-muted/10 px-2.5 py-1.5 text-sm transition-colors hover:bg-muted/40"
               >
                 <span className="truncate font-medium">{p.title}</span>
                 <StatusBadge status={p.status} />

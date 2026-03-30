@@ -72,17 +72,28 @@ const SupplierFieldRow = memo(function SupplierFieldRow({
 }: SupplierFieldRowProps) {
   const showWhen = field.showWhen?.[0];
   const requireWhen = field.requireWhen?.[0];
+  const [showAdvanced, setShowAdvanced] = useState(false);
   return (
-    <div className="rounded-md border p-3">
+    <div className="rounded-lg border border-border/60 bg-card p-3 shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.05]">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Feld {index + 1}</p>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setShowAdvanced((v) => !v)}>
+          {showAdvanced ? "Einfach" : "Erweitert"}
+        </Button>
+      </div>
+
       <div className="space-y-1">
-        <Label className="text-xs">Label</Label>
+        <Label className="text-xs">Feldname</Label>
         <Input
           value={field.label}
           onChange={(e) => onUpdateField(index, { label: e.target.value })}
+          placeholder="z. B. Storen-Typ"
         />
       </div>
 
       <div className="mt-2 grid gap-2 md:grid-cols-[1fr_auto_auto_auto]">
+        <div className="space-y-1">
+          <Label className="text-xs">Feldtyp</Label>
         <select
           className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
           value={field.type}
@@ -96,6 +107,7 @@ const SupplierFieldRow = memo(function SupplierFieldRow({
             </option>
           ))}
         </select>
+        </div>
         <label className="inline-flex items-center gap-2 rounded-md border px-2 text-xs">
           <input
             type="checkbox"
@@ -104,24 +116,28 @@ const SupplierFieldRow = memo(function SupplierFieldRow({
           />
           Pflichtfeld
         </label>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={index === 0}
-          onClick={() => onMoveField(index, -1)}
-        >
-          Hoch
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={index === total - 1}
-          onClick={() => onMoveField(index, 1)}
-        >
-          Runter
-        </Button>
+        {showAdvanced ? (
+          <>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={index === 0}
+              onClick={() => onMoveField(index, -1)}
+            >
+              Hoch
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={index === total - 1}
+              onClick={() => onMoveField(index, 1)}
+            >
+              Runter
+            </Button>
+          </>
+        ) : null}
       </div>
 
       {field.type === "select" ? (
@@ -135,6 +151,7 @@ const SupplierFieldRow = memo(function SupplierFieldRow({
         </div>
       ) : null}
 
+      {showAdvanced ? (
       <div className="mt-3 grid gap-2 md:grid-cols-2">
         <div className="space-y-1">
           <Label className="text-xs">Anzeigen wenn</Label>
@@ -242,6 +259,7 @@ const SupplierFieldRow = memo(function SupplierFieldRow({
           ) : null}
         </div>
       </div>
+      ) : null}
 
       <div className="mt-2">
         <Button
@@ -274,6 +292,7 @@ export function BestellformularCmsClient({ templates, supplierNames = [] }: Prop
   const [newSupplierName, setNewSupplierName] = useState<string>(supplierNames[0] ?? "");
   const [newName, setNewName] = useState<string>("");
   const [isPending, startTransition] = useTransition();
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const templateMap = useMemo(
     () => new Map(templates.map((template) => [template.id, template] as const)),
@@ -335,12 +354,12 @@ export function BestellformularCmsClient({ templates, supplierNames = [] }: Prop
   const createNewTemplate = () => {
     const supplierName = newSupplierName.trim();
     if (!supplierName) {
-      window.alert("Bitte Lieferantenname erfassen.");
+      setFeedback({ type: "error", text: "Bitte zuerst einen Lieferanten auswählen." });
       return;
     }
     const name = newName.trim();
     if (!name) {
-      window.alert("Bitte Formularname erfassen.");
+      setFeedback({ type: "error", text: "Bitte einen Formularnamen eingeben." });
       return;
     }
     setDraft({
@@ -350,6 +369,7 @@ export function BestellformularCmsClient({ templates, supplierNames = [] }: Prop
       fieldDefinitions: [blankField(0)],
     });
     setSelectedId("");
+    setFeedback({ type: "success", text: "Neues Formular erstellt. Jetzt rechts Felder erfassen und speichern." });
   };
 
   const saveDraft = () => {
@@ -361,16 +381,19 @@ export function BestellformularCmsClient({ templates, supplierNames = [] }: Prop
           setDraft(draftFromTemplate(saved));
         }
         router.refresh();
-        window.alert("Bestellformular gespeichert.");
+        setFeedback({ type: "success", text: "Bestellformular gespeichert." });
       } catch (error) {
-        window.alert(error instanceof Error ? error.message : "Bestellformular konnte nicht gespeichert werden.");
+        setFeedback({
+          type: "error",
+          text: error instanceof Error ? error.message : "Bestellformular konnte nicht gespeichert werden.",
+        });
       }
     });
   };
 
   const removeTemplate = () => {
     if (!draft.id) {
-      window.alert("Dieses Formular ist noch nicht gespeichert.");
+      setFeedback({ type: "error", text: "Dieses Formular ist noch nicht gespeichert." });
       return;
     }
     const ok = window.confirm("Bestellformular wirklich löschen?");
@@ -388,9 +411,12 @@ export function BestellformularCmsClient({ templates, supplierNames = [] }: Prop
           fieldDefinitions: [blankField(0)],
         });
         router.refresh();
-        window.alert("Bestellformular gelöscht.");
+        setFeedback({ type: "success", text: "Bestellformular gelöscht." });
       } catch (error) {
-        window.alert(error instanceof Error ? error.message : "Bestellformular konnte nicht gelöscht werden.");
+        setFeedback({
+          type: "error",
+          text: error instanceof Error ? error.message : "Bestellformular konnte nicht gelöscht werden.",
+        });
       }
     });
   };
@@ -399,8 +425,8 @@ export function BestellformularCmsClient({ templates, supplierNames = [] }: Prop
     <div className="grid gap-4 xl:grid-cols-[320px_1fr]">
       <Card>
         <CardHeader>
-          <CardTitle>Neues Bestellformular</CardTitle>
-          <CardDescription>Links erstellen, rechts bearbeiten.</CardDescription>
+          <CardTitle>1) Neues Formular starten</CardTitle>
+          <CardDescription>Lieferant wählen, Namen vergeben, dann rechts Felder aufbauen.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="space-y-1">
@@ -431,7 +457,7 @@ export function BestellformularCmsClient({ templates, supplierNames = [] }: Prop
           </Button>
 
           <div className="pt-2">
-            <Label className="text-xs text-muted-foreground">Bestehende Formulare</Label>
+            <Label className="text-xs text-muted-foreground">2) Bestehendes Formular öffnen</Label>
             <div className="mt-2 max-h-80 space-y-1 overflow-auto rounded-md border p-2">
               {templates.length === 0 ? (
                 <p className="text-xs text-muted-foreground">Noch keine Formulare vorhanden.</p>
@@ -452,17 +478,28 @@ export function BestellformularCmsClient({ templates, supplierNames = [] }: Prop
             </div>
           </div>
           <div className="rounded-md border bg-muted/20 p-2 text-xs text-muted-foreground">
-            Änderungen wirken live in Projekten.
+            Änderungen wirken direkt in Projekten.
           </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Formular-Editor</CardTitle>
-          <CardDescription>So einfach wie möglich: Felder hinzufügen, umbenennen, Pflichtfeld setzen.</CardDescription>
+          <CardTitle>3) Formular bearbeiten</CardTitle>
+          <CardDescription>Nur das Nötigste: Feldname, Feldtyp und Pflichtfeld. Mehr unter „Erweitert“.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {feedback ? (
+            <div
+              className={`rounded-md border px-3 py-2 text-sm ${
+                feedback.type === "success"
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+                  : "border-amber-300 bg-amber-50 text-amber-900"
+              }`}
+            >
+              {feedback.text}
+            </div>
+          ) : null}
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-1">
               <Label>Lieferantenname</Label>
@@ -496,7 +533,7 @@ export function BestellformularCmsClient({ templates, supplierNames = [] }: Prop
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Felder</Label>
+              <Label>Felder im Formular</Label>
               <Button
                 type="button"
                 size="sm"
@@ -511,6 +548,9 @@ export function BestellformularCmsClient({ templates, supplierNames = [] }: Prop
                 Feld hinzufügen
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Tipp: Starten Sie mit den wichtigsten 3-5 Feldern. Zusätzliche Logik nur bei Bedarf über „Erweitert“.
+            </p>
 
             <div className="space-y-2">
               {draft.fieldDefinitions.map((field, index) => (
@@ -530,7 +570,7 @@ export function BestellformularCmsClient({ templates, supplierNames = [] }: Prop
 
           <div className="flex flex-wrap gap-2">
             <Button type="button" onClick={saveDraft} disabled={isPending}>
-              Speichern
+              Änderungen speichern
             </Button>
             <Button type="button" variant="outline" onClick={removeTemplate} disabled={isPending || !draft.id}>
               Formular löschen
@@ -538,7 +578,7 @@ export function BestellformularCmsClient({ templates, supplierNames = [] }: Prop
           </div>
 
           <div className="rounded-md border bg-muted/20 p-3">
-            <p className="mb-2 text-sm font-medium">Vorschau</p>
+            <p className="mb-2 text-sm font-medium">Kurzübersicht</p>
             <div className="space-y-1 text-sm">
               {draft.fieldDefinitions.map((f, i) => (
                 <p key={`preview-${f.key}-${i}`}>

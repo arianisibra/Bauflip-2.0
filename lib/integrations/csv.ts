@@ -18,11 +18,13 @@ export const CONTACT_IMPORT_FIELDS = [
   "city",
   "website",
   "managedObjectLabel",
+  "bexioContactId",
 ] as const;
 
 export const ARTICLE_IMPORT_FIELDS = [
   "name",
   "sku",
+  "bexioArticleId",
   "categoryName",
   "supplierId",
   "purchasePrice",
@@ -70,7 +72,7 @@ export function validateArticleImportCsvHeaders(csvText: string): string | null 
     return `Spalte „categoryName“ fehlt. Bitte die Vorlage verwenden.`;
   }
   for (const col of ARTICLE_IMPORT_FIELDS) {
-    if (col === "categoryName") {
+    if (col === "categoryName" || col === "bexioArticleId") {
       continue;
     }
     if (!fields.includes(col.toLowerCase())) {
@@ -107,6 +109,7 @@ export function contactsToStandardCsv(contacts: Contact[]): string {
     city: c.city ?? "",
     website: c.website ?? "",
     managedObjectLabel: c.managedObjectLabel ?? "",
+    bexioContactId: c.bexioContactId ?? "",
   }));
   return "\uFEFF" + Papa.unparse(rows, { columns: [...CONTACT_IMPORT_FIELDS] });
 }
@@ -115,6 +118,7 @@ export function articlesToStandardCsv(articles: Article[]): string {
   const rows = articles.map((a) => ({
     name: a.name,
     sku: a.sku,
+    bexioArticleId: a.bexioArticleId ?? "",
     categoryName: a.categoryName ?? "",
     supplierId: a.supplierId ?? "",
     purchasePrice: a.purchasePrice ?? "",
@@ -160,6 +164,7 @@ export function parseContactCsv(csvText: string): Omit<Contact, "id" | "createdA
     city: pickCi(row, "city") || null,
     website: pickCi(row, "website") || null,
     managedObjectLabel: pickCi(row, "managedObjectLabel") || null,
+    bexioContactId: pickCi(row, "bexioContactId") || null,
   }));
 }
 
@@ -184,6 +189,7 @@ export function parseArticleCsv(csvText: string): ArticleImportRow[] {
     return {
       name: pickCi(row, "name"),
       sku: pickCi(row, "sku"),
+      bexioArticleId: pickCi(row, "bexioArticleId") || null,
       categoryName,
       supplierId: pickCi(row, "supplierId") || null,
       purchasePrice: parseOptionalPrice(pickCi(row, "purchasePrice")),

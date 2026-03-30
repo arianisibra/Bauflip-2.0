@@ -107,6 +107,7 @@ export async function updateContactFromFormAction(values: unknown) {
     postalCode: v.postalCode?.trim() || null,
     city: v.city?.trim() || null,
     managedObjectLabel: v.managedObjectLabel?.trim() || null,
+    bexioContactId: v.bexioContactId?.trim() || null,
   });
 
   const incomingPersonIds = new Set(
@@ -253,6 +254,7 @@ export async function createContactFromFormAction(values: unknown) {
     postalCode: v.postalCode?.trim() || null,
     city: v.city?.trim() || null,
     managedObjectLabel: v.managedObjectLabel?.trim() || null,
+    bexioContactId: v.bexioContactId?.trim() || null,
   });
 
   for (const p of v.persons ?? []) {

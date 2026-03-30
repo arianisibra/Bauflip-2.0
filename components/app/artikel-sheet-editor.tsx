@@ -36,6 +36,7 @@ function articleToForm(a: NonNullable<Awaited<ReturnType<typeof getArticleSheetD
     id: a.id,
     name: a.name,
     sku: a.sku,
+    bexioArticleId: a.bexioArticleId ?? "",
     categoryId: a.categoryId,
     supplierId: a.supplierId ?? "",
     purchasePrice: a.purchasePrice != null ? String(a.purchasePrice) : "",
@@ -165,6 +166,21 @@ export function ArtikelSheetEditor({ articleId, open, canEdit }: Props) {
             <Input id="as-sku" className="h-9" disabled={ro} {...form.register("sku")} />
             {form.formState.errors.sku ? (
               <p className="text-sm text-destructive">{form.formState.errors.sku.message}</p>
+            ) : null}
+          </div>
+          <div className="flex flex-col gap-1.5 sm:col-span-2">
+            <Label htmlFor="as-bexio-art" className="text-sm">
+              bexio Artikel-ID (optional)
+            </Label>
+            <Input
+              id="as-bexio-art"
+              className="h-9"
+              disabled={ro}
+              placeholder="z. B. 12345 für Zapier / article_ids"
+              {...form.register("bexioArticleId")}
+            />
+            {form.formState.errors.bexioArticleId ? (
+              <p className="text-sm text-destructive">{form.formState.errors.bexioArticleId.message}</p>
             ) : null}
           </div>
           <div className="flex flex-col gap-1.5">

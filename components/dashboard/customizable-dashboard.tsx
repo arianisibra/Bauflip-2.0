@@ -66,8 +66,11 @@ function SortableWidget({
 
   return (
     <div ref={setNodeRef} style={style} className={cn(isDragging && "z-10 opacity-60")}>
-      <Card>
-        <CardHeader className="flex flex-row items-start gap-2 pb-3">
+      <Card
+        size="sm"
+        className="border-border/60 bg-card/95 shadow-sm ring-1 ring-black/[0.04] transition-shadow hover:shadow-md dark:ring-white/[0.07]"
+      >
+        <CardHeader className="flex flex-row items-start gap-2 border-b border-border/50 pb-2.5">
           {editing ? (
             <button
               type="button"
@@ -79,9 +82,13 @@ function SortableWidget({
               <GripVertical className="size-4" />
             </button>
           ) : null}
-          <div className="min-w-0 flex-1 space-y-1">
-            <CardTitle className="text-base">{meta?.title ?? placement.widgetId}</CardTitle>
-            {meta?.description ? <CardDescription>{meta.description}</CardDescription> : null}
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
+              {meta?.title ?? placement.widgetId}
+            </CardTitle>
+            {meta?.description ? (
+              <CardDescription className="text-xs leading-snug text-muted-foreground">{meta.description}</CardDescription>
+            ) : null}
           </div>
           {editing ? (
             <Button
@@ -96,7 +103,7 @@ function SortableWidget({
             </Button>
           ) : null}
         </CardHeader>
-        <CardContent className="pt-0">
+        <CardContent className="pt-3">
           <DashboardWidgetBody widgetId={placement.widgetId} data={data} />
         </CardContent>
       </Card>
@@ -176,20 +183,21 @@ export function CustomizableDashboard({ initialLayout, data, saveAction }: Custo
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/25 px-3 py-2 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.06]">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
           <Button
             type="button"
             variant={editing ? "default" : "outline"}
             size="sm"
+            className="shrink-0"
             onClick={() => setEditing((e) => !e)}
           >
             {editing ? "Bearbeiten beenden" : "Dashboard bearbeiten"}
           </Button>
           {editing ? (
-            <span className="text-xs text-muted-foreground">
-              Bausteine ziehen, entfernen oder hinzufügen. Änderungen werden gespeichert.
+            <span className="text-xs leading-snug text-muted-foreground">
+              Ziehen, entfernen oder hinzufügen — wird automatisch gespeichert.
             </span>
           ) : null}
         </div>
@@ -197,16 +205,16 @@ export function CustomizableDashboard({ initialLayout, data, saveAction }: Custo
       </div>
 
       {editing ? (
-        <Card className="border-dashed bg-muted/20">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Baustein hinzufügen</CardTitle>
-            <CardDescription>
+        <Card size="sm" className="border-dashed border-border/70 bg-muted/15">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold tracking-tight">Baustein hinzufügen</CardTitle>
+            <CardDescription className="text-xs leading-relaxed">
               Hier können Sie nur <strong>neue</strong> Bereiche einfügen, die für Ihre Rolle vorgesehen sind und noch{" "}
               <strong>nicht</strong> auf dem Dashboard vorkommen. Diagramme und Kennzahlen (z.&nbsp;B. unter „Betrieb &amp;
               Erfolg“) gehören zu einem bestehenden Baustein — es gibt dafür keinen extra Baustein.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-wrap items-end gap-2">
+          <CardContent className="flex flex-wrap items-end gap-2 pt-0">
             <div className="flex min-w-[200px] flex-1 flex-col gap-1">
               <span className="text-xs font-medium text-muted-foreground">Baustein</span>
               {addable.length > 0 ? (
@@ -253,12 +261,9 @@ export function CustomizableDashboard({ initialLayout, data, saveAction }: Custo
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={items.map((i) => i.instanceId)} strategy={verticalListSortingStrategy}>
-          <div className="flex flex-col">
-            {items.map((placement, index) => (
-              <div
-                key={placement.instanceId}
-                className={cn(index > 0 && "mt-4 border-t border-border/90 pt-8")}
-              >
+          <div className="flex flex-col gap-3">
+            {items.map((placement) => (
+              <div key={placement.instanceId}>
                 <SortableWidget
                   placement={placement}
                   editing={editing}

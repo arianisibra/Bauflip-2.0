@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -21,6 +22,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { VoiceTextarea } from "@/components/app/voice-textarea";
+import { WorkTypeSelect } from "@/components/app/work-type-select";
+import { mergeAccessAndKeyNotes } from "@/lib/utils";
 
 type FormValues = z.infer<typeof projectStammdatenUpdateSchema>;
 
@@ -53,6 +56,7 @@ export function ProjectStammdatenForm({
   initialAddresses,
   readOnly = false,
 }: Props) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [persons, setPersons] = useState<ContactPerson[]>(initialPersons);
   const [addresses, setAddresses] = useState<ContactAddress[]>(initialAddresses);
@@ -78,9 +82,8 @@ export function ProjectStammdatenForm({
       nextOwnerUserId: project.nextOwnerUserId ?? "",
       newWorkTypeName: "",
       intakeOriginalText: project.intakeOriginalText,
-      accessNotes: project.accessNotes ?? "",
-      keyHandlingNotes: project.keyHandlingNotes ?? "",
-      timingNotes: project.timingNotes ?? "",
+      accessNotes: mergeAccessAndKeyNotes(project.accessNotes, project.keyHandlingNotes),
+      keyHandlingNotes: "",
       internalNotes: project.internalNotes ?? "",
     }),
     [project],
@@ -315,28 +318,16 @@ export function ProjectStammdatenForm({
                 control={form.control}
                 name="workTypeId"
                 render={({ field }) => (
-                  <Select value={field.value || empty} onValueChange={field.onChange}>
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder="Auswählen"
-                        resolvedLabel={field.value ? (workTypes.find((w) => w.id === field.value)?.name ?? "") : ""}
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={empty}>—</SelectItem>
-                      {workTypes.map((w) => (
-                        <SelectItem key={w.id} value={w.id}>
-                          {w.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <WorkTypeSelect
+                    workTypes={workTypes}
+                    value={field.value || empty}
+                    onChange={field.onChange}
+                    disabled={readOnly}
+                    manageable={!readOnly}
+                    onMutation={() => router.refresh()}
+                  />
                 )}
               />
-            </div>
-            <div className="flex flex-col gap-2 md:col-span-2">
-              <Label htmlFor="newWorkTypeName">Neue Arbeitsart (wird gespeichert und ausgewählt)</Label>
-              <Input id="newWorkTypeName" {...form.register("newWorkTypeName")} placeholder="Optional" />
             </div>
             <div className="flex flex-col gap-2">
               <Label>Zugeordneter Mitarbeiter</Label>
@@ -571,7 +562,6 @@ export function ProjectStammdatenForm({
           <input type="hidden" {...form.register("intakeOriginalText")} />
           <input type="hidden" {...form.register("accessNotes")} />
           <input type="hidden" {...form.register("keyHandlingNotes")} />
-          <input type="hidden" {...form.register("timingNotes")} />
           <input type="hidden" {...form.register("internalNotes")} />
 
           <Button type="submit" disabled={isPending}>

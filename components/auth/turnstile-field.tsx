@@ -72,7 +72,25 @@ export function TurnstileField({ inputName = "turnstileToken", onToken }: Turnst
   }, [apiReady, siteKey]);
 
   if (!siteKey) {
-    return null;
+    return (
+      <div
+        role="status"
+        className="rounded-md border border-dashed border-amber-300/90 bg-amber-50 px-3 py-2.5 text-xs leading-snug text-amber-950 dark:border-amber-800/80 dark:bg-amber-950/40 dark:text-amber-50"
+      >
+        <p className="font-medium">Captcha (Cloudflare Turnstile) nicht konfiguriert</p>
+        <p className="mt-1.5 text-amber-900/95 dark:text-amber-100/90">
+          Setzen Sie{" "}
+          <code className="rounded bg-black/[0.06] px-1 py-0.5 font-mono text-[10px] dark:bg-white/10">
+            NEXT_PUBLIC_TURNSTILE_SITE_KEY
+          </code>{" "}
+          (öffentlicher Site-Key) und{" "}
+          <code className="rounded bg-black/[0.06] px-1 py-0.5 font-mono text-[10px] dark:bg-white/10">
+            CLOUDFLARE_TURNSTILE_SECRET_KEY
+          </code>{" "}
+          (nur Server), danach Build/Neustart — dann erscheint das Widget hier.
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -83,7 +101,7 @@ export function TurnstileField({ inputName = "turnstileToken", onToken }: Turnst
         onLoad={() => setApiReady(true)}
       />
       <input ref={hiddenInputRef} type="hidden" name={inputName} />
-      <div id={widgetContainerId} ref={containerRef} />
+      <div id={widgetContainerId} ref={containerRef} className="min-h-[65px] w-full" />
     </div>
   );
 }

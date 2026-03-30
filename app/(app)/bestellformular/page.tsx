@@ -18,7 +18,7 @@ export default async function BestellformularPage() {
     <section className="flex flex-col gap-4">
       <h1 className="text-2xl font-semibold">Bestellformular-CMS</h1>
       <p className="text-sm text-muted-foreground">
-        Lieferantenspezifische Formulare einfach konfigurieren: Felder, Pflichtfelder, Dropdowns und Reihenfolge.
+        Bestellformulare fuer Lieferanten einfach und Schritt fuer Schritt konfigurieren.
       </p>
       <BestellformularCmsClient templates={templates} supplierNames={supplierNames} />
     </section>

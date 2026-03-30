@@ -8,6 +8,8 @@ import type {
   ContactAddress,
   ContactPerson,
   ProjectWorkType,
+  ReportOutcomeOption,
+  ReportSelectOption,
   SiteProperty,
   Delivery,
   EmployeeStat,
@@ -50,6 +52,7 @@ export const mockContacts: Contact[] = [
     city: "Zürich",
     website: "https://mueller-ag.ch",
     managedObjectLabel: null,
+    bexioContactId: null,
     createdAt: now,
   },
 ];
@@ -115,6 +118,26 @@ export const mockProjectWorkTypes: ProjectWorkType[] = [
   { id: "wt-4", organizationId: null, name: "Wartung", sortOrder: 40, createdAt: now },
 ];
 
+export const mockReportOutcomeOptions: ReportOutcomeOption[] = [
+  { id: "ro-1", organizationId: "mock-org", label: "Direkt gelöst (Reparatur sofort)", value: "direkt_geloest",    isDeletable: false, sortOrder: 10, createdAt: now },
+  { id: "ro-2", organizationId: "mock-org", label: "Ersatzteil nötig",                 value: "ersatzteil_noetig", isDeletable: false, sortOrder: 20, createdAt: now },
+  { id: "ro-3", organizationId: "mock-org", label: "Demontage → Werkstatt",            value: "werkstatt_noetig",  isDeletable: false, sortOrder: 30, createdAt: now },
+  { id: "ro-4", organizationId: "mock-org", label: "Komplettersatz nötig",             value: "vollersatz_noetig", isDeletable: false, sortOrder: 40, createdAt: now },
+];
+
+export const mockReportSelectOptions: ReportSelectOption[] = [
+  { id: "rs-01", organizationId: "mock-org", fieldKey: "ort", label: "Balkon",           value: "balkon",         isDeletable: false, sortOrder: 10,  createdAt: now },
+  { id: "rs-02", organizationId: "mock-org", fieldKey: "ort", label: "Balkon Südseite",  value: "balkon_sued",    isDeletable: false, sortOrder: 20,  createdAt: now },
+  { id: "rs-03", organizationId: "mock-org", fieldKey: "ort", label: "Balkon Nordseite", value: "balkon_nord",    isDeletable: false, sortOrder: 30,  createdAt: now },
+  { id: "rs-04", organizationId: "mock-org", fieldKey: "ort", label: "Terrasse",         value: "terrasse",       isDeletable: false, sortOrder: 40,  createdAt: now },
+  { id: "rs-05", organizationId: "mock-org", fieldKey: "ort", label: "Terrasse Südseite",value: "terrasse_sued",  isDeletable: false, sortOrder: 50,  createdAt: now },
+  { id: "rs-06", organizationId: "mock-org", fieldKey: "ort", label: "Fenster",          value: "fenster",        isDeletable: false, sortOrder: 60,  createdAt: now },
+  { id: "rs-07", organizationId: "mock-org", fieldKey: "ort", label: "Fassade",          value: "fassade",        isDeletable: false, sortOrder: 70,  createdAt: now },
+  { id: "rs-08", organizationId: "mock-org", fieldKey: "ort", label: "Wintergarten",     value: "wintergarten",   isDeletable: false, sortOrder: 80,  createdAt: now },
+  { id: "rs-09", organizationId: "mock-org", fieldKey: "ort", label: "Sitzplatz",        value: "sitzplatz",      isDeletable: false, sortOrder: 90,  createdAt: now },
+  { id: "rs-10", organizationId: "mock-org", fieldKey: "ort", label: "Innenbereich",     value: "innenbereich",   isDeletable: false, sortOrder: 100, createdAt: now },
+];
+
 export const mockProfiles: UserProfile[] = [
   {
     id: "u-admin-1",
@@ -150,7 +173,7 @@ export const mockProjects: Project[] = [
       "Kunde meldet: Lamellenstoren blockiert seit gestern, lautes Geräusch beim Hochfahren.",
     accessNotes: "Zugang über Seiteneingang links, Klingel Werkstatt.",
     keyHandlingNotes: "Schlüssel bei Nachbarin Frau Keller, Wohnung 2.",
-    timingNotes: "Nur zwischen 07:30 und 11:30 Uhr möglich.",
+    timingNotes: null,
     internalNotes: "Bitte zuerst Motor prüfen, Kunde braucht schnelle Lösung.",
     createdAt: now,
     updatedAt: now,
@@ -310,6 +333,7 @@ export const mockArticles: Article[] = [
     id: "art-1",
     name: "Markisenstoff Premium",
     sku: "MARK-STOFF-01",
+    bexioArticleId: null,
     categoryId: "ac-1",
     categoryName: "Markisen + Stoff",
     categoryTemplateScope: "generic",
@@ -327,6 +351,7 @@ export const mockArticles: Article[] = [
     id: "art-2",
     name: "Faltrolladen Regapak Set",
     sku: "REGAPAK-SET-01",
+    bexioArticleId: null,
     categoryId: "ac-2",
     categoryName: "Faltrolladen Regapak",
     categoryTemplateScope: "generic",

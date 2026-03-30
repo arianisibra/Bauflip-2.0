@@ -16,8 +16,6 @@ import {
   addProjectNote,
   addPurchaseOrder,
   addQuote,
-  addStockDecision,
-  deleteStockDecision,
   addSupplierSubmission,
   addTechnicianReport,
   createContact,
@@ -39,7 +37,16 @@ import {
   upsertModuleLabel,
   getContactWithDetails,
   getProjectBundle,
+  listQuoteItems,
   updateProjectStatus,
+  listReportOutcomeOptions,
+  insertReportOutcomeOption,
+  deleteReportOutcomeOption,
+  listReportSelectOptions,
+  insertReportSelectOption,
+  deleteReportSelectOption,
+  deleteQuoteForProject,
+  deleteInvoiceForProject,
 } from "@/lib/db/repository";
 import { PROJECT_FILE_MAX_BYTES, PROJECT_FILE_MIME, sanitizeFileBaseName } from "@/lib/storage/mime";
 import { generateDeliveryPdf, generateInvoicePdf, generateQuotePdf } from "@/lib/documents/project-document-pdf";
@@ -49,6 +56,8 @@ import {
   chatMessageSchema,
   deliverySchema,
   finalizeDocumentSchema,
+  deleteDraftQuoteSchema,
+  deleteDraftInvoiceSchema,
   intakeSchema,
   invoiceSchema,
   kanbanColumnRenameSchema,
@@ -59,16 +68,16 @@ import {
   quoteSchema,
   reportSchema,
   smtpSendSchema,
-  stockDecisionSchema,
   supplierTemplateSubmissionSchema,
-  swissQrSchema,
   transitionSchema,
 } from "@/lib/validations/forms";
 import { assertCanTransition, getAllowedTransitions, type ProjectRequiredField } from "@/lib/workflow/project-workflow";
 import { getWorkflowPhaseIndex } from "@/lib/workflow/project-workflow-rail";
 import { getBundlePrerequisiteMessages } from "@/lib/workflow/project-guided-flow";
-import { projectStatuses, type ProjectStatus } from "@/lib/domain/types";
+import { projectStatuses, type Contact, type ProjectStatus } from "@/lib/domain/types";
+import { isUuidString, parseBexioContactIdNumeric } from "@/lib/utils";
 import { getCurrentProfile, getCurrentRole, getCurrentSession } from "@/lib/auth/session";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   articlesToStandardCsv,
@@ -81,7 +90,8 @@ import {
 } from "@/lib/integrations/csv";
 import { buildIcsInvite } from "@/lib/integrations/calendar";
 import { sendMailViaSmtp } from "@/lib/integrations/smtp";
-import { generateSwissQrCodeDataUrl } from "@/lib/integrations/swiss-qr";
+import { BAUFLIP_ZAPIER_EVENTS } from "@/lib/integrations/zapier-events";
+import { dispatchZapierEvent } from "@/lib/integrations/zapier";
 import { getRequiredSupplierFieldKeys } from "@/lib/forms/supplier-conditions";
 
 function collectFormData(formData: FormData) {
@@ -89,6 +99,41 @@ function collectFormData(formData: FormData) {
   return Object.fromEntries(
     Object.entries(entries).map(([key, value]) => [key, typeof value === "string" ? value : ""]),
   );
+}
+
+/** Nur Felder, die Zapier/bexio typischerweise braucht (keine internen UUIDs, keine Adress-Duplikate). */
+function zapierContactPayload(contact: Contact | null | undefined) {
+  const raw = contact?.bexioContactId?.trim();
+  const bexioContactIdNumeric = raw ? parseBexioContactIdNumeric(raw) : null;
+  const t = (s: string | null | undefined) => (s?.trim() ? s.trim() : null);
+  return {
+    bexioContactIdNumeric,
+    contactName: contact ? t(contact.name) : null,
+    contactEmail: contact ? t(contact.email) : null,
+  };
+}
+
+/** Wenn `quotes.total_net` / `total_gross` in der DB 0 sind (Legacy/Daten), aus Positionen wie beim Offertenspeichern nachrechnen. */
+function zapierTotalsFromQuoteOrLines(
+  quote: { discountPercent: number; vatPercent: number; totalNet: number; totalGross: number },
+  lineItems: Array<{ quantity: number; unitPrice: number }>,
+): { totalNet: number; totalGross: number } {
+  const tn = quote.totalNet ?? 0;
+  const tg = quote.totalGross ?? 0;
+  if (tn !== 0 || tg !== 0) {
+    return { totalNet: tn, totalGross: tg };
+  }
+  if (lineItems.length === 0) {
+    return { totalNet: tn, totalGross: tg };
+  }
+  const subtotalNet = lineItems.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
+  const discountPercent = quote.discountPercent ?? 0;
+  const vatPercent = quote.vatPercent ?? 8.1;
+  const discountAmount = subtotalNet * (discountPercent / 100);
+  const totalNet = subtotalNet - discountAmount;
+  const vatAmount = totalNet * (vatPercent / 100);
+  const totalGross = totalNet + vatAmount;
+  return { totalNet, totalGross };
 }
 
 async function buildNextInvoiceNumber(): Promise<string> {
@@ -243,6 +288,7 @@ export async function createIntakeAction(formData: FormData) {
       city: parsed.data.contactCity || null,
       website: null,
       managedObjectLabel: null,
+      bexioContactId: null,
     });
   }
 
@@ -256,8 +302,8 @@ export async function createIntakeAction(formData: FormData) {
     source: parsed.data.source,
     intakeOriginalText: parsed.data.intakeOriginalText,
     accessNotes: parsed.data.accessNotes,
-    keyHandlingNotes: parsed.data.keyHandlingNotes,
-    timingNotes: parsed.data.timingNotes,
+    keyHandlingNotes: parsed.data.keyHandlingNotes?.trim() ? parsed.data.keyHandlingNotes : null,
+    timingNotes: null,
     internalNotes: parsed.data.internalNotes ?? null,
     tenantUnit: null,
     sitePhone: null,
@@ -273,12 +319,15 @@ export async function createIntakeAction(formData: FormData) {
     hintsAndNotes: null,
   });
 
-  await addProjectNote({
-    projectId: project.id,
-    type: "kunde",
-    body: parsed.data.intakeOriginalText,
-    authorRole: "office",
-  });
+  const intakeForNote = parsed.data.intakeOriginalText.trim();
+  if (intakeForNote.length > 0) {
+    await addProjectNote({
+      projectId: project.id,
+      type: "kunde",
+      body: intakeForNote,
+      authorRole: "office",
+    });
+  }
 
   revalidatePath("/");
   revalidatePath("/projekte");
@@ -402,6 +451,7 @@ export type AddTechnicianReportResult = { ok: true } | { ok: false; message: str
 export async function addTechnicianReportAction(formData: FormData): Promise<AddTechnicianReportResult> {
   const payload = collectFormData(formData);
   const parsed = reportSchema.safeParse(payload);
+  const session = await getCurrentSession();
   if (!parsed.success) {
     return {
       ok: false,
@@ -433,6 +483,11 @@ export async function addTechnicianReportAction(formData: FormData): Promise<Add
       }
     })();
 
+    const projectBundle = await getProjectBundle(parsed.data.projectId);
+    if (!projectBundle) {
+      return { ok: false, message: "Projekt nicht gefunden." };
+    }
+
     await addTechnicianReport({
       projectId: parsed.data.projectId,
       outcome: parsed.data.outcome,
@@ -452,8 +507,22 @@ export async function addTechnicianReportAction(formData: FormData): Promise<Add
       actorName: "System Benutzer",
       payload: JSON.stringify({ outcome: parsed.data.outcome }),
     });
+    if (session?.organizationId) {
+      await dispatchZapierEvent({
+        organizationId: session.organizationId,
+        eventType: BAUFLIP_ZAPIER_EVENTS.REPORT_CREATED,
+        payload: {
+          ...zapierContactPayload(projectBundle.contact),
+          projectId: parsed.data.projectId,
+          outcome: parsed.data.outcome,
+          summary: parsed.data.summary,
+          timeSpentMinutes: parsed.data.timeSpentMinutes ?? null,
+        },
+      });
+    }
 
     revalidatePath(`/projekte/${parsed.data.projectId}`);
+    revalidatePath("/rapporte");
     return { ok: true };
   } catch (e) {
     console.error(e);
@@ -480,18 +549,40 @@ export async function addQuoteAction(formData: FormData) {
     try {
       const arr = JSON.parse(parsed.data.quoteItemsJson ?? "[]");
       if (!Array.isArray(arr)) {
-        return [] as Array<{ description: string; quantity: number; unit: string; unitPrice: number }>;
+        return [] as Array<{
+          description: string;
+          quantity: number;
+          unit: string;
+          unitPrice: number;
+          articleId: string | null;
+        }>;
       }
       return arr
-        .map((raw) => ({
-          description: String((raw as { description?: unknown }).description ?? "").trim(),
-          quantity: Number((raw as { quantity?: unknown }).quantity ?? 0),
-          unit: String((raw as { unit?: unknown }).unit ?? "Stk").trim(),
-          unitPrice: Number((raw as { unitPrice?: unknown }).unitPrice ?? 0),
-        }))
+        .map((raw) => {
+          const description = String((raw as { description?: unknown }).description ?? "").trim();
+          const source = String((raw as { source?: unknown }).source ?? "");
+          const refId = (raw as { refId?: unknown }).refId;
+          let articleId: string | null = null;
+          if (source === "artikel" && typeof refId === "string" && isUuidString(refId)) {
+            articleId = refId;
+          }
+          return {
+            description,
+            quantity: Number((raw as { quantity?: unknown }).quantity ?? 0),
+            unit: String((raw as { unit?: unknown }).unit ?? "Stk").trim(),
+            unitPrice: Number((raw as { unitPrice?: unknown }).unitPrice ?? 0),
+            articleId,
+          };
+        })
         .filter((i) => i.description.length > 0 && Number.isFinite(i.quantity) && i.quantity > 0 && Number.isFinite(i.unitPrice));
     } catch {
-      return [] as Array<{ description: string; quantity: number; unit: string; unitPrice: number }>;
+      return [] as Array<{
+        description: string;
+        quantity: number;
+        unit: string;
+        unitPrice: number;
+        articleId: string | null;
+      }>;
     }
   })();
 
@@ -509,8 +600,9 @@ export async function addQuoteAction(formData: FormData) {
   }
   const nextVersion = bundle.quotes.reduce((max, q) => Math.max(max, q.version), 0) + 1;
 
+  let createdQuote;
   try {
-    await addQuote({
+    createdQuote = await addQuote({
       projectId: parsed.data.projectId,
       version: nextVersion,
       warrantyText: parsed.data.warrantyText?.trim() ? parsed.data.warrantyText.trim() : null,
@@ -535,6 +627,7 @@ export async function addQuoteAction(formData: FormData) {
       `Offerte konnte nicht erstellt werden: ${error instanceof Error ? error.message : "Unbekannter Fehler"}`,
     );
   }
+  const quoteLineItems = await listQuoteItems(createdQuote.id);
   await addAuditEvent({
     action: "offerte_erstellt",
     projectId: parsed.data.projectId,
@@ -542,6 +635,21 @@ export async function addQuoteAction(formData: FormData) {
     actorName: session.profile.displayName,
     payload: JSON.stringify({ version: nextVersion, totalGross, totalNet, positions: quoteItems.length }),
   });
+  if (session.organizationId) {
+    await dispatchZapierEvent({
+      organizationId: session.organizationId,
+      eventType: BAUFLIP_ZAPIER_EVENTS.QUOTE_CREATED,
+      payload: {
+        ...zapierContactPayload(bundle.contact),
+        lineItems: quoteLineItems,
+        projectId: parsed.data.projectId,
+        version: nextVersion,
+        totalGross,
+        totalNet,
+        currency: "CHF",
+      },
+    });
+  }
 
   revalidatePath(`/projekte/${parsed.data.projectId}`);
 }
@@ -592,6 +700,11 @@ export async function addDeliveryAction(formData: FormData) {
 }
 
 export async function addInvoiceAction(formData: FormData) {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
+    throw new Error("Keine Berechtigung: Rechnungen dürfen nur von Büro oder Admin erstellt werden.");
+  }
+
   const payload = collectFormData(formData);
   const parsed = invoiceSchema.safeParse(payload);
   if (!parsed.success) {
@@ -599,17 +712,43 @@ export async function addInvoiceAction(formData: FormData) {
   }
 
   const autoInvoiceNumber = await buildNextInvoiceNumber();
-  await addInvoice({
+  const created = await addInvoice({
     projectId: parsed.data.projectId,
     invoiceNumber: autoInvoiceNumber,
   });
   await addAuditEvent({
     action: "rechnung_vorbereitet",
     projectId: parsed.data.projectId,
-    actorRole: "admin",
-    actorName: "System Benutzer",
-    payload: JSON.stringify({ invoiceNumber: autoInvoiceNumber }),
+    actorRole: session.role,
+    actorName: session.profile.displayName,
+    payload: JSON.stringify({ invoiceNumber: autoInvoiceNumber, invoiceId: created.id }),
   });
+
+  if (session.organizationId) {
+    const invBundle = await getProjectBundle(parsed.data.projectId);
+    if (invBundle) {
+      const latestQuoteForLines =
+        invBundle.quotes.length > 0 ? [...invBundle.quotes].sort((a, b) => b.version - a.version)[0] : null;
+      const invoiceLineItems = latestQuoteForLines ? await listQuoteItems(latestQuoteForLines.id) : [];
+      const invoiceZapierTotals = latestQuoteForLines
+        ? zapierTotalsFromQuoteOrLines(latestQuoteForLines, invoiceLineItems)
+        : { totalNet: 0, totalGross: 0 };
+      await dispatchZapierEvent({
+        organizationId: session.organizationId,
+        eventType: BAUFLIP_ZAPIER_EVENTS.INVOICE_CREATED,
+        payload: {
+          ...zapierContactPayload(invBundle.contact),
+          lineItems: invoiceLineItems,
+          projectId: parsed.data.projectId,
+          invoiceId: created.id,
+          invoiceNumber: created.invoiceNumber,
+          totalGross: latestQuoteForLines ? invoiceZapierTotals.totalGross : null,
+          totalNet: latestQuoteForLines ? invoiceZapierTotals.totalNet : null,
+          currency: "CHF",
+        },
+      });
+    }
+  }
 
   revalidatePath(`/projekte/${parsed.data.projectId}`);
 }
@@ -648,6 +787,98 @@ async function uploadProjectDocumentPdf(params: {
   throw new Error(lastError ?? "PDF konnte nicht hochgeladen werden.");
 }
 
+async function removeStoredProjectPdf(pdfPath: string | null | undefined, organizationId: string): Promise<void> {
+  const raw = pdfPath?.trim();
+  if (!raw) {
+    return;
+  }
+  if (!raw.startsWith(`${organizationId}/`)) {
+    return;
+  }
+  const supabase = createSupabaseAdminClient() ?? (await createSupabaseServerClient());
+  if (!supabase) {
+    return;
+  }
+  const buckets = ["project-documents", "project-files"] as const;
+  for (const bucket of buckets) {
+    await supabase.storage.from(bucket).remove([raw]);
+  }
+}
+
+export async function deleteDraftQuoteAction(formData: FormData) {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
+    throw new Error("Keine Berechtigung: Offerten dürfen nur von Büro oder Admin gelöscht werden.");
+  }
+  if (!session.organizationId) {
+    throw new Error("Keine Organisation im Benutzerkontext.");
+  }
+  const projectId = String(formData.get("projectId") ?? "").trim();
+  const quoteId = String(formData.get("quoteId") ?? "").trim();
+  const parsed = deleteDraftQuoteSchema.safeParse({ projectId, quoteId });
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Ungültige Anfrage.");
+  }
+  const bundle = await getProjectBundle(parsed.data.projectId);
+  if (!bundle) {
+    throw new Error("Projekt nicht gefunden.");
+  }
+  const quote = bundle.quotes.find((q) => q.id === parsed.data.quoteId);
+  if (!quote) {
+    throw new Error("Offerte nicht gefunden.");
+  }
+  await removeStoredProjectPdf(quote.pdfPath, session.organizationId);
+  await deleteQuoteForProject({ quoteId: parsed.data.quoteId, projectId: parsed.data.projectId });
+  await addAuditEvent({
+    action: "offerte_geloescht",
+    projectId: parsed.data.projectId,
+    actorRole: session.role,
+    actorName: session.profile.displayName,
+    payload: JSON.stringify({ quoteId: parsed.data.quoteId, version: quote.version, wasFinalized: Boolean(quote.finalizedAt) }),
+  });
+  revalidatePath(`/projekte/${parsed.data.projectId}`);
+  revalidatePath("/projekte");
+}
+
+export async function deleteDraftInvoiceAction(formData: FormData) {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
+    throw new Error("Keine Berechtigung: Rechnungen dürfen nur von Büro oder Admin gelöscht werden.");
+  }
+  if (!session.organizationId) {
+    throw new Error("Keine Organisation im Benutzerkontext.");
+  }
+  const projectId = String(formData.get("projectId") ?? "").trim();
+  const invoiceId = String(formData.get("invoiceId") ?? "").trim();
+  const parsed = deleteDraftInvoiceSchema.safeParse({ projectId, invoiceId });
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Ungültige Anfrage.");
+  }
+  const bundle = await getProjectBundle(parsed.data.projectId);
+  if (!bundle) {
+    throw new Error("Projekt nicht gefunden.");
+  }
+  const invoice = bundle.invoices.find((i) => i.id === parsed.data.invoiceId);
+  if (!invoice) {
+    throw new Error("Rechnung nicht gefunden.");
+  }
+  await removeStoredProjectPdf(invoice.pdfPath, session.organizationId);
+  await deleteInvoiceForProject({ invoiceId: parsed.data.invoiceId, projectId: parsed.data.projectId });
+  await addAuditEvent({
+    action: "rechnung_geloescht",
+    projectId: parsed.data.projectId,
+    actorRole: session.role,
+    actorName: session.profile.displayName,
+    payload: JSON.stringify({
+      invoiceId: parsed.data.invoiceId,
+      invoiceNumber: invoice.invoiceNumber,
+      wasFinalized: Boolean(invoice.finalizedAt),
+    }),
+  });
+  revalidatePath(`/projekte/${parsed.data.projectId}`);
+  revalidatePath("/projekte");
+}
+
 export async function finalizeProjectDocumentAction(formData: FormData) {
   const payload = collectFormData(formData);
   const parsed = finalizeDocumentSchema.safeParse(payload);
@@ -667,6 +898,7 @@ export async function finalizeProjectDocumentAction(formData: FormData) {
   if (!bundle) {
     throw new Error("Projekt nicht gefunden.");
   }
+  const finalizedByFk = isUuidString(session.profile.id) ? session.profile.id : null;
   const deliveryChannel = parsed.data.deliveryChannel ?? "post";
   const pdfBundle = {
     project: bundle.project,
@@ -709,7 +941,7 @@ export async function finalizeProjectDocumentAction(formData: FormData) {
     }
   };
 
-  const maybeAdvanceStatus = async (targetStatus: "offerte_gesendet" | "abgeschlossen") => {
+  const maybeAdvanceStatus = async (targetStatus: "offerte_gesendet") => {
     if (bundle.project.status === targetStatus) {
       return;
     }
@@ -746,7 +978,7 @@ export async function finalizeProjectDocumentAction(formData: FormData) {
     await markQuoteFinalizedWithPdf({
       quoteId: quote.id,
       pdfPath,
-      finalizedBy: session.profile.id,
+      finalizedBy: finalizedByFk,
       nextPdfVersion,
       deliveryChannel,
       deliveryRecipient: deliveryChannel === "email" ? (parsed.data.emailTo?.trim() || bundle.contact?.email || null) : null,
@@ -758,6 +990,23 @@ export async function finalizeProjectDocumentAction(formData: FormData) {
       actorRole: session.role,
       actorName: session.profile.displayName,
       payload: JSON.stringify({ quoteId: quote.id, pdfPath, version: nextPdfVersion, deliveryChannel }),
+    });
+    const finalizedQuoteLines = await listQuoteItems(quote.id);
+    const zapierTotals = zapierTotalsFromQuoteOrLines(quote, finalizedQuoteLines);
+    await dispatchZapierEvent({
+      organizationId: session.organizationId,
+      eventType: BAUFLIP_ZAPIER_EVENTS.QUOTE_CREATED,
+      payload: {
+        ...zapierContactPayload(bundle.contact),
+        lineItems: finalizedQuoteLines,
+        projectId: parsed.data.projectId,
+        quoteId: quote.id,
+        version: nextPdfVersion,
+        pdfPath,
+        deliveryChannel,
+        totalGross: zapierTotals.totalGross,
+        totalNet: zapierTotals.totalNet,
+      },
     });
   } else if (parsed.data.documentType === "invoice") {
     const invoice = await getInvoiceById(parsed.data.documentId);
@@ -778,18 +1027,40 @@ export async function finalizeProjectDocumentAction(formData: FormData) {
     await markInvoiceFinalizedWithPdf({
       invoiceId: invoice.id,
       pdfPath,
-      finalizedBy: session.profile.id,
+      finalizedBy: finalizedByFk,
       nextPdfVersion,
       deliveryChannel,
       deliveryRecipient: deliveryChannel === "email" ? (parsed.data.emailTo?.trim() || bundle.contact?.email || null) : null,
     });
-    await maybeAdvanceStatus("abgeschlossen");
     await addAuditEvent({
       action: "rechnung_finalisiert_pdf",
       projectId: parsed.data.projectId,
       actorRole: session.role,
       actorName: session.profile.displayName,
       payload: JSON.stringify({ invoiceId: invoice.id, pdfPath, version: nextPdfVersion, deliveryChannel }),
+    });
+    const latestQuoteForLines =
+      bundle.quotes.length > 0 ? [...bundle.quotes].sort((a, b) => b.version - a.version)[0] : null;
+    const invoiceLineItems = latestQuoteForLines ? await listQuoteItems(latestQuoteForLines.id) : [];
+    const invoiceZapierTotals = latestQuoteForLines
+      ? zapierTotalsFromQuoteOrLines(latestQuoteForLines, invoiceLineItems)
+      : { totalNet: 0, totalGross: 0 };
+    await dispatchZapierEvent({
+      organizationId: session.organizationId,
+      eventType: BAUFLIP_ZAPIER_EVENTS.INVOICE_CREATED,
+      payload: {
+        ...zapierContactPayload(bundle.contact),
+        lineItems: invoiceLineItems,
+        projectId: parsed.data.projectId,
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        version: nextPdfVersion,
+        pdfPath,
+        deliveryChannel,
+        totalGross: latestQuoteForLines ? invoiceZapierTotals.totalGross : null,
+        totalNet: latestQuoteForLines ? invoiceZapierTotals.totalNet : null,
+        currency: "CHF",
+      },
     });
   } else {
     const delivery = await getDeliveryById(parsed.data.documentId);
@@ -809,7 +1080,7 @@ export async function finalizeProjectDocumentAction(formData: FormData) {
     await markDeliveryFinalizedWithPdf({
       deliveryId: delivery.id,
       pdfPath,
-      finalizedBy: session.profile.id,
+      finalizedBy: finalizedByFk,
       nextPdfVersion,
     });
     await addAuditEvent({
@@ -851,8 +1122,8 @@ export async function transitionProjectAction(formData: FormData) {
     directResolvedReports: bundle.reports.filter((r) => r.outcome === "direkt_geloest").length,
     quotes: bundle.quotes.length,
     quoteFinalized: bundle.quotes.filter((q) => Boolean(q.finalizedAt) || Boolean(q.deliverySentAt)).length,
+    supplierSubmissions: (bundle.supplierSubmissions ?? []).length,
     orders: bundle.orders.length,
-    stockDecisionAbLager: bundle.stockDecisions.filter((s) => s.decision === "ab_lager").length,
     deliveries: bundle.deliveries.length,
     invoices: bundle.invoices.length,
     invoiceFinalized: bundle.invoices.filter((inv) => Boolean(inv.finalizedAt) || Boolean(inv.deliverySentAt)).length,
@@ -944,8 +1215,8 @@ export async function moveProjectPhaseAction(formData: FormData) {
     directResolvedReports: bundle.reports.filter((r) => r.outcome === "direkt_geloest").length,
     quotes: bundle.quotes.length,
     quoteFinalized: bundle.quotes.filter((q) => Boolean(q.finalizedAt) || Boolean(q.deliverySentAt)).length,
+    supplierSubmissions: (bundle.supplierSubmissions ?? []).length,
     orders: bundle.orders.length,
-    stockDecisionAbLager: bundle.stockDecisions.filter((s) => s.decision === "ab_lager").length,
     deliveries: bundle.deliveries.length,
     invoices: bundle.invoices.length,
     invoiceFinalized: bundle.invoices.filter((inv) => Boolean(inv.finalizedAt) || Boolean(inv.deliverySentAt)).length,
@@ -1017,9 +1288,7 @@ function translateMissingFieldsInReason(reason: string): string {
   }
   const map: Record<ProjectRequiredField, string> = {
     intakeOriginalText: "Originalaussage Kunde",
-    accessNotes: "Zugang / Hinweise",
-    keyHandlingNotes: "Schlüssel / Zutritt",
-    timingNotes: "Zeitfenster",
+    accessNotes: "Zugang/Schlüssel",
     internalNotes: "Interne Notiz",
   };
   const labels = fieldsRaw
@@ -1326,44 +1595,6 @@ export async function exportCsvAction(type: "contacts" | "articles") {
   return contactsToStandardCsv(await listContacts());
 }
 
-export async function addStockDecisionAction(formData: FormData) {
-  const session = await getCurrentSession();
-  if (!session || (session.role !== "office" && session.role !== "admin")) {
-    throw new Error("Keine Berechtigung.");
-  }
-  const payload = collectFormData(formData);
-  const parsed = stockDecisionSchema.safeParse(payload);
-  if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "Ungültiger Lagerentscheid.");
-  }
-  await addStockDecision({
-    projectId: parsed.data.projectId,
-    decision: parsed.data.decision,
-    notes: parsed.data.notes,
-    decidedByRole: session.role,
-  });
-  if (parsed.data.decision === "bestellen") {
-    await updateProjectStatus(parsed.data.projectId, "bestellung", "admin");
-  }
-  revalidatePath(`/projekte/${parsed.data.projectId}`);
-  revalidatePath("/projekte");
-}
-
-export async function deleteStockDecisionAction(formData: FormData) {
-  const session = await getCurrentSession();
-  if (!session || (session.role !== "office" && session.role !== "admin")) {
-    throw new Error("Keine Berechtigung.");
-  }
-  const stockDecisionId = String(formData.get("stockDecisionId") ?? "").trim();
-  const projectId = String(formData.get("projectId") ?? "").trim();
-  if (!stockDecisionId) {
-    throw new Error("Lagerentscheid-ID fehlt.");
-  }
-  await deleteStockDecision(stockDecisionId);
-  revalidatePath(`/projekte/${projectId}`);
-  revalidatePath("/projekte");
-}
-
 export async function submitSupplierTemplateAction(formData: FormData) {
   const session = await getCurrentSession();
   if (!session) {
@@ -1544,60 +1775,50 @@ export async function sendDocumentMailAction(formData: FormData) {
   }
 }
 
-export async function generateSwissQrAction(formData: FormData): Promise<string> {
-  const payload = collectFormData(formData);
-  const parsed = swissQrSchema.safeParse(payload);
-  if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "QR-Daten unvollständig.");
-  }
+export async function listReportOutcomeOptionsAction() {
   const session = await getCurrentSession();
-  if (!session?.organizationId) {
-    throw new Error("Keine Organisation gefunden. Bitte Firmeneinstellungen prüfen.");
-  }
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) {
-    throw new Error("Supabase ist nicht konfiguriert.");
-  }
-  const { data: org, error: orgError } = await supabase
-    .from("organizations")
-    .select(
-      "name, billing_iban, billing_creditor_name, billing_creditor_street, billing_creditor_postal_code, billing_creditor_city",
-    )
-    .eq("id", session.organizationId)
-    .maybeSingle();
-  if (orgError) {
-    const schemaCacheMissingColumn =
-      orgError.code === "PGRST204" && String(orgError.message ?? "").includes("billing_creditor_");
-    if (schemaCacheMissingColumn) {
-      throw new Error("DB-Migration für Firmeneinstellungen fehlt. Bitte Migrationen ausführen und Seite neu laden.");
-    }
-    throw new Error(orgError.message || "Firmendaten konnten nicht geladen werden.");
-  }
-  const row = (org ?? {}) as Record<string, unknown>;
-  const iban = String(row.billing_iban ?? "").trim();
-  const creditorName = String(row.billing_creditor_name ?? row.name ?? "").trim();
-  const creditorStreet = String(row.billing_creditor_street ?? "").trim();
-  const creditorPostalCode = String(row.billing_creditor_postal_code ?? "").trim();
-  const creditorCity = String(row.billing_creditor_city ?? "").trim();
-  if (!iban || !creditorName || !creditorStreet || !creditorPostalCode || !creditorCity) {
-    throw new Error("Bitte zuerst in den Firmeneinstellungen IBAN und Gläubigeradresse hinterlegen.");
-  }
+  if (!session) throw new Error("Keine Berechtigung.");
+  return listReportOutcomeOptions();
+}
 
-  const qrCode = await generateSwissQrCodeDataUrl({
-    ...parsed.data,
-    iban,
-    creditorName,
-    creditorStreet,
-    creditorPostalCode,
-    creditorCity,
-    debtorCountry: (parsed.data.debtorCountry ?? "CH").toUpperCase(),
-  });
-  await addAuditEvent({
-    action: "qr_rechnung_generiert",
-    projectId: null,
-    actorRole: session.role,
-    actorName: session.profile.displayName,
-    payload: JSON.stringify({ preview: qrCode.slice(0, 120) }),
-  });
-  return qrCode;
+export async function addReportOutcomeOptionAction(formData: FormData) {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
+    throw new Error("Keine Berechtigung.");
+  }
+  const label = String(formData.get("label") ?? "").trim();
+  if (!label) throw new Error("Bezeichnung fehlt.");
+  return insertReportOutcomeOption(label);
+}
+
+export async function deleteReportOutcomeOptionAction(formData: FormData) {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
+    throw new Error("Keine Berechtigung.");
+  }
+  const optionId = String(formData.get("optionId") ?? "").trim();
+  if (!optionId) throw new Error("Option-ID fehlt.");
+  await deleteReportOutcomeOption(optionId);
+}
+
+export async function addReportSelectOptionAction(formData: FormData) {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
+    throw new Error("Keine Berechtigung.");
+  }
+  const fieldKey = String(formData.get("fieldKey") ?? "").trim();
+  const label = String(formData.get("label") ?? "").trim();
+  if (!fieldKey) throw new Error("Feld-Schlüssel fehlt.");
+  if (!label) throw new Error("Bezeichnung fehlt.");
+  return insertReportSelectOption(fieldKey, label);
+}
+
+export async function deleteReportSelectOptionAction(formData: FormData) {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
+    throw new Error("Keine Berechtigung.");
+  }
+  const optionId = String(formData.get("optionId") ?? "").trim();
+  if (!optionId) throw new Error("Option-ID fehlt.");
+  await deleteReportSelectOption(optionId);
 }

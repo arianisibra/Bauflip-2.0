@@ -25,7 +25,6 @@ const defaultValues: IntakeValues = {
   intakeOriginalText: "",
   accessNotes: "",
   keyHandlingNotes: "",
-  timingNotes: "",
   internalNotes: "",
   contactName: "",
   contactEmail: "",
@@ -202,57 +201,24 @@ export function IntakeForm({ contacts = [] }: { contacts?: Contact[] }) {
             ) : null}
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="accessNotes">Zugang</Label>
-              <Controller
-                control={form.control}
-                name="accessNotes"
-                render={({ field }) => (
-                  <VoiceTextarea
-                    id="accessNotes"
-                    value={field.value}
-                    onValueChange={field.onChange}
-                  />
-                )}
-              />
-              {form.formState.errors.accessNotes ? (
-                <p className="text-sm text-destructive">{form.formState.errors.accessNotes.message}</p>
-              ) : null}
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="keyHandlingNotes">Schlüssel</Label>
-              <Controller
-                control={form.control}
-                name="keyHandlingNotes"
-                render={({ field }) => (
-                  <VoiceTextarea
-                    id="keyHandlingNotes"
-                    required
-                    value={field.value}
-                    onValueChange={field.onChange}
-                  />
-                )}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="timingNotes">Zeitfenster</Label>
-              <Controller
-                control={form.control}
-                name="timingNotes"
-                render={({ field }) => (
-                  <VoiceTextarea
-                    id="timingNotes"
-                    value={field.value}
-                    onValueChange={field.onChange}
-                  />
-                )}
-              />
-              {form.formState.errors.timingNotes ? (
-                <p className="text-sm text-destructive">{form.formState.errors.timingNotes.message}</p>
-              ) : null}
-            </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="accessNotes">Zugang/Schlüssel</Label>
+            <Controller
+              control={form.control}
+              name="accessNotes"
+              render={({ field }) => (
+                <VoiceTextarea
+                  id="accessNotes"
+                  value={field.value}
+                  onValueChange={field.onChange}
+                />
+              )}
+            />
+            {form.formState.errors.accessNotes ? (
+              <p className="text-sm text-destructive">{form.formState.errors.accessNotes.message}</p>
+            ) : null}
           </div>
+          <input type="hidden" {...form.register("keyHandlingNotes")} />
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="internalNotes">Interne Notiz</Label>

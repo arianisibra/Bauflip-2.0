@@ -51,6 +51,7 @@ export const appPageKeys = [
   "team_chat",
   "zeiterfassung",
   "bestellformular",
+  "stoffgenerator",
   "einstellungen",
   "integrationen",
   "import_export",
@@ -80,6 +81,8 @@ export type Contact = {
   city: string | null;
   website: string | null;
   managedObjectLabel: string | null;
+  /** Manuell: bexio Kontakt-ID (Company/Person) für Zapier → bexio. */
+  bexioContactId: string | null;
   createdAt: string;
 };
 
@@ -138,6 +141,29 @@ export type ProjectWorkType = {
   id: string;
   organizationId: string | null;
   name: string;
+  sortOrder: number;
+  createdAt: string;
+};
+
+/** Konfigurierbare Entscheid-vor-Ort-Optionen im Monteurbericht. */
+export type ReportOutcomeOption = {
+  id: string;
+  organizationId: string;
+  label: string;
+  value: string;
+  isDeletable: boolean;
+  sortOrder: number;
+  createdAt: string;
+};
+
+/** Generisch konfigurierbare Select-Optionen im Monteurbericht (z. B. Ort). */
+export type ReportSelectOption = {
+  id: string;
+  organizationId: string;
+  fieldKey: string;
+  label: string;
+  value: string;
+  isDeletable: boolean;
   sortOrder: number;
   createdAt: string;
 };
@@ -260,7 +286,7 @@ export type CompanyKpiSnapshot = {
 export type TechnicianReport = {
   id: string;
   projectId: string;
-  outcome: "direkt_geloest" | "ersatzteil_noetig" | "werkstatt_noetig" | "vollersatz_noetig";
+  outcome: string;
   summary: string;
   measurementsJson: string;
   workDescription: string;
@@ -295,7 +321,7 @@ export type Quote = {
   totalNet: number;
   vatAmount: number;
   totalGross: number;
-  deliveryChannel: "email" | "post" | null;
+  deliveryChannel: "email" | "post" | "bexio" | null;
   deliverySentAt: string | null;
   deliveryRecipient: string | null;
   createdAt: string;
@@ -339,7 +365,7 @@ export type Invoice = {
   pdfVersion: number;
   finalizedAt: string | null;
   finalizedBy: string | null;
-  deliveryChannel: "email" | "post" | null;
+  deliveryChannel: "email" | "post" | "bexio" | null;
   deliverySentAt: string | null;
   deliveryRecipient: string | null;
   createdAt: string;
@@ -438,6 +464,8 @@ export type Article = {
   name: string;
   /** Interne Artikelnummer */
   sku: string;
+  /** bexio Artikel-/Produkt-ID (manuell), für Zapier → article_ids. */
+  bexioArticleId: string | null;
   categoryId: string;
   categoryName: string | null;
   categoryTemplateScope: ArticleCategoryTemplateScope;

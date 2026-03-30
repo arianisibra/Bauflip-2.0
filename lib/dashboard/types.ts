@@ -4,12 +4,9 @@ export const widgetIds = [
   "snapshot_kpis",
   "betrieb_erfolg",
   "week_tasks",
-  "pipeline_status",
   "offers_invoices",
-  "logistics_pulse",
   "team_compact",
   "chat_module",
-  "shortcuts",
   "recent_projects",
 ] as const;
 

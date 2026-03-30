@@ -17,11 +17,7 @@ type ProfileSettingsFormProps = {
   canEditCompanySettings: boolean;
   organizationBilling: {
     companyName: string;
-    iban: string;
-    creditorName: string;
-    creditorStreet: string;
-    creditorPostalCode: string;
-    creditorCity: string;
+    logoUrl: string | null;
   } | null;
 };
 
@@ -45,8 +41,7 @@ export function ProfileSettingsForm({
       <CardHeader className="border-b border-border/60 bg-muted/30 px-5 py-5 sm:px-6">
         <CardTitle className="text-lg font-semibold tracking-tight">Profil &amp; Firma</CardTitle>
         <CardDescription className="text-sm leading-relaxed">
-          Anzeigename und Profilbild werden im Team angezeigt. Bilder liegen im Supabase-Storage (Bucket{" "}
-          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">avatars</code>).
+          Bereiche: Mein Profil und Firmeneinstellungen (nur Admin).
         </CardDescription>
       </CardHeader>
 
@@ -110,6 +105,8 @@ export function ProfileSettingsForm({
 
             {/* Felder */}
             <div className="min-w-0 flex-1 space-y-6">
+              <div className="rounded-xl border border-border/60 bg-muted/15 p-4 sm:p-5">
+                <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Mein Profil</p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="displayName" className="text-sm font-medium">
@@ -124,76 +121,72 @@ export function ProfileSettingsForm({
                   <Input id="email" name="email" type="email" defaultValue={profile.email} disabled readOnly className="h-10 bg-muted/50" />
                 </div>
               </div>
+              </div>
 
               <div className="rounded-xl border border-border/60 bg-muted/15 p-4 sm:p-5">
-                <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Firma · QR-Rechnung</p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="flex flex-col gap-2 sm:col-span-2">
-                    <Label htmlFor="billingIban" className="text-sm font-medium">
-                      IBAN
-                    </Label>
-                    <Input
-                      id="billingIban"
-                      name="billingIban"
-                      defaultValue={organizationBilling?.iban ?? ""}
-                      placeholder="CH44 ..."
-                      className="h-10"
-                      disabled={!canEditCompanySettings}
-                    />
+                <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Firmeneinstellungen {canEditCompanySettings ? "(Admin)" : "(nur Ansicht)"}
+                </p>
+                <div className="mb-4 grid gap-4 md:grid-cols-[160px_1fr]">
+                  <div className="flex flex-col items-start gap-2">
+                    <div className="relative size-24 overflow-hidden rounded-xl border border-border/70 bg-card">
+                      {organizationBilling?.logoUrl ? (
+                        <img src={organizationBilling.logoUrl} alt="Firmenlogo" className="size-full object-contain p-2" />
+                      ) : (
+                        <div className="flex size-full items-center justify-center px-2 text-center text-xs text-muted-foreground">
+                          Kein Logo
+                        </div>
+                      )}
+                    </div>
+                    {canEditCompanySettings ? (
+                      <div className="flex w-full flex-col gap-2">
+                        <input
+                          id="companyLogo"
+                          name="companyLogo"
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/gif"
+                          className="sr-only"
+                        />
+                        <Label
+                          htmlFor="companyLogo"
+                          className={cn(
+                            buttonVariants({ variant: "outline", size: "sm" }),
+                            "w-fit cursor-pointer border-border/70",
+                          )}
+                        >
+                          Logo wählen
+                        </Label>
+                        {organizationBilling?.logoUrl ? (
+                          <Button
+                            type="submit"
+                            name="removeCompanyLogo"
+                            value="true"
+                            variant="ghost"
+                            size="sm"
+                            className="w-fit text-red-700"
+                          >
+                            Logo entfernen
+                          </Button>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
-                  <div className="flex flex-col gap-2 sm:col-span-2">
-                    <Label htmlFor="billingCreditorName" className="text-sm font-medium">
-                      Firmenname (Gläubigername)
-                    </Label>
-                    <Input
-                      id="billingCreditorName"
-                      name="billingCreditorName"
-                      defaultValue={organizationBilling?.creditorName || organizationBilling?.companyName || ""}
-                      placeholder="Firmenname"
-                      className="h-10"
-                      disabled={!canEditCompanySettings}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="billingCreditorStreet" className="text-sm font-medium">
-                      Strasse
-                    </Label>
-                    <Input
-                      id="billingCreditorStreet"
-                      name="billingCreditorStreet"
-                      defaultValue={organizationBilling?.creditorStreet ?? ""}
-                      className="h-10"
-                      disabled={!canEditCompanySettings}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="billingCreditorPostalCode" className="text-sm font-medium">
-                      PLZ
-                    </Label>
-                    <Input
-                      id="billingCreditorPostalCode"
-                      name="billingCreditorPostalCode"
-                      defaultValue={organizationBilling?.creditorPostalCode ?? ""}
-                      className="h-10"
-                      disabled={!canEditCompanySettings}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2 sm:col-span-2">
-                    <Label htmlFor="billingCreditorCity" className="text-sm font-medium">
-                      Ort
-                    </Label>
-                    <Input
-                      id="billingCreditorCity"
-                      name="billingCreditorCity"
-                      defaultValue={organizationBilling?.creditorCity ?? ""}
-                      className="h-10"
-                      disabled={!canEditCompanySettings}
-                    />
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="flex flex-col gap-2 sm:col-span-2">
+                      <Label htmlFor="companyName" className="text-sm font-medium">
+                        Firmenname
+                      </Label>
+                      <Input
+                        id="companyName"
+                        name="companyName"
+                        defaultValue={organizationBilling?.companyName || ""}
+                        className="h-10"
+                        disabled={!canEditCompanySettings}
+                        placeholder="Firmenname"
+                      />
+                    </div>
                   </div>
                 </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Diese Werte werden im Projekt bei «Schweizer Rechnungs-QR» automatisch verwendet.
-                </p>
               </div>
 
               <div className="rounded-xl border border-border/60 bg-muted/15 p-4 sm:p-5">

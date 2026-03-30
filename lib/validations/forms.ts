@@ -9,12 +9,9 @@ export const intakeSchema = z.object({
   type: z.enum(projectTypes, {
     message: "Bitte wählen Sie den Projekttyp.",
   }),
-  intakeOriginalText: z
-    .string()
-    .min(10, "Die Originalaussage des Kunden ist Pflicht."),
-  accessNotes: z.string().min(3, "Bitte Zutrittshinweise ergänzen."),
-  keyHandlingNotes: z.string().min(3, "Bitte Schlüsselhinweise ergänzen."),
-  timingNotes: z.string().min(3, "Bitte Zeitfenster ergänzen."),
+  intakeOriginalText: z.string(),
+  accessNotes: z.string(),
+  keyHandlingNotes: z.string().optional(),
   internalNotes: z.string().optional(),
   contactName: z.string().min(2, "Bitte Kontaktnamen erfassen."),
   contactEmail: z.email("Bitte eine gültige E-Mail angeben.").or(z.literal("")),
@@ -48,10 +45,10 @@ export const appointmentSchema = z.object({
 
 export const reportSchema = z.object({
   projectId: z.string().min(1),
-  outcome: z.enum(["direkt_geloest", "ersatzteil_noetig", "werkstatt_noetig", "vollersatz_noetig"]),
-  summary: z.string().trim().min(10, "Bitte eine klare Diagnose erfassen (mindestens 10 Zeichen)."),
+  outcome: z.string().trim().min(1, "Bitte Entscheid vor Ort wählen."),
+  summary: z.string().trim().optional().default(""),
   measurementsJson: z.string().trim().min(2, "Messdaten fehlen."),
-  workDescription: z.string().trim().min(5, "Bitte Massnahme beschreiben."),
+  workDescription: z.string().trim().optional().default(""),
   serviceSelections: z.string().optional(),
   articleSelections: z.string().optional(),
   timeSpentMinutes: z.coerce.number().min(0).optional(),
@@ -92,12 +89,22 @@ export const finalizeDocumentSchema = z.object({
   projectId: z.string().min(1),
   documentType: z.enum(["quote", "invoice", "delivery"]),
   documentId: z.string().min(1),
-  deliveryChannel: z.enum(["email", "post"]).optional(),
+  deliveryChannel: z.enum(["email", "post", "bexio"]).optional(),
   emailTo: z.string().optional(),
   emailCc: z.string().optional(),
   emailBcc: z.string().optional(),
   emailSubject: z.string().optional(),
   emailHtml: z.string().optional(),
+});
+
+export const deleteDraftQuoteSchema = z.object({
+  projectId: z.string().min(1),
+  quoteId: z.string().min(1),
+});
+
+export const deleteDraftInvoiceSchema = z.object({
+  projectId: z.string().min(1),
+  invoiceId: z.string().min(1),
 });
 
 export const transitionSchema = z.object({
@@ -143,6 +150,8 @@ export const articleSaveSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1, "Name ist Pflicht."),
   sku: z.string().min(1, "Artikelnummer ist Pflicht."),
+  /** bexio Artikel-ID (optional), für Zapier/bexio. */
+  bexioArticleId: z.union([z.literal(""), z.string().max(128, "Max. 128 Zeichen.")]).optional(),
   categoryId: z.string().min(1, "Kategorie wählen."),
   supplierId: z.string().optional(),
   purchasePrice: z.string().optional(),
@@ -150,7 +159,7 @@ export const articleSaveSchema = z.object({
   unit: z.string().min(1, "Einheit ist Pflicht."),
   descriptionLong: z.string().optional(),
   descriptionShort: z.string().optional(),
-  inStock: z.number().int().min(0),
+  inStock: z.coerce.number().int().min(0),
 });
 
 export const articleCategoryCreateSchema = z.object({
@@ -161,17 +170,6 @@ export const articleCategoryCreateSchema = z.object({
 export const profileSettingsSchema = z.object({
   displayName: z.string().min(1, "Anzeigename ist Pflicht."),
   calendarPosition: z.coerce.number().int().min(0).max(9999),
-  billingIban: z.string().optional(),
-  billingCreditorName: z.string().optional(),
-  billingCreditorStreet: z.string().optional(),
-  billingCreditorPostalCode: z.string().optional(),
-  billingCreditorCity: z.string().optional(),
-});
-
-export const stockDecisionSchema = z.object({
-  projectId: z.string().min(1),
-  decision: z.enum(["ab_lager", "bestellen"]),
-  notes: z.string().min(2, "Bitte Begründung ergänzen."),
 });
 
 export const supplierTemplateSubmissionSchema = z.object({
@@ -263,18 +261,6 @@ export const smtpSendSchema = z.object({
   icsEndsAt: z.string().optional(),
 });
 
-export const swissQrSchema = z.object({
-  amount: z.string().min(1),
-  currency: z.enum(["CHF", "EUR"]),
-  debtorName: z.string().min(2),
-  debtorStreet: z.string().min(2),
-  debtorPostalCode: z.string().min(2),
-  debtorCity: z.string().min(2),
-  debtorCountry: z.string().min(2).max(2).optional(),
-  reference: z.string().min(2),
-  message: z.string().min(1),
-});
-
 const contactPersonDraftSchema = z.object({
   firstName: z.string().optional(),
   lastName: z.string().optional(),
@@ -314,7 +300,6 @@ export const projectStammdatenUpdateSchema = z.object({
   intakeOriginalText: z.string().optional(),
   accessNotes: z.string().optional(),
   keyHandlingNotes: z.string().optional(),
-  timingNotes: z.string().optional(),
   internalNotes: z.string().optional(),
 });
 
@@ -332,6 +317,8 @@ export const contactCreateSchema = z.object({
   postalCode: z.string().optional(),
   city: z.string().optional(),
   managedObjectLabel: z.string().optional(),
+  /** bexio Kontakt-ID (Company/Person), manuell aus bexio übernehmen. */
+  bexioContactId: z.union([z.literal(""), z.string().max(128, "Max. 128 Zeichen.")]).optional(),
   persons: z.array(contactPersonDraftSchema).optional(),
   addresses: z.array(contactAddressDraftSchema).optional(),
 });

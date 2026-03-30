@@ -12,6 +12,8 @@ type QuoteDraftFormProps = {
   projectId: string;
   suggestedVersion: number;
   articleOptions: Article[];
+  /** Zapier aktiv: schlankes Formular; Texte/Konditionen werden in bexio am Entwurf ergänzt. */
+  bexioDraftMode?: boolean;
   className?: string;
   onSuccess?: () => void | Promise<void>;
 };
@@ -42,6 +44,7 @@ export function QuoteDraftForm({
   projectId,
   suggestedVersion,
   articleOptions,
+  bexioDraftMode = false,
   className,
   onSuccess,
 }: QuoteDraftFormProps) {
@@ -84,78 +87,97 @@ export function QuoteDraftForm({
       <input type="hidden" name="projectId" value={projectId} />
       <input type="hidden" name="version" value={String(suggestedVersion)} />
 
-      <div className="flex flex-col gap-1">
-        <Label className="text-sm">Gültigkeit (Tage)</Label>
-        <select name="validityDays" className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none" defaultValue="30">
-          <option value="14">14 Tage</option>
-          <option value="30">30 Tage</option>
-          <option value="60">60 Tage</option>
-          <option value="90">90 Tage</option>
-        </select>
-      </div>
+      {bexioDraftMode ? (
+        <>
+          <p className="rounded-md border border-sky-200 bg-sky-50/90 px-3 py-2 text-xs leading-relaxed text-sky-950">
+            <span className="font-medium text-sky-900">bexio-Entwurf:</span> Hier erfassen Sie Kunde (Projekt) und
+            Positionen. Briefanrede, Fließtexte und feine Konditionen ergänzen Sie nach dem Webhook in{" "}
+            <span className="font-medium">bexio</span> am Angebot.
+          </p>
+          <input type="hidden" name="validityDays" value="30" />
+          <input type="hidden" name="warrantyText" value="24 Monate" />
+          <input type="hidden" name="leadTimeText" value="1 Woche" />
+          <input type="hidden" name="downPaymentPercent" value="0" />
+          <input type="hidden" name="paymentTermsText" value="30 Tage netto" />
+          <input type="hidden" name="salutationText" value="" />
+          <input type="hidden" name="textBlocks" value="" />
+        </>
+      ) : (
+        <>
+          <div className="flex flex-col gap-1">
+            <Label className="text-sm">Gültigkeit (Tage)</Label>
+            <select name="validityDays" className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none" defaultValue="30">
+              <option value="14">14 Tage</option>
+              <option value="30">30 Tage</option>
+              <option value="60">60 Tage</option>
+              <option value="90">90 Tage</option>
+            </select>
+          </div>
 
-      <div className="grid gap-2 xl:grid-cols-2">
-        <div className="flex flex-col gap-1">
-          <Label className="text-sm">Garantie</Label>
-          <select
-            name="warrantyText"
-            defaultValue="24 Monate"
-            className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
-          >
-            <option value="12 Monate">12 Monate</option>
-            <option value="24 Monate">24 Monate</option>
-            <option value="36 Monate">36 Monate</option>
-            <option value="Keine Garantie">Keine Garantie</option>
-            <option value="Nach Herstellerangaben">Nach Herstellerangaben</option>
-          </select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <Label className="text-sm">Lieferfrist</Label>
-          <select
-            name="leadTimeText"
-            defaultValue="1 Woche"
-            className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
-          >
-            <option value="Sofort / ab Lager">Sofort / ab Lager</option>
-            <option value="1 Woche">1 Woche</option>
-            <option value="2 Wochen">2 Wochen</option>
-            <option value="3-4 Wochen">3-4 Wochen</option>
-            <option value="6-8 Wochen">6-8 Wochen</option>
-            <option value="Nach Absprache">Nach Absprache</option>
-          </select>
-        </div>
-      </div>
+          <div className="grid gap-2 xl:grid-cols-2">
+            <div className="flex flex-col gap-1">
+              <Label className="text-sm">Garantie</Label>
+              <select
+                name="warrantyText"
+                defaultValue="24 Monate"
+                className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
+              >
+                <option value="12 Monate">12 Monate</option>
+                <option value="24 Monate">24 Monate</option>
+                <option value="36 Monate">36 Monate</option>
+                <option value="Keine Garantie">Keine Garantie</option>
+                <option value="Nach Herstellerangaben">Nach Herstellerangaben</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-sm">Lieferfrist</Label>
+              <select
+                name="leadTimeText"
+                defaultValue="1 Woche"
+                className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
+              >
+                <option value="Sofort / ab Lager">Sofort / ab Lager</option>
+                <option value="1 Woche">1 Woche</option>
+                <option value="2 Wochen">2 Wochen</option>
+                <option value="3-4 Wochen">3-4 Wochen</option>
+                <option value="6-8 Wochen">6-8 Wochen</option>
+                <option value="Nach Absprache">Nach Absprache</option>
+              </select>
+            </div>
+          </div>
 
-      <div className="grid gap-2 xl:grid-cols-2">
-        <div className="flex flex-col gap-1">
-          <Label className="text-sm">Akontozahlung (%)</Label>
-          <Input name="downPaymentPercent" type="number" min={0} max={100} step="0.1" defaultValue={0} className="h-9" />
-        </div>
-        <div className="flex flex-col gap-1">
-          <Label className="text-sm">Zahlungskonditionen</Label>
-          <select
-            name="paymentTermsText"
-            defaultValue="30 Tage netto"
-            className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
-          >
-            <option value="Sofort zahlbar">Sofort zahlbar</option>
-            <option value="10 Tage netto">10 Tage netto</option>
-            <option value="20 Tage netto">20 Tage netto</option>
-            <option value="30 Tage netto">30 Tage netto</option>
-            <option value="50% bei Auftrag, Rest bei Abschluss">50% bei Auftrag, Rest bei Abschluss</option>
-            <option value="Nach Absprache">Nach Absprache</option>
-          </select>
-        </div>
-      </div>
+          <div className="grid gap-2 xl:grid-cols-2">
+            <div className="flex flex-col gap-1">
+              <Label className="text-sm">Akontozahlung (%)</Label>
+              <Input name="downPaymentPercent" type="number" min={0} max={100} step="0.1" defaultValue={0} className="h-9" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-sm">Zahlungskonditionen</Label>
+              <select
+                name="paymentTermsText"
+                defaultValue="30 Tage netto"
+                className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
+              >
+                <option value="Sofort zahlbar">Sofort zahlbar</option>
+                <option value="10 Tage netto">10 Tage netto</option>
+                <option value="20 Tage netto">20 Tage netto</option>
+                <option value="30 Tage netto">30 Tage netto</option>
+                <option value="50% bei Auftrag, Rest bei Abschluss">50% bei Auftrag, Rest bei Abschluss</option>
+                <option value="Nach Absprache">Nach Absprache</option>
+              </select>
+            </div>
+          </div>
 
-      <div className="flex flex-col gap-1">
-        <Label className="text-sm">Briefanrede</Label>
-        <Input name="salutationText" placeholder="z. B. Sehr geehrte Frau Muster" className="h-9" />
-      </div>
-      <div className="flex flex-col gap-1">
-        <Label className="text-sm">Textbausteine</Label>
-        <VoiceTextarea name="textBlocks" placeholder="Zusatztexte, Hinweise, Ausnahmen …" />
-      </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-sm">Briefanrede</Label>
+            <Input name="salutationText" placeholder="z. B. Sehr geehrte Frau Muster" className="h-9" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-sm">Textbausteine</Label>
+            <VoiceTextarea name="textBlocks" placeholder="Zusatztexte, Hinweise, Ausnahmen …" />
+          </div>
+        </>
+      )}
 
       <div className="rounded-md border p-3">
         <p className="text-sm font-medium">Offertenpositionen: Dienstleistungen</p>

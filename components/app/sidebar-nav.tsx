@@ -16,6 +16,7 @@ import {
   PackageSearch,
   ScrollText,
   Settings2,
+  SwatchBook,
   Upload,
   Users,
 } from "lucide-react";
@@ -33,6 +34,7 @@ const iconByKey: Record<SidebarItem["key"], ComponentType<{ className?: string }
   rapporte: ScrollText,
   team_chat: MessageSquare,
   zeiterfassung: Clock3,
+  stoffgenerator: SwatchBook,
   bestellformular: ChartColumnStacked,
   einstellungen: Cog,
   integrationen: Settings2,
@@ -86,6 +88,8 @@ export function SidebarNav({ items }: SidebarNavProps) {
                 <Link
                   key={item.href}
                   href={item.href}
+                  target={item.href.startsWith("http") ? "_blank" : undefined}
+                  rel={item.href.startsWith("http") ? "noopener noreferrer" : undefined}
                   className={cn(
                     "flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors",
                     isActive

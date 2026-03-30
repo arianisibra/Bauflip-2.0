@@ -1,0 +1,214 @@
+"use client";
+
+import * as React from "react";
+import * as RadixDialog from "@radix-ui/react-dialog";
+import { Check, ChevronDown, Plus, X } from "lucide-react";
+import type { ProjectWorkType } from "@/lib/domain/types";
+import { addProjectWorkTypeAction, deleteProjectWorkTypeAction } from "@/app/(app)/projekte/actions";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+
+export type WorkTypeSelectProps = {
+  workTypes: ProjectWorkType[];
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  id?: string;
+  className?: string;
+  /** Auswahl- und Lösch-Buttons (Büro/Admin). */
+  manageable?: boolean;
+  onMutation?: () => void | Promise<void>;
+};
+
+export function WorkTypeSelect({
+  workTypes,
+  value,
+  onChange,
+  disabled,
+  id,
+  className,
+  manageable = true,
+  onMutation,
+}: WorkTypeSelectProps) {
+  const [open, setOpen] = React.useState(false);
+  const [addOpen, setAddOpen] = React.useState(false);
+  const [newName, setNewName] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+
+  const resolvedLabel = value ? (workTypes.find((w) => w.id === value)?.name ?? "") : "";
+
+  async function handleDelete(w: ProjectWorkType) {
+    if (!manageable || disabled) {
+      return;
+    }
+    if (!window.confirm(`Arbeitsart «${w.name}» aus der Liste entfernen? Zugewiesene Projekte werden auf «keine Arbeitsart» gesetzt.`)) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await deleteProjectWorkTypeAction(w.id);
+      if (value === w.id) {
+        onChange("");
+      }
+      await onMutation?.();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Löschen fehlgeschlagen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAdd() {
+    const name = newName.trim();
+    if (!name) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const { id: newId } = await addProjectWorkTypeAction(name);
+      setNewName("");
+      setAddOpen(false);
+      onChange(newId);
+      setOpen(false);
+      await onMutation?.();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Anlegen fehlgeschlagen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            id={id}
+            disabled={disabled || busy}
+            className={cn(
+              "flex h-9 w-full min-w-0 items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent py-2 pr-2 pl-2.5 text-sm whitespace-nowrap outline-none transition-colors",
+              "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+              "disabled:cursor-not-allowed disabled:opacity-50",
+              "data-[state=open]:border-ring data-[state=open]:ring-3 data-[state=open]:ring-ring/50",
+              className,
+            )}
+          >
+            <span className={cn("flex flex-1 truncate", !resolvedLabel && "text-muted-foreground")}>
+              {resolvedLabel || "—"}
+            </span>
+            <ChevronDown className="pointer-events-none size-4 shrink-0 text-muted-foreground" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          className="z-[200] min-w-[var(--radix-dropdown-menu-trigger-width)] max-w-[min(100vw-2rem,24rem)] p-0"
+          onCloseAutoFocus={(e) => e.preventDefault()}
+        >
+          <div className="max-h-[min(18rem,calc(100vh-8rem))] overflow-y-auto p-1">
+            <button
+              type="button"
+              role="menuitem"
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent focus-visible:bg-accent"
+              onClick={() => {
+                onChange("");
+                setOpen(false);
+              }}
+            >
+              <span className="min-w-0 flex-1 truncate text-left">—</span>
+              {!value ? <Check className="size-4 shrink-0 opacity-80" aria-hidden /> : <span className="size-4 shrink-0" aria-hidden />}
+            </button>
+            {workTypes.map((w) => (
+              <div key={w.id} className="flex min-h-8 items-stretch gap-0 rounded-sm hover:bg-accent/60">
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent"
+                  onClick={() => {
+                    onChange(w.id);
+                    setOpen(false);
+                  }}
+                >
+                  <span className="min-w-0 flex-1 truncate">{w.name}</span>
+                  {value === w.id ? <Check className="size-4 shrink-0 opacity-80" aria-hidden /> : <span className="size-4 shrink-0" aria-hidden />}
+                </button>
+                {manageable ? (
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-sm px-2 text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
+                    title="Arbeitsart entfernen"
+                    disabled={busy}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void handleDelete(w);
+                    }}
+                  >
+                    <X className="size-3.5" aria-hidden />
+                    <span className="sr-only">Entfernen</span>
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+          {manageable ? (
+            <>
+              <DropdownMenuSeparator className="my-0" />
+              <div className="p-1">
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-primary outline-none hover:bg-accent focus-visible:bg-accent"
+                  disabled={busy}
+                  onClick={() => {
+                    setAddOpen(true);
+                    setOpen(false);
+                  }}
+                >
+                  <Plus className="size-4 shrink-0" aria-hidden />
+                  Weitere Arbeitsart hinzufügen
+                </button>
+              </div>
+            </>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <RadixDialog.Root open={addOpen} onOpenChange={setAddOpen}>
+        <RadixDialog.Portal>
+          <RadixDialog.Overlay className="fixed inset-0 z-[250] bg-black/40 data-[state=open]:animate-in data-[state=closed]:animate-out" />
+          <RadixDialog.Content
+            className="fixed top-1/2 left-1/2 z-[251] w-[min(100%,20rem)] -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-background p-4 shadow-lg outline-none"
+            onOpenAutoFocus={(e) => e.preventDefault()}
+          >
+            <RadixDialog.Title className="text-sm font-semibold">Neue Arbeitsart</RadixDialog.Title>
+            <RadixDialog.Description className="sr-only">Bezeichnung für die neue Arbeitsart eingeben.</RadixDialog.Description>
+            <Input
+              className="mt-3 h-9"
+              placeholder="z. B. Wartung"
+              value={newName}
+              disabled={busy}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void handleAdd();
+                }
+              }}
+            />
+            <div className="mt-3 flex justify-end gap-2">
+              <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => setAddOpen(false)}>
+                Abbrechen
+              </Button>
+              <Button type="button" size="sm" disabled={busy || !newName.trim()} onClick={() => void handleAdd()}>
+                Anlegen
+              </Button>
+            </div>
+          </RadixDialog.Content>
+        </RadixDialog.Portal>
+      </RadixDialog.Root>
+    </>
+  );
+}

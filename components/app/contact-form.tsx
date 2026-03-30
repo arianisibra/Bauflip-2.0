@@ -36,6 +36,7 @@ const defaultValues: ContactCreateValues = {
   postalCode: "",
   city: "",
   managedObjectLabel: "",
+  bexioContactId: "",
   persons: [{ firstName: "", lastName: "", email: "", phone: "", mobile: "", roleTitle: "" }],
   addresses: [],
 };
@@ -105,6 +106,17 @@ export function ContactForm() {
           <div className="flex flex-col gap-2 md:col-span-2">
             <Label htmlFor="contactNumber">Kontakt- / Identifikationsnummer</Label>
             <Input id="contactNumber" {...form.register("contactNumber")} placeholder="optional" />
+          </div>
+          <div className="flex flex-col gap-2 md:col-span-2">
+            <Label htmlFor="bexioContactId">bexio Kontakt-ID (optional)</Label>
+            <Input
+              id="bexioContactId"
+              className="font-mono text-sm"
+              placeholder="Aus bexio kopieren"
+              autoComplete="off"
+              {...form.register("bexioContactId")}
+            />
+            <p className="text-xs text-muted-foreground">Für die Zapier-Anbindung an bexio (manuell aus bexio übernehmen).</p>
           </div>
         </CardContent>
       </Card>

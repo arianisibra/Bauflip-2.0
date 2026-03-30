@@ -1,25 +1,22 @@
 "use client";
 
-import type { FormEvent } from "react";
-import { useEffect, useRef, useState } from "react";
-import { CalendarClock } from "lucide-react";
+import type { ReactNode } from "react";
+import { useRef } from "react";
+import Link from "next/link";
+import { CalendarClock, ChevronDown, Download, FileText, Plus, Trash2 } from "lucide-react";
 import {
   addAppointmentAction,
-  addDeliveryAction,
   addInvoiceAction,
   addProjectNoteAction,
-  addStockDecisionAction,
-  deleteStockDecisionAction,
   finalizeProjectDocumentAction,
-  generateSwissQrAction,
-  uploadProjectReportFileAction,
+  deleteDraftQuoteAction,
+  deleteDraftInvoiceAction,
   deleteAppointmentAction,
 } from "@/app/(app)/actions";
 import type { getProjectSheetDataAction } from "@/app/(app)/projekte/actions";
+import { BAUFLIP_ZAPIER_EVENTS } from "@/lib/integrations/zapier-events";
 import { PROJECT_WORKFLOW_STEPS } from "@/lib/workflow/project-workflow-rail";
 import { VoiceTextarea } from "@/components/app/voice-textarea";
-import { StockDecisionSelect } from "@/components/app/stock-decision-select";
-import { SupplierOrderForm } from "@/components/app/supplier-order-form";
 import { QuoteDraftForm } from "@/components/app/quote-draft-form";
 import { GuidedPhaseSection } from "@/components/app/guided-phase-section";
 import { TechnicianReportForm } from "@/components/app/technician-report-form";
@@ -28,6 +25,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+
 
 type SheetPayload = Awaited<ReturnType<typeof getProjectSheetDataAction>>;
 
@@ -43,6 +41,10 @@ type ProjectSheetPhasePanelsProps = {
   profiles: SheetPayload["profiles"];
   supplierTemplates: SheetPayload["supplierTemplates"];
   articles: SheetPayload["articles"];
+  outcomeOptions: SheetPayload["outcomeOptions"];
+  locationOptions: SheetPayload["locationOptions"];
+  /** Aus organisations.zapier_enabled — Hinweis zu Webhooks / bexio in Offerten- und Rechnungsphase. */
+  integrationZapierEnabled?: boolean;
   onAfterMutation: () => void | Promise<void>;
 };
 
@@ -53,10 +55,131 @@ const REPORT_OUTCOME_LABEL: Record<string, string> = {
   vollersatz_noetig: "Komplettersatz nötig",
 };
 
-const STOCK_DECISION_LABEL: Record<string, string> = {
-  ab_lager: "Ab Lager verfügbar",
-  bestellen: "Bestellung nötig",
-};
+function ZapierBexioSyncHint({
+  enabled,
+  variant,
+  bexioContactId,
+}: {
+  enabled: boolean;
+  variant: "quote" | "invoice";
+  bexioContactId?: string | null;
+}) {
+  if (!enabled) {
+    return null;
+  }
+  const hasBexio = Boolean(bexioContactId?.trim());
+  const mono = "font-mono text-[11px] text-sky-950";
+  const code = (s: string) => (
+    <code className="rounded bg-sky-100/90 px-1 py-0.5 font-mono text-[11px] text-sky-950">{s}</code>
+  );
+
+  const shell = (body: ReactNode) => (
+    <details className="group rounded-md border border-sky-200 bg-sky-50/90 text-xs text-sky-950 open:border-sky-300/90">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 select-none outline-none marker:hidden [&::-webkit-details-marker]:hidden hover:bg-sky-100/50">
+        <span className="font-medium text-sky-900">Zapier / bexio</span>
+        <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-sky-200/80 bg-white/60 px-2 py-0.5 text-[10px] font-medium text-sky-800">
+          Details
+          <ChevronDown className="size-3.5 text-sky-600 transition-transform duration-200 group-open:rotate-180" aria-hidden />
+        </span>
+      </summary>
+      <div className="border-t border-sky-200/80 px-3 pb-3 pt-2">{body}</div>
+    </details>
+  );
+
+  if (variant === "quote") {
+    return shell(
+      <>
+        <p className="leading-relaxed text-sky-900/90">
+          <span className="font-medium text-sky-950">Ablauf:</span> In BauFlip erfassen Sie Kontakt und Positionen. Der Zap
+          legt in <span className="font-medium text-sky-950">bexio</span> ein <span className="font-medium text-sky-950">Angebot als Entwurf</span>{" "}
+          an (oder gleichwertige bexio-Aktion). Briefanrede, Fließtexte und feine Konditionen tragen Sie anschliessend in{" "}
+          <span className="font-medium text-sky-950">bexio</span> nach — nicht im BauFlip-Formular.
+        </p>
+        <p className="mt-2 leading-relaxed text-sky-900/90">
+          Webhooks nur wenn Zapier unter{" "}
+          <Link href="/integrationen" className="font-medium text-sky-950 underline underline-offset-2 hover:text-sky-800">
+            Integrationen
+          </Link>{" "}
+          aktiv ist. Pro Aufruf: JSON mit <span className={mono}>eventType</span> (Header{" "}
+          <span className={mono}>X-Bauflip-Event</span>) und <span className={mono}>payload</span> für Ihren Zap.
+        </p>
+        <ul className="mt-2 list-disc space-y-1.5 pl-4 leading-relaxed text-sky-900/90">
+          <li>
+            <span className="font-medium text-sky-950">Offerte speichern und finalisieren:</span> jeweils{" "}
+            {code(BAUFLIP_ZAPIER_EVENTS.QUOTE_CREATED)} — Zapier filtert nur dieses Event. Beim Speichern ohne PDF: kein{" "}
+            <span className={mono}>pdfPath</span>; nach «Finalisieren (bexio)» enthält der Payload zusätzlich{" "}
+            <span className={mono}>pdfPath</span>, <span className={mono}>deliveryChannel</span>, <span className={mono}>quoteId</span>
+            , Positionen, Totale.
+          </li>
+        </ul>
+        <p className="mt-2 leading-relaxed text-sky-900/90">
+          Für bexio: <span className={mono}>bexioContactIdNumeric</span> wenn ID gepflegt; zusätzlich{" "}
+          <span className={mono}>contactName</span>, <span className={mono}>contactEmail</span> für «Kontakt suchen»,
+          falls die ID nicht zieht.
+        </p>
+        <p className="mt-1 leading-relaxed text-sky-900/90">
+          BauFlip erzeugt ein PDF für die Akte; Kundenanschrift und Versand der Offerte steuern Sie in bexio über den Zap.
+        </p>
+        {hasBexio ? (
+          <p className="mt-2 rounded border border-emerald-200/80 bg-emerald-50/80 px-2 py-1.5 text-emerald-950">
+            Kontakt: bexio-ID hinterlegt — Webhook enthält <span className={mono}>bexioContactIdNumeric</span>.
+          </p>
+        ) : (
+          <p className="mt-2 rounded border border-amber-200/80 bg-amber-50/80 px-2 py-1.5 text-amber-950">
+            Kontakt: keine bexio-ID — im Kontakt «bexio Kontakt-ID» eintragen, damit Zapier den bexio-Kunden zuordnen kann.
+          </p>
+        )}
+      </>,
+    );
+  }
+
+  return shell(
+    <>
+      <p className="leading-relaxed text-sky-900/90">
+        <span className="font-medium text-sky-950">Ablauf:</span> In BauFlip bereiten Sie die Rechnung vor (Positionen kommen aus
+        der letzten Offerte). Der Zap legt in <span className="font-medium text-sky-950">bexio</span> eine{" "}
+        <span className="font-medium text-sky-950">Rechnung als Entwurf</span> an (oder gleichwertige bexio-Aktion). Texte, Versand
+        an den Kunden und Zahlungslauf steuern Sie in <span className="font-medium text-sky-950">bexio</span> — nicht per E-Mail aus
+        BauFlip.
+      </p>
+      <p className="mt-2 leading-relaxed text-sky-900/90">
+        Webhooks nur wenn Zapier unter{" "}
+        <Link href="/integrationen" className="font-medium text-sky-950 underline underline-offset-2 hover:text-sky-800">
+          Integrationen
+        </Link>{" "}
+        aktiv ist. Pro Aufruf: JSON mit <span className={mono}>eventType</span> (Header{" "}
+        <span className={mono}>X-Bauflip-Event</span>) und <span className={mono}>payload</span> für Ihren Zap.
+      </p>
+      <ul className="mt-2 list-disc space-y-1.5 pl-4 leading-relaxed text-sky-900/90">
+        <li>
+          <span className="font-medium text-sky-950">Rechnung vorbereiten und finalisieren:</span> jeweils{" "}
+          {code(BAUFLIP_ZAPIER_EVENTS.INVOICE_CREATED)} — Zapier filtert nur dieses Event. Beim Vorbereiten ohne PDF: kein{" "}
+          <span className={mono}>pdfPath</span>; nach «Finalisieren (bexio)» enthält der Payload zusätzlich{" "}
+          <span className={mono}>pdfPath</span>, <span className={mono}>deliveryChannel</span>, <span className={mono}>invoiceId</span>,{" "}
+          <span className={mono}>invoiceNumber</span>, Positionen (letzte Offerte), Totale.
+        </li>
+      </ul>
+      <p className="mt-2 leading-relaxed text-sky-900/90">
+        Für bexio: <span className={mono}>bexioContactIdNumeric</span> wenn ID gepflegt; zusätzlich{" "}
+        <span className={mono}>contactName</span>, <span className={mono}>contactEmail</span> für «Kontakt suchen», falls die ID nicht
+        zieht.
+      </p>
+      <p className="mt-1 leading-relaxed text-sky-900/90">
+        BauFlip erzeugt ein PDF für die Akte; den formalen Projektabschluss lösen Sie im geführten Prozess aus, wenn die Rechnung in
+        bexio versandt ist (wie Freigabe nach der Offerte).
+      </p>
+      {hasBexio ? (
+        <p className="mt-2 rounded border border-emerald-200/80 bg-emerald-50/80 px-2 py-1.5 text-emerald-950">
+          Kontakt: bexio-ID hinterlegt — Webhook enthält <span className={mono}>bexioContactIdNumeric</span>.
+        </p>
+      ) : (
+        <p className="mt-2 rounded border border-amber-200/80 bg-amber-50/80 px-2 py-1.5 text-amber-950">
+          Kontakt: keine bexio-ID — im Kontakt «bexio Kontakt-ID» eintragen, damit Zapier den bexio-Kunden zuordnen kann.
+        </p>
+      )}
+    </>,
+  );
+}
 
 export function ProjectSheetPhasePanels({
   phaseIndex,
@@ -68,12 +191,11 @@ export function ProjectSheetPhasePanels({
   profiles,
   supplierTemplates,
   articles,
+  outcomeOptions,
+  locationOptions,
+  integrationZapierEnabled = false,
   onAfterMutation,
 }: ProjectSheetPhasePanelsProps) {
-  const [selectedTemplateId, setSelectedTemplateId] = useState("");
-  const [qrPreview, setQrPreview] = useState<string | null>(null);
-  const [qrPending, setQrPending] = useState(false);
-  const [qrError, setQrError] = useState<string | null>(null);
   const technicians = profiles.filter((p) => p.role === "technician");
   const technicianById = new Map(technicians.map((t) => [t.id, t]));
   const besichtigungAppointments = bundle.appointments.filter((a) => a.kind === "besichtigung");
@@ -84,8 +206,6 @@ export function ProjectSheetPhasePanels({
   const latestQuote = bundle.quotes.at(-1) ?? null;
   const latestInvoice = bundle.invoices.at(-1) ?? null;
   const latestOrder = bundle.orders.at(-1) ?? null;
-  const latestDelivery = bundle.deliveries.at(-1) ?? null;
-  const latestStockDecision = bundle.stockDecisions?.at(-1) ?? null;
   const supplierSubmissions = bundle.supplierSubmissions ?? [];
   const supplierNameById = new Map(
     supplierTemplates.map((template) => [template.supplierId, template.supplierName] as const),
@@ -93,38 +213,11 @@ export function ProjectSheetPhasePanels({
   const supplierTemplateById = new Map(
     supplierTemplates.map((template) => [template.id, template] as const),
   );
-  const selectedSupplierTemplate =
-    supplierTemplates.find((template) => template.id === selectedTemplateId) ?? supplierTemplates[0] ?? null;
-  const qrAmountValue = latestQuote
-    ? Number.isFinite(latestQuote.totalGross)
-      ? latestQuote.totalGross.toFixed(2)
-      : "0.00"
-    : "";
-  const qrDebtorName = bundle.contact?.name ?? "";
-  const qrDebtorStreet = bundle.billingAddress?.street ?? bundle.contact?.street ?? "";
-  const qrDebtorPostalCode = bundle.billingAddress?.postalCode ?? bundle.contact?.postalCode ?? "";
-  const qrDebtorCity = bundle.billingAddress?.city ?? bundle.contact?.city ?? "";
-  const qrDebtorCountry = (bundle.billingAddress?.country ?? "CH").toUpperCase();
-  const qrReferenceValue =
-    latestInvoice?.invoiceNumber ??
-    bundle.project.referenceCode ??
-    `PROJ-${String(bundle.project.id).slice(0, 8).toUpperCase()}`;
+  const canDownloadSupplierFormPdf = actorRole === "admin" || actorRole === "office";
   const mutationsLocked = !canEdit || phaseIndex < currentPhaseIndex;
   const mutationLockReason = !canEdit
     ? `Ihre Rolle (${actorRole}) darf diesen Schritt nicht bearbeiten.`
     : "Dieser Schritt ist bereits abgeschlossen. Für Korrekturen zuerst den aktuellen Schritt öffnen.";
-
-  useEffect(() => {
-    if (supplierTemplates.length === 0) {
-      if (selectedTemplateId) {
-        setSelectedTemplateId("");
-      }
-      return;
-    }
-    if (!selectedTemplateId || !supplierTemplates.some((template) => template.id === selectedTemplateId)) {
-      setSelectedTemplateId(supplierTemplates[0]!.id);
-    }
-  }, [supplierTemplates, selectedTemplateId]);
 
   const submitAppointment = async (fd: FormData) => {
     if (mutationsLocked) {
@@ -150,28 +243,50 @@ export function ProjectSheetPhasePanels({
       window.alert(error instanceof Error ? error.message : "Dokument konnte nicht finalisiert werden.");
     }
   };
-  const submitQrForm = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const submitDeleteDraftQuote = async (fd: FormData) => {
     if (mutationsLocked) {
       window.alert(mutationLockReason);
       return;
     }
-    setQrError(null);
-    setQrPending(true);
+    const finalized = String(fd.get("quoteFinalized") ?? "") === "1";
+    const confirmMsg = finalized
+      ? "Diese Offertenversion wirklich löschen? PDF und Positionen in BauFlip werden entfernt. In bexio angelegte Dokumente bleiben unverändert."
+      : "Diesen Offerten-Entwurf wirklich löschen?";
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
     try {
-      const fd = new FormData(event.currentTarget);
-      const qrCode = await generateSwissQrAction(fd);
-      setQrPreview(qrCode);
-      window.alert("QR-Code wurde erfolgreich erzeugt.");
+      const next = new FormData();
+      next.set("projectId", String(fd.get("projectId") ?? ""));
+      next.set("quoteId", String(fd.get("quoteId") ?? ""));
+      await deleteDraftQuoteAction(next);
+      await onAfterMutation();
     } catch (error) {
-      const msg = error instanceof Error ? error.message : "QR-Code konnte nicht erzeugt werden.";
-      setQrError(msg);
-      window.alert(msg);
-    } finally {
-      setQrPending(false);
+      window.alert(error instanceof Error ? error.message : "Offerte konnte nicht gelöscht werden.");
     }
   };
-
+  const submitDeleteDraftInvoice = async (fd: FormData) => {
+    if (mutationsLocked) {
+      window.alert(mutationLockReason);
+      return;
+    }
+    const finalized = String(fd.get("invoiceFinalized") ?? "") === "1";
+    const confirmMsg = finalized
+      ? "Diese Rechnung wirklich löschen? PDF in BauFlip wird entfernt. In bexio angelegte Rechnungen bleiben unverändert."
+      : "Diesen Rechnungs-Entwurf wirklich löschen?";
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+    try {
+      const next = new FormData();
+      next.set("projectId", String(fd.get("projectId") ?? ""));
+      next.set("invoiceId", String(fd.get("invoiceId") ?? ""));
+      await deleteDraftInvoiceAction(next);
+      await onAfterMutation();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Rechnung konnte nicht gelöscht werden.");
+    }
+  };
   if (phaseIndex === 0) {
     return null;
   }
@@ -334,35 +449,26 @@ export function ProjectSheetPhasePanels({
             />
             <Card>
               <CardHeader>
-                <CardTitle>Technikerbericht</CardTitle>
+                <CardTitle>Monteurbericht</CardTitle>
                 <CardDescription>
                   Monteur erfasst Diagnose, Masse und Entscheid vor Ort. Grundlage für Offerte und Bestellung.
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
+                {/* Aktions-Buttons */}
                 {mutationsLocked ? null : (
-                  <form
-                    action={async (fd) => {
-                      await uploadProjectReportFileAction(fd);
-                      await onAfterMutation();
-                    }}
-                    className="flex flex-col gap-2 rounded-md border p-3"
-                  >
-                    <input type="hidden" name="projectId" value={bundle.project.id} />
-                    <Label className="text-sm">Datei zum Rapport hochladen (Bild, PDF, Word)</Label>
-                    <Input
-                      name="file"
-                      type="file"
-                      required
-                      accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                    />
-                    <div>
-                      <Button type="submit" size="sm" variant="outline">
-                        Datei hochladen
-                      </Button>
-                    </div>
-                  </form>
+                  <div className="flex flex-wrap gap-2">
+                    <a
+                      href={`/rapporte/neu/${bundle.project.id}`}
+                      className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                    >
+                      <Plus className="size-4" />
+                      Neuen Rapport erstellen
+                    </a>
+                  </div>
                 )}
+
+                {/* Hochgeladene Rapport-Dateien */}
                 {reportAttachments.length > 0 ? (
                   <div className="rounded-md border p-3">
                     <p className="mb-2 text-sm font-medium">Rapport-Dateien</p>
@@ -387,133 +493,35 @@ export function ProjectSheetPhasePanels({
                     </ul>
                   </div>
                 ) : null}
-                {mutationsLocked ? null : (
-                  <TechnicianReportForm
-                    projectId={bundle.project.id}
-                    variant="full"
-                    articleOptions={articles}
-                    className="flex flex-col gap-3 rounded-md border p-4"
-                    submitLabel="Bericht speichern"
-                    onSuccess={onAfterMutation}
-                  />
-                )}
 
-                {bundle.reports.map((report) => (
-                  <div key={report.id} className="rounded-md border bg-muted/20 p-3 text-sm">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium">{REPORT_OUTCOME_LABEL[report.outcome] ?? report.outcome}</span>
-                      <span className="text-xs text-muted-foreground">{formatDateTime(report.createdAt)}</span>
-                    </div>
-                    <p className="mt-1">{report.summary}</p>
-                    {report.workDescription ? <p className="mt-1 text-muted-foreground">{report.workDescription}</p> : null}
-                    {(() => {
-                      try {
-                        const m = JSON.parse(report.measurementsJson ?? "{}") as {
-                          serviceSelections?: string[];
-                          articleSelections?: string[];
-                        };
-                        const services = Array.isArray(m.serviceSelections) ? m.serviceSelections : [];
-                        const articles = Array.isArray(m.articleSelections) ? m.articleSelections : [];
-                        if (services.length === 0 && articles.length === 0) {
-                          return null;
-                        }
-                        return (
-                          <div className="mt-2 text-xs text-muted-foreground">
-                            {services.length > 0 ? <p>Dienstleistungen: {services.join(", ")}</p> : null}
-                            {articles.length > 0 ? <p>Artikel IDs: {articles.join(", ")}</p> : null}
-                          </div>
-                        );
-                      } catch {
-                        return null;
-                      }
-                    })()}
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            {/* Bestellformulare vor Ort (Monteur) */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Bestellformulare vor Ort</CardTitle>
-                <CardDescription>
-                  Monteur wählt Lieferantenformular und erfasst Bestelldaten direkt vor Ort.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-3">
-                {supplierTemplates.length > 0 ? (
-                  <>
-                    <div className="flex flex-col gap-1">
-                      <Label className="text-sm">Lieferant / Formular</Label>
-                      <select
-                        value={selectedTemplateId}
-                        onChange={(e) => setSelectedTemplateId(e.target.value)}
-                        className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
-                      >
-                        {supplierTemplates.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.supplierName} — {t.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    {selectedSupplierTemplate && !mutationsLocked ? (
-                      <SupplierOrderForm
-                        key={`draft-${selectedSupplierTemplate.id}`}
-                        projectId={bundle.project.id}
-                        template={selectedSupplierTemplate}
-                        articleOptions={articles}
-                        draftMode
-                        onSubmitted={onAfterMutation}
-                      />
-                    ) : null}
-                  </>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Keine Lieferantenvorlagen verfügbar.</p>
-                )}
-                {/* Already submitted drafts */}
-                {supplierSubmissions.length > 0 ? (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Erfasste Bestellformulare</p>
-                    {supplierSubmissions.map((sub) => {
-                      const tmpl = supplierTemplateById.get(sub.templateId);
-                      let vals: Record<string, string> = {};
-                      try {
-                        const parsed = JSON.parse(sub.valuesJson ?? "{}") as Record<string, unknown>;
-                        vals = Object.fromEntries(
-                          Object.entries(parsed).map(([k, v]) => [k, String(v ?? "").trim()]),
-                        );
-                      } catch {
-                        vals = {};
-                      }
-                      const entries = Object.entries(vals).filter(([, v]) => v.length > 0);
-                      return (
-                        <div key={sub.id} className="rounded-md border bg-muted/20 px-3 py-2 text-xs">
-                          <p className="font-medium text-foreground">
-                            {tmpl?.supplierName ?? "Lieferant"} · {vals.titel ?? tmpl?.name ?? "Formular"} ·{" "}
-                            <span className="capitalize">{sub.status}</span> · {formatDateTime(sub.createdAt)}
-                          </p>
-                          {entries.length > 0 ? (
-                            <div className="mt-1 space-y-0.5 text-muted-foreground">
-                              {entries
-                                .filter(([k]) => k !== "titel")
-                                .map(([key, value]) => {
-                                  const fieldDef = tmpl?.fieldDefinitions?.find((f) => f.key === key);
-                                  return (
-                                    <p key={`${sub.id}-${key}`}>
-                                      <span className="font-medium text-foreground">{fieldDef?.label ?? key}:</span> {value}
-                                    </p>
-                                  );
-                                })}
-                            </div>
-                          ) : null}
+                {/* Erfasste Rapporte */}
+                {bundle.reports.length > 0 ? (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-sm font-medium">Erfasste Rapporte ({bundle.reports.length})</p>
+                    {bundle.reports.map((report) => (
+                      <div key={report.id} className="flex items-start justify-between gap-3 rounded-md border bg-muted/20 p-3 text-sm">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium">{REPORT_OUTCOME_LABEL[report.outcome] ?? report.outcome}</p>
+                          {report.summary ? <p className="mt-0.5 truncate text-muted-foreground">{report.summary}</p> : null}
+                          <p className="mt-0.5 text-xs text-muted-foreground">{formatDateTime(report.createdAt)}</p>
                         </div>
-                      );
-                    })}
+                        <a
+                          href={`/rapporte/${report.id}/pdf`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-xs hover:bg-accent"
+                          title="PDF herunterladen"
+                        >
+                          <Download className="size-3.5" />
+                          PDF
+                        </a>
+                      </div>
+                    ))}
                   </div>
                 ) : null}
               </CardContent>
             </Card>
+
           </div>
         </GuidedPhaseSection>
       );
@@ -523,6 +531,11 @@ export function ProjectSheetPhasePanels({
         <GuidedPhaseSection id="offerte" phaseIndex={3} currentPhaseIndex={currentPhaseIndex}>
           <div className="space-y-4">
             {mutationsLocked ? <MutationLockedNotice message={mutationLockReason} /> : null}
+            <ZapierBexioSyncHint
+              enabled={integrationZapierEnabled}
+              variant="quote"
+              bexioContactId={bundle.contact?.bexioContactId ?? null}
+            />
             <PhaseHeader workflowStepIndex={3} />
             <PhaseControlCard
               rows={[
@@ -535,22 +548,22 @@ export function ProjectSheetPhasePanels({
                   value: latestQuote?.deliverySentAt ? formatDateTime(latestQuote.deliverySentAt) : "Noch nicht versendet",
                 },
                 {
-                  label: "Lagerentscheid",
-                  value: latestStockDecision
-                    ? `${STOCK_DECISION_LABEL[latestStockDecision.decision] ?? latestStockDecision.decision} · ${formatDateTime(latestStockDecision.createdAt)}`
-                    : "Noch keiner",
-                },
-                {
                   label: "Empfänger",
-                  value: latestQuote?.deliveryRecipient ?? "Kein Empfänger protokolliert",
+                  value:
+                    latestQuote?.deliveryChannel === "bexio"
+                      ? "über bexio (kein Mail aus BauFlip)"
+                      : (latestQuote?.deliveryRecipient ?? "Kein Empfänger protokolliert"),
                 },
               ]}
             />
-            <div className="grid gap-4 2xl:grid-cols-2 2xl:items-stretch">
-              <Card className="h-full min-h-0">
+            <Card className="h-full min-h-0">
                 <CardHeader>
                   <CardTitle>Offerte erstellen</CardTitle>
-                  <CardDescription>Basierend auf Monteur-Rapport. Material + Arbeit.</CardDescription>
+                  <CardDescription>
+                    {integrationZapierEnabled
+                      ? "Kontakt und Positionen für den bexio-Entwurf; feine Texte, Versand und Konditionen in bexio."
+                      : "Basierend auf Monteur-Rapport. Material + Arbeit."}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
                   {mutationsLocked ? null : (
@@ -558,6 +571,7 @@ export function ProjectSheetPhasePanels({
                       projectId={bundle.project.id}
                       suggestedVersion={(bundle.quotes?.length ?? 0) + 1}
                       articleOptions={articles}
+                      bexioDraftMode={integrationZapierEnabled}
                       className="flex min-h-0 flex-1 flex-col gap-2 rounded-md border p-3"
                       onSuccess={onAfterMutation}
                     />
@@ -566,12 +580,30 @@ export function ProjectSheetPhasePanels({
                     <div className="flex shrink-0 flex-col gap-1.5">
                       {bundle.quotes.map((q) => (
                         <div key={q.id} className="rounded-md border bg-muted/20 px-3 py-2 text-sm">
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between gap-2">
                             <span>Version {q.version}</span>
-                            <span className="text-xs text-muted-foreground capitalize">
-                              {q.status}
-                              {q.deliveryChannel ? ` · ${q.deliveryChannel}` : ""}
-                            </span>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <form action={submitDeleteDraftQuote}>
+                                <input type="hidden" name="projectId" value={bundle.project.id} />
+                                <input type="hidden" name="quoteId" value={q.id} />
+                                <input type="hidden" name="quoteFinalized" value={q.finalizedAt ? "1" : "0"} />
+                                <Button
+                                  type="submit"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 gap-1 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                  disabled={mutationsLocked}
+                                  title={q.finalizedAt ? "Version löschen" : "Entwurf löschen"}
+                                >
+                                  <Trash2 className="size-3.5" aria-hidden />
+                                  Löschen
+                                </Button>
+                              </form>
+                              <span className="text-xs text-muted-foreground capitalize">
+                                {q.status}
+                                {q.deliveryChannel ? ` · ${q.deliveryChannel}` : ""}
+                              </span>
+                            </div>
                           </div>
                           <div className="mt-2 space-y-2">
                             <p className="text-xs text-muted-foreground">
@@ -581,58 +613,73 @@ export function ProjectSheetPhasePanels({
                               {q.deliverySentAt ? ` · Versand: ${formatDateTime(q.deliverySentAt)}` : ""}
                               {q.deliveryRecipient ? ` · Empfänger: ${q.deliveryRecipient}` : ""}
                             </p>
-                            <form
-                              action={submitFinalizeDocument}
-                              className="flex items-center gap-2"
-                            >
-                              <input type="hidden" name="projectId" value={bundle.project.id} />
-                              <input type="hidden" name="documentType" value="quote" />
-                              <input type="hidden" name="documentId" value={q.id} />
-                              <input type="hidden" name="deliveryChannel" value="post" />
-                              <Button type="submit" size="sm" variant="outline" className="h-8 px-2 text-xs" disabled={mutationsLocked}>
-                                Per Post finalisieren
-                              </Button>
-                              <span className="text-xs text-muted-foreground">Kein Mailversand</span>
-                            </form>
-                            <form
-                              action={submitFinalizeDocument}
-                              className="rounded-md border bg-background p-2"
-                            >
-                              <input type="hidden" name="projectId" value={bundle.project.id} />
-                              <input type="hidden" name="documentType" value="quote" />
-                              <input type="hidden" name="documentId" value={q.id} />
-                              <input type="hidden" name="deliveryChannel" value="email" />
-                              <div className="grid gap-1">
-                                <Input
-                                  name="emailTo"
-                                  defaultValue={bundle.contact?.email ?? ""}
-                                  placeholder="kunde@beispiel.ch"
-                                  className="h-8 text-xs"
-                                />
-                                <Input
-                                  name="emailCc"
-                                  placeholder="cc@beispiel.ch, team@firma.ch (optional)"
-                                  className="h-8 text-xs"
-                                />
-                                <Input
-                                  name="emailBcc"
-                                  placeholder="bcc@beispiel.ch (optional)"
-                                  className="h-8 text-xs"
-                                />
-                                <Input
-                                  name="emailSubject"
-                                  defaultValue={`Offerte ${bundle.project.title}`}
-                                  className="h-8 text-xs"
-                                />
-                                <VoiceTextarea
-                                  name="emailHtml"
-                                  defaultValue="<p>Guten Tag</p><p>Besten Dank für Ihre Anfrage.</p><p>Im Anhang erhalten Sie die Offerte als PDF.</p><p>Bei Fragen sind wir gerne für Sie da.</p><p>Freundliche Grüsse<br/>Ihr Bauflip Team</p>"
-                                />
-                                <Button type="submit" size="sm" variant="outline" className="h-8 px-2 text-xs" disabled={mutationsLocked}>
-                                  Per E-Mail finalisieren
+                            {integrationZapierEnabled ? (
+                              <form
+                                action={submitFinalizeDocument}
+                                className="flex flex-col gap-2 rounded-md border border-sky-200 bg-sky-50/60 p-3"
+                              >
+                                <input type="hidden" name="projectId" value={bundle.project.id} />
+                                <input type="hidden" name="documentType" value="quote" />
+                                <input type="hidden" name="documentId" value={q.id} />
+                                <input type="hidden" name="deliveryChannel" value="bexio" />
+                                <p className="text-xs text-sky-950">
+                                  PDF für die Akte erzeugen und Daten an Zapier senden. Kundenversand nur in bexio — nicht per
+                                  E-Mail aus BauFlip.
+                                </p>
+                                <Button type="submit" size="sm" className="h-9 w-full sm:w-auto" disabled={mutationsLocked}>
+                                  Finalisieren (bexio)
                                 </Button>
-                              </div>
-                            </form>
+                              </form>
+                            ) : (
+                              <>
+                                <form action={submitFinalizeDocument} className="flex items-center gap-2">
+                                  <input type="hidden" name="projectId" value={bundle.project.id} />
+                                  <input type="hidden" name="documentType" value="quote" />
+                                  <input type="hidden" name="documentId" value={q.id} />
+                                  <input type="hidden" name="deliveryChannel" value="post" />
+                                  <Button type="submit" size="sm" variant="outline" className="h-8 px-2 text-xs" disabled={mutationsLocked}>
+                                    Per Post finalisieren
+                                  </Button>
+                                  <span className="text-xs text-muted-foreground">Kein Mailversand</span>
+                                </form>
+                                <form action={submitFinalizeDocument} className="rounded-md border bg-background p-2">
+                                  <input type="hidden" name="projectId" value={bundle.project.id} />
+                                  <input type="hidden" name="documentType" value="quote" />
+                                  <input type="hidden" name="documentId" value={q.id} />
+                                  <input type="hidden" name="deliveryChannel" value="email" />
+                                  <div className="grid gap-1">
+                                    <Input
+                                      name="emailTo"
+                                      defaultValue={bundle.contact?.email ?? ""}
+                                      placeholder="kunde@beispiel.ch"
+                                      className="h-8 text-xs"
+                                    />
+                                    <Input
+                                      name="emailCc"
+                                      placeholder="cc@beispiel.ch, team@firma.ch (optional)"
+                                      className="h-8 text-xs"
+                                    />
+                                    <Input
+                                      name="emailBcc"
+                                      placeholder="bcc@beispiel.ch (optional)"
+                                      className="h-8 text-xs"
+                                    />
+                                    <Input
+                                      name="emailSubject"
+                                      defaultValue={`Offerte ${bundle.project.title}`}
+                                      className="h-8 text-xs"
+                                    />
+                                    <VoiceTextarea
+                                      name="emailHtml"
+                                      defaultValue="<p>Guten Tag</p><p>Besten Dank für Ihre Anfrage.</p><p>Im Anhang erhalten Sie die Offerte als PDF.</p><p>Bei Fragen sind wir gerne für Sie da.</p><p>Freundliche Grüsse<br/>Ihr Bauflip Team</p>"
+                                    />
+                                    <Button type="submit" size="sm" variant="outline" className="h-8 px-2 text-xs" disabled={mutationsLocked}>
+                                      Per E-Mail finalisieren
+                                    </Button>
+                                  </div>
+                                </form>
+                              </>
+                            )}
                             {q.pdfPath ? (
                               <a
                                 href={`/api/project-documents/quote/${q.id}`}
@@ -650,84 +697,6 @@ export function ProjectSheetPhasePanels({
                   ) : null}
                 </CardContent>
               </Card>
-
-              <Card className="h-full min-h-0">
-                <CardHeader>
-                  <CardTitle>Lagerentscheidung</CardTitle>
-                  <CardDescription>Nach Offert-Freigabe: ab Lager lieferbar oder Bestellung nötig?</CardDescription>
-                </CardHeader>
-                <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
-                  <form
-                    action={async (fd) => {
-                      if (mutationsLocked) {
-                        window.alert(mutationLockReason);
-                        return;
-                      }
-                      try {
-                        await addStockDecisionAction(fd);
-                        await onAfterMutation();
-                        window.alert("Lagerentscheid gespeichert.");
-                      } catch (error) {
-                        window.alert(error instanceof Error ? error.message : "Lagerentscheid konnte nicht gespeichert werden.");
-                      }
-                    }}
-                    className="flex min-h-0 flex-1 flex-col gap-2 rounded-md border p-3"
-                  >
-                    <input type="hidden" name="projectId" value={bundle.project.id} />
-                    <Label className="text-sm">Entscheid</Label>
-                    <StockDecisionSelect />
-                    <div className="min-h-[5rem] flex-1">
-                      <VoiceTextarea name="notes" placeholder="Begründung / Bemerkung" required />
-                    </div>
-                    <Button className="mt-auto w-fit" type="submit" size="sm" disabled={mutationsLocked}>
-                      Entscheid speichern
-                    </Button>
-                  </form>
-                  {latestStockDecision ? (
-                    <div className="rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-                      <p>
-                        Letzter Entscheid:{" "}
-                        <span className="font-medium text-foreground">
-                          {STOCK_DECISION_LABEL[latestStockDecision.decision] ?? latestStockDecision.decision}
-                        </span>{" "}
-                        · {formatDateTime(latestStockDecision.createdAt)}
-                      </p>
-                      {latestStockDecision.notes ? <p className="mt-1">Notiz: {latestStockDecision.notes}</p> : null}
-                      <form
-                        action={async (fd) => {
-                          try {
-                            await deleteStockDecisionAction(fd);
-                            await onAfterMutation();
-                          } catch (error) {
-                            window.alert(
-                              error instanceof Error ? error.message : "Lagerentscheid konnte nicht gelöscht werden.",
-                            );
-                          }
-                        }}
-                        className="mt-2"
-                      >
-                        <input type="hidden" name="stockDecisionId" value={latestStockDecision.id} />
-                        <input type="hidden" name="projectId" value={bundle.project.id} />
-                        <Button
-                          type="submit"
-                          size="sm"
-                          variant="outline"
-                          className="h-7 border-red-200 px-2 text-xs text-red-700 hover:bg-red-50"
-                          onClick={(e) => {
-                            const ok = window.confirm("Lagerentscheid wirklich löschen?");
-                            if (!ok) {
-                              e.preventDefault();
-                            }
-                          }}
-                        >
-                          Lagerentscheid löschen
-                        </Button>
-                      </form>
-                    </div>
-                  ) : null}
-                </CardContent>
-              </Card>
-            </div>
           </div>
         </GuidedPhaseSection>
       );
@@ -749,25 +718,17 @@ export function ProjectSheetPhasePanels({
                   value: supplierSubmissions.length > 0 ? `${supplierSubmissions.length} erfasst` : "Fehlt",
                 },
                 {
-                  label: "Wareneingänge",
-                  value: bundle.deliveries.length > 0 ? `${bundle.deliveries.length} erfasst` : "Fehlt",
-                },
-                {
                   label: "Letzte Bestellung",
                   value: latestOrder ? formatDateTime(latestOrder.createdAt) : "Noch keine",
                 },
-                {
-                  label: "Letzter Wareneingang",
-                  value: latestDelivery ? formatDateTime(latestDelivery.arrivedAt) : "Noch keiner",
-                },
               ]}
             />
-            <div className="grid gap-4 2xl:grid-cols-2">
-              <Card>
+            <Card>
                 <CardHeader>
                   <CardTitle>Lieferanten-Bestellung</CardTitle>
                   <CardDescription>
-                    Vom Monteur erfasste Bestellformulare prüfen und bei Bedarf neu erfassen oder absenden.
+                    Vom Monteur erfasste Bestellformulare zu diesem Projekt. Bestellung und Versand an den Lieferant erfolgen
+                    ausserhalb von BauFlip (manuell).
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-3">
@@ -789,19 +750,36 @@ export function ProjectSheetPhasePanels({
                         const entries = Object.entries(vals).filter(([, v]) => v.length > 0);
                         return (
                           <div key={sub.id} className="rounded-md border bg-muted/20 px-3 py-2 text-xs">
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="font-medium text-foreground">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="min-w-0 font-medium text-foreground">
                                 {tmpl?.supplierName ?? "Lieferant"} · {vals.titel ?? tmpl?.name ?? "Formular"}
                               </p>
-                              <span className={cn(
-                                "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium capitalize",
-                                sub.status === "eingereicht"
-                                  ? "bg-green-100 text-green-800"
-                                  : "bg-amber-100 text-amber-800",
-                              )}>
-                                {sub.status}
-                              </span>
+                              <div className="flex shrink-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center">
+                                {canDownloadSupplierFormPdf ? (
+                                  <a
+                                    href={`/api/supplier-submissions/${sub.id}/pdf`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[10px] font-medium text-primary hover:bg-accent"
+                                    title="PDF im Browser öffnen (speichern über Drucken / Download)"
+                                  >
+                                    <FileText className="size-3 shrink-0" aria-hidden />
+                                    PDF
+                                  </a>
+                                ) : null}
+                                <span
+                                  className={cn(
+                                    "rounded-full px-2 py-0.5 text-[10px] font-medium capitalize",
+                                    sub.status === "eingereicht"
+                                      ? "bg-green-100 text-green-800"
+                                      : "bg-amber-100 text-amber-800",
+                                  )}
+                                >
+                                  {sub.status}
+                                </span>
+                              </div>
                             </div>
+                            <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">ID {sub.id}</p>
                             <p className="mt-0.5 text-muted-foreground">{formatDateTime(sub.createdAt)}</p>
                             {entries.length > 0 ? (
                               <div className="mt-1 space-y-0.5 text-muted-foreground">
@@ -825,33 +803,6 @@ export function ProjectSheetPhasePanels({
                     <p className="text-sm text-muted-foreground">Noch keine Bestellformulare vom Monteur erfasst.</p>
                   )}
 
-                  {/* Admin/Office: new order form */}
-                  {supplierTemplates.length > 0 && !mutationsLocked ? (
-                    <div className="flex flex-col gap-2 rounded-md border p-3">
-                      <Label className="text-sm">Neues Formular erfassen / absenden</Label>
-                      <select
-                        value={selectedTemplateId}
-                        onChange={(e) => setSelectedTemplateId(e.target.value)}
-                        className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
-                      >
-                        {supplierTemplates.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.supplierName} — {t.name}
-                          </option>
-                        ))}
-                      </select>
-                      {selectedSupplierTemplate ? (
-                        <SupplierOrderForm
-                          key={`send-${selectedSupplierTemplate.id}`}
-                          projectId={bundle.project.id}
-                          template={selectedSupplierTemplate}
-                          articleOptions={articles}
-                          onSubmitted={onAfterMutation}
-                        />
-                      ) : null}
-                    </div>
-                  ) : null}
-
                   {/* Purchase orders */}
                   {bundle.orders.length > 0 ? (
                     <div className="flex flex-col gap-1.5">
@@ -865,86 +816,6 @@ export function ProjectSheetPhasePanels({
                   ) : null}
                 </CardContent>
               </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Wareneingang</CardTitle>
-                  <CardDescription>Material kontrollieren, Lieferschein erfassen.</CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-3">
-                  <form
-                    action={async (fd) => {
-                      if (mutationsLocked) {
-                        window.alert(mutationLockReason);
-                        return;
-                      }
-                      try {
-                        await addDeliveryAction(fd);
-                        await onAfterMutation();
-                        window.alert("Wareneingang gespeichert.");
-                      } catch (error) {
-                        window.alert(error instanceof Error ? error.message : "Wareneingang konnte nicht erfasst werden.");
-                      }
-                    }}
-                    className="flex flex-col gap-2 rounded-md border p-3"
-                  >
-                    <input type="hidden" name="projectId" value={bundle.project.id} />
-                    <Label className="text-sm">Bestellung (optional, ID)</Label>
-                    <select
-                      name="purchaseOrderId"
-                      defaultValue=""
-                      className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
-                    >
-                      <option value="">Keine direkte Bestellung zuordnen</option>
-                      {bundle.orders.map((order) => (
-                        <option key={order.id} value={order.id}>
-                          {supplierNameById.get(order.supplierId) ?? "Lieferant"} · {order.status} · {formatDateTime(order.createdAt)}
-                        </option>
-                      ))}
-                    </select>
-                    <Label className="text-sm">Lieferscheinnummer</Label>
-                    <Input name="deliveryNoteNumber" placeholder="z. B. LS-2024-001" />
-                    <Button type="submit" size="sm" disabled={mutationsLocked}>
-                      Wareneingang erfassen
-                    </Button>
-                  </form>
-                  {bundle.deliveries.length > 0 ? (
-                    <div className="flex flex-col gap-1.5">
-                      {bundle.deliveries.map((d) => (
-                        <div key={d.id} className="rounded-md border bg-muted/20 px-3 py-2 text-sm">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium">{d.deliveryNoteNumber ?? "Kein Lieferschein"}</span>
-                            <span className="ml-2 text-xs text-muted-foreground">{formatDateTime(d.arrivedAt)}</span>
-                          </div>
-                          <div className="mt-2 flex items-center gap-2">
-                            <form
-                              action={submitFinalizeDocument}
-                            >
-                              <input type="hidden" name="projectId" value={bundle.project.id} />
-                              <input type="hidden" name="documentType" value="delivery" />
-                              <input type="hidden" name="documentId" value={d.id} />
-                              <Button type="submit" size="sm" variant="outline" className="h-8 px-2 text-xs">
-                                Lieferschein PDF erzeugen
-                              </Button>
-                            </form>
-                            {d.pdfPath ? (
-                              <a
-                                href={`/api/project-documents/delivery/${d.id}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-xs font-medium text-primary underline-offset-4 hover:underline"
-                              >
-                                PDF öffnen
-                              </a>
-                            ) : null}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </CardContent>
-              </Card>
-            </div>
           </div>
         </GuidedPhaseSection>
       );
@@ -992,7 +863,7 @@ export function ProjectSheetPhasePanels({
                   </div>
                   <div className="flex flex-col gap-1">
                     <Label className="text-sm">Zugang / Hinweise</Label>
-                    <VoiceTextarea name="accessNotes" placeholder="Schlüssel, Anwesenheit, Zeitfenster …" />
+                    <VoiceTextarea name="accessNotes" placeholder="Schlüssel, Anwesenheit …" />
                   </div>
                   <div className="flex flex-col gap-1">
                     <Label className="text-sm">Planungsnotiz</Label>
@@ -1154,6 +1025,11 @@ export function ProjectSheetPhasePanels({
         <GuidedPhaseSection id="rechnung" phaseIndex={7} currentPhaseIndex={currentPhaseIndex}>
           <div className="space-y-4">
             {mutationsLocked ? <MutationLockedNotice message={mutationLockReason} /> : null}
+            <ZapierBexioSyncHint
+              enabled={integrationZapierEnabled}
+              variant="invoice"
+              bexioContactId={bundle.contact?.bexioContactId ?? null}
+            />
             <PhaseHeader workflowStepIndex={7} />
             <PhaseControlCard
               rows={[
@@ -1167,15 +1043,26 @@ export function ProjectSheetPhasePanels({
                 },
                 {
                   label: "Empfänger",
-                  value: latestInvoice?.deliveryRecipient ?? "Kein Empfänger protokolliert",
+                  value:
+                    latestInvoice?.deliveryChannel === "bexio"
+                      ? "über bexio (kein Mail aus BauFlip)"
+                      : (latestInvoice?.deliveryRecipient ?? "Kein Empfänger protokolliert"),
                 },
               ]}
             />
-            <div className="grid gap-4 2xl:grid-cols-2">
-              <Card>
+            <p className="rounded-md border border-border/80 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">Abschluss:</span> Nach Finalisierung bleibt das Projekt auf Status{" "}
+              «Rechnung». Wenn die Rechnung in bexio versandt ist, schliessen Sie das Projekt im{" "}
+              <span className="font-medium text-foreground">geführten Prozess</span> ab (wie die Kundenfreigabe nach der Offerte).
+            </p>
+            <Card>
                 <CardHeader>
                   <CardTitle>Rechnung</CardTitle>
-                  <CardDescription>Rechnung erstellen und versenden.</CardDescription>
+                  <CardDescription>
+                    {integrationZapierEnabled
+                      ? "Rechnung vorbereiten; Versand und Zahlungslauf in bexio über den Zap."
+                      : "Rechnung erstellen und versenden."}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-3">
                   <form
@@ -1199,12 +1086,30 @@ export function ProjectSheetPhasePanels({
                     <div className="flex flex-col gap-1.5">
                       {bundle.invoices.map((inv) => (
                         <div key={inv.id} className="rounded-md border bg-muted/20 px-3 py-2 text-sm">
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between gap-2">
                             <span className="font-medium">{inv.invoiceNumber ?? "Entwurf"}</span>
-                            <span className="text-xs text-muted-foreground capitalize">
-                              {inv.status}
-                              {inv.deliveryChannel ? ` · ${inv.deliveryChannel}` : ""}
-                            </span>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <form action={submitDeleteDraftInvoice}>
+                                <input type="hidden" name="projectId" value={bundle.project.id} />
+                                <input type="hidden" name="invoiceId" value={inv.id} />
+                                <input type="hidden" name="invoiceFinalized" value={inv.finalizedAt ? "1" : "0"} />
+                                <Button
+                                  type="submit"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 gap-1 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                  disabled={mutationsLocked}
+                                  title={inv.finalizedAt ? "Rechnung löschen" : "Entwurf löschen"}
+                                >
+                                  <Trash2 className="size-3.5" aria-hidden />
+                                  Löschen
+                                </Button>
+                              </form>
+                              <span className="text-xs text-muted-foreground capitalize">
+                                {inv.status}
+                                {inv.deliveryChannel ? ` · ${inv.deliveryChannel}` : ""}
+                              </span>
+                            </div>
                           </div>
                           <div className="mt-2 space-y-2">
                             <p className="text-xs text-muted-foreground">
@@ -1214,58 +1119,73 @@ export function ProjectSheetPhasePanels({
                               {inv.deliverySentAt ? ` · Versand: ${formatDateTime(inv.deliverySentAt)}` : ""}
                               {inv.deliveryRecipient ? ` · Empfänger: ${inv.deliveryRecipient}` : ""}
                             </p>
-                            <form
-                              action={submitFinalizeDocument}
-                              className="flex items-center gap-2"
-                            >
-                              <input type="hidden" name="projectId" value={bundle.project.id} />
-                              <input type="hidden" name="documentType" value="invoice" />
-                              <input type="hidden" name="documentId" value={inv.id} />
-                              <input type="hidden" name="deliveryChannel" value="post" />
-                              <Button type="submit" size="sm" variant="outline" className="h-8 px-2 text-xs" disabled={mutationsLocked}>
-                                Per Post finalisieren
-                              </Button>
-                              <span className="text-xs text-muted-foreground">Kein Mailversand</span>
-                            </form>
-                            <form
-                              action={submitFinalizeDocument}
-                              className="rounded-md border bg-background p-2"
-                            >
-                              <input type="hidden" name="projectId" value={bundle.project.id} />
-                              <input type="hidden" name="documentType" value="invoice" />
-                              <input type="hidden" name="documentId" value={inv.id} />
-                              <input type="hidden" name="deliveryChannel" value="email" />
-                              <div className="grid gap-1">
-                                <Input
-                                  name="emailTo"
-                                  defaultValue={bundle.contact?.email ?? ""}
-                                  placeholder="kunde@beispiel.ch"
-                                  className="h-8 text-xs"
-                                />
-                                <Input
-                                  name="emailCc"
-                                  placeholder="cc@beispiel.ch, team@firma.ch (optional)"
-                                  className="h-8 text-xs"
-                                />
-                                <Input
-                                  name="emailBcc"
-                                  placeholder="bcc@beispiel.ch (optional)"
-                                  className="h-8 text-xs"
-                                />
-                                <Input
-                                  name="emailSubject"
-                                  defaultValue={`Rechnung ${bundle.project.title}`}
-                                  className="h-8 text-xs"
-                                />
-                                <VoiceTextarea
-                                  name="emailHtml"
-                                  defaultValue="<p>Guten Tag</p><p>Im Anhang erhalten Sie die Rechnung als PDF.</p><p>Vielen Dank für den Auftrag.</p><p>Freundliche Grüsse<br/>Ihr Bauflip Team</p>"
-                                />
-                                <Button type="submit" size="sm" variant="outline" className="h-8 px-2 text-xs" disabled={mutationsLocked}>
-                                  Per E-Mail finalisieren
+                            {integrationZapierEnabled ? (
+                              <form
+                                action={submitFinalizeDocument}
+                                className="flex flex-col gap-2 rounded-md border border-sky-200 bg-sky-50/60 p-3"
+                              >
+                                <input type="hidden" name="projectId" value={bundle.project.id} />
+                                <input type="hidden" name="documentType" value="invoice" />
+                                <input type="hidden" name="documentId" value={inv.id} />
+                                <input type="hidden" name="deliveryChannel" value="bexio" />
+                                <p className="text-xs text-sky-950">
+                                  PDF für die Akte erzeugen und Daten an Zapier senden. Kundenversand nur in bexio — nicht per
+                                  E-Mail aus BauFlip.
+                                </p>
+                                <Button type="submit" size="sm" className="h-9 w-full sm:w-auto" disabled={mutationsLocked}>
+                                  Finalisieren (bexio)
                                 </Button>
-                              </div>
-                            </form>
+                              </form>
+                            ) : (
+                              <>
+                                <form action={submitFinalizeDocument} className="flex items-center gap-2">
+                                  <input type="hidden" name="projectId" value={bundle.project.id} />
+                                  <input type="hidden" name="documentType" value="invoice" />
+                                  <input type="hidden" name="documentId" value={inv.id} />
+                                  <input type="hidden" name="deliveryChannel" value="post" />
+                                  <Button type="submit" size="sm" variant="outline" className="h-8 px-2 text-xs" disabled={mutationsLocked}>
+                                    Per Post finalisieren
+                                  </Button>
+                                  <span className="text-xs text-muted-foreground">Kein Mailversand</span>
+                                </form>
+                                <form action={submitFinalizeDocument} className="rounded-md border bg-background p-2">
+                                  <input type="hidden" name="projectId" value={bundle.project.id} />
+                                  <input type="hidden" name="documentType" value="invoice" />
+                                  <input type="hidden" name="documentId" value={inv.id} />
+                                  <input type="hidden" name="deliveryChannel" value="email" />
+                                  <div className="grid gap-1">
+                                    <Input
+                                      name="emailTo"
+                                      defaultValue={bundle.contact?.email ?? ""}
+                                      placeholder="kunde@beispiel.ch"
+                                      className="h-8 text-xs"
+                                    />
+                                    <Input
+                                      name="emailCc"
+                                      placeholder="cc@beispiel.ch, team@firma.ch (optional)"
+                                      className="h-8 text-xs"
+                                    />
+                                    <Input
+                                      name="emailBcc"
+                                      placeholder="bcc@beispiel.ch (optional)"
+                                      className="h-8 text-xs"
+                                    />
+                                    <Input
+                                      name="emailSubject"
+                                      defaultValue={`Rechnung ${bundle.project.title}`}
+                                      className="h-8 text-xs"
+                                    />
+                                    <VoiceTextarea
+                                      name="emailHtml"
+                                      defaultValue="<p>Guten Tag</p><p>Im Anhang erhalten Sie die Rechnung als PDF.</p><p>Vielen Dank für den Auftrag.</p><p>Freundliche Grüsse<br/>Ihr Bauflip Team</p>"
+                                    />
+                                    <Button type="submit" size="sm" variant="outline" className="h-8 px-2 text-xs" disabled={mutationsLocked}>
+                                      Per E-Mail finalisieren
+                                    </Button>
+                                  </div>
+                                </form>
+                              </>
+                            )}
                             {inv.pdfPath ? (
                               <a
                                 href={`/api/project-documents/invoice/${inv.id}`}
@@ -1283,78 +1203,6 @@ export function ProjectSheetPhasePanels({
                   ) : null}
                 </CardContent>
               </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Schweizer Rechnungs-QR</CardTitle>
-                  <CardDescription>
-                    QR-Code für Einzahlungsschein / QR-Rechnung. Firmendaten (IBAN/Gläubiger) kommen aus den Firmeneinstellungen,
-                    Betrag aus der letzten Offerte, Schuldnerdaten aus der Rechnungsadresse.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={submitQrForm} className="flex flex-col gap-2 rounded-md border p-3">
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <Input name="amount" value={qrAmountValue} readOnly required placeholder="Betrag CHF" />
-                      <Input name="debtorName" value={qrDebtorName} readOnly placeholder="Schuldnername" />
-                      <Input name="debtorStreet" value={qrDebtorStreet} readOnly placeholder="Schuldnerstrasse" />
-                      <Input
-                        name="debtorPostalCode"
-                        value={qrDebtorPostalCode}
-                        readOnly
-                        placeholder="Schuldner PLZ"
-                      />
-                      <Input name="debtorCity" value={qrDebtorCity} readOnly placeholder="Schuldner Ort" />
-                      <input type="hidden" name="debtorCountry" value={qrDebtorCountry} />
-                      <Input name="reference" value={qrReferenceValue} readOnly placeholder="Referenznummer" />
-                      <Input name="message" placeholder="Mitteilung" required />
-                    </div>
-                    {!latestQuote || !qrDebtorName || !qrDebtorStreet || !qrDebtorPostalCode || !qrDebtorCity ? (
-                      <p className="text-xs text-muted-foreground">
-                        Für QR werden Betrag (letzte Offerte) und Rechnungsadresse automatisch übernommen. Bitte fehlende Daten zuerst
-                        im Projekt ergänzen.
-                      </p>
-                    ) : null}
-                    <input type="hidden" name="currency" value="CHF" />
-                    <Button
-                      className="mt-1"
-                      type="submit"
-                      size="sm"
-                      disabled={
-                        qrPending || !latestQuote || !qrDebtorName || !qrDebtorStreet || !qrDebtorPostalCode || !qrDebtorCity
-                      }
-                    >
-                      {qrPending ? "Erzeuge QR-Code..." : "QR-Code erzeugen"}
-                    </Button>
-                  </form>
-                  {qrError ? <p className="mt-2 text-xs text-destructive">{qrError}</p> : null}
-                  {qrPreview ? (
-                    <div className="mt-3 rounded-md border p-3">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <p className="text-xs text-muted-foreground">Vorschau</p>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-7 border-red-200 px-2 text-xs text-red-700 hover:bg-red-50"
-                          onClick={() => {
-                            const ok = window.confirm("QR-Code-Vorschau wirklich löschen?");
-                            if (!ok) {
-                              return;
-                            }
-                            setQrPreview(null);
-                            setQrError(null);
-                          }}
-                        >
-                          QR-Code löschen
-                        </Button>
-                      </div>
-                      <img src={qrPreview} alt="QR-Code Rechnung" className="max-w-[260px] rounded border bg-white p-2" />
-                    </div>
-                  ) : null}
-                </CardContent>
-              </Card>
-            </div>
           </div>
         </GuidedPhaseSection>
       );
@@ -1495,7 +1343,7 @@ function PhaseHeader({ workflowStepIndex }: { workflowStepIndex: number }) {
   return (
     <div className="border-b border-border/60 pb-2">
       <div className="flex items-center gap-2">
-        <span className="flex size-6 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground">
+        <span className="flex size-6 items-center justify-center rounded-full border-2 border-primary bg-primary text-[10px] font-bold tabular-nums text-primary-foreground shadow-sm">
           {stepNumber}
         </span>
         <h2 className="text-sm font-semibold text-foreground">{step.label}</h2>

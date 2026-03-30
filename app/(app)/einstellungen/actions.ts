@@ -52,21 +52,12 @@ export async function saveProfileSettingsAction(formData: FormData) {
   const parsed = profileSettingsSchema.safeParse({
     displayName: formData.get("displayName"),
     calendarPosition: formData.get("calendarPosition"),
-    billingIban: formData.get("billingIban"),
-    billingCreditorName: formData.get("billingCreditorName"),
-    billingCreditorStreet: formData.get("billingCreditorStreet"),
-    billingCreditorPostalCode: formData.get("billingCreditorPostalCode"),
-    billingCreditorCity: formData.get("billingCreditorCity"),
   });
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Ungültige Eingabe.");
   }
   const displayName = parsed.data.displayName.trim();
-  const billingIban = String(parsed.data.billingIban ?? "").trim();
-  const billingCreditorName = String(parsed.data.billingCreditorName ?? "").trim();
-  const billingCreditorStreet = String(parsed.data.billingCreditorStreet ?? "").trim();
-  const billingCreditorPostalCode = String(parsed.data.billingCreditorPostalCode ?? "").trim();
-  const billingCreditorCity = String(parsed.data.billingCreditorCity ?? "").trim();
+  const companyName = String(formData.get("companyName") ?? "").trim();
   const calendarColorRaw = String(formData.get("calendarColor") ?? "").trim();
   const calendarColor =
     calendarColorRaw === "" ? null : isHexColor(calendarColorRaw) ? calendarColorRaw : null;
@@ -77,6 +68,9 @@ export async function saveProfileSettingsAction(formData: FormData) {
   const removeAvatar =
     formData.get("removeAvatar") === "on" || String(formData.get("removeAvatar") ?? "") === "true";
   const avatarFile = formData.get("avatar") as File | null;
+  const removeCompanyLogo =
+    formData.get("removeCompanyLogo") === "on" || String(formData.get("removeCompanyLogo") ?? "") === "true";
+  const companyLogoFile = formData.get("companyLogo") as File | null;
 
   let avatarUrl: string | null = session.profile.avatarUrl;
 
@@ -124,39 +118,64 @@ export async function saveProfileSettingsAction(formData: FormData) {
     throw new Error("Profil konnte nicht gespeichert werden.");
   }
 
-  if (session.role === "admin" && session.organizationId) {
-    const anyBillingFieldFilled = Boolean(
-      billingIban || billingCreditorName || billingCreditorStreet || billingCreditorPostalCode || billingCreditorCity,
-    );
-    if (
-      anyBillingFieldFilled &&
-      (!billingIban || !billingCreditorStreet || !billingCreditorPostalCode || !billingCreditorCity)
-    ) {
-      throw new Error("Für QR-Rechnung bitte IBAN, Strasse, PLZ und Ort vollständig ausfüllen.");
+  if (session.role === "admin") {
+    const organizationId = session.organizationId ?? (await ensureCurrentOrganizationId());
+    let existingCompanyName = "";
+    let organizationLogoUrl: string | null = null;
+
+    if (organizationId) {
+      const { data: orgRow } = await supabase
+        .from("organizations")
+        .select("name, logo_url")
+        .eq("id", organizationId)
+        .maybeSingle();
+      existingCompanyName = String((orgRow as Record<string, unknown> | null)?.name ?? "");
+      organizationLogoUrl =
+        (orgRow as Record<string, unknown> | null)?.logo_url != null
+          ? String((orgRow as Record<string, unknown>).logo_url)
+          : null;
+    }
+
+    if (removeCompanyLogo && organizationLogoUrl) {
+      const oldPath = extractAvatarPathFromPublicUrl(organizationLogoUrl);
+      if (oldPath) {
+        await storage.storage.from("avatars").remove([oldPath]);
+      }
+      organizationLogoUrl = null;
+    } else if (companyLogoFile && typeof companyLogoFile === "object" && companyLogoFile.size > 0 && organizationId) {
+      if (!AVATAR_MIME.has(companyLogoFile.type)) {
+        throw new Error("Firmenlogo: Nur JPEG, PNG, WebP oder GIF sind erlaubt.");
+      }
+      if (companyLogoFile.size > AVATAR_MAX_BYTES) {
+        throw new Error("Firmenlogo darf maximal 2 MB gross sein.");
+      }
+      const ext = extForAvatarMime(companyLogoFile.type);
+      const path = `organizations/${organizationId}/logo.${ext}`;
+      const oldPath = organizationLogoUrl ? extractAvatarPathFromPublicUrl(organizationLogoUrl) : null;
+      const buf = Buffer.from(await companyLogoFile.arrayBuffer());
+      const { error: uploadLogoError } = await storage.storage.from("avatars").upload(path, buf, {
+        contentType: companyLogoFile.type,
+        upsert: true,
+      });
+      if (uploadLogoError) {
+        throw new Error(uploadLogoError.message);
+      }
+      const { data: pub } = supabase.storage.from("avatars").getPublicUrl(path);
+      organizationLogoUrl = pub.publicUrl;
+      if (oldPath && oldPath !== path) {
+        await storage.storage.from("avatars").remove([oldPath]);
+      }
     }
 
     const orgClient = createSupabaseAdminClient() ?? supabase;
     const { error: orgError } = await orgClient
       .from("organizations")
       .update({
-        billing_iban: billingIban || null,
-        billing_creditor_name: billingCreditorName || null,
-        billing_creditor_street: billingCreditorStreet || null,
-        billing_creditor_postal_code: billingCreditorPostalCode || null,
-        billing_creditor_city: billingCreditorCity || null,
+        name: companyName || existingCompanyName || "Bauflip Organisation",
+        logo_url: organizationLogoUrl,
       })
-      .eq("id", session.organizationId);
+      .eq("id", organizationId);
     if (orgError) {
-      const schemaCacheMissingColumn =
-        orgError.code === "PGRST204" &&
-        String(orgError.message ?? "").includes("billing_creditor_");
-      if (schemaCacheMissingColumn) {
-        // DB migration for QR billing fields is not applied yet.
-        // Keep profile save successful and avoid blocking the whole settings form.
-        revalidatePath("/einstellungen");
-        revalidatePath("/");
-        return;
-      }
       const detail = [orgError.code, orgError.message, orgError.details, orgError.hint].filter(Boolean).join(" | ");
       throw new Error(detail || "Firmeneinstellungen konnten nicht gespeichert werden.");
     }
@@ -168,11 +187,14 @@ export async function saveProfileSettingsAction(formData: FormData) {
 
 export type TeamMemberListItem = {
   key: string;
+  /** Nur bei aktiven Mitgliedern — für Avatar-Link zum eigenen Profil. */
+  userId: string | null;
   displayName: string;
   email: string;
   role: "admin" | "office" | "technician";
   status: "aktiv" | "eingeladen";
   createdAt: string | null;
+  avatarUrl: string | null;
 };
 
 export async function listTeamMembersAction(): Promise<TeamMemberListItem[]> {
@@ -186,7 +208,7 @@ export async function listTeamMembersAction(): Promise<TeamMemberListItem[]> {
   const [membershipsResult, invitationsResult] = await Promise.all([
     supabase
       .from("organization_memberships")
-      .select("user_id, role, is_active, created_at, profiles(display_name)")
+      .select("user_id, role, is_active, created_at, profiles(display_name, avatar_url)")
       .eq("organization_id", organizationId)
       .eq("is_active", true)
       .order("created_at", { ascending: true }),
@@ -204,7 +226,10 @@ export async function listTeamMembersAction(): Promise<TeamMemberListItem[]> {
     role: "admin" | "office" | "technician";
     is_active: boolean;
     created_at: string | null;
-    profiles?: { display_name?: string | null } | Array<{ display_name?: string | null }> | null;
+    profiles?:
+      | { display_name?: string | null; avatar_url?: string | null }
+      | Array<{ display_name?: string | null; avatar_url?: string | null }>
+      | null;
   }> | null) ?? [];
   const invitations = (invitationsResult.data as Array<{
     id: string;
@@ -230,23 +255,29 @@ export async function listTeamMembersAction(): Promise<TeamMemberListItem[]> {
     const profileRaw = Array.isArray(m.profiles) ? m.profiles[0] ?? null : m.profiles ?? null;
     const displayName = String(profileRaw?.display_name ?? "").trim();
     const email = emailByUserId.get(m.user_id) ?? "—";
+    const rawAvatar = profileRaw?.avatar_url;
+    const avatarUrl = rawAvatar != null && String(rawAvatar).trim() !== "" ? String(rawAvatar).trim() : null;
     return {
       key: `member:${m.user_id}`,
+      userId: m.user_id,
       displayName: displayName || email.split("@")[0] || "Mitarbeiter",
       email,
       role: m.role,
       status: "aktiv",
       createdAt: m.created_at ?? null,
+      avatarUrl,
     };
   });
 
   const pendingItems: TeamMemberListItem[] = invitations.map((inv) => ({
     key: `invite:${inv.id}`,
+    userId: null,
     displayName: inv.email.split("@")[0] || "Einladung",
     email: inv.email,
     role: inv.role,
     status: "eingeladen",
     createdAt: inv.created_at ?? null,
+    avatarUrl: null,
   }));
 
   return [...activeItems, ...pendingItems];
@@ -323,6 +354,7 @@ export async function inviteEmployeeAction(formData: FormData) {
   }
 
   revalidatePath("/einstellungen");
+  revalidatePath("/mitarbeiter");
 }
 
 export async function acceptInviteOnboardingAction() {

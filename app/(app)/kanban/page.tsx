@@ -10,7 +10,7 @@ export default async function KanbanHubPage() {
       <div>
         <h1 className="text-2xl font-semibold">Kanban</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Alle Projekte nach Ablaufsphase — wie ein Team-Board. Karten können per Maus verschoben werden.
+          Alle Projekte nach Ablaufsphase.
         </p>
       </div>
 
@@ -21,13 +21,6 @@ export default async function KanbanHubPage() {
       ) : (
         <KanbanHubBoard projects={projects} />
       )}
-
-      <p className="text-xs text-muted-foreground">
-        Detailliertes Projekt-Board (Spalten pro Status):{" "}
-        <Link href="/projekte" className="font-medium text-primary underline-offset-4 hover:underline">
-          Projekt öffnen → Projekt-Kanban
-        </Link>
-      </p>
     </section>
   );
 }

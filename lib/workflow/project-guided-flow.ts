@@ -27,6 +27,32 @@ export function getPrimaryNextStatus(status: ProjectStatus): ProjectStatus | nul
   return map[status] ?? null;
 }
 
+/** Vorheriger Status auf dem gleichen Hauptpfad wie `getPrimaryNextStatus` (für kompakte Anzeige). */
+export function getPrimaryPreviousStatus(status: ProjectStatus): ProjectStatus | null {
+  const forward: Partial<Record<ProjectStatus, ProjectStatus>> = {
+    anfrage: "termin_geplant",
+    termin_geplant: "besichtigung",
+    besichtigung: "bericht_ausstehend",
+    bericht_ausstehend: "bericht_fertig",
+    bericht_fertig: "offerte_in_arbeit",
+    offerte_in_arbeit: "offerte_gesendet",
+    offerte_gesendet: "genehmigt",
+    genehmigt: "bestellung",
+    bestellung: "bestellt",
+    bestellt: "ware_eingetroffen",
+    ware_eingetroffen: "ausfuehrung_geplant",
+    ausfuehrung_geplant: "ausfuehrung_erledigt",
+    ausfuehrung_erledigt: "rechnung",
+    rechnung: "abgeschlossen",
+  };
+  for (const [from, to] of Object.entries(forward) as [ProjectStatus, ProjectStatus][]) {
+    if (to === status) {
+      return from;
+    }
+  }
+  return null;
+}
+
 export type BundleGateCounts = {
   besichtigungAppointments: number;
   ausfuehrungAppointments: number;
@@ -34,8 +60,9 @@ export type BundleGateCounts = {
   directResolvedReports: number;
   quotes: number;
   quoteFinalized: number;
+  /** Erfasste Lieferanten-Bestellformulare (Monteur), nicht die interne Bestell-Entität. */
+  supplierSubmissions: number;
   orders: number;
-  stockDecisionAbLager: number;
   deliveries: number;
   invoices: number;
   invoiceFinalized: number;
@@ -65,12 +92,12 @@ export function getBundlePrerequisiteMessages(
   }
   if (project.status === "bericht_ausstehend" && targetStatus === "bericht_fertig") {
     if (bundle.reports < 1) {
-      msgs.push("Mindestens einen Technikerbericht erfassen (Schritt «Rapport & Bestandsaufnahme»).");
+      msgs.push("Mindestens einen Monteurbericht erfassen (Schritt «Rapport & Bestandsaufnahme»).");
     }
   }
   if (project.status === "bericht_fertig" && targetStatus === "offerte_in_arbeit") {
     if (bundle.reports < 1) {
-      msgs.push("Rapport fehlt: zuerst Technikerbericht erfassen.");
+      msgs.push("Rapport fehlt: zuerst Monteurbericht erfassen.");
     }
   }
   if (project.status === "offerte_in_arbeit" && targetStatus === "offerte_gesendet") {
@@ -78,17 +105,12 @@ export function getBundlePrerequisiteMessages(
       msgs.push("Mindestens eine Offerte erstellen.");
     }
     if (bundle.quoteFinalized < 1) {
-      msgs.push("Offerte finalisieren (PDF/Post/E-Mail), bevor sie als gesendet gilt.");
+      msgs.push("Offerte finalisieren (PDF), bevor sie als gesendet gilt.");
     }
   }
   if (project.status === "bestellung" && targetStatus === "bestellt") {
-    if (bundle.orders < 1 && bundle.stockDecisionAbLager < 1) {
-      msgs.push("Mindestens eine Lieferanten-Bestellung erfassen oder Lagerentscheid «Ab Lager verfügbar» setzen.");
-    }
-  }
-  if (project.status === "bestellt" && targetStatus === "ware_eingetroffen") {
-    if (bundle.deliveries < 1) {
-      msgs.push("Wareneingang erfassen, bevor Material als eingetroffen markiert wird.");
+    if (bundle.supplierSubmissions < 1) {
+      msgs.push("Mindestens ein Lieferanten-Bestellformular vom Monteur erfassen (Schritt «Bestellung»).");
     }
   }
   if (project.status === "ausfuehrung_erledigt" && targetStatus === "rechnung") {
@@ -101,7 +123,7 @@ export function getBundlePrerequisiteMessages(
       msgs.push("Mindestens eine Rechnung vorbereiten.");
     }
     if (bundle.invoiceFinalized < 1) {
-      msgs.push("Rechnung finalisieren (PDF/Post/E-Mail), bevor das Projekt abgeschlossen wird.");
+      msgs.push("Rechnung finalisieren (PDF), bevor das Projekt abgeschlossen wird.");
     }
   }
   return msgs;
@@ -123,10 +145,12 @@ export function buildGuidedTransitionOptions(
   bundle: BundleGateCounts,
 ): GuidedTransitionOption[] {
   const primary = getPrimaryNextStatus(project.status);
+  const primaryPrevious = getPrimaryPreviousStatus(project.status);
   const rules = getAllowedTransitions(project.status);
 
   return rules
     .filter((r) => r.allowedRoles.includes(role))
+    .filter((r) => primaryPrevious == null || r.to !== primaryPrevious)
     .filter((r) => {
       if (project.status === "besichtigung" && r.to === "ausfuehrung_erledigt") {
         return bundle.directResolvedReports > 0;

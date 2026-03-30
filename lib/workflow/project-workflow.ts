@@ -3,8 +3,6 @@ import type { Project, ProjectStatus, RoleType } from "@/lib/domain/types";
 export type ProjectRequiredField =
   | "intakeOriginalText"
   | "accessNotes"
-  | "keyHandlingNotes"
-  | "timingNotes"
   | "internalNotes";
 
 type RequiredField = ProjectRequiredField;
@@ -39,7 +37,7 @@ const transitions: Record<ProjectStatus, TransitionRule[]> = {
     {
       to: "termin_geplant",
       allowedRoles: ["office", "admin"],
-      requiredFields: ["intakeOriginalText", "accessNotes", "keyHandlingNotes", "timingNotes"],
+      requiredFields: [],
       nextOwnerRole: "admin",
     },
   ],
@@ -47,8 +45,14 @@ const transitions: Record<ProjectStatus, TransitionRule[]> = {
     {
       to: "besichtigung",
       allowedRoles: ["technician", "office", "admin"],
-      requiredFields: ["intakeOriginalText", "accessNotes", "keyHandlingNotes", "timingNotes"],
+      requiredFields: [],
       nextOwnerRole: "technician",
+    },
+    {
+      to: "anfrage",
+      allowedRoles: ["office", "admin"],
+      requiredFields: [],
+      nextOwnerRole: "admin",
     },
   ],
   besichtigung: [
@@ -56,13 +60,19 @@ const transitions: Record<ProjectStatus, TransitionRule[]> = {
       to: "ausfuehrung_erledigt",
       allowedRoles: ["technician", "office", "admin"],
       requiredFields: ["intakeOriginalText"],
-      nextOwnerRole: "office",
+      nextOwnerRole: "technician",
     },
     {
       to: "bericht_ausstehend",
       allowedRoles: ["technician", "office", "admin"],
       requiredFields: ["intakeOriginalText"],
       nextOwnerRole: "technician",
+    },
+    {
+      to: "termin_geplant",
+      allowedRoles: ["technician", "office", "admin"],
+      requiredFields: [],
+      nextOwnerRole: "admin",
     },
   ],
   bericht_ausstehend: [
@@ -80,12 +90,24 @@ const transitions: Record<ProjectStatus, TransitionRule[]> = {
       requiredFields: ["intakeOriginalText", "internalNotes"],
       nextOwnerRole: "office",
     },
+    {
+      to: "bericht_ausstehend",
+      allowedRoles: ["office", "admin"],
+      requiredFields: [],
+      nextOwnerRole: "technician",
+    },
   ],
   offerte_in_arbeit: [
     {
       to: "offerte_gesendet",
       allowedRoles: ["office", "admin"],
       requiredFields: ["intakeOriginalText"],
+      nextOwnerRole: "office",
+    },
+    {
+      to: "bericht_fertig",
+      allowedRoles: ["office", "admin"],
+      requiredFields: [],
       nextOwnerRole: "office",
     },
   ],
@@ -104,6 +126,12 @@ const transitions: Record<ProjectStatus, TransitionRule[]> = {
       requiredFields: ["intakeOriginalText"],
       nextOwnerRole: "admin",
     },
+    {
+      to: "offerte_gesendet",
+      allowedRoles: ["admin", "office"],
+      requiredFields: [],
+      nextOwnerRole: "office",
+    },
   ],
   bestellung: [
     {
@@ -120,12 +148,18 @@ const transitions: Record<ProjectStatus, TransitionRule[]> = {
       requiredFields: ["intakeOriginalText"],
       nextOwnerRole: "office",
     },
+    {
+      to: "bestellung",
+      allowedRoles: ["office", "admin"],
+      requiredFields: [],
+      nextOwnerRole: "admin",
+    },
   ],
   ware_eingetroffen: [
     {
       to: "ausfuehrung_geplant",
       allowedRoles: ["office", "admin"],
-      requiredFields: ["timingNotes", "accessNotes"],
+      requiredFields: ["accessNotes"],
       nextOwnerRole: "technician",
     },
   ],
@@ -134,6 +168,12 @@ const transitions: Record<ProjectStatus, TransitionRule[]> = {
       to: "ausfuehrung_erledigt",
       allowedRoles: ["technician", "office", "admin"],
       requiredFields: ["intakeOriginalText"],
+      nextOwnerRole: "technician",
+    },
+    {
+      to: "ware_eingetroffen",
+      allowedRoles: ["office", "admin"],
+      requiredFields: [],
       nextOwnerRole: "office",
     },
   ],
@@ -152,8 +192,21 @@ const transitions: Record<ProjectStatus, TransitionRule[]> = {
       requiredFields: ["intakeOriginalText"],
       nextOwnerRole: "admin",
     },
+    {
+      to: "ausfuehrung_erledigt",
+      allowedRoles: ["admin", "office"],
+      requiredFields: [],
+      nextOwnerRole: "technician",
+    },
   ],
-  abgeschlossen: [],
+  abgeschlossen: [
+    {
+      to: "rechnung",
+      allowedRoles: ["admin", "office"],
+      requiredFields: [],
+      nextOwnerRole: "admin",
+    },
+  ],
 };
 
 function hasValue(value: string | null): boolean {
@@ -167,9 +220,7 @@ export function getAllowedTransitions(status: ProjectStatus): TransitionRule[] {
 /** Deutsche Bezeichnungen für Pflichtfelder (Anzeige im geführten Prozess). */
 export const requiredFieldLabelsDe: Record<ProjectRequiredField, string> = {
   intakeOriginalText: "Originalaussage Kunde",
-  accessNotes: "Zugang / Hinweise",
-  keyHandlingNotes: "Schlüssel / Zutritt",
-  timingNotes: "Zeitfenster",
+  accessNotes: "Zugang/Schlüssel",
   internalNotes: "Interne Notiz",
 };
 

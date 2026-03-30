@@ -37,7 +37,7 @@ export function ProjectWorkflowRail({ status }: ProjectWorkflowRailProps) {
                 <div
                   className={cn(
                     "absolute top-0 left-[1.125rem] h-3 w-px -translate-y-full",
-                    done || current ? "bg-primary/45" : "bg-border",
+                    done || current ? "bg-primary/45" : "bg-primary/25",
                   )}
                   aria-hidden
                 />
@@ -45,14 +45,7 @@ export function ProjectWorkflowRail({ status }: ProjectWorkflowRailProps) {
               <div className="flex w-full min-w-0 gap-2.5 pb-3">
                 <div className="flex flex-col items-center pt-0.5">
                   <span
-                    className={cn(
-                      "flex size-9 shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold tabular-nums transition-colors",
-                      done
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : current
-                          ? "border-primary bg-primary/15 text-primary shadow-sm ring-2 ring-primary/25"
-                          : "border-muted-foreground/25 bg-muted/40 text-muted-foreground",
-                    )}
+                    className="flex size-9 shrink-0 items-center justify-center rounded-full border-2 border-primary bg-primary text-xs font-bold tabular-nums text-primary-foreground shadow-sm transition-colors"
                     aria-current={current ? "step" : undefined}
                   >
                     {done ? <Check className="size-4" strokeWidth={2.5} /> : i + 1}
@@ -61,7 +54,7 @@ export function ProjectWorkflowRail({ status }: ProjectWorkflowRailProps) {
                     <div
                       className={cn(
                         "mt-1 min-h-[1.25rem] w-px flex-1",
-                        done ? "bg-primary/40" : "bg-border",
+                        done ? "bg-primary/40" : "bg-primary/25",
                       )}
                       aria-hidden
                     />

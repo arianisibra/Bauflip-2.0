@@ -26,12 +26,13 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { ProjectGuidedProcess } from "@/components/app/project-guided-process";
 import { ProjectSheetPhasePanels } from "@/components/app/project-sheet-phase-panels";
+import { WorkTypeSelect } from "@/components/app/work-type-select";
 import { ProjectWorkflowRailSheet } from "@/components/app/project-workflow-rail-sheet";
 import { BauflipLoading, BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
 import { PROJECT_WORKFLOW_STEPS, getWorkflowPhaseIndex } from "@/lib/workflow/project-workflow-rail";
 import { buildGuidedTransitionOptions, getGuidedStepMeta } from "@/lib/workflow/project-guided-flow";
 import { statusLabels } from "@/lib/workflow/project-workflow";
-import { cn } from "@/lib/utils";
+import { cn, mergeAccessAndKeyNotes } from "@/lib/utils";
 
 type FormValues = z.infer<typeof projectStammdatenUpdateSchema>;
 
@@ -69,9 +70,8 @@ function bundleToFormValues(project: Project): Omit<FormValues, "newWorkTypeName
     nextOwnerUserId: project.nextOwnerUserId ?? "",
     newWorkTypeName: "",
     intakeOriginalText: project.intakeOriginalText,
-    accessNotes: project.accessNotes ?? "",
-    keyHandlingNotes: project.keyHandlingNotes ?? "",
-    timingNotes: project.timingNotes ?? "",
+    accessNotes: mergeAccessAndKeyNotes(project.accessNotes, project.keyHandlingNotes),
+    keyHandlingNotes: "",
     internalNotes: project.internalNotes ?? "",
   };
 }
@@ -402,6 +402,9 @@ export function ProjektSheetEditor({ projectId, open, canEdit }: Props) {
   const actorRole = payload.actorRole ?? "office";
   const supplierTemplates = payload.supplierTemplates ?? [];
   const articles = payload.articles ?? [];
+  const outcomeOptions = payload.outcomeOptions ?? [];
+  const locationOptions = payload.locationOptions ?? [];
+  const integrationZapierEnabled = payload.integrationZapierEnabled ?? false;
   const guidedOptions = buildGuidedTransitionOptions(project, actorRole, {
     besichtigungAppointments: payload.bundle.appointments.filter((a) => a.kind === "besichtigung").length,
     ausfuehrungAppointments: payload.bundle.appointments.filter((a) => a.kind === "ausfuehrung").length,
@@ -409,8 +412,8 @@ export function ProjektSheetEditor({ projectId, open, canEdit }: Props) {
     directResolvedReports: payload.bundle.reports.filter((r) => r.outcome === "direkt_geloest").length,
     quotes: payload.bundle.quotes.length,
     quoteFinalized: payload.bundle.quotes.filter((q) => Boolean(q.finalizedAt) || Boolean(q.deliverySentAt)).length,
+    supplierSubmissions: (payload.bundle.supplierSubmissions ?? []).length,
     orders: payload.bundle.orders.length,
-    stockDecisionAbLager: payload.bundle.stockDecisions.filter((s) => s.decision === "ab_lager").length,
     deliveries: payload.bundle.deliveries.length,
     invoices: payload.bundle.invoices.length,
     invoiceFinalized: payload.bundle.invoices.filter((inv) => Boolean(inv.finalizedAt) || Boolean(inv.deliverySentAt)).length,
@@ -470,19 +473,12 @@ export function ProjektSheetEditor({ projectId, open, canEdit }: Props) {
               {...form.register("intakeOriginalText")}
             />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
-              <Label className="text-sm">Zugang</Label>
+              <Label className="text-sm">Zugang/Schlüssel</Label>
               <Textarea className="min-h-[4.5rem] text-sm" disabled={ro} {...form.register("accessNotes")} />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-sm">Schlüssel / Zutritt</Label>
-              <Textarea className="min-h-[4.5rem] text-sm" disabled={ro} {...form.register("keyHandlingNotes")} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-sm">Zeitfenster</Label>
-              <Textarea className="min-h-[4.5rem] text-sm" disabled={ro} {...form.register("timingNotes")} />
-            </div>
+            <input type="hidden" {...form.register("keyHandlingNotes")} />
             <div className="flex flex-col gap-1.5">
               <Label className="text-sm">Interne Notizen</Label>
               <Textarea className="min-h-[4.5rem] text-sm" disabled={ro} {...form.register("internalNotes")} />
@@ -578,32 +574,17 @@ export function ProjektSheetEditor({ projectId, open, canEdit }: Props) {
               control={form.control}
               name="workTypeId"
               render={({ field }) => (
-                <Select
-                  value={mapEmptyToSelect(field.value)}
-                  onValueChange={(v) => field.onChange(mapEmptyFromSelect(v))}
+                <WorkTypeSelect
+                  id="ps-workTypeId"
+                  workTypes={workTypes}
+                  value={field.value ?? ""}
+                  onChange={(v) => field.onChange(v)}
                   disabled={ro}
-                >
-                  <SelectTrigger id="ps-workTypeId" className="h-9 w-full min-w-0">
-                    <SelectValue
-                      placeholder="—"
-                      resolvedLabel={field.value ? (workTypes.find((w) => w.id === field.value)?.name ?? "") : ""}
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={SELECT_EMPTY}>—</SelectItem>
-                    {workTypes.map((w) => (
-                      <SelectItem key={w.id} value={w.id}>
-                        {w.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  manageable={!ro}
+                  onMutation={reloadSheetData}
+                />
               )}
             />
-          </div>
-          <div className="flex flex-col gap-1.5 sm:col-span-2">
-            <Label className="text-sm">Neue Arbeitsart (optional)</Label>
-            <Input className="h-9" disabled={ro} {...form.register("newWorkTypeName")} placeholder="Wird angelegt und ausgewählt" />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="ps-nextOwnerUserId" className="text-sm">
@@ -844,6 +825,8 @@ export function ProjektSheetEditor({ projectId, open, canEdit }: Props) {
           currentStepLabel={guidedPhaseMeta.stepLabel}
           currentStepHint={guidedPhaseMeta.stepHint}
           currentStatusLabel={statusLabels[project.status]}
+          projectStatus={project.status}
+          projectNextOwnerRole={project.nextOwnerRole}
           stepAnchorId={guidedPhaseMeta.stepAnchor}
           completed={guidedPhaseMeta.completed}
           steps={PROJECT_WORKFLOW_STEPS.map((s) => ({ id: s.id, label: s.label }))}
@@ -859,6 +842,8 @@ export function ProjektSheetEditor({ projectId, open, canEdit }: Props) {
           onNavigateToStep={handleNavigateToStep}
           focusedStepIndex={viewPhaseIndex}
           onAfterStatusTransition={reloadSheetData}
+          userRole={actorRole}
+          canEditWorkflowTransitions={canEdit}
         />
         <div
           className={cn(
@@ -889,6 +874,9 @@ export function ProjektSheetEditor({ projectId, open, canEdit }: Props) {
               profiles={profiles}
               supplierTemplates={supplierTemplates}
               articles={articles}
+              outcomeOptions={outcomeOptions}
+              locationOptions={locationOptions}
+              integrationZapierEnabled={integrationZapierEnabled}
               onAfterMutation={reloadSheetData}
             />
           </div>

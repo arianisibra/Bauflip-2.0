@@ -68,7 +68,7 @@ export default async function ArbeitspoolPage() {
   );
 
   return (
-    <section className="flex flex-col gap-5">
+    <section className="flex flex-col gap-4">
       {!supabaseConfigured ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
           <div className="flex items-center gap-2">
@@ -78,14 +78,14 @@ export default async function ArbeitspoolPage() {
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Übersicht</h1>
-          <p className="text-sm text-muted-foreground">
-            Persönliches Dashboard — Bausteine anordnen, hinzufügen oder ausblenden.
+      <div className="flex flex-col gap-3 border-b border-border/60 pb-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Übersicht</h1>
+          <p className="text-xs leading-relaxed text-muted-foreground sm:text-sm">
+            Persönliches Dashboard — Bausteine anordnen und ausblenden.
           </p>
         </div>
-        <Button nativeButton={false} render={<Link href="/projekte" />} variant="outline" size="sm">
+        <Button nativeButton={false} render={<Link href="/projekte" />} variant="outline" size="sm" className="shrink-0">
           Alle Projekte
         </Button>
       </div>

@@ -47,18 +47,18 @@ export function KanbanHubBoard({ projects }: KanbanHubBoardProps) {
     });
   };
 
-  const handleDrop = (targetColumnIndex: number) => {
-    if (!dragProjectId) {
+  const handleDrop = (targetColumnIndex: number, projectId: string | null) => {
+    if (!projectId) {
       return;
     }
     const previous = rows;
     const next = rows.map((row) =>
-      row.id === dragProjectId ? { ...row, status: phaseDefaultStatus(targetColumnIndex) } : row,
+      row.id === projectId ? { ...row, status: phaseDefaultStatus(targetColumnIndex) } : row,
     );
     setRows(next);
     setDragProjectId(null);
     setDragOverColumn(null);
-    persistMove(dragProjectId, targetColumnIndex, previous);
+    persistMove(projectId, targetColumnIndex, previous);
   };
 
   return (
@@ -72,12 +72,14 @@ export function KanbanHubBoard({ projects }: KanbanHubBoardProps) {
             key={step.id}
             onDragOver={(event) => {
               event.preventDefault();
+              event.dataTransfer.dropEffect = "move";
               setDragOverColumn(colIndex);
             }}
             onDragLeave={() => setDragOverColumn((prev) => (prev === colIndex ? null : prev))}
             onDrop={(event) => {
               event.preventDefault();
-              handleDrop(colIndex);
+              const fromTransfer = event.dataTransfer.getData("text/project-id") || event.dataTransfer.getData("text/plain");
+              handleDrop(colIndex, fromTransfer || dragProjectId);
             }}
             className={cn(
               "flex w-[min(100%,17.5rem)] shrink-0 flex-col rounded-xl border shadow-sm transition",
@@ -100,7 +102,13 @@ export function KanbanHubBoard({ projects }: KanbanHubBoardProps) {
                   <div
                     key={p.id}
                     draggable
-                    onDragStart={() => setDragProjectId(p.id)}
+                    onDragStart={(event) => {
+                      // Browserübergreifend: Ohne setData feuern Drops in manchen Engines unzuverlässig.
+                      event.dataTransfer.setData("text/project-id", p.id);
+                      event.dataTransfer.setData("text/plain", p.id);
+                      event.dataTransfer.effectAllowed = "move";
+                      setDragProjectId(p.id);
+                    }}
                     onDragEnd={() => {
                       setDragProjectId(null);
                       setDragOverColumn(null);
@@ -112,7 +120,11 @@ export function KanbanHubBoard({ projects }: KanbanHubBoardProps) {
                       pending && "cursor-progress",
                     )}
                   >
-                    <Link href={`/projekte/${p.id}`} className="block">
+                    <Link
+                      href={`/projekte/${p.id}`}
+                      className={cn("block", dragProjectId === p.id && "pointer-events-none")}
+                      draggable={false}
+                    >
                       <p className="text-sm font-semibold leading-snug text-foreground">{p.title}</p>
                       <p className="mt-1 text-xs text-muted-foreground">{p.contactName ?? "—"}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-1.5">

@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { addTechnicianReportAction } from "@/app/(app)/actions";
-import type { Article } from "@/lib/domain/types";
+import { addReportSelectOptionAction, addTechnicianReportAction, deleteReportSelectOptionAction } from "@/app/(app)/actions";
+import type { Article, ReportOutcomeOption, ReportSelectOption } from "@/lib/domain/types";
+import { ManagedSelect } from "@/components/app/managed-select";
+import { OutcomeSelect } from "@/components/app/outcome-select";
 import { VoiceTextarea } from "@/components/app/voice-textarea";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +16,8 @@ type TechnicianReportFormProps = {
   className?: string;
   submitLabel: string;
   articleOptions?: Article[];
+  outcomeOptions?: ReportOutcomeOption[];
+  locationOptions?: ReportSelectOption[];
   /** Called after successful save (e.g. refresh sheet data). Server action already revalidates routes. */
   onSuccess?: () => void | Promise<void>;
 };
@@ -62,9 +66,12 @@ export function TechnicianReportForm({
   className,
   submitLabel,
   articleOptions = [],
+  outcomeOptions = [],
+  locationOptions = [],
   onSuccess,
 }: TechnicianReportFormProps) {
   const [error, setError] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState("");
   const [selectedService, setSelectedService] = useState("");
   const [selectedArticleId, setSelectedArticleId] = useState("");
   const [serviceList, setServiceList] = useState<string[]>([]);
@@ -117,6 +124,10 @@ export function TechnicianReportForm({
       className={className}
       action={async (fd) => {
         setError(null);
+        if (variant === "full" && !fd.get("outcome")) {
+          setError("Bitte wählen Sie einen Entscheid vor Ort.");
+          return;
+        }
         const result = await addTechnicianReportAction(fd);
         if (!result.ok) {
           setError(result.message);
@@ -137,17 +148,13 @@ export function TechnicianReportForm({
         <>
           <div className="flex flex-col gap-1">
             <Label className="text-sm">Entscheid vor Ort</Label>
-            <select
+            <OutcomeSelect
+              options={outcomeOptions}
+              value={outcome}
+              onChange={setOutcome}
               name="outcome"
-              required
-              className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
-            >
-              <option value="">Bitte wählen …</option>
-              <option value="direkt_geloest">Direkt gelöst (Reparatur sofort)</option>
-              <option value="ersatzteil_noetig">Ersatzteil nötig</option>
-              <option value="werkstatt_noetig">Demontage → Werkstatt</option>
-              <option value="vollersatz_noetig">Komplettersatz nötig</option>
-            </select>
+              manageable
+            />
           </div>
           <div className="flex flex-col gap-1">
             <Label className="text-sm">Diagnose / Zusammenfassung</Label>
@@ -208,7 +215,17 @@ export function TechnicianReportForm({
             <input type="hidden" name="serviceSelections" value={JSON.stringify(serviceList)} />
           </div>
           <div className="flex flex-col gap-1">
-            <Label className="text-sm">Artikel aus Artikelliste</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-sm">Artikel aus Artikelliste</Label>
+              <a
+                href="/artikel/neu"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-primary hover:underline"
+              >
+                + Neuer Artikel
+              </a>
+            </div>
             <select
               value={selectedArticleId}
               onChange={(e) => {
@@ -258,19 +275,26 @@ export function TechnicianReportForm({
             </p>
             <div className="flex flex-col gap-1 sm:col-span-2">
               <Label className="text-sm">Ort</Label>
-              <select
+              <ManagedSelect
+                options={locationOptions}
                 value={measurements.ort}
-                onChange={(e) => setMeasurements((prev) => ({ ...prev, ort: e.target.value }))}
-                className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
-                required
-              >
-                <option value="">Ort wählen …</option>
-                {ORT_OPTIONS.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setMeasurements((prev) => ({ ...prev, ort: v }))}
+                placeholder="Ort wählen …"
+                manageable
+                addDialogTitle="Neuer Ort"
+                addDialogPlaceholder="z. B. Dachterrasse"
+                onAdd={async (label) => {
+                  const fd = new FormData();
+                  fd.set("fieldKey", "ort");
+                  fd.set("label", label);
+                  return addReportSelectOptionAction(fd);
+                }}
+                onDelete={async (opt) => {
+                  const fd = new FormData();
+                  fd.set("optionId", opt.id);
+                  await deleteReportSelectOptionAction(fd);
+                }}
+              />
             </div>
 
             {hasStorenArticle ? (
@@ -409,15 +433,6 @@ export function TechnicianReportForm({
               Felder werden je nach ausgewähltem Artikeltyp eingeblendet (Storen, Sonnenstoren, DL).
             </p>
             <input type="hidden" name="measurementsJson" value={measurementsJsonValue} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label className="text-sm">Massnahme / was muss gemacht werden</Label>
-            <VoiceTextarea
-              name="workDescription"
-              placeholder="Genaue Beschreibung der Arbeit"
-              required
-              minLength={5}
-            />
           </div>
           <div className="flex flex-col gap-1">
             <Label className="text-sm">Zeit vor Ort (Minuten)</Label>

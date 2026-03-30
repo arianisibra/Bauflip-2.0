@@ -272,19 +272,16 @@ export function CompanyKpiRevenueLineChart() {
 
   return (
     <div
-      className="rounded-xl border border-border/60 bg-card/80 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/10"
+      className="rounded-lg border border-border/60 bg-muted/10 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.08]"
       role="region"
       aria-label="Umsatz Liniendiagramm"
     >
-      <div className="border-b border-border/50 bg-muted/30 px-3 py-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="border-b border-border/50 bg-muted/25 px-2.5 py-2 sm:px-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-sm font-semibold tracking-tight text-foreground">Umsatz (genehmigt)</h3>
-            <p className="mt-0.5 text-sm leading-snug text-muted-foreground">
-              Zeitraum wählen · bei kurzen Fenstern Tage, sonst Monate
-            </p>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Umsatz</h3>
           </div>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1">
             {(
               [
                 ["1 M", 1],
@@ -298,7 +295,7 @@ export function CompanyKpiRevenueLineChart() {
                 type="button"
                 onClick={() => applyPreset(months)}
                 className={cn(
-                  "rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+                  "rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
                   preset === `${months}m`
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "bg-background/80 text-muted-foreground ring-1 ring-border/80 hover:bg-muted hover:text-foreground",
@@ -310,10 +307,10 @@ export function CompanyKpiRevenueLineChart() {
           </div>
         </div>
 
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
-          <div className="flex flex-1 flex-wrap items-end gap-2 sm:gap-3">
-            <div className="flex min-w-0 flex-col gap-1">
-              <Label htmlFor="rev-from" className="text-sm font-medium text-muted-foreground">
+        <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+          <div className="flex flex-1 flex-wrap items-end gap-2 sm:gap-2">
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <Label htmlFor="rev-from" className="text-xs font-medium text-muted-foreground">
                 Von
               </Label>
               <Input
@@ -324,11 +321,11 @@ export function CompanyKpiRevenueLineChart() {
                   setCustomFrom(e.target.value);
                   setPreset("custom");
                 }}
-                className="h-9 max-w-[11rem] text-sm"
+                className="h-8 max-w-[11rem] text-sm"
               />
             </div>
-            <div className="flex min-w-0 flex-col gap-1">
-              <Label htmlFor="rev-to" className="text-sm font-medium text-muted-foreground">
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <Label htmlFor="rev-to" className="text-xs font-medium text-muted-foreground">
                 Bis
               </Label>
               <Input
@@ -339,24 +336,24 @@ export function CompanyKpiRevenueLineChart() {
                   setCustomTo(e.target.value);
                   setPreset("custom");
                 }}
-                className="h-9 max-w-[11rem] text-sm"
+                className="h-8 max-w-[11rem] text-sm"
               />
             </div>
-            <Button type="button" size="default" variant="secondary" className="h-9 shrink-0 text-sm" onClick={applyCustom}>
+            <Button type="button" size="sm" variant="secondary" className="h-8 shrink-0 text-xs" onClick={applyCustom}>
               Anwenden
             </Button>
           </div>
         </div>
       </div>
 
-      <div className="bg-gradient-to-b from-muted/20 to-transparent px-2 pb-3 pt-2">
+      <div className="bg-gradient-to-b from-muted/15 to-transparent px-2 pb-2 pt-1.5 sm:px-2.5">
         {error ? <p className="px-1 py-2 text-center text-sm text-destructive">{error}</p> : null}
         {loading ? (
-          <div className="flex min-h-[200px] items-center justify-center py-6">
+          <div className="flex min-h-[168px] items-center justify-center py-5">
             <BauflipLoading label="Daten werden geladen …" size="sm" />
           </div>
         ) : points.length === 0 ? (
-          <div className="flex min-h-[200px] items-center justify-center">
+          <div className="flex min-h-[168px] items-center justify-center">
             <p className="text-sm text-muted-foreground">Keine Daten im Zeitraum</p>
           </div>
         ) : (

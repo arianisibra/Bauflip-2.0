@@ -11,7 +11,13 @@ export const sidebarItems: SidebarItem[] = [
   { key: "rapporte", label: "Rapporte", href: "/rapporte", section: "einsatz" },
   { key: "team_chat", label: "Team-Chat", href: "/team-chat", section: "einsatz" },
   { key: "zeiterfassung", label: "Zeiterfassung", href: "/zeiterfassung", section: "einsatz" },
-  { key: "bestellformular", label: "Bestellformular", href: "/bestellformular", section: "einsatz" },
+  {
+    key: "stoffgenerator",
+    label: "Stoffgenerator",
+    href: "https://www.sonnentuch.ch/produkte-und-informationen/stoffe-und-dessins/stoffgenerator",
+    section: "einsatz",
+  },
+  { key: "bestellformular", label: "Bestellformular CMS", href: "/bestellformular", section: "system" },
   { key: "einstellungen", label: "Einstellungen", href: "/einstellungen", section: "system" },
   { key: "integrationen", label: "Integrationen", href: "/integrationen", section: "system" },
   { key: "import_export", label: "Import / Export", href: "/import-export", section: "system" },
@@ -19,8 +25,8 @@ export const sidebarItems: SidebarItem[] = [
 
 const roleVisibility: Record<RoleType, AppPageKey[]> = {
   admin: sidebarItems.map((item) => item.key),
-  office: ["uebersicht", "kontakte", "termine", "projekte", "kanban", "artikel", "team_chat", "bestellformular", "import_export", "einstellungen"],
-  technician: ["uebersicht", "projekte", "kanban", "termine", "rapporte", "team_chat"],
+  office: ["uebersicht", "kontakte", "termine", "projekte", "kanban", "artikel", "team_chat", "stoffgenerator", "bestellformular", "import_export", "einstellungen"],
+  technician: ["uebersicht", "projekte", "kanban", "termine", "rapporte", "team_chat", "stoffgenerator"],
 };
 
 export function getVisibleSidebarItems(role: RoleType) {

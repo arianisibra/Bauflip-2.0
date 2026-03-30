@@ -28,12 +28,12 @@ export const PROJECT_WORKFLOW_STEPS = [
   {
     id: "bestellung",
     label: "Material & Bestellung",
-    hint: "Lager prüfen, Lieferant bestellen, Wareneingang",
+    hint: "Lager prüfen, Lieferant bestellen",
   },
   {
     id: "ausfuehrung",
     label: "Ausführungstermin",
-    hint: "2. Termin, Zugang, Schlüssel & Zeitplanung",
+    hint: "2. Termin, Zugang & Schlüssel",
   },
   {
     id: "fertigmeldung",

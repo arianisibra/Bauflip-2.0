@@ -78,6 +78,17 @@ export default async function KontaktDetailPage({ params }: Props) {
             )}
           </p>
         </div>
+        <div className="md:col-span-2">
+          <h2 className="text-sm font-medium text-muted-foreground">bexio Kontakt-ID</h2>
+          <p className="font-mono text-sm">
+            {contact.bexioContactId?.trim() ? contact.bexioContactId.trim() : "—"}
+          </p>
+          {!contact.bexioContactId?.trim() ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Für Zapier → bexio: ID aus bexio kopieren und im Kontakt bearbeiten eintragen.
+            </p>
+          ) : null}
+        </div>
       </div>
 
       {persons.length > 0 ? (

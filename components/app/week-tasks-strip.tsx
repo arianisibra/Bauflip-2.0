@@ -35,7 +35,7 @@ export function WeekTasksStrip({ tasks, teamProfiles = [], embedded = false }: W
   const rangeLabel = formatWeekRangeDe(start, end);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className={cn("flex flex-col", embedded ? "gap-2" : "gap-3")}>
       {!embedded ? (
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -49,7 +49,7 @@ export function WeekTasksStrip({ tasks, teamProfiles = [], embedded = false }: W
           </Link>
         </div>
       ) : (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs leading-snug text-muted-foreground">
           {rangeLabel} · nach Zeit sortiert ·{" "}
           <Link href="/termine" className="font-medium text-foreground underline-offset-4 hover:underline">
             Alle Termine
@@ -58,7 +58,7 @@ export function WeekTasksStrip({ tasks, teamProfiles = [], embedded = false }: W
       )}
 
       {teamProfiles.length > 0 ? (
-        <div className="flex flex-wrap gap-x-4 gap-y-2 rounded-lg border border-dashed bg-muted/20 px-3 py-2 text-xs">
+        <div className="flex flex-wrap gap-x-3 gap-y-1.5 rounded-md border border-dashed border-border/60 bg-muted/15 px-2.5 py-1.5 text-xs">
           <span className="font-medium text-muted-foreground">Team:</span>
           {teamProfiles.map((p) => (
             <div key={p.id} className="flex items-center gap-1.5">

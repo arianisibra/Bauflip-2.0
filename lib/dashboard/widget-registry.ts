@@ -4,11 +4,8 @@ import {
   CalendarRange,
   ClipboardList,
   Gauge,
-  LayoutGrid,
-  Link2,
   MessageSquare,
   Package,
-  Truck,
   Users,
 } from "lucide-react";
 import type { RoleType } from "@/lib/domain/types";
@@ -33,7 +30,7 @@ export const WIDGET_REGISTRY: WidgetMeta[] = [
   {
     id: "betrieb_erfolg",
     title: "Betrieb & Erfolg",
-    description: "Umsatz, Deckungsbeitrag, Kennzahlen und Umsatz-Verlauf (Liniendiagramm).",
+    description: "Umsatz und Kennzahlen.",
     Icon: BarChart3,
     roles: ["admin", "office"],
   },
@@ -44,24 +41,10 @@ export const WIDGET_REGISTRY: WidgetMeta[] = [
     Icon: CalendarRange,
   },
   {
-    id: "pipeline_status",
-    title: "Projekt-Pipeline",
-    description: "Verteilung der Aufträge nach Bearbeitungsstand.",
-    Icon: LayoutGrid,
-    roles: ["admin", "office"],
-  },
-  {
     id: "offers_invoices",
     title: "Offerten & Rechnungen",
     description: "Offert-Erfolg, offene Rechnungen, Kundenstamm.",
     Icon: ClipboardList,
-    roles: ["admin", "office"],
-  },
-  {
-    id: "logistics_pulse",
-    title: "Einkauf & Logistik",
-    description: "Bestellungen unterwegs, Termindichte.",
-    Icon: Truck,
     roles: ["admin", "office"],
   },
   {
@@ -74,14 +57,8 @@ export const WIDGET_REGISTRY: WidgetMeta[] = [
   {
     id: "chat_module",
     title: "Chat",
-    description: "Separates Chat-Modul für Team-Kommunikation.",
+    description: "",
     Icon: MessageSquare,
-  },
-  {
-    id: "shortcuts",
-    title: "Schnellzugriff",
-    description: "Team-Chat, Projekte, Rapporte, Termine.",
-    Icon: Link2,
   },
   {
     id: "recent_projects",

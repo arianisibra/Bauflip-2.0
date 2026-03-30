@@ -68,6 +68,7 @@ function bundleToForm(
     postalCode: contact.postalCode ?? "",
     city: contact.city ?? "",
     managedObjectLabel: contact.managedObjectLabel ?? "",
+    bexioContactId: contact.bexioContactId ?? "",
     persons:
       persons.length > 0
         ? persons.map((p) => ({
@@ -242,6 +243,21 @@ export function KontaktSheetEditor({ contactId, open, onTitleChange }: Props) {
               Kontaktnummer
             </Label>
             <Input id="ks-contactNumber" className="h-9" {...form.register("contactNumber")} />
+          </div>
+          <div className="flex flex-col gap-1.5 sm:col-span-2">
+            <Label htmlFor="ks-bexioContactId" className="text-sm">
+              bexio Kontakt-ID
+            </Label>
+            <Input
+              id="ks-bexioContactId"
+              className="h-9 font-mono text-sm"
+              placeholder="Aus bexio kopieren (Kunde / Firma)"
+              autoComplete="off"
+              {...form.register("bexioContactId")}
+            />
+            <p className="text-xs text-muted-foreground">
+              Optional. Für Zapier → bexio: gleiche ID wie Kontakt oder Firma in bexio, manuell eintragen.
+            </p>
           </div>
         </div>
       </section>

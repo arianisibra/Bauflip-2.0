@@ -8,11 +8,7 @@ export default async function EinstellungenPage() {
   const supabaseConfigured = hasSupabaseConfig();
   let organizationBilling: {
     companyName: string;
-    iban: string;
-    creditorName: string;
-    creditorStreet: string;
-    creditorPostalCode: string;
-    creditorCity: string;
+    logoUrl: string | null;
   } | null = null;
 
   if (session?.organizationId) {
@@ -20,19 +16,13 @@ export default async function EinstellungenPage() {
     if (supabase) {
       const { data } = await supabase
         .from("organizations")
-        .select(
-          "name, billing_iban, billing_creditor_name, billing_creditor_street, billing_creditor_postal_code, billing_creditor_city",
-        )
+        .select("name, logo_url")
         .eq("id", session.organizationId)
         .maybeSingle();
       const row = (data ?? {}) as Record<string, unknown>;
       organizationBilling = {
         companyName: String(row.name ?? ""),
-        iban: String(row.billing_iban ?? ""),
-        creditorName: String(row.billing_creditor_name ?? ""),
-        creditorStreet: String(row.billing_creditor_street ?? ""),
-        creditorPostalCode: String(row.billing_creditor_postal_code ?? ""),
-        creditorCity: String(row.billing_creditor_city ?? ""),
+        logoUrl: row.logo_url != null ? String(row.logo_url) : null,
       };
     }
   }

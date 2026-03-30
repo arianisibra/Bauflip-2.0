@@ -45,14 +45,7 @@ export function ProjectWorkflowRailSheet({
               <div className="flex w-full min-w-0 gap-2 pb-1.5">
                 <div className="flex w-8 shrink-0 flex-col items-center pt-0.5">
                   <span
-                    className={cn(
-                      "flex size-8 shrink-0 items-center justify-center rounded-full border-2 text-[0.65rem] font-bold tabular-nums transition-colors",
-                      done
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : currentPipeline
-                          ? "border-primary bg-primary/15 text-primary shadow-sm ring-2 ring-primary/25"
-                          : "border-muted-foreground/25 bg-muted/40 text-muted-foreground",
-                    )}
+                    className="flex size-8 shrink-0 items-center justify-center rounded-full border-2 border-primary bg-primary text-[0.65rem] font-bold tabular-nums text-primary-foreground shadow-sm transition-colors"
                     aria-current={currentPipeline ? "step" : undefined}
                   >
                     {done ? <Check className="size-3.5" strokeWidth={2.5} /> : i + 1}
@@ -61,7 +54,7 @@ export function ProjectWorkflowRailSheet({
                     <div
                       className={cn(
                         "mt-1 h-8 w-[3px] rounded-full",
-                        done ? "bg-primary/35" : "bg-sky-200/90",
+                        done ? "bg-primary/35" : "bg-primary/25",
                       )}
                       aria-hidden
                     />
@@ -80,7 +73,7 @@ export function ProjectWorkflowRailSheet({
                     <span
                       className={cn(
                         "block text-[0.8rem] font-semibold leading-tight",
-                        currentPipeline ? "text-primary" : "text-foreground",
+                        currentPipeline || viewing ? "text-primary" : "text-foreground",
                       )}
                     >
                       {step.label}
@@ -100,7 +93,7 @@ export function ProjectWorkflowRailSheet({
       </ol>
       <div className="border-t border-sky-100/90 px-3 py-2.5">
         <p className="text-[0.65rem] leading-snug text-muted-foreground">
-          Erledigte Schritte können Sie erneut öffnen. «Weiter» schaltet den nächsten Schritt frei.
+          Klick springt die Ansicht. Status ändern: oben in der Leiste «Weiter».
         </p>
       </div>
     </aside>

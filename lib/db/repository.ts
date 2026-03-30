@@ -41,6 +41,8 @@ import type {
   ProjectWorkType,
   ProjectListRow,
   CalendarAppointmentItem,
+  ReportOutcomeOption,
+  ReportSelectOption,
 } from "@/lib/domain/types";
 import type { DashboardLayout } from "@/lib/dashboard/types";
 import { parseDashboardLayout } from "@/lib/dashboard/types";
@@ -74,11 +76,14 @@ import {
   mockSupplierTemplates,
   mockSiteProperties,
   mockProjectWorkTypes,
+  mockReportOutcomeOptions,
+  mockReportSelectOptions,
 } from "@/lib/db/mock-data";
 import { getWeekBounds } from "@/lib/date/week-bounds";
 import { resolveCalendarColor } from "@/lib/calendar/team-colors";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { parseBexioContactIdNumeric } from "@/lib/utils";
 
 export async function getOrganizationBranding(organizationId: string | null): Promise<OrganizationBranding> {
   const fallbackName = process.env.NEXT_PUBLIC_APP_NAME?.trim() || "Bauflip";
@@ -252,6 +257,7 @@ function mapArticleRow(row: Record<string, unknown>): Article {
     id: String(row.id),
     name: String(row.name ?? ""),
     sku: String(row.sku ?? ""),
+    bexioArticleId: row.bexio_article_id != null ? String(row.bexio_article_id).trim() || null : null,
     categoryId,
     categoryName,
     categoryTemplateScope,
@@ -293,6 +299,7 @@ function mapContactRow(row: Record<string, unknown>): Contact {
     city: row.city != null ? String(row.city) : null,
     website: row.website != null ? String(row.website) : null,
     managedObjectLabel: row.managed_object_label != null ? String(row.managed_object_label) : null,
+    bexioContactId: row.bexio_contact_id != null ? String(row.bexio_contact_id).trim() || null : null,
     createdAt: String(row.created_at ?? ""),
   };
 }
@@ -642,6 +649,120 @@ export async function listAppointmentsInRange(start: Date, end: Date): Promise<C
       calendarColor: resolveCalendarColor(tp?.calendar_color ?? null, tid),
     };
   });
+}
+
+export type TimeTrackingEntry = {
+  appointmentId: string;
+  projectId: string;
+  projectTitle: string;
+  projectStatus: ProjectStatus;
+  technicianId: string | null;
+  technicianName: string;
+  kind: Appointment["kind"];
+  startsAt: string;
+  endsAt: string;
+  durationMinutes: number;
+};
+
+export async function listTimeTrackingEntriesInRange(start: Date, end: Date): Promise<TimeTrackingEntry[]> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const items: TimeTrackingEntry[] = [];
+    for (const a of mockAppointments) {
+      const startsAt = new Date(a.startsAt);
+      if (startsAt < start || startsAt > end) {
+        continue;
+      }
+      const p = mockProjects.find((pr) => pr.id === a.projectId);
+      if (!p) {
+        continue;
+      }
+      const t = a.assignedTechnicianId ? mockProfiles.find((pr) => pr.id === a.assignedTechnicianId) : null;
+      const endAt = new Date(a.endsAt);
+      const durationMinutes = Math.max(0, Math.round((endAt.getTime() - startsAt.getTime()) / 60000));
+      items.push({
+        appointmentId: a.id,
+        projectId: p.id,
+        projectTitle: p.title,
+        projectStatus: p.status,
+        technicianId: a.assignedTechnicianId,
+        technicianName: t?.displayName ?? "Nicht zugewiesen",
+        kind: a.kind,
+        startsAt: a.startsAt,
+        endsAt: a.endsAt,
+        durationMinutes,
+      });
+    }
+    return items.sort((a, b) => b.startsAt.localeCompare(a.startsAt));
+  }
+
+  const { data, error } = await supabase
+    .from("appointments")
+    .select(
+      `
+      id,
+      project_id,
+      kind,
+      starts_at,
+      ends_at,
+      assigned_technician_id,
+      projects ( title, status )
+    `,
+    )
+    .gte("starts_at", start.toISOString())
+    .lte("starts_at", end.toISOString())
+    .order("starts_at", { ascending: false });
+
+  if (error || !data?.length) {
+    return [];
+  }
+
+  const rows = data as Array<{
+    id: string;
+    project_id: string;
+    kind: Appointment["kind"];
+    starts_at: string;
+    ends_at: string;
+    assigned_technician_id: string | null;
+    projects: { title: string; status: ProjectStatus } | Array<{ title: string; status: ProjectStatus }> | null;
+  }>;
+
+  const technicianIds = [...new Set(rows.map((r) => r.assigned_technician_id).filter(Boolean))] as string[];
+  const techNameById = new Map<string, string>();
+  if (technicianIds.length > 0) {
+    const { data: techRows } = await supabase.from("profiles").select("id, display_name").in("id", technicianIds);
+    for (const row of (techRows as Array<Record<string, unknown>> | null) ?? []) {
+      const id = String(row.id ?? "");
+      if (!id) {
+        continue;
+      }
+      techNameById.set(id, String(row.display_name ?? "Monteur"));
+    }
+  }
+
+  const result: TimeTrackingEntry[] = [];
+  for (const row of rows) {
+    const startsAt = new Date(row.starts_at);
+    const endsAt = new Date(row.ends_at);
+    const durationMinutes = Math.max(0, Math.round((endsAt.getTime() - startsAt.getTime()) / 60000));
+    const rawProject = row.projects;
+    const project = Array.isArray(rawProject) ? rawProject[0] : rawProject;
+    const technicianId = row.assigned_technician_id;
+    result.push({
+      appointmentId: row.id,
+      projectId: row.project_id,
+      projectTitle: project?.title ?? "Projekt",
+      projectStatus: project?.status ?? "anfrage",
+      technicianId,
+      technicianName: technicianId ? techNameById.get(technicianId) ?? "Monteur" : "Nicht zugewiesen",
+      kind: row.kind,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      durationMinutes,
+    });
+  }
+
+  return result;
 }
 
 function listWeekTasksMock(weekStart: Date, weekEnd: Date): WeekTaskItem[] {
@@ -1206,7 +1327,13 @@ export async function createContact(input: Omit<Contact, "id" | "createdAt">) {
       const next = peers.length + 1;
       contactNumber = `K-${String(next).padStart(2, "0")}`;
     }
-    const contact: Contact = { id: id("c"), createdAt: new Date().toISOString(), ...input, contactNumber };
+    const contact: Contact = {
+      id: id("c"),
+      createdAt: new Date().toISOString(),
+      ...input,
+      bexioContactId: input.bexioContactId?.trim() || null,
+      contactNumber,
+    };
     mockContacts.push(contact);
     return contact;
   }
@@ -1228,6 +1355,7 @@ export async function createContact(input: Omit<Contact, "id" | "createdAt">) {
       city: input.city,
       website: input.website,
       managed_object_label: input.managedObjectLabel,
+      bexio_contact_id: input.bexioContactId?.trim() || null,
     })
     .select("*")
     .single();
@@ -1306,6 +1434,7 @@ export type ContactUpdateFields = Pick<
   | "city"
   | "website"
   | "managedObjectLabel"
+  | "bexioContactId"
 >;
 
 export async function updateContact(contactId: string, input: ContactUpdateFields): Promise<Contact> {
@@ -1335,6 +1464,7 @@ export async function updateContact(contactId: string, input: ContactUpdateField
       city: input.city,
       website: input.website,
       managed_object_label: input.managedObjectLabel,
+      bexio_contact_id: input.bexioContactId?.trim() || null,
     })
     .eq("id", contactId)
     .select("*")
@@ -1690,6 +1820,26 @@ export async function listAssignableProfiles(): Promise<UserProfile[]> {
   return ((data as Record<string, unknown>[]) ?? []).map((r) => mapUserProfileRow(r));
 }
 
+export async function deleteProjectWorkType(workTypeId: string): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const idx = mockProjectWorkTypes.findIndex((w) => w.id === workTypeId);
+    if (idx !== -1) {
+      mockProjectWorkTypes.splice(idx, 1);
+    }
+    for (const p of mockProjects) {
+      if (p.workTypeId === workTypeId) {
+        p.workTypeId = null;
+      }
+    }
+    return;
+  }
+  const { error } = await supabase.from("project_work_types").delete().eq("id", workTypeId);
+  if (error) {
+    throw new Error(error.message || "Arbeitsart konnte nicht gelöscht werden.");
+  }
+}
+
 export async function insertProjectWorkType(name: string): Promise<ProjectWorkType> {
   const trimmed = name.trim();
   if (!trimmed) {
@@ -1725,6 +1875,155 @@ export async function insertProjectWorkType(name: string): Promise<ProjectWorkTy
     throw new Error("Arbeitsart konnte nicht gespeichert werden.");
   }
   return mapProjectWorkTypeRow(data as Record<string, unknown>);
+}
+
+// ─── ReportOutcomeOption ──────────────────────────────────────────────────────
+
+function mapReportOutcomeOptionRow(row: Record<string, unknown>): ReportOutcomeOption {
+  return {
+    id: String(row.id),
+    organizationId: String(row.organization_id ?? ""),
+    label: String(row.label ?? ""),
+    value: String(row.value ?? ""),
+    isDeletable: Boolean(row.is_deletable),
+    sortOrder: Number(row.sort_order ?? 0),
+    createdAt: String(row.created_at ?? ""),
+  };
+}
+
+export async function listReportOutcomeOptions(): Promise<ReportOutcomeOption[]> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return [...mockReportOutcomeOptions].sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+  const { data, error } = await supabase
+    .from("report_outcome_options")
+    .select("*")
+    .order("sort_order", { ascending: true });
+  if (error || !data) return [];
+  return (data as Record<string, unknown>[]).map(mapReportOutcomeOptionRow);
+}
+
+export async function insertReportOutcomeOption(label: string): Promise<ReportOutcomeOption> {
+  const trimmed = label.trim();
+  if (!trimmed) throw new Error("Bezeichnung fehlt.");
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const value = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+    const row: ReportOutcomeOption = {
+      id: `ro-${Date.now()}`,
+      organizationId: "mock-org",
+      label: trimmed,
+      value: value || `custom_${Date.now()}`,
+      isDeletable: true,
+      sortOrder: mockReportOutcomeOptions.length * 10 + 100,
+      createdAt: new Date().toISOString(),
+    };
+    mockReportOutcomeOptions.push(row);
+    return row;
+  }
+  const { data: oid } = await supabase.rpc("current_organization_id");
+  const orgId = oid as string | null;
+  if (!orgId) throw new Error("Keine Organisation ausgewählt.");
+  const valueSlug = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || `custom_${Date.now()}`;
+  const { data, error } = await supabase
+    .from("report_outcome_options")
+    .insert({ organization_id: orgId, label: trimmed, value: valueSlug, sort_order: 999 })
+    .select("*")
+    .single();
+  if (error || !data) throw new Error("Option konnte nicht gespeichert werden.");
+  return mapReportOutcomeOptionRow(data as Record<string, unknown>);
+}
+
+export async function deleteReportOutcomeOption(optionId: string): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const idx = mockReportOutcomeOptions.findIndex((o) => o.id === optionId);
+    if (idx !== -1) mockReportOutcomeOptions.splice(idx, 1);
+    return;
+  }
+  const { error } = await supabase
+    .from("report_outcome_options")
+    .delete()
+    .eq("id", optionId);
+  if (error) throw new Error(error.message || "Option konnte nicht gelöscht werden.");
+}
+
+// ─── ReportSelectOption (generisch) ──────────────────────────────────────────
+
+function mapReportSelectOptionRow(row: Record<string, unknown>): ReportSelectOption {
+  return {
+    id: String(row.id),
+    organizationId: String(row.organization_id ?? ""),
+    fieldKey: String(row.field_key ?? ""),
+    label: String(row.label ?? ""),
+    value: String(row.value ?? ""),
+    isDeletable: Boolean(row.is_deletable),
+    sortOrder: Number(row.sort_order ?? 0),
+    createdAt: String(row.created_at ?? ""),
+  };
+}
+
+export async function listReportSelectOptions(fieldKey: string): Promise<ReportSelectOption[]> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return mockReportSelectOptions
+      .filter((o) => o.fieldKey === fieldKey)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+  const { data, error } = await supabase
+    .from("report_select_options")
+    .select("*")
+    .eq("field_key", fieldKey)
+    .order("sort_order", { ascending: true });
+  if (error || !data) return [];
+  return (data as Record<string, unknown>[]).map(mapReportSelectOptionRow);
+}
+
+export async function insertReportSelectOption(fieldKey: string, label: string): Promise<ReportSelectOption> {
+  const trimmed = label.trim();
+  if (!trimmed) throw new Error("Bezeichnung fehlt.");
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const value = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || `custom_${Date.now()}`;
+    const row: ReportSelectOption = {
+      id: `rs-${Date.now()}`,
+      organizationId: "mock-org",
+      fieldKey,
+      label: trimmed,
+      value,
+      isDeletable: true,
+      sortOrder: mockReportSelectOptions.filter((o) => o.fieldKey === fieldKey).length * 10 + 100,
+      createdAt: new Date().toISOString(),
+    };
+    mockReportSelectOptions.push(row);
+    return row;
+  }
+  const { data: oid } = await supabase.rpc("current_organization_id");
+  const orgId = oid as string | null;
+  if (!orgId) throw new Error("Keine Organisation ausgewählt.");
+  const valueSlug = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || `custom_${Date.now()}`;
+  const { data, error } = await supabase
+    .from("report_select_options")
+    .insert({ organization_id: orgId, field_key: fieldKey, label: trimmed, value: valueSlug, sort_order: 999 })
+    .select("*")
+    .single();
+  if (error || !data) throw new Error("Option konnte nicht gespeichert werden.");
+  return mapReportSelectOptionRow(data as Record<string, unknown>);
+}
+
+export async function deleteReportSelectOption(optionId: string): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const idx = mockReportSelectOptions.findIndex((o) => o.id === optionId);
+    if (idx !== -1) mockReportSelectOptions.splice(idx, 1);
+    return;
+  }
+  const { error } = await supabase
+    .from("report_select_options")
+    .delete()
+    .eq("id", optionId);
+  if (error) throw new Error(error.message || "Option konnte nicht gelöscht werden.");
 }
 
 export type ProjectStammdatenPatch = Partial<
@@ -1880,10 +2179,107 @@ export async function addTechnicianReport(input: Omit<TechnicianReport, "id" | "
   }).select("*").single();
 
   if (error || !data) {
-    throw new Error("Technikerbericht konnte nicht gespeichert werden.");
+    throw new Error("Monteurbericht konnte nicht gespeichert werden.");
   }
 
   return data as unknown as TechnicianReport;
+}
+
+export type TechnicianReportListItem = TechnicianReport & {
+  projectTitle: string;
+  projectStatus: ProjectStatus;
+  contactName: string | null;
+};
+
+export async function listTechnicianReports(): Promise<TechnicianReportListItem[]> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return mockReports
+      .map((r) => {
+        const p = mockProjects.find((x) => x.id === r.projectId);
+        const c = p ? mockContacts.find((x) => x.id === p.contactId) : null;
+        return {
+          ...r,
+          projectTitle: p?.title ?? "Projekt",
+          projectStatus: (p?.status ?? "anfrage") as ProjectStatus,
+          contactName: c?.name ?? null,
+        };
+      })
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  const { data: reportRows, error: reportError } = await supabase
+    .from("technician_reports")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (reportError || !reportRows?.length) {
+    return [];
+  }
+
+  const reports = (reportRows as Array<Record<string, unknown>>).map(mapTechnicianReportRow);
+  const projectIds = [...new Set(reports.map((r) => r.projectId).filter(Boolean))];
+  if (projectIds.length === 0) {
+    return reports.map((r) => ({
+      ...r,
+      projectTitle: "Projekt",
+      projectStatus: "anfrage",
+      contactName: null,
+    }));
+  }
+
+  const { data: projectRows } = await supabase
+    .from("projects")
+    .select("id, title, status, contact_id")
+    .in("id", projectIds);
+
+  const projectById = new Map<string, { title: string; status: ProjectStatus; contactId: string | null }>();
+  for (const row of (projectRows as Array<Record<string, unknown>> | null) ?? []) {
+    const id = String(row.id ?? "");
+    if (!id) {
+      continue;
+    }
+    projectById.set(id, {
+      title: String(row.title ?? "Projekt"),
+      status: String(row.status ?? "anfrage") as ProjectStatus,
+      contactId: row.contact_id ? String(row.contact_id) : null,
+    });
+  }
+
+  const contactIds = [...new Set([...projectById.values()].map((p) => p.contactId).filter(Boolean))] as string[];
+  const contactNameById = new Map<string, string>();
+  if (contactIds.length > 0) {
+    const { data: contactRows } = await supabase.from("contacts").select("id, name").in("id", contactIds);
+    for (const row of (contactRows as Array<Record<string, unknown>> | null) ?? []) {
+      const id = String(row.id ?? "");
+      if (!id) {
+        continue;
+      }
+      contactNameById.set(id, String(row.name ?? ""));
+    }
+  }
+
+  return reports.map((r) => {
+    const p = projectById.get(r.projectId);
+    return {
+      ...r,
+      projectTitle: p?.title ?? "Projekt",
+      projectStatus: p?.status ?? "anfrage",
+      contactName: p?.contactId ? contactNameById.get(p.contactId) ?? null : null,
+    };
+  });
+}
+
+export async function getTechnicianReportById(reportId: string): Promise<TechnicianReport | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return mockReports.find((r) => r.id === reportId) ?? null;
+  }
+  const { data, error } = await supabase.from("technician_reports").select("*").eq("id", reportId).maybeSingle();
+  if (error || !data) {
+    return null;
+  }
+  return mapTechnicianReportRow(data as Record<string, unknown>);
 }
 
 export async function addQuote(
@@ -1903,7 +2299,13 @@ export async function addQuote(
     | "deliverySentAt"
     | "deliveryRecipient"
   > & {
-    items?: Array<{ description: string; quantity: number; unit: string; unitPrice: number }>;
+    items?: Array<{
+      description: string;
+      quantity: number;
+      unit: string;
+      unitPrice: number;
+      articleId?: string | null;
+    }>;
   },
 ) {
   const { items = [], ...quoteInput } = input;
@@ -1950,6 +2352,7 @@ export async function addQuote(
         quantity: item.quantity,
         unit: item.unit,
         unit_price: item.unitPrice,
+        article_id: item.articleId?.trim() ? item.articleId.trim() : null,
       })),
     );
     if (itemError) {
@@ -2119,6 +2522,46 @@ export async function addInvoice(
   return mapInvoiceRow(data as Record<string, unknown>);
 }
 
+export type QuoteLineItemForZapier = {
+  description: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  /** Aus Artikelstamm, wenn Position aus Katalog und ID gepflegt. */
+  bexioArticleId: string | null;
+  bexioArticleIdNumeric: number | null;
+};
+
+export async function listQuoteItems(quoteId: string): Promise<QuoteLineItemForZapier[]> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return [];
+  }
+  const { data, error } = await supabase
+    .from("quote_items")
+    .select("description, quantity, unit, unit_price, articles ( bexio_article_id )")
+    .eq("quote_id", quoteId)
+    .order("created_at", { ascending: true });
+  if (error || !data) {
+    return [];
+  }
+  return (data as Array<Record<string, unknown>>).map((row) => {
+    const nested = row.articles as { bexio_article_id?: unknown } | { bexio_article_id?: unknown }[] | null | undefined;
+    const rawNested = Array.isArray(nested) ? nested[0] : nested;
+    const raw = rawNested?.bexio_article_id != null ? String(rawNested.bexio_article_id).trim() : "";
+    const bexioArticleId = raw.length > 0 ? raw : null;
+    const bexioArticleIdNumeric = bexioArticleId ? parseBexioContactIdNumeric(bexioArticleId) : null;
+    return {
+      description: String(row.description ?? ""),
+      quantity: Number(row.quantity ?? 0),
+      unit: String(row.unit ?? "Stk"),
+      unitPrice: Number(row.unit_price ?? 0),
+      bexioArticleId,
+      bexioArticleIdNumeric,
+    };
+  });
+}
+
 export async function getQuoteById(quoteId: string): Promise<Quote | null> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
@@ -2151,7 +2594,7 @@ export async function markQuoteFinalizedWithPdf(input: {
   pdfPath: string;
   finalizedBy: string | null;
   nextPdfVersion: number;
-  deliveryChannel: "email" | "post";
+  deliveryChannel: "email" | "post" | "bexio";
   deliveryRecipient: string | null;
 }) {
   const now = new Date().toISOString();
@@ -2192,9 +2635,72 @@ export async function markQuoteFinalizedWithPdf(input: {
     .select("*")
     .single();
   if (error || !data) {
-    throw new Error("Offerte konnte nicht finalisiert werden.");
+    const detail = [error?.code, error?.message, error?.details, error?.hint].filter(Boolean).join(" | ");
+    throw new Error(detail ? `Offerte konnte nicht finalisiert werden: ${detail}` : "Offerte konnte nicht finalisiert werden.");
   }
   return mapQuoteRow(data as Record<string, unknown>);
+}
+
+/** Löscht eine Offertenversion (Entwurf oder finalisiert) inkl. Kaskade auf quote_items. */
+export async function deleteQuoteForProject(input: { quoteId: string; projectId: string }) {
+  const quoteId = input.quoteId.trim();
+  const projectId = input.projectId.trim();
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const idx = mockQuotes.findIndex((q) => q.id === quoteId && q.projectId === projectId);
+    if (idx === -1) {
+      throw new Error("Offerte nicht gefunden.");
+    }
+    mockQuotes.splice(idx, 1);
+    return;
+  }
+
+  const db = createSupabaseAdminClient() ?? supabase;
+  const { data: deleted, error: delErr } = await db
+    .from("quotes")
+    .delete()
+    .eq("id", quoteId)
+    .eq("project_id", projectId)
+    .select("id");
+
+  if (delErr) {
+    const detail = [delErr.code, delErr.message, delErr.details, delErr.hint].filter(Boolean).join(" | ");
+    throw new Error(detail ? `Offerte konnte nicht gelöscht werden: ${detail}` : "Offerte konnte nicht gelöscht werden.");
+  }
+  if (!deleted?.length) {
+    throw new Error("Offerte konnte nicht gelöscht werden.");
+  }
+}
+
+/** Löscht eine Rechnung (Entwurf oder finalisiert) für das Projekt. */
+export async function deleteInvoiceForProject(input: { invoiceId: string; projectId: string }) {
+  const invoiceId = input.invoiceId.trim();
+  const projectId = input.projectId.trim();
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const idx = mockInvoices.findIndex((i) => i.id === invoiceId && i.projectId === projectId);
+    if (idx === -1) {
+      throw new Error("Rechnung nicht gefunden.");
+    }
+    mockInvoices.splice(idx, 1);
+    return;
+  }
+
+  const db = createSupabaseAdminClient() ?? supabase;
+  const { data: deleted, error: delErr } = await db
+    .from("invoices")
+    .delete()
+    .eq("id", invoiceId)
+    .eq("project_id", projectId)
+    .select("id");
+
+  if (delErr) {
+    const detail = [delErr.code, delErr.message, delErr.details, delErr.hint].filter(Boolean).join(" | ");
+    throw new Error(detail ? `Rechnung konnte nicht gelöscht werden: ${detail}` : "Rechnung konnte nicht gelöscht werden.");
+  }
+  if (!deleted?.length) {
+    throw new Error("Rechnung konnte nicht gelöscht werden.");
+  }
 }
 
 export async function markInvoiceFinalizedWithPdf(input: {
@@ -2202,7 +2708,7 @@ export async function markInvoiceFinalizedWithPdf(input: {
   pdfPath: string;
   finalizedBy: string | null;
   nextPdfVersion: number;
-  deliveryChannel: "email" | "post";
+  deliveryChannel: "email" | "post" | "bexio";
   deliveryRecipient: string | null;
 }) {
   const now = new Date().toISOString();
@@ -2243,7 +2749,8 @@ export async function markInvoiceFinalizedWithPdf(input: {
     .select("*")
     .single();
   if (error || !data) {
-    throw new Error("Rechnung konnte nicht finalisiert werden.");
+    const detail = [error?.code, error?.message, error?.details, error?.hint].filter(Boolean).join(" | ");
+    throw new Error(detail ? `Rechnung konnte nicht finalisiert werden: ${detail}` : "Rechnung konnte nicht finalisiert werden.");
   }
   return mapInvoiceRow(data as Record<string, unknown>);
 }
@@ -2282,7 +2789,8 @@ export async function markDeliveryFinalizedWithPdf(input: {
     .select("*")
     .single();
   if (error || !data) {
-    throw new Error("Lieferschein konnte nicht finalisiert werden.");
+    const detail = [error?.code, error?.message, error?.details, error?.hint].filter(Boolean).join(" | ");
+    throw new Error(detail ? `Lieferschein konnte nicht finalisiert werden: ${detail}` : "Lieferschein konnte nicht finalisiert werden.");
   }
   return mapDeliveryRow(data as Record<string, unknown>);
 }
@@ -2770,6 +3278,7 @@ export async function saveArticle(
   const row = {
     name: input.name,
     sku: input.sku,
+    bexio_article_id: input.bexioArticleId?.trim() || null,
     article_category_id: input.categoryId,
     supplier_id: input.supplierId,
     purchase_price: input.purchasePrice,
@@ -2851,6 +3360,7 @@ export async function upsertArticles(items: ArticleImportRow[]) {
       const base = {
         name: item.name,
         sku: item.sku,
+        bexioArticleId: item.bexioArticleId ?? null,
         categoryId: resolved.id,
         categoryName: item.categoryName.trim() || "Sonstiges",
         categoryTemplateScope: resolved.templateScope,
@@ -2879,6 +3389,7 @@ export async function upsertArticles(items: ArticleImportRow[]) {
     const payload = {
       name: item.name,
       sku: item.sku,
+      bexio_article_id: item.bexioArticleId?.trim() || null,
       article_category_id: categoryId,
       supplier_id: item.supplierId,
       purchase_price: item.purchasePrice,
@@ -3443,6 +3954,33 @@ export async function addSupplierSubmission(input: Omit<SupplierOrderSubmission,
     throw new Error("Bestellformular konnte nicht gespeichert werden.");
   }
   return data as unknown as SupplierOrderSubmission;
+}
+
+export async function getSupplierOrderSubmissionById(submissionId: string): Promise<SupplierOrderSubmission | null> {
+  const id = submissionId.trim();
+  if (!id) {
+    return null;
+  }
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return mockSupplierSubmissions.find((s) => s.id === id) ?? null;
+  }
+  const { data } = await supabase.from("supplier_order_form_submissions").select("*").eq("id", id).maybeSingle();
+  return data ? mapSupplierOrderSubmissionRow(data as Record<string, unknown>) : null;
+}
+
+export async function getSupplierOrderTemplateById(templateId: string): Promise<SupplierOrderTemplate | null> {
+  const id = templateId.trim();
+  if (!id) {
+    return null;
+  }
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return mockSupplierTemplates.find((t) => t.id === id) ?? null;
+  }
+  const admin = createSupabaseAdminClient() ?? supabase;
+  const { data } = await admin.from("supplier_order_form_templates").select("*").eq("id", id).maybeSingle();
+  return data ? mapSupplierOrderTemplateRow(data as Record<string, unknown>) : null;
 }
 
 export async function addStockDecision(input: Omit<StockDecision, "id" | "createdAt">) {
