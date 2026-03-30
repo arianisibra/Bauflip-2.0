@@ -42,7 +42,6 @@ import {
   listReportOutcomeOptions,
   insertReportOutcomeOption,
   deleteReportOutcomeOption,
-  listReportSelectOptions,
   insertReportSelectOption,
   deleteReportSelectOption,
   deleteQuoteForProject,
@@ -76,7 +75,7 @@ import { getWorkflowPhaseIndex } from "@/lib/workflow/project-workflow-rail";
 import { getBundlePrerequisiteMessages } from "@/lib/workflow/project-guided-flow";
 import { projectStatuses, type Contact, type ProjectStatus } from "@/lib/domain/types";
 import { isUuidString, parseBexioContactIdNumeric } from "@/lib/utils";
-import { getCurrentProfile, getCurrentRole, getCurrentSession } from "@/lib/auth/session";
+import { getCurrentProfile, getCurrentSession } from "@/lib/auth/session";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
@@ -1536,7 +1535,7 @@ export async function importCsvAction(formData: FormData) {
   if (!session) {
     throw new Error("Nicht angemeldet.");
   }
-  const role = await getCurrentRole();
+  const role = session.role;
   if (role !== "admin" && role !== "office") {
     throw new Error("Kein Zugriff auf Import (nur Büro/Admin).");
   }

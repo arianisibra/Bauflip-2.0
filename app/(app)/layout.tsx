@@ -2,14 +2,14 @@ import { redirect } from "next/navigation";
 import { ChatbotFab } from "@/components/app/chatbot-fab";
 import { SidebarNav } from "@/components/app/sidebar-nav";
 import { UserAvatarButton } from "@/components/app/user-avatar-button";
-import { getCurrentRole, getCurrentSession } from "@/lib/auth/session";
+import { getCurrentSession } from "@/lib/auth/session";
 import { getOrganizationBranding } from "@/lib/db/repository";
 import { isAdminMfaRequiredAndMissing } from "@/lib/auth/mfa";
 import { getVisibleSidebarItems } from "@/lib/navigation/sidebar-config";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const role = await getCurrentRole();
   const session = await getCurrentSession();
+  const role = session?.role ?? "office";
   const branding = await getOrganizationBranding(session?.organizationId ?? null);
   const mfaMissing = await isAdminMfaRequiredAndMissing();
   if (mfaMissing) {

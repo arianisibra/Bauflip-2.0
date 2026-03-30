@@ -1,5 +1,6 @@
 import type { User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { cache } from "react";
 import type { RoleType, UserProfile } from "@/lib/domain/types";
 import { mapUserProfileRow } from "@/lib/db/repository";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -21,8 +22,17 @@ function mapRole(raw: string | null | undefined): RoleType {
   return "office";
 }
 
-export async function getCurrentSession(): Promise<CurrentSession | null> {
+export const getCurrentSession = cache(async function getCurrentSession(): Promise<CurrentSession | null> {
   const cookieStore = await cookies();
+  /**
+   * Mock-Cookies (bauflip_mock_*) nur in Development oder wenn explizit erlaubt.
+   * In Live-Umgebungen ALLOW_MOCK_AUTH niemals setzen — dokumentiert in .env.example.
+   */
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_MOCK_AUTH === "true") {
+    console.warn(
+      "[bauflip] ALLOW_MOCK_AUTH is enabled in production — disable for real deployments.",
+    );
+  }
   const mockAuthEnabled =
     process.env.NODE_ENV !== "production" || process.env.ALLOW_MOCK_AUTH === "true";
   const mockAuthenticated = cookieStore.get("bauflip_mock_auth")?.value === "1";
@@ -150,7 +160,7 @@ export async function getCurrentSession(): Promise<CurrentSession | null> {
       return { ...mapped, role };
     })(),
   };
-}
+});
 
 export async function getCurrentRole(): Promise<RoleType> {
   const session = await getCurrentSession();

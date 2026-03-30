@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { getArticleSheetDataAction, saveArticleSheetAction } from "@/app/(app)/artikel/actions";
@@ -65,7 +65,7 @@ export function ArtikelSheetEditor({ articleId, open, canEdit }: Props) {
   const [scopeHint, setScopeHint] = useState<ArticleCategoryTemplateScope>("generic");
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(articleSaveSchema),
+    resolver: zodResolver(articleSaveSchema) as Resolver<FormValues>,
   });
 
   const categoryId = form.watch("categoryId");

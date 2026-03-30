@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { listArticles, listContacts } from "@/lib/db/repository";
-import { getCurrentRole, getCurrentSession } from "@/lib/auth/session";
+import { getCurrentSession } from "@/lib/auth/session";
 import { articlesToStandardCsv, contactsToStandardCsv } from "@/lib/integrations/csv";
 
 type Params = {
@@ -9,12 +9,12 @@ type Params = {
 
 export async function GET(_: Request, { params }: Params) {
   const session = await getCurrentSession();
-  const role = await getCurrentRole();
-  const canExport = role === "admin" || role === "office";
-
   if (!session) {
     return NextResponse.json({ error: "Nicht autorisiert." }, { status: 401 });
   }
+
+  const role = session.role;
+  const canExport = role === "admin" || role === "office";
 
   if (!canExport) {
     return NextResponse.json({ error: "Kein Zugriff auf Export." }, { status: 403 });

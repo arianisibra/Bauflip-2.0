@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildArticleTemplateCsv, buildContactTemplateCsv } from "@/lib/integrations/csv";
-import { getCurrentRole, getCurrentSession } from "@/lib/auth/session";
+import { getCurrentSession } from "@/lib/auth/session";
 
 type Params = {
   params: Promise<{ type: string }>;
@@ -8,12 +8,12 @@ type Params = {
 
 export async function GET(_: Request, { params }: Params) {
   const session = await getCurrentSession();
-  const role = await getCurrentRole();
-  const allowed = role === "admin" || role === "office";
-
   if (!session) {
     return NextResponse.json({ error: "Nicht autorisiert." }, { status: 401 });
   }
+
+  const role = session.role;
+  const allowed = role === "admin" || role === "office";
 
   if (!allowed) {
     return NextResponse.json({ error: "Kein Zugriff." }, { status: 403 });

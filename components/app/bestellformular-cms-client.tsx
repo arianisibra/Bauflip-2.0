@@ -517,7 +517,7 @@ export function BestellformularCmsClient({ templates, supplierNames = [] }: Prop
               </select>
               {draft.supplierName && !supplierNames.includes(draft.supplierName) ? (
                 <p className="text-xs text-amber-700">
-                  Dieser Lieferant ist nicht mehr in Kontakte als Kategorie "Lieferant" vorhanden.
+                  Dieser Lieferant ist nicht mehr in Kontakte als Kategorie „Lieferant“ vorhanden.
                 </p>
               ) : null}
             </div>

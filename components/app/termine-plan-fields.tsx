@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -17,17 +17,10 @@ type Props = {
 };
 
 export function TerminePlanFields({ projects }: Props) {
-  const [projectId, setProjectId] = useState(projects[0]?.id ?? "");
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  const projectId =
+    pickedId != null && projects.some((p) => p.id === pickedId) ? pickedId : (projects[0]?.id ?? "");
   const [kind, setKind] = useState("besichtigung");
-
-  useEffect(() => {
-    if (projects.length === 0) {
-      return;
-    }
-    if (!projectId || !projects.some((p) => p.id === projectId)) {
-      setProjectId(projects[0]!.id);
-    }
-  }, [projects, projectId]);
 
   if (projects.length === 0) {
     return <p className="text-sm text-muted-foreground">Keine Projekte vorhanden.</p>;
@@ -38,7 +31,7 @@ export function TerminePlanFields({ projects }: Props) {
       <div className="flex flex-col gap-2">
         <input type="hidden" name="projectId" value={projectId} />
         <Label htmlFor="termine-project">Projekt</Label>
-        <Select value={projectId} onValueChange={(v) => setProjectId(String(v))}>
+        <Select value={projectId} onValueChange={(v) => setPickedId(String(v))}>
           <SelectTrigger id="termine-project" className="h-9 w-full min-w-0">
             <SelectValue
               placeholder="Projekt wählen"

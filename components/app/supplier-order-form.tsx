@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import type { FormEvent } from "react";
 import { BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
 import { Button } from "@/components/ui/button";
@@ -107,12 +107,6 @@ export function SupplierOrderForm({
   const [isPending, startTransition] = useTransition();
   const [orderTitle, setOrderTitle] = useState(template.name);
   const visibleFields = getVisibleSupplierFields(fields, values);
-
-  useEffect(() => {
-    setOrderTitle(template.name);
-    setValues({});
-    setMissing([]);
-  }, [template.id, template.name]);
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

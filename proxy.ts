@@ -3,6 +3,22 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const PUBLIC_PATHS = ["/anmeldung"];
+
+/** Security-Header auf jede Response (CSP später iterativ, s. Next-Docs). */
+function withSecurityHeaders(res: NextResponse): NextResponse {
+  const isProd = process.env.NODE_ENV === "production";
+  res.headers.set("X-Content-Type-Options", "nosniff");
+  res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.headers.set(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+  );
+  res.headers.set("X-Frame-Options", "SAMEORIGIN");
+  if (isProd) {
+    res.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
+  }
+  return res;
+}
 const technicianAllowedPrefixes = ["/projekte", "/termine", "/rapporte", "/team-chat", "/mitarbeiter", "/anmeldung"];
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -27,7 +43,7 @@ export async function proxy(request: NextRequest) {
     pathname.includes(".");
 
   if (isStaticAsset) {
-    return NextResponse.next();
+    return withSecurityHeaders(NextResponse.next());
   }
 
   const isPublicPath = PUBLIC_PATHS.some((path) => pathname.startsWith(path));
@@ -35,16 +51,18 @@ export async function proxy(request: NextRequest) {
   if (!supabaseUrl || !supabaseAnonKey) {
     if (!isPublicPath) {
       const loginUrl = new URL("/anmeldung", request.url);
-      return NextResponse.redirect(loginUrl);
+      return withSecurityHeaders(NextResponse.redirect(loginUrl));
     }
-    return NextResponse.next();
+    return withSecurityHeaders(NextResponse.next());
   }
 
-  const response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  });
+  const response = withSecurityHeaders(
+    NextResponse.next({
+      request: {
+        headers: request.headers,
+      },
+    }),
+  );
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
@@ -83,15 +101,15 @@ export async function proxy(request: NextRequest) {
 
   if (!isAuthenticated && !isPublicPath) {
     if (pathname.startsWith("/api")) {
-      return NextResponse.json({ error: "Nicht autorisiert." }, { status: 401 });
+      return withSecurityHeaders(NextResponse.json({ error: "Nicht autorisiert." }, { status: 401 }));
     }
     const loginUrl = new URL("/anmeldung", request.url);
-    return NextResponse.redirect(loginUrl);
+    return withSecurityHeaders(NextResponse.redirect(loginUrl));
   }
 
   if (isAuthenticated && pathname === "/anmeldung") {
     const appUrl = new URL("/", request.url);
-    return NextResponse.redirect(appUrl);
+    return withSecurityHeaders(NextResponse.redirect(appUrl));
   }
 
   if (
@@ -101,10 +119,10 @@ export async function proxy(request: NextRequest) {
     !technicianAllowedPrefixes.some((prefix) => pathname.startsWith(prefix))
   ) {
     if (pathname.startsWith("/api")) {
-      return NextResponse.json({ error: "Kein Zugriff." }, { status: 403 });
+      return withSecurityHeaders(NextResponse.json({ error: "Kein Zugriff." }, { status: 403 }));
     }
     const appUrl = new URL("/", request.url);
-    return NextResponse.redirect(appUrl);
+    return withSecurityHeaders(NextResponse.redirect(appUrl));
   }
 
   return response;

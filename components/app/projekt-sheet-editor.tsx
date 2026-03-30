@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import {
   getContactProjectOptionsAction,
   getProjectSheetDataAction,
+  refreshProjectSheetViewAction,
   updateProjectStammdatenAction,
 } from "@/app/(app)/projekte/actions";
 import { buildGoogleMapsDirectionsUrl, buildGoogleMapsSearchUrl } from "@/lib/maps/google-maps";
@@ -77,6 +78,19 @@ function bundleToFormValues(project: Project): Omit<FormValues, "newWorkTypeName
 }
 
 type SheetPayload = Awaited<ReturnType<typeof getProjectSheetDataAction>>;
+type SheetViewRefresh = Awaited<ReturnType<typeof refreshProjectSheetViewAction>>;
+
+function mergeSheetView(prev: SheetPayload, next: SheetViewRefresh): SheetPayload {
+  return {
+    ...prev,
+    bundle: next.bundle,
+    reportAttachments: next.reportAttachments,
+    persons: next.persons,
+    addresses: next.addresses,
+    actorRole: next.actorRole,
+    integrationZapierEnabled: next.integrationZapierEnabled,
+  };
+}
 
 /** Platzhalter für optionale Selects (Base UI erlaubt kein leeres `value`). */
 const SELECT_EMPTY = "__none__";
@@ -258,8 +272,8 @@ export function ProjektSheetEditor({ projectId, open, canEdit }: Props) {
     setLoadError(null);
     startLoad(async () => {
       try {
-        const data = await getProjectSheetDataAction(projectId);
-        setPayload(data);
+        const data = await refreshProjectSheetViewAction(projectId);
+        setPayload((prev) => (prev ? mergeSheetView(prev, data) : null));
         setPersons(data.persons);
         setAddresses(data.addresses);
         form.reset(bundleToFormValues(data.bundle.project));
@@ -357,8 +371,8 @@ export function ProjektSheetEditor({ projectId, open, canEdit }: Props) {
       try {
         await updateProjectStammdatenAction(values);
         if (projectId) {
-          const fresh = await getProjectSheetDataAction(projectId);
-          setPayload(fresh);
+          const fresh = await refreshProjectSheetViewAction(projectId);
+          setPayload((prev) => (prev ? mergeSheetView(prev, fresh) : null));
           setPersons(fresh.persons);
           setAddresses(fresh.addresses);
           form.reset(bundleToFormValues(fresh.bundle.project));

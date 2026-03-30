@@ -1,26 +1,20 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getCurrentRole, getCurrentSession } from "@/lib/auth/session";
+import { getCurrentSession } from "@/lib/auth/session";
 import {
   deleteProject,
   deleteProjectWorkType,
   getProjectBundle,
   insertProjectWorkType,
-  listAssignableProfiles,
-  listContactAddressesForContact,
-  listContactPersonsForContact,
-  listContacts,
-  listArticles,
-  listProjectWorkTypes,
-  listReportOutcomeOptions,
-  listReportSelectOptions,
-  listSiteProperties,
-  listSupplierTemplates,
   updateProjectStammdaten,
 } from "@/lib/db/repository";
-import { getProjectFileSignedUrl } from "@/lib/storage/signed-urls";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  getCachedOrganizationZapierEnabled,
+  getCachedProjectFileSignedUrl,
+  loadContactProjectOptions,
+  loadProjectSheetReferenceLists,
+} from "@/lib/app/project-sheet-cache";
 import { projectStammdatenUpdateSchema } from "@/lib/validations/forms";
 
 function nz(s: string | undefined | null): string | null {
@@ -32,11 +26,7 @@ function nz(s: string | undefined | null): string | null {
 }
 
 export async function getContactProjectOptionsAction(contactId: string) {
-  const [persons, addresses] = await Promise.all([
-    listContactPersonsForContact(contactId),
-    listContactAddressesForContact(contactId),
-  ]);
-  return { persons, addresses };
+  return loadContactProjectOptions(contactId);
 }
 
 export async function getProjectSheetDataAction(projectId: string) {
@@ -45,36 +35,27 @@ export async function getProjectSheetDataAction(projectId: string) {
   if (!bundle) {
     throw new Error("Projekt nicht gefunden.");
   }
-  const [contacts, properties, workTypes, profiles, supplierTemplates, articles, outcomeOptions, locationOptions] = await Promise.all([
-    listContacts(),
-    listSiteProperties(),
-    listProjectWorkTypes(),
-    listAssignableProfiles(),
-    listSupplierTemplates(),
-    listArticles(),
-    listReportOutcomeOptions(),
-    listReportSelectOptions("ort"),
-  ]);
-  const { persons, addresses } = await getContactProjectOptionsAction(bundle.project.contactId);
+  const {
+    contacts,
+    properties,
+    workTypes,
+    profiles,
+    supplierTemplates,
+    articles,
+    outcomeOptions,
+    locationOptions,
+  } = await loadProjectSheetReferenceLists();
+  const { persons, addresses } = await loadContactProjectOptions(bundle.project.contactId);
   const reportAttachments = await Promise.all(
     (bundle.attachments ?? []).map(async (a) => ({
       ...a,
-      href: await getProjectFileSignedUrl(a.filePath),
+      href: await getCachedProjectFileSignedUrl(a.filePath),
     })),
   );
 
-  let integrationZapierEnabled = false;
-  if (session?.organizationId) {
-    const supabase = await createSupabaseServerClient();
-    if (supabase) {
-      const { data: orgRow } = await supabase
-        .from("organizations")
-        .select("zapier_enabled")
-        .eq("id", session.organizationId)
-        .maybeSingle();
-      integrationZapierEnabled = Boolean(orgRow?.zapier_enabled);
-    }
-  }
+  const integrationZapierEnabled = session?.organizationId
+    ? await getCachedOrganizationZapierEnabled(session.organizationId)
+    : false;
 
   return {
     bundle,
@@ -89,6 +70,34 @@ export async function getProjectSheetDataAction(projectId: string) {
     articles,
     outcomeOptions,
     locationOptions,
+    actorRole: session?.role ?? "office",
+    integrationZapierEnabled,
+  };
+}
+
+/** Nur Bundle, Anhänge, Kontakt-Optionen — keine org-weiten Referenzlisten (nach Mutationen / Refresh). */
+export async function refreshProjectSheetViewAction(projectId: string) {
+  const session = await getCurrentSession();
+  const bundle = await getProjectBundle(projectId);
+  if (!bundle) {
+    throw new Error("Projekt nicht gefunden.");
+  }
+  const { persons, addresses } = await loadContactProjectOptions(bundle.project.contactId);
+  const reportAttachments = await Promise.all(
+    (bundle.attachments ?? []).map(async (a) => ({
+      ...a,
+      href: await getCachedProjectFileSignedUrl(a.filePath),
+    })),
+  );
+  const integrationZapierEnabled = session?.organizationId
+    ? await getCachedOrganizationZapierEnabled(session.organizationId)
+    : false;
+
+  return {
+    bundle,
+    reportAttachments,
+    persons,
+    addresses,
     actorRole: session?.role ?? "office",
     integrationZapierEnabled,
   };
@@ -165,8 +174,8 @@ export async function updateProjectStammdatenAction(values: unknown) {
 }
 
 export async function deleteProjectAction(projectId: string) {
-  const role = await getCurrentRole();
-  if (role !== "office" && role !== "admin") {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
     throw new Error("Keine Berechtigung.");
   }
   if (!projectId) {
@@ -175,5 +184,4 @@ export async function deleteProjectAction(projectId: string) {
 
   await deleteProject(projectId);
   revalidatePath("/projekte");
-  revalidatePath("/");
 }

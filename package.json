@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "bootstrap:first-admin": "node --env-file=.env.local scripts/bootstrap-first-admin.mts",
     "db:push": "npx supabase db push",
     "db:push:dry-run": "npx supabase db push --dry-run"
