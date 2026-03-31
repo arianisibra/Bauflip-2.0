@@ -12,6 +12,8 @@ import { getWorkflowPhaseIndex, PROJECT_WORKFLOW_STEPS } from "@/lib/workflow/pr
 import type { ProjectStatus, RoleType } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 
+const bexioAppUrl = process.env.NEXT_PUBLIC_BEXIO_APP_URL ?? "https://office.bexio.com";
+
 export type GuidedStepDisplay = {
   id: string;
   label: string;
@@ -65,6 +67,25 @@ type ProjectGuidedProcessProps = {
   /** Statuswechsel im Sheet erlaubt (z. B. Büro/Admin). */
   canEditWorkflowTransitions?: boolean;
 };
+
+function BexioManualActions() {
+  return (
+    <div className="mt-4 rounded-xl border border-primary/20 bg-primary/[0.03] px-3 py-2">
+      <p className="text-xs font-semibold text-primary">Offerte / Rechnung manuell in bexio erstellen</p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Öffnet bexio, damit du Angebot oder Rechnung manuell anlegen kannst. Die benötigten Daten findest du im
+        Projekt-Sheet (Kunde, Adresse, Positionen).
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Button asChild size="xs" variant="outline">
+          <Link href={bexioAppUrl} target="_blank" rel="noreferrer">
+            bexio öffnen
+          </Link>
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 function GuidedStatusTransitionForms({
   projectId,
@@ -148,6 +169,7 @@ function GuidedStatusTransitionForms({
           </form>
         );
       })}
+      <BexioManualActions />
     </div>
   );
 }
@@ -336,6 +358,8 @@ function SheetCompactStrip({
           )}
         </div>
       </div>
+
+      <BexioManualActions />
 
       {primaryOpt && !primaryOpt.canSubmit && blockIssues(primaryOpt).length > 0 ? (
         <div className="rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs text-destructive">

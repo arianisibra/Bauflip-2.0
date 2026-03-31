@@ -487,6 +487,18 @@ export async function addTechnicianReportAction(formData: FormData): Promise<Add
       return { ok: false, message: "Projekt nicht gefunden." };
     }
 
+    if (!session) {
+      return { ok: false, message: "Nicht angemeldet." };
+    }
+
+    if (session.role === "technician") {
+      const isAssigned =
+        projectBundle.appointments?.some((a) => a.assignedTechnicianId === session.user.id) ?? false;
+      if (!isAssigned) {
+        return { ok: false, message: "Keine Berechtigung für diesen Rapport." };
+      }
+    }
+
     await addTechnicianReport({
       projectId: parsed.data.projectId,
       outcome: parsed.data.outcome,
@@ -502,7 +514,7 @@ export async function addTechnicianReportAction(formData: FormData): Promise<Add
     await addAuditEvent({
       action: "rapport_erstellt",
       projectId: parsed.data.projectId,
-      actorRole: "technician",
+      actorRole: session.role,
       actorName: "System Benutzer",
       payload: JSON.stringify({ outcome: parsed.data.outcome }),
     });

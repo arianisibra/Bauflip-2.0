@@ -85,18 +85,15 @@ export async function proxy(request: NextRequest) {
 
   let role = "office";
   if (user) {
-    const [{ data: roleData }, membershipResult] = await Promise.all([
-      supabase.rpc("current_user_role"),
-      supabase
-        .from("organization_memberships")
-        .select("role")
-        .eq("user_id", user.id)
-        .eq("is_active", true)
-        .limit(1)
-        .maybeSingle(),
-    ]);
+    const { data: membership } = await supabase
+      .from("organization_memberships")
+      .select("role")
+      .eq("user_id", user.id)
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle();
 
-    role = mapRole((membershipResult.data?.role as string | null | undefined) ?? (roleData as string));
+    role = mapRole(membership?.role as string | null | undefined ?? (user.user_metadata?.role as string | null | undefined));
   }
 
   if (!isAuthenticated && !isPublicPath) {

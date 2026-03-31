@@ -72,7 +72,7 @@ export function TechnicianReportForm({
 }: TechnicianReportFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState("");
-  const [selectedService, setSelectedService] = useState("");
+  const [selectedService, setSelectedService] = useState("Reparatur");
   const [selectedArticleId, setSelectedArticleId] = useState("");
   const [serviceList, setServiceList] = useState<string[]>([]);
   const [articleList, setArticleList] = useState<Array<{ id: string; name: string }>>([]);
@@ -82,7 +82,7 @@ export function TechnicianReportForm({
     farbeStoff: "",
     farbeRahmen: "",
     stoffart: "",
-    ort: "",
+    ort: "Fenster",
     datum: "",
     bedienung: "",
     ausladung: "",

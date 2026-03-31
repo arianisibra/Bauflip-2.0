@@ -962,7 +962,10 @@ export function ProjectSheetPhasePanels({
               <Card>
                 <CardHeader>
                   <CardTitle>Fertigmeldung</CardTitle>
-                  <CardDescription>Monteur meldet Arbeit als erledigt.</CardDescription>
+                  <CardDescription>
+                    Monteur meldet Arbeit als erledigt. Alternativ kann die Monteur-App unter{" "}
+                    <span className="font-mono text-xs">/tag</span> verwendet werden.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-3">
                   {mutationsLocked ? null : (

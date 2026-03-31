@@ -92,12 +92,10 @@ export const getCurrentSession = cache(async function getCurrentSession(): Promi
     return null;
   }
 
-  const [{ data: roleData }, { data: orgData }, membershipResponse, profileResponse] = await Promise.all([
-    supabase.rpc("current_user_role"),
-    supabase.rpc("current_organization_id"),
+  const [membershipResponse, profileResponse] = await Promise.all([
     supabase
       .from("organization_memberships")
-      .select("role")
+      .select("role, organization_id")
       .eq("user_id", user.id)
       .eq("is_active", true)
       .limit(1)
@@ -106,8 +104,8 @@ export const getCurrentSession = cache(async function getCurrentSession(): Promi
   ]);
 
   const membershipRole = membershipResponse.data?.role as string | null | undefined;
-  const role = mapRole(membershipRole ?? (roleData as string | null | undefined) ?? user.user_metadata?.role);
-  const organizationId = (orgData as string | null | undefined) ?? null;
+  const role = mapRole(membershipRole ?? (user.user_metadata?.role as string | null | undefined));
+  const organizationId = (membershipResponse.data?.organization_id as string | null | undefined) ?? null;
 
   if (!profileResponse.data) {
     const displayName =
