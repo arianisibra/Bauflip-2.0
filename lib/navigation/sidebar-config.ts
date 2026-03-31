@@ -26,7 +26,7 @@ export const sidebarItems: SidebarItem[] = [
 const roleVisibility: Record<RoleType, AppPageKey[]> = {
   admin: sidebarItems.map((item) => item.key),
   office: ["uebersicht", "kontakte", "termine", "projekte", "kanban", "artikel", "team_chat", "stoffgenerator", "bestellformular", "import_export", "einstellungen"],
-  technician: ["uebersicht", "projekte", "kanban", "termine", "rapporte", "team_chat", "stoffgenerator"],
+  technician: ["uebersicht", "projekte", "kanban", "rapporte", "team_chat", "zeiterfassung", "stoffgenerator", "einstellungen"],
 };
 
 export function getVisibleSidebarItems(role: RoleType) {

@@ -19,7 +19,20 @@ function withSecurityHeaders(res: NextResponse): NextResponse {
   }
   return res;
 }
-const technicianAllowedPrefixes = ["/projekte", "/termine", "/rapporte", "/team-chat", "/mitarbeiter", "/anmeldung"];
+const technicianAllowedPrefixes = [
+  "/",
+  "/tag",
+  "/projekte",
+  "/termine",
+  "/rapporte",
+  "/team-chat",
+  "/mitarbeiter",
+  "/anmeldung",
+  "/zeiten",
+  "/profil",
+  "/tech",
+  "/debug-session",
+];
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 

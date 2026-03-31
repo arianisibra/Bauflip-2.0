@@ -12,7 +12,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const role = session?.role ?? "office";
   const branding = await getOrganizationBranding(session?.organizationId ?? null);
   const mfaMissing = await isAdminMfaRequiredAndMissing();
-  if (mfaMissing) {
+  if (mfaMissing && role === "admin") {
     redirect("/mfa/setup");
   }
   const items = getVisibleSidebarItems(role);

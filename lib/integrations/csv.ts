@@ -54,15 +54,27 @@ function parseMetaFields(csvText: string): string[] {
   return raw.map((f) => f.replace(/^\uFEFF/, "").trim()).filter(Boolean);
 }
 
+function isBexioContactHeader(fieldsLc: string[]): boolean {
+  const required = ["kontakt nr.", "vorname", "nachname", "firma", "e-mail"];
+  return required.every((col) => fieldsLc.includes(col));
+}
+
 /** Prüft, ob alle erwarteten Spalten vorhanden sind. */
 export function validateContactImportCsvHeaders(csvText: string): string | null {
-  const fields = parseMetaFields(csvText).map((f) => f.toLowerCase());
-  for (const col of CONTACT_IMPORT_FIELDS) {
-    if (!fields.includes(col.toLowerCase())) {
-      return `Spalte „${col}“ fehlt. Bitte die aktuelle Vorlage (CSV) herunterladen und nicht die erste Zeile ändern.`;
-    }
+  const fieldsLc = parseMetaFields(csvText).map((f) => f.toLowerCase());
+
+  const hasStandard = CONTACT_IMPORT_FIELDS.every((col) =>
+    fieldsLc.includes(col.toLowerCase()),
+  );
+  if (hasStandard) {
+    return null;
   }
-  return null;
+
+  if (isBexioContactHeader(fieldsLc)) {
+    return null;
+  }
+
+  return "CSV-Header unbekannt. Bitte entweder die Bauflip-Kontaktvorlage oder den Bexio-Kontakt-Export verwenden.";
 }
 
 export function validateArticleImportCsvHeaders(csvText: string): string | null {
@@ -143,7 +155,7 @@ function parseCategory(raw: string | undefined): ContactCategory {
   return "kunde";
 }
 
-export function parseContactCsv(csvText: string): Omit<Contact, "id" | "createdAt">[] {
+function parseStandardContactCsv(csvText: string): Omit<Contact, "id" | "createdAt">[] {
   const parsed = Papa.parse<Record<string, string>>(stripCsvBom(csvText), {
     header: true,
     skipEmptyLines: true,
@@ -166,6 +178,80 @@ export function parseContactCsv(csvText: string): Omit<Contact, "id" | "createdA
     managedObjectLabel: pickCi(row, "managedObjectLabel") || null,
     bexioContactId: pickCi(row, "bexioContactId") || null,
   }));
+}
+
+function parseBexioContactCsv(csvText: string): Omit<Contact, "id" | "createdAt">[] {
+  const parsed = Papa.parse<Record<string, string>>(stripCsvBom(csvText), {
+    header: true,
+    skipEmptyLines: true,
+  });
+
+  return parsed.data.map((row) => {
+    const firstName = pickCi(row, "Vorname");
+    const lastName = pickCi(row, "Nachname");
+    const company = pickCi(row, "Firma");
+    const companyExtra = pickCi(row, "Firmennamen-Zusatz");
+    const nameRecipient = pickCi(row, "Name des Empfängers");
+    const nameExtra = pickCi(row, "Namens-Zusatz");
+    const bexioId = pickCi(row, "Kontakt Nr.");
+
+    const streetBase = [pickCi(row, "Strasse"), pickCi(row, "Haus-Nr.")]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    const addressExtra = pickCi(row, "Adresszusatz");
+    const streetCombined = [streetBase, addressExtra].filter(Boolean).join(", ").trim();
+
+    const postalCode = pickCi(row, "PLZ") || null;
+    const city = pickCi(row, "Ort") || null;
+
+    const email = pickCi(row, "E-Mail") || null;
+    const phone = pickCi(row, "Telefon") || null;
+    const mobile = pickCi(row, "Mobile") || null;
+
+    const rawCategory = pickCi(row, "Kategorie");
+    const category = parseCategory(rawCategory);
+
+    const partyKind: ContactPartyKind = company ? "firma" : "privat";
+
+    const nameCandidates = [
+      [company, companyExtra].filter(Boolean).join(" ").trim(),
+      [nameRecipient, nameExtra].filter(Boolean).join(" ").trim(),
+      `${firstName} ${lastName}`.trim(),
+    ].filter((v) => v.length > 0);
+
+    const name = nameCandidates[0] || "Kontakt";
+
+    const managedObjectLabelParts = [pickCi(row, "Branche")].filter(Boolean);
+    const managedObjectLabel =
+      managedObjectLabelParts.length > 0 ? managedObjectLabelParts.join(" · ") : null;
+
+    return {
+      organizationId: null,
+      contactNumber: null,
+      partyKind,
+      category,
+      name,
+      uidNumber: null,
+      email,
+      phone,
+      mobile,
+      street: streetCombined || null,
+      postalCode,
+      city,
+      website: null,
+      managedObjectLabel,
+      bexioContactId: bexioId || null,
+    };
+  });
+}
+
+export function parseContactCsv(csvText: string): Omit<Contact, "id" | "createdAt">[] {
+  const fieldsLc = parseMetaFields(csvText).map((f) => f.toLowerCase());
+  if (isBexioContactHeader(fieldsLc)) {
+    return parseBexioContactCsv(csvText);
+  }
+  return parseStandardContactCsv(csvText);
 }
 
 function parseOptionalPrice(raw: string | undefined): number | null {
