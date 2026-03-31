@@ -231,6 +231,9 @@ function SheetCompactStrip({
 
   const blockIssues = (opt: GuidedOptionDisplay) => [...opt.missingFieldLabels, ...opt.prerequisiteMessages];
 
+  const technicianLockedHere =
+    userRole === "technician" && projectNextOwnerRole && projectNextOwnerRole !== "technician";
+
   function submitForm(fd: FormData) {
     setError(null);
     startTransition(async () => {
@@ -358,6 +361,13 @@ function SheetCompactStrip({
           )}
         </div>
       </div>
+
+      {technicianLockedHere ? (
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          In diesem Schritt ist das Büro bzw. der Admin zuständig. Als Monteur kannst du den Status hier nicht ändern.
+          Wenn etwas nicht passt, bitte kurz im Büro melden.
+        </p>
+      ) : null}
 
       <BexioManualActions />
 
@@ -533,7 +543,9 @@ export function ProjectGuidedProcess({
 
               {options.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  Für Ihre Rolle ist hier kein weiterer Statuswechsel vorgesehen. Bitte Büro oder Admin informieren.
+                  {userRole === "technician" && projectNextOwnerRole && projectNextOwnerRole !== "technician"
+                    ? "In diesem Schritt ist das Büro bzw. der Admin zuständig. Als Monteur kannst du den Status hier nicht ändern. Wenn etwas nicht passt, bitte kurz im Büro melden."
+                    : "Für Ihre Rolle ist hier kein weiterer Statuswechsel vorgesehen. Bitte Büro oder Admin informieren."}
                 </p>
               ) : onAfterStatusTransition ? (
                 <GuidedStatusTransitionForms

@@ -70,7 +70,7 @@ const transitions: Record<ProjectStatus, TransitionRule[]> = {
     },
     {
       to: "termin_geplant",
-      allowedRoles: ["technician", "office", "admin"],
+      allowedRoles: ["office", "admin"],
       requiredFields: [],
       nextOwnerRole: "admin",
     },
@@ -253,16 +253,20 @@ export function assertCanTransition(
     return { ok: false, reason: "Dieser Statuswechsel ist nicht erlaubt." };
   }
 
-  if (!rule.allowedRoles.includes(role)) {
-    return { ok: false, reason: "Ihre Rolle darf diesen Statuswechsel nicht ausfuehren." };
-  }
-
   const missingFields = getMissingFieldsForTransition(project, targetStatus);
   if (missingFields.length > 0) {
     return {
       ok: false,
       reason: `Pflichtangaben fehlen: ${missingFields.join(", ")}`,
     };
+  }
+
+  if (role === "admin") {
+    return { ok: true, nextOwnerRole: rule.nextOwnerRole };
+  }
+
+  if (!rule.allowedRoles.includes(role)) {
+    return { ok: false, reason: "Ihre Rolle darf diesen Statuswechsel nicht ausfuehren." };
   }
 
   return { ok: true, nextOwnerRole: rule.nextOwnerRole };

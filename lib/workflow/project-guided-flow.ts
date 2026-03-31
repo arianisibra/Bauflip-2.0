@@ -84,6 +84,9 @@ export function getBundlePrerequisiteMessages(
     if (bundle.ausfuehrungAppointments < 1) {
       msgs.push("Mindestens einen Ausführungstermin erfassen (Schritt «Ausführungstermin»).");
     }
+    if (bundle.reports < 1) {
+      msgs.push("Mindestens einen Rapport oder eine Fertigmeldung erfassen, bevor die Ausführung als erledigt gilt.");
+    }
   }
   if (project.status === "besichtigung" && targetStatus === "ausfuehrung_erledigt") {
     if (bundle.directResolvedReports < 1) {
@@ -149,7 +152,7 @@ export function buildGuidedTransitionOptions(
   const rules = getAllowedTransitions(project.status);
 
   return rules
-    .filter((r) => r.allowedRoles.includes(role))
+    .filter((r) => (role === "admin" ? true : r.allowedRoles.includes(role)))
     .filter((r) => primaryPrevious == null || r.to !== primaryPrevious)
     .filter((r) => {
       if (project.status === "besichtigung" && r.to === "ausfuehrung_erledigt") {

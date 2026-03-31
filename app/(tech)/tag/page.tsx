@@ -108,7 +108,11 @@ export default async function TodayPage() {
                 </p>
                 <div className="space-y-2">
                   {upcomingTasks.map((task) => (
-                    <div key={task.appointmentId} className="space-y-0.5">
+                    <Link
+                      key={task.appointmentId}
+                      href={`/termine/${task.projectId}`}
+                      className="block rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm active:scale-[0.99]"
+                    >
                       <p className="text-[11px] font-medium text-slate-700">
                         {new Date(task.startsAt).toLocaleDateString("de-CH", {
                           weekday: "short",
@@ -121,10 +125,10 @@ export default async function TodayPage() {
                           minute: "2-digit",
                         })}
                       </p>
-                      <p className="line-clamp-1 text-xs text-slate-800">
+                      <p className="mt-0.5 line-clamp-2 text-xs text-slate-900">
                         {task.projectTitle}
                       </p>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               </div>

@@ -482,8 +482,8 @@ export async function addTechnicianReportAction(formData: FormData): Promise<Add
       }
     })();
 
-    const projectBundle = await getProjectBundle(parsed.data.projectId);
-    if (!projectBundle) {
+    const projectBundleBefore = await getProjectBundle(parsed.data.projectId);
+    if (!projectBundleBefore) {
       return { ok: false, message: "Projekt nicht gefunden." };
     }
 
@@ -493,7 +493,7 @@ export async function addTechnicianReportAction(formData: FormData): Promise<Add
 
     if (session.role === "technician") {
       const isAssigned =
-        projectBundle.appointments?.some((a) => a.assignedTechnicianId === session.user.id) ?? false;
+        projectBundleBefore.appointments?.some((a) => a.assignedTechnicianId === session.user.id) ?? false;
       if (!isAssigned) {
         return { ok: false, message: "Keine Berechtigung für diesen Rapport." };
       }
@@ -530,6 +530,71 @@ export async function addTechnicianReportAction(formData: FormData): Promise<Add
           timeSpentMinutes: parsed.data.timeSpentMinutes ?? null,
         },
       });
+    }
+
+    // Nach erfolgreichem Rapport ggf. Projektstatus entlang des geführten Workflows fortschreiben.
+    // Dabei nutzen wir dieselbe Validierungslogik wie transitionProjectAction, blockieren aber den Rapport selbst nicht,
+    // falls ein Statuswechsel (z.B. wegen fehlender Stammdaten) nicht möglich ist.
+    try {
+      const bundleAfter = await getProjectBundle(parsed.data.projectId);
+      if (bundleAfter && session) {
+        const currentProject = bundleAfter.project;
+        const currentStatus = currentProject.status;
+
+        const candidateTargets: ProjectStatus[] = [];
+        if (currentStatus === "bericht_ausstehend") {
+          candidateTargets.push("bericht_fertig");
+        }
+        if (currentStatus === "ausfuehrung_geplant") {
+          candidateTargets.push("ausfuehrung_erledigt");
+        }
+        if (currentStatus === "besichtigung" && parsed.data.outcome === "direkt_geloest") {
+          candidateTargets.push("ausfuehrung_erledigt");
+        }
+
+        for (const targetStatus of candidateTargets) {
+          const decision = assertCanTransition(currentProject, targetStatus, session.role);
+          if (!decision.ok) {
+            continue;
+          }
+          const prerequisiteMessages = getBundlePrerequisiteMessages(currentProject, targetStatus, {
+            besichtigungAppointments: bundleAfter.appointments.filter((a) => a.kind === "besichtigung").length,
+            ausfuehrungAppointments: bundleAfter.appointments.filter((a) => a.kind === "ausfuehrung").length,
+            reports: bundleAfter.reports.length,
+            directResolvedReports: bundleAfter.reports.filter((r) => r.outcome === "direkt_geloest").length,
+            quotes: bundleAfter.quotes.length,
+            quoteFinalized: bundleAfter.quotes.filter(
+              (q) => Boolean(q.finalizedAt) || Boolean(q.deliverySentAt),
+            ).length,
+            supplierSubmissions: (bundleAfter.supplierSubmissions ?? []).length,
+            orders: bundleAfter.orders.length,
+            deliveries: bundleAfter.deliveries.length,
+            invoices: bundleAfter.invoices.length,
+            invoiceFinalized: bundleAfter.invoices.filter(
+              (inv) => Boolean(inv.finalizedAt) || Boolean(inv.deliverySentAt),
+            ).length,
+          });
+          if (prerequisiteMessages.length > 0) {
+            continue;
+          }
+
+          await updateProjectStatus(parsed.data.projectId, targetStatus, decision.nextOwnerRole);
+          await addAuditEvent({
+            action: "status_gewechselt",
+            projectId: parsed.data.projectId,
+            actorRole: session.role,
+            actorName: "System Benutzer",
+            payload: JSON.stringify({
+              to: targetStatus,
+              reason: "technician_report",
+            }),
+          });
+          // Nur einen passenden Übergang pro Rapport ausführen.
+          break;
+        }
+      }
+    } catch (statusError) {
+      console.error(statusError);
     }
 
     revalidatePath(`/projekte/${parsed.data.projectId}`);
