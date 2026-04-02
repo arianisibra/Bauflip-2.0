@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
 import { getProjectBundle } from "@/lib/db/repository";
+import { bundleContactLabel, bundleSiteAddressShort } from "@/lib/tech/bundle-display";
 import { TechnicianRapportTech } from "@/components/app/technician-rapport-tech";
 
 type Params = {
@@ -34,7 +35,8 @@ export default async function TechnicianRapportPage({ params }: Params) {
         </p>
         <h1 className="text-2xl font-semibold text-slate-900">{bundle.project.title}</h1>
         <p className="text-xs text-slate-600">
-          {bundle.project.contactName} · {bundle.project.siteAddressShort}
+          {bundleContactLabel(bundle.contact)} ·{" "}
+          {bundleSiteAddressShort(bundle.serviceAddress, bundle.property) ?? "—"}
         </p>
       </header>
 

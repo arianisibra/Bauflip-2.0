@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getCurrentSession } from "@/lib/auth/session";
 import { getProjectBundle, listWeekTasks } from "@/lib/db/repository";
+import { bundleContactLabel, bundleSiteAddressShort } from "@/lib/tech/bundle-display";
 
 function formatTimeRange(isoStart: string, isoEnd: string): string {
   const s = new Date(isoStart);
@@ -72,8 +73,8 @@ export default async function TodayPage() {
   for (const { id, bundle } of projectBundles) {
     if (!bundle) continue;
     projectMeta.set(id, {
-      contactName: bundle.project.contactName ?? null,
-      siteAddressShort: bundle.project.siteAddressShort ?? null,
+      contactName: bundleContactLabel(bundle.contact),
+      siteAddressShort: bundleSiteAddressShort(bundle.serviceAddress, bundle.property),
     });
   }
 

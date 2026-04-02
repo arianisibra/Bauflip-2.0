@@ -523,7 +523,7 @@ export async function addTechnicianReportAction(formData: FormData): Promise<Add
         organizationId: session.organizationId,
         eventType: BAUFLIP_ZAPIER_EVENTS.REPORT_CREATED,
         payload: {
-          ...zapierContactPayload(projectBundle.contact),
+          ...zapierContactPayload(projectBundleBefore.contact),
           projectId: parsed.data.projectId,
           outcome: parsed.data.outcome,
           summary: parsed.data.summary,

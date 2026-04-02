@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
 import { getProjectBundle } from "@/lib/db/repository";
+import { bundleContactLabel, bundleSiteAddressFull, bundleSiteAddressShort } from "@/lib/tech/bundle-display";
 import { statusLabels } from "@/lib/workflow/project-workflow";
 
 type Params = {
@@ -35,7 +36,8 @@ export default async function TechnicianAppointmentPage({ params }: Params) {
         </p>
         <h1 className="text-2xl font-semibold text-slate-900">{project.title}</h1>
         <p className="text-xs text-slate-600">
-          {project.contactName} · {project.siteAddressShort}
+          {bundleContactLabel(bundle.contact)} ·{" "}
+          {bundleSiteAddressShort(bundle.serviceAddress, bundle.property) ?? "—"}
         </p>
         <p className="text-xs text-slate-500">
           Status: <span className="font-medium text-slate-800">{statusLabels[project.status]}</span>
@@ -44,7 +46,7 @@ export default async function TechnicianAppointmentPage({ params }: Params) {
 
       <div className="space-y-2 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm shadow-sm">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Adresse</p>
-        <p className="text-slate-800">{project.siteAddressFull}</p>
+        <p className="text-slate-800">{bundleSiteAddressFull(bundle.serviceAddress, bundle.property)}</p>
         {project.mapsUrl ? (
           <Link
             href={project.mapsUrl}

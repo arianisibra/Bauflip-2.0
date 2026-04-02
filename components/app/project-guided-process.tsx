@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { ArrowRight, Check, MoreHorizontal } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { transitionProjectAction } from "@/app/(app)/actions";
 import { getPrimaryPreviousStatus } from "@/lib/workflow/project-guided-flow";
@@ -77,11 +77,14 @@ function BexioManualActions() {
         Projekt-Sheet (Kunde, Adresse, Positionen).
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
-        <Button asChild size="xs" variant="outline">
-          <Link href={bexioAppUrl} target="_blank" rel="noreferrer">
-            bexio öffnen
-          </Link>
-        </Button>
+        <Link
+          href={bexioAppUrl}
+          target="_blank"
+          rel="noreferrer"
+          className={buttonVariants({ size: "xs", variant: "outline" })}
+        >
+          bexio öffnen
+        </Link>
       </div>
     </div>
   );
