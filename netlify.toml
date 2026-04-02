@@ -1,0 +1,12 @@
+# Netlify + Next.js (https://docs.netlify.com/build/frameworks/framework-setup-guides/nextjs/overview/)
+# Secrets-Scan: NEXT_PUBLIC_*-Werte landen bewusst im Client-Bundle (Supabase anon, Turnstile site key, …).
+# Nur diese Keys hier ausschließen — niemals z. B. SUPABASE_SERVICE_ROLE_KEY oder CLOUDFLARE_TURNSTILE_SECRET_KEY.
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_SUPABASE_ANON_KEY,NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_TURNSTILE_SITE_KEY,NEXT_PUBLIC_SITE_URL"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
