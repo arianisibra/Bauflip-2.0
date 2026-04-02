@@ -1,3 +1,5 @@
+import "server-only";
+
 import { createHmac, randomUUID } from "crypto";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
