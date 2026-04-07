@@ -378,10 +378,14 @@ export function MonteurAuftragClient({
                     fd.set("file", file);
                     setPending(true);
                     try {
-                      await uploadProjectReportFileAction(fd);
-                      router.refresh();
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : "Upload fehlgeschlagen.");
+                      const result = await uploadProjectReportFileAction(fd);
+                      if (!result.success) {
+                        setError(result.error);
+                      } else {
+                        router.refresh();
+                      }
+                    } catch {
+                      setError("Upload fehlgeschlagen.");
                     } finally {
                       setPending(false);
                     }

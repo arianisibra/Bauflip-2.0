@@ -68,57 +68,47 @@ export async function createIntakeAction(formData: FormData) {
   return { projectId: project.id };
 }
 
-export async function uploadProjectReportFileAction(formData: FormData) {
+export async function uploadProjectReportFileAction(
+  formData: FormData,
+): Promise<{ success: true } | { success: false; error: string }> {
   const session = await getCurrentSession();
-  if (!session) {
-    throw new Error("Nicht angemeldet.");
-  }
+  if (!session) return { success: false, error: "Nicht angemeldet." };
   const supabase = await createSupabaseServerClient();
-  if (!supabase) {
-    throw new Error("Supabase ist nicht konfiguriert.");
-  }
+  if (!supabase) return { success: false, error: "Supabase ist nicht konfiguriert." };
+
   const projectId = String(formData.get("projectId") ?? "").trim();
   const file = formData.get("file") as File | null;
-  if (!projectId) {
-    throw new Error("Projekt fehlt.");
-  }
-  if (!file || typeof file !== "object" || file.size === 0) {
-    throw new Error("Bitte eine Datei wählen.");
-  }
-  if (!session.organizationId) {
-    throw new Error("Keine Organisation.");
-  }
-  if (!PROJECT_FILE_MIME.has(file.type)) {
-    throw new Error("Dateityp nicht erlaubt.");
-  }
-  if (file.size > PROJECT_FILE_MAX_BYTES) {
-    throw new Error("Datei darf maximal 15 MB gross sein.");
-  }
+  if (!projectId) return { success: false, error: "Projekt fehlt." };
+  if (!file || typeof file !== "object" || file.size === 0) return { success: false, error: "Bitte eine Datei wählen." };
+  if (!session.organizationId) return { success: false, error: "Keine Organisation." };
+  if (!PROJECT_FILE_MIME.has(file.type)) return { success: false, error: "Dateityp nicht erlaubt." };
+  if (file.size > PROJECT_FILE_MAX_BYTES) return { success: false, error: "Datei darf maximal 15 MB gross sein." };
 
   const core = await getProjectCore(projectId);
-  if (!core) {
-    throw new Error("Projekt nicht gefunden.");
-  }
+  if (!core) return { success: false, error: "Projekt nicht gefunden." };
 
-  const safe = sanitizeFileBaseName(file.name) || "datei";
-  const storagePath = `${session.organizationId}/${projectId}/reports/${Date.now()}-${safe}`;
-  const buf = Buffer.from(await file.arrayBuffer());
-  const { error: uploadError } = await supabase.storage.from("project-files").upload(storagePath, buf, {
-    contentType: file.type,
-    upsert: false,
-  });
-  if (uploadError) {
-    throw new Error(uploadError.message);
-  }
+  try {
+    const safe = sanitizeFileBaseName(file.name) || "datei";
+    const storagePath = `${session.organizationId}/${projectId}/reports/${Date.now()}-${safe}`;
+    const buf = Buffer.from(await file.arrayBuffer());
+    const { error: uploadError } = await supabase.storage.from("project-files").upload(storagePath, buf, {
+      contentType: file.type,
+      upsert: false,
+    });
+    if (uploadError) return { success: false, error: uploadError.message };
 
-  await addProjectAttachment({
-    projectId,
-    filePath: storagePath,
-    fileName: file.name,
-    fileType: file.type,
-    sizeBytes: file.size,
-    uploadedBy: session.profile.id,
-  });
+    await addProjectAttachment({
+      projectId,
+      filePath: storagePath,
+      fileName: file.name,
+      fileType: file.type,
+      sizeBytes: file.size,
+      uploadedBy: session.profile.id,
+    });
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Upload fehlgeschlagen." };
+  }
 
   revalidatePath("/projekte");
+  return { success: true };
 }

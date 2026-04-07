@@ -760,8 +760,8 @@ export async function addTechnicianReport(
       time_spent_minutes: input.timeSpentMinutes,
       created_by: options?.createdByProfileId ?? null,
     })
-    .select("*")
-    .single();
+    .select("id, project_id, outcome, summary, measurements_json, work_description, time_spent_minutes, created_at")
+    .maybeSingle();
   if (error || !data) throw new Error(error?.message ?? "Rapport konnte nicht gespeichert werden.");
 
   const reportId = String((data as Record<string, unknown>).id ?? "");
