@@ -1,36 +1,30 @@
-import type { Contact, ContactAddress, SiteProperty } from "@/lib/domain/types";
+import type { Project } from "@/lib/domain/types";
 
-export function bundleContactLabel(contact: Contact | null): string {
-  const n = contact?.name?.trim();
-  return n && n.length > 0 ? n : "—";
+/** Adresszeile ohne vollen `Project` (z. B. verschachtelte Supabase-Joins). */
+export function formatServiceAddressFields(fields: {
+  serviceStreet: string | null | undefined;
+  servicePostalCode: string | null | undefined;
+  serviceCity: string | null | undefined;
+}): string {
+  const parts = [
+    fields.serviceStreet,
+    [fields.servicePostalCode, fields.serviceCity].filter(Boolean).join(" "),
+  ].filter(Boolean);
+  return parts.join(", ") || "—";
 }
 
-export function bundleSiteAddressShort(
-  serviceAddress: ContactAddress | null,
-  property: SiteProperty | null,
-): string | null {
-  const a = serviceAddress;
-  const p = property;
-  const parts = (street: string | null, pc: string | null, city: string | null) => {
-    const line = [pc, city].filter(Boolean).join(" ").trim();
-    if (street?.trim() && line) {
-      return `${street.trim()}, ${line}`;
-    }
-    if (line) {
-      return line;
-    }
-    return street?.trim() || null;
-  };
-  return parts(a?.street ?? null, a?.postalCode ?? null, a?.city ?? null) ?? parts(p?.street ?? null, p?.postalCode ?? null, p?.city ?? null);
+export function formatServiceAddress(p: Project): string {
+  return formatServiceAddressFields({
+    serviceStreet: p.serviceStreet,
+    servicePostalCode: p.servicePostalCode,
+    serviceCity: p.serviceCity,
+  });
 }
 
-export function bundleSiteAddressFull(
-  serviceAddress: ContactAddress | null,
-  property: SiteProperty | null,
-): string {
-  const short = bundleSiteAddressShort(serviceAddress, property);
-  if (short) {
-    return short;
-  }
-  return "Adresse noch nicht hinterlegt.";
+export function tenantLabel(p: Project): string {
+  return p.tenantName?.trim() || "—";
+}
+
+export function managementLabel(p: Project): string {
+  return p.managementName?.trim() || "—";
 }

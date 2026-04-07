@@ -3,130 +3,26 @@
 import { revalidatePath } from "next/cache";
 import { getCurrentSession } from "@/lib/auth/session";
 import {
+  addAppointment,
   deleteProject,
-  deleteProjectWorkType,
-  getProjectBundle,
-  insertProjectWorkType,
-  updateProjectStammdaten,
+  deleteAppointment,
+  getProjectCore,
+  updateProject,
 } from "@/lib/db/repository";
-import {
-  getCachedOrganizationZapierEnabled,
-  getCachedProjectFileSignedUrl,
-  loadContactProjectOptions,
-  loadProjectSheetReferenceLists,
-} from "@/lib/app/project-sheet-cache";
 import { projectStammdatenUpdateSchema } from "@/lib/validations/forms";
 
 function nz(s: string | undefined | null): string | null {
-  if (s == null) {
-    return null;
-  }
+  if (s == null) return null;
   const t = String(s).trim();
   return t === "" ? null : t;
 }
 
-export async function getContactProjectOptionsAction(contactId: string) {
-  return loadContactProjectOptions(contactId);
-}
-
 export async function getProjectSheetDataAction(projectId: string) {
-  const session = await getCurrentSession();
-  const bundle = await getProjectBundle(projectId);
+  const bundle = await getProjectCore(projectId);
   if (!bundle) {
     throw new Error("Projekt nicht gefunden.");
   }
-  const {
-    contacts,
-    properties,
-    workTypes,
-    profiles,
-    supplierTemplates,
-    articles,
-    outcomeOptions,
-    locationOptions,
-  } = await loadProjectSheetReferenceLists();
-  const { persons, addresses } = await loadContactProjectOptions(bundle.project.contactId);
-  const reportAttachments = await Promise.all(
-    (bundle.attachments ?? []).map(async (a) => ({
-      ...a,
-      href: await getCachedProjectFileSignedUrl(a.filePath),
-    })),
-  );
-
-  const integrationZapierEnabled = session?.organizationId
-    ? await getCachedOrganizationZapierEnabled(session.organizationId)
-    : false;
-
-  return {
-    bundle,
-    reportAttachments,
-    contacts,
-    properties,
-    workTypes,
-    profiles,
-    persons,
-    addresses,
-    supplierTemplates,
-    articles,
-    outcomeOptions,
-    locationOptions,
-    actorRole: session?.role ?? "office",
-    integrationZapierEnabled,
-  };
-}
-
-/** Nur Bundle, Anhänge, Kontakt-Optionen — keine org-weiten Referenzlisten (nach Mutationen / Refresh). */
-export async function refreshProjectSheetViewAction(projectId: string) {
-  const session = await getCurrentSession();
-  const bundle = await getProjectBundle(projectId);
-  if (!bundle) {
-    throw new Error("Projekt nicht gefunden.");
-  }
-  const { persons, addresses } = await loadContactProjectOptions(bundle.project.contactId);
-  const reportAttachments = await Promise.all(
-    (bundle.attachments ?? []).map(async (a) => ({
-      ...a,
-      href: await getCachedProjectFileSignedUrl(a.filePath),
-    })),
-  );
-  const integrationZapierEnabled = session?.organizationId
-    ? await getCachedOrganizationZapierEnabled(session.organizationId)
-    : false;
-
-  return {
-    bundle,
-    reportAttachments,
-    persons,
-    addresses,
-    actorRole: session?.role ?? "office",
-    integrationZapierEnabled,
-  };
-}
-
-export async function addProjectWorkTypeAction(name: string) {
-  const session = await getCurrentSession();
-  if (!session || (session.role !== "office" && session.role !== "admin")) {
-    throw new Error("Keine Berechtigung.");
-  }
-  const trimmed = name.trim();
-  if (!trimmed) {
-    throw new Error("Bezeichnung fehlt.");
-  }
-  const wt = await insertProjectWorkType(trimmed);
-  revalidatePath("/projekte");
-  return { id: wt.id };
-}
-
-export async function deleteProjectWorkTypeAction(workTypeId: string) {
-  const session = await getCurrentSession();
-  if (!session || (session.role !== "office" && session.role !== "admin")) {
-    throw new Error("Keine Berechtigung.");
-  }
-  if (!workTypeId) {
-    throw new Error("Arbeitsart-ID fehlt.");
-  }
-  await deleteProjectWorkType(workTypeId);
-  revalidatePath("/projekte");
+  return { bundle };
 }
 
 export async function updateProjectStammdatenAction(values: unknown) {
@@ -140,36 +36,58 @@ export async function updateProjectStammdatenAction(values: unknown) {
     throw new Error(parsed.error.issues[0]?.message ?? "Ungültige Eingabe.");
   }
 
-  let v = parsed.data;
-  if (v.newWorkTypeName?.trim()) {
-    const wt = await insertProjectWorkType(v.newWorkTypeName);
-    v = { ...v, workTypeId: wt.id, newWorkTypeName: undefined };
-  }
-
-  await updateProjectStammdaten(v.projectId, {
-    contactId: v.contactId,
+  const v = parsed.data;
+  await updateProject(v.projectId, {
     title: v.title,
-    tenantUnit: nz(v.tenantUnit),
-    sitePhone: nz(v.sitePhone),
-    siteMobile: nz(v.siteMobile),
-    referenceCode: nz(v.referenceCode),
-    technicianNotes: nz(v.technicianNotes),
-    propertyId: nz(v.propertyId),
-    mapsUrl: nz(v.mapsUrl),
-    workTypeId: nz(v.workTypeId),
-    contactPersonId: nz(v.contactPersonId),
-    serviceAddressId: nz(v.serviceAddressId),
-    billingAddressId: nz(v.billingAddressId),
+    status: v.status,
+    intakeOriginalText: v.intakeOriginalText,
+    tenantName: nz(v.tenantName),
+    tenantPhone: nz(v.tenantPhone),
+    tenantEmail: nz(v.tenantEmail),
+    managementName: nz(v.managementName),
+    managementPhone: nz(v.managementPhone),
+    managementEmail: nz(v.managementEmail),
+    costCeilingText: nz(v.costCeilingText),
+    serviceStreet: nz(v.serviceStreet),
+    servicePostalCode: nz(v.servicePostalCode),
+    serviceCity: nz(v.serviceCity),
+    serviceCountry: v.serviceCountry ?? undefined,
     hintsAndNotes: nz(v.hintsAndNotes),
-    nextOwnerUserId: nz(v.nextOwnerUserId),
-    intakeOriginalText: v.intakeOriginalText ?? "",
     accessNotes: nz(v.accessNotes),
-    keyHandlingNotes: nz(v.keyHandlingNotes),
-    timingNotes: null,
-    internalNotes: nz(v.internalNotes),
+    nextOwnerUserId: v.nextOwnerUserId && v.nextOwnerUserId !== "" ? v.nextOwnerUserId : null,
   });
 
-  revalidatePath(`/projekte/${v.projectId}`);
+  revalidatePath("/projekte");
+}
+
+export async function addAppointmentAction(input: {
+  projectId: string;
+  kind: "besichtigung" | "ausfuehrung";
+  startsAt: string;
+  endsAt: string;
+  assignedTechnicianId?: string | null;
+}) {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
+    throw new Error("Keine Berechtigung.");
+  }
+  await addAppointment({
+    projectId: input.projectId,
+    kind: input.kind,
+    startsAt: input.startsAt,
+    endsAt: input.endsAt,
+    assignedTechnicianId: input.assignedTechnicianId ?? null,
+    planningNotes: null,
+  });
+  revalidatePath("/projekte");
+}
+
+export async function deleteAppointmentAction(appointmentId: string) {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
+    throw new Error("Keine Berechtigung.");
+  }
+  await deleteAppointment(appointmentId);
   revalidatePath("/projekte");
 }
 
@@ -181,7 +99,6 @@ export async function deleteProjectAction(projectId: string) {
   if (!projectId) {
     throw new Error("Projekt-ID fehlt.");
   }
-
   await deleteProject(projectId);
   revalidatePath("/projekte");
 }

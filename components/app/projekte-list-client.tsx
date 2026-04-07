@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Contact, ProjectListRow } from "@/lib/domain/types";
+import type { OfficeProjectListItem, UserProfile } from "@/lib/domain/types";
+import { projectStatusLabels } from "@/lib/domain/types";
 import { deleteProjectAction } from "@/app/(app)/projekte/actions";
-import { ProjektSheetEditor } from "@/components/app/projekt-sheet-editor";
-import { IntakeForm } from "@/components/app/intake-form";
 import { ListPageToolbar } from "@/components/app/list-page-toolbar";
 import { Sheet } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -18,30 +18,82 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { statusLabels } from "@/lib/workflow/project-workflow";
+
+const ProjektSheetEditor = dynamic(
+  () => import("@/components/app/projekt-sheet-editor").then((m) => ({ default: m.ProjektSheetEditor })),
+  {
+    loading: () => <p className="p-4 text-sm text-muted-foreground">Laden…</p>,
+  },
+);
+
+const IntakeForm = dynamic(() =>
+  import("@/components/app/intake-form").then((m) => ({ default: m.IntakeForm })),
+);
 
 function normalize(s: string) {
   return s.toLowerCase().trim();
 }
 
+type RowProps = {
+  p: OfficeProjectListItem;
+  deletingId: string | null;
+  selectedId: string | null;
+  onOpen: (p: OfficeProjectListItem) => void;
+  onDelete: (p: OfficeProjectListItem) => void;
+};
+
+const ProjectTableRow = memo(function ProjectTableRow({ p, deletingId, selectedId, onOpen, onDelete }: RowProps) {
+  return (
+    <TableRow
+      className="cursor-pointer"
+      data-state={selectedId === p.id ? "selected" : undefined}
+      onClick={() => onOpen(p)}
+    >
+      <TableCell className="font-medium">{p.title}</TableCell>
+      <TableCell>{p.displayLabel ?? "—"}</TableCell>
+      <TableCell className="capitalize">{p.type}</TableCell>
+      <TableCell>
+        <StatusBadge status={p.status} />
+      </TableCell>
+      <TableCell className="text-right">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-8 border-red-200 text-red-700 hover:bg-red-50"
+          disabled={deletingId === p.id}
+          onClick={(e) => {
+            e.stopPropagation();
+            void onDelete(p);
+          }}
+        >
+          Löschen
+        </Button>
+      </TableCell>
+    </TableRow>
+  );
+});
+
 export function ProjekteListClient({
   projects,
-  contacts,
+  technicians,
   canEditProjectSheet,
   initialOpenProjectId,
 }: {
-  projects: ProjectListRow[];
-  contacts: Contact[];
+  projects: OfficeProjectListItem[];
+  technicians: UserProfile[];
   canEditProjectSheet: boolean;
   initialOpenProjectId?: string;
 }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState<ProjectListRow | null>(null);
+  const [selected, setSelected] = useState<OfficeProjectListItem | null>(null);
   const [intakeOpen, setIntakeOpen] = useState(false);
   const [pendingOpenProjectId, setPendingOpenProjectId] = useState(initialOpenProjectId ?? "");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const router = useRouter();
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
 
   useEffect(() => {
     setPendingOpenProjectId(initialOpenProjectId ?? "");
@@ -69,8 +121,8 @@ export function ProjekteListClient({
     return projects.filter((p) => {
       return (
         normalize(p.title).includes(n) ||
-        normalize(p.contactName ?? "").includes(n) ||
-        normalize(statusLabels[p.status]).includes(n) ||
+        normalize(p.displayLabel ?? "").includes(n) ||
+        normalize(projectStatusLabels[p.status]).includes(n) ||
         normalize(p.type).includes(n)
       );
     });
@@ -78,13 +130,47 @@ export function ProjekteListClient({
   const hasSearch = q.trim().length > 0;
   const showEmptyState = filtered.length === 0;
 
+  const handleOpenRow = useCallback(
+    (p: OfficeProjectListItem) => {
+      setSelected(p);
+      setOpen(true);
+      router.replace(`/projekte?openProjectId=${encodeURIComponent(p.id)}`, { scroll: false });
+    },
+    [router],
+  );
+
+  const handleDeleteRow = useCallback(
+    async (p: OfficeProjectListItem) => {
+      const ok = window.confirm(`Projekt "${p.title}" wirklich löschen?`);
+      if (!ok) {
+        return;
+      }
+      try {
+        setDeletingId(p.id);
+        await deleteProjectAction(p.id);
+        if (selectedRef.current?.id === p.id) {
+          setOpen(false);
+          setSelected(null);
+        }
+        router.refresh();
+      } catch (err) {
+        window.alert(err instanceof Error ? err.message : "Löschen fehlgeschlagen.");
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [router],
+  );
+
   return (
     <>
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold">Projekte</h1>
         <div className="flex items-center gap-2">
-          <ListPageToolbar value={q} onChange={setQ} placeholder="Projekt, Kunde, Status …" />
-          <Button size="sm" onClick={() => setIntakeOpen(true)}>+ Neue Anfrage</Button>
+          <ListPageToolbar value={q} onChange={setQ} placeholder="Suche…" />
+          <Button size="sm" onClick={() => setIntakeOpen(true)}>
+            + Neue Anfrage
+          </Button>
         </div>
       </div>
 
@@ -96,8 +182,8 @@ export function ProjekteListClient({
             </h2>
             <p className="max-w-2xl text-sm text-muted-foreground">
               {hasSearch
-                ? "Passen Sie die Suche an oder leeren Sie den Suchbegriff, um wieder alle Projekte zu sehen."
-                : "Erfassen Sie die erste Anfrage, damit sie hier im Ablauf erscheint und als Sidepage geöffnet werden kann."}
+                ? "Passen Sie die Suche an."
+                : "Erfassen Sie die erste Anfrage, damit sie hier erscheint."}
             </p>
             <div className="flex gap-2">
               {hasSearch ? (
@@ -115,63 +201,22 @@ export function ProjekteListClient({
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead>Projekt</TableHead>
-                <TableHead>Kunde</TableHead>
+                <TableHead>Mieter / Kontakt</TableHead>
                 <TableHead>Typ</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Nächster Schritt</TableHead>
                 <TableHead className="w-[120px] text-right">Aktion</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.map((p) => (
-                <TableRow
+                <ProjectTableRow
                   key={p.id}
-                  className="cursor-pointer"
-                  onClick={() => {
-                    setSelected(p);
-                    setOpen(true);
-                    router.replace(`/projekte?openProjectId=${encodeURIComponent(p.id)}`, { scroll: false });
-                  }}
-                >
-                  <TableCell className="font-medium">{p.title}</TableCell>
-                  <TableCell>{p.contactName ?? "—"}</TableCell>
-                  <TableCell className="capitalize">{p.type}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={p.status} />
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{p.nextOwnerRole}</TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-8 border-red-200 text-red-700 hover:bg-red-50"
-                      disabled={deletingId === p.id}
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        const ok = window.confirm(`Projekt "${p.title}" wirklich löschen?`);
-                        if (!ok) {
-                          return;
-                        }
-                        try {
-                          setDeletingId(p.id);
-                          await deleteProjectAction(p.id);
-                          if (selected?.id === p.id) {
-                            setOpen(false);
-                            setSelected(null);
-                          }
-                          router.refresh();
-                        } catch (err) {
-                          window.alert(err instanceof Error ? err.message : "Löschen fehlgeschlagen.");
-                        } finally {
-                          setDeletingId(null);
-                        }
-                      }}
-                    >
-                      Löschen
-                    </Button>
-                  </TableCell>
-                </TableRow>
+                  p={p}
+                  deletingId={deletingId}
+                  selectedId={selected?.id ?? null}
+                  onOpen={handleOpenRow}
+                  onDelete={handleDeleteRow}
+                />
               ))}
             </TableBody>
           </Table>
@@ -196,21 +241,21 @@ export function ProjekteListClient({
         }}
         className="max-w-6xl w-[min(100vw-1.5rem,80rem)]"
         title={selected?.title ?? "Projekt"}
-        description={selected?.contactName?.trim() ? selected.contactName : undefined}
+        description={selected?.displayLabel?.trim() ? selected.displayLabel : undefined}
       >
         {selected ? (
-          <ProjektSheetEditor projectId={selected.id} open={open} canEdit={canEditProjectSheet} />
+          <ProjektSheetEditor
+            projectId={selected.id}
+            open={open}
+            canEdit={canEditProjectSheet}
+            technicians={technicians}
+          />
         ) : null}
       </Sheet>
 
-      <Sheet
-        open={intakeOpen}
-        onOpenChange={setIntakeOpen}
-        title="Neue Anfrage"
-        className="max-w-2xl overflow-y-auto"
-      >
+      <Sheet open={intakeOpen} onOpenChange={setIntakeOpen} title="Neue Anfrage" className="max-w-2xl overflow-y-auto">
         <div className="p-4">
-          <IntakeForm contacts={contacts} />
+          <IntakeForm />
         </div>
       </Sheet>
     </>

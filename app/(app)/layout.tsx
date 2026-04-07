@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { ChatbotFab } from "@/components/app/chatbot-fab";
 import { SidebarNav } from "@/components/app/sidebar-nav";
 import { UserAvatarButton } from "@/components/app/user-avatar-button";
 import { getCurrentSession } from "@/lib/auth/session";
@@ -31,7 +30,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <main className="min-h-0 flex-1 overflow-y-auto px-6 py-6">{children}</main>
         </div>
       </div>
-      <ChatbotFab />
     </div>
   );
 }

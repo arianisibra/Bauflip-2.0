@@ -182,7 +182,7 @@ export async function saveProfileSettingsAction(formData: FormData) {
   }
 
   revalidatePath("/einstellungen");
-  revalidatePath("/");
+  revalidatePath("/projekte");
 }
 
 export type TeamMemberListItem = {

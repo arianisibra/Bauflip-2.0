@@ -22,16 +22,14 @@ function withSecurityHeaders(res: NextResponse): NextResponse {
 const technicianAllowedPrefixes = [
   "/",
   "/tag",
+  "/auftrag",
   "/projekte",
-  "/termine",
-  "/rapporte",
-  "/team-chat",
-  "/mitarbeiter",
+  "/einstellungen",
+  "/mfa/setup",
+  "/onboarding",
   "/anmeldung",
-  "/zeiten",
   "/profil",
   "/tech",
-  "/debug-session",
 ];
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

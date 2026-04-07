@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { getCurrentSession } from "@/lib/auth/session";
-import { getProjectBundle, listWeekTasks } from "@/lib/db/repository";
-import { bundleContactLabel, bundleSiteAddressShort } from "@/lib/tech/bundle-display";
+import { listWeekTasks } from "@/lib/db/repository";
 
 function formatTimeRange(isoStart: string, isoEnd: string): string {
   const s = new Date(isoStart);
@@ -34,14 +33,13 @@ export default async function TodayPage() {
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
     .slice(0, 3);
 
-  // Projekte mit offenen Rapporten (vereinfachte Heuristik über Projektstatus).
   const openRapportByProject = new Map<
     string,
     { projectId: string; projectTitle: string; isOverdue: boolean }
   >();
   for (const task of tasks) {
     if (task.assignedTechnicianId !== session.user.id) continue;
-    if (task.projectStatus !== "bericht_ausstehend") continue;
+    if (task.projectStatus !== "einsatz_offen") continue;
     const isOverdue = new Date(task.endsAt) < now;
     if (!openRapportByProject.has(task.projectId)) {
       openRapportByProject.set(task.projectId, {
@@ -50,7 +48,6 @@ export default async function TodayPage() {
         isOverdue,
       });
     } else if (isOverdue) {
-      // Wenn irgendein zugehöriger Termin überfällig ist, markieren.
       const existing = openRapportByProject.get(task.projectId)!;
       openRapportByProject.set(task.projectId, { ...existing, isOverdue: true });
     }
@@ -58,25 +55,6 @@ export default async function TodayPage() {
   const openRapportProjects = Array.from(openRapportByProject.values()).sort((a, b) =>
     a.projectTitle.localeCompare(b.projectTitle, "de-CH"),
   );
-
-  const uniqueProjectIds = Array.from(new Set(todaysTasks.map((t) => t.projectId)));
-  const projectBundles = await Promise.all(
-    uniqueProjectIds.map(async (id) => ({
-      id,
-      bundle: await getProjectBundle(id),
-    })),
-  );
-  const projectMeta = new Map<
-    string,
-    { contactName: string | null; siteAddressShort: string | null }
-  >();
-  for (const { id, bundle } of projectBundles) {
-    if (!bundle) continue;
-    projectMeta.set(id, {
-      contactName: bundleContactLabel(bundle.contact),
-      siteAddressShort: bundleSiteAddressShort(bundle.serviceAddress, bundle.property),
-    });
-  }
 
   return (
     <section className="flex flex-col gap-5 pb-4">
@@ -86,7 +64,7 @@ export default async function TodayPage() {
         </p>
         <h1 className="text-2xl font-semibold text-slate-900">Mein Tag</h1>
         <p className="text-xs text-slate-500">
-          Heutige Einsätze und offene Rapporte. Für Details einfach antippen.
+          Heutige Einsätze. Für den Auftrag antippen.
         </p>
       </header>
 
@@ -104,14 +82,11 @@ export default async function TodayPage() {
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                   Nächste Termine
                 </p>
-                <p className="mb-1 text-[11px] text-slate-500">
-                  Diese Einsätze stehen als Nächstes an.
-                </p>
                 <div className="space-y-2">
                   {upcomingTasks.map((task) => (
                     <Link
                       key={task.appointmentId}
-                      href={`/termine/${task.projectId}`}
+                      href={`/auftrag/${task.projectId}`}
                       className="block rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm active:scale-[0.99]"
                     >
                       <p className="text-[11px] font-medium text-slate-700">
@@ -140,7 +115,7 @@ export default async function TodayPage() {
             {todaysTasks.map((task) => (
               <Link
                 key={task.appointmentId}
-                href={`/termine/${task.projectId}`}
+                href={`/auftrag/${task.projectId}`}
                 className="block rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm active:scale-[0.99]"
               >
                 <p className="flex items-center justify-between gap-2 text-[11px] font-medium uppercase tracking-wide text-slate-500">
@@ -158,19 +133,11 @@ export default async function TodayPage() {
                 <p className="mt-1 line-clamp-2 text-sm font-semibold text-slate-900">
                   {task.projectTitle}
                 </p>
-                {(() => {
-                  const meta = projectMeta.get(task.projectId);
-                  if (!meta) return null;
-                  const parts = [];
-                  if (meta.contactName) parts.push(meta.contactName);
-                  if (meta.siteAddressShort) parts.push(meta.siteAddressShort);
-                  if (!parts.length) return null;
-                  return (
-                    <p className="mt-0.5 line-clamp-1 text-xs text-slate-600">
-                      {parts.join(" · ")}
-                    </p>
-                  );
-                })()}
+                {task.tenantDisplay || task.serviceAddressShort ? (
+                  <p className="mt-0.5 line-clamp-1 text-xs text-slate-600">
+                    {[task.tenantDisplay, task.serviceAddressShort].filter(Boolean).join(" · ")}
+                  </p>
+                ) : null}
               </Link>
             ))}
           </div>
@@ -180,16 +147,16 @@ export default async function TodayPage() {
       {openRapportProjects.length > 0 ? (
         <section className="space-y-2">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Rapporte ausstehend
+            Offene Einsätze
           </h2>
           <p className="text-[11px] text-slate-500">
-            Diese Projekte brauchen noch einen Rapport von dir.
+            Diese Aufträge sind noch in Arbeit.
           </p>
           <div className="space-y-2">
             {openRapportProjects.map((item) => (
               <Link
                 key={item.projectId}
-                href={`/rapport/${item.projectId}`}
+                href={`/auftrag/${item.projectId}`}
                 className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm active:scale-[0.99]"
               >
                 <span className="line-clamp-1 text-slate-900">{item.projectTitle}</span>
@@ -208,4 +175,3 @@ export default async function TodayPage() {
     </section>
   );
 }
-

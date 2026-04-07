@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 
 type Props = {
   displayName: string | null;
@@ -22,15 +22,15 @@ function applyTheme(theme: Theme) {
 }
 
 export function TechProfileClient({ displayName, email }: Props) {
-  const [theme, setTheme] = useState<Theme>("light");
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (typeof window === "undefined") return "light";
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-    const initialTheme = stored === "dark" || stored === "light" ? stored : "light";
-    setTheme(initialTheme);
-    applyTheme(initialTheme);
-  }, []);
+    return stored === "dark" || stored === "light" ? stored : "light";
+  });
+
+  useLayoutEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
 
   function toggleTheme() {
     setTheme((prev) => {

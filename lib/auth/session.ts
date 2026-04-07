@@ -102,7 +102,11 @@ export const getCurrentSession = cache(async function getCurrentSession(): Promi
       .eq("is_active", true)
       .limit(1)
       .maybeSingle(),
-    supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("id, display_name, role, avatar_url, calendar_color, calendar_position")
+      .eq("id", user.id)
+      .maybeSingle(),
   ]);
 
   const membershipRole = membershipResponse.data?.role as string | null | undefined;
@@ -124,7 +128,7 @@ export const getCurrentSession = cache(async function getCurrentSession(): Promi
         },
         { onConflict: "id" },
       )
-      .select("*")
+      .select("id, display_name, role, avatar_url, calendar_color, calendar_position")
       .single();
 
     if (inserted) {
