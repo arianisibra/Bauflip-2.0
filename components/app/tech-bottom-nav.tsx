@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, UserRound } from "lucide-react";
+import { Calendar, CalendarDays, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const tabs = [
   { href: "/tag", label: "Mein Tag", icon: CalendarDays },
+  { href: "/kalender", label: "Kalender", icon: Calendar },
   { href: "/profil", label: "Profil", icon: UserRound },
 ] as const;
 

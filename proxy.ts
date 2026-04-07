@@ -23,6 +23,7 @@ function withSecurityHeaders(res: NextResponse): NextResponse {
 const TECHNICIAN_ALLOWED_PREFIXES = [
   "/tag",
   "/auftrag",
+  "/kalender",
   "/mfa/setup",
   "/onboarding",
   "/anmeldung",

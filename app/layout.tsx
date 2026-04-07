@@ -31,6 +31,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="de-CH" className="h-full antialiased" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(localStorage.getItem("bauflip_theme")==="dark")document.documentElement.classList.add("dark")}catch{}`,
+          }}
+        />
+      </head>
       <body
         className={`${poppins.className} min-h-full flex flex-col`}
         suppressHydrationWarning

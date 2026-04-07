@@ -28,9 +28,16 @@ import {
   ImagePlus,
   KeyRound,
   MapPin,
+  Navigation,
   Paperclip,
   User,
 } from "lucide-react";
+
+function buildMapsUrl(p: { serviceStreet: string | null; servicePostalCode: string | null; serviceCity: string | null }): string | null {
+  const parts = [p.serviceStreet, p.servicePostalCode, p.serviceCity].filter(Boolean);
+  if (parts.length === 0) return null;
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(parts.join(", "))}`;
+}
 
 function orderFormsPayloadFromFormData(fd: FormData, templates: OrderFormTemplate[]) {
   return templates.map((t) => {
@@ -105,6 +112,17 @@ export function MonteurAuftragClient({
           <InfoRow icon={MapPin} label="Adresse">
             {formatServiceAddress(p)}
           </InfoRow>
+          {buildMapsUrl(p) ? (
+            <a
+              href={buildMapsUrl(p)!}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2.5 text-sm font-medium text-primary transition-colors active:scale-[0.98] hover:bg-primary/10"
+            >
+              <Navigation className="size-4" />
+              Route starten
+            </a>
+          ) : null}
           <InfoRow icon={Clock} label="Termin">
             {nextAppt
               ? `${new Date(nextAppt.startsAt).toLocaleString("de-CH")} – ${new Date(nextAppt.endsAt).toLocaleTimeString("de-CH")}`
@@ -264,7 +282,7 @@ export function MonteurAuftragClient({
                 setPending(true);
                 setError(null);
                 try {
-                  await submitTechnicianReportAction({
+                  const result = await submitTechnicianReportAction({
                     projectId: p.id,
                     outcome: mode,
                     summary: String(fd.get("summary") ?? ""),
@@ -272,10 +290,14 @@ export function MonteurAuftragClient({
                     workDescription: String(fd.get("workDescription") ?? ""),
                     orderForms: orderFormsPayloadFromFormData(fd, orderFormTemplates),
                   });
+                  if (!result.success) {
+                    setError(result.error);
+                    return;
+                  }
                   router.push("/tag");
                   router.refresh();
-                } catch (err) {
-                  setError(err instanceof Error ? err.message : "Speichern fehlgeschlagen.");
+                } catch {
+                  setError("Speichern fehlgeschlagen.");
                 } finally {
                   setPending(false);
                 }

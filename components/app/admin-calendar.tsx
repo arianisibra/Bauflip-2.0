@@ -1,0 +1,207 @@
+"use client";
+
+import { useCallback, useMemo, useState, useTransition } from "react";
+import Link from "next/link";
+import type { WeekTaskItem } from "@/lib/domain/types";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { fetchMonthTasksAction } from "@/app/(app)/kalender/actions";
+
+const DAY_NAMES = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+
+const MONTH_NAMES = [
+  "Januar", "Februar", "März", "April", "Mai", "Juni",
+  "Juli", "August", "September", "Oktober", "November", "Dezember",
+];
+
+function getMonthGrid(year: number, month: number) {
+  const firstDay = new Date(year, month - 1, 1);
+  const lastDay = new Date(year, month, 0);
+  const startDow = (firstDay.getDay() + 6) % 7;
+  const daysInMonth = lastDay.getDate();
+
+  const cells: { day: number; inMonth: boolean; dateKey: string }[] = [];
+
+  for (let i = 0; i < startDow; i++) {
+    const d = new Date(year, month - 1, -startDow + i + 1);
+    cells.push({
+      day: d.getDate(),
+      inMonth: false,
+      dateKey: d.toISOString().slice(0, 10),
+    });
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(year, month - 1, d);
+    cells.push({
+      day: d,
+      inMonth: true,
+      dateKey: date.toISOString().slice(0, 10),
+    });
+  }
+
+  const remaining = 7 - (cells.length % 7);
+  if (remaining < 7) {
+    for (let i = 1; i <= remaining; i++) {
+      const d = new Date(year, month, i);
+      cells.push({
+        day: d.getDate(),
+        inMonth: false,
+        dateKey: d.toISOString().slice(0, 10),
+      });
+    }
+  }
+
+  return cells;
+}
+
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
+}
+
+export function AdminCalendar({
+  initialTasks,
+  initialYear,
+  initialMonth,
+}: {
+  initialTasks: WeekTaskItem[];
+  initialYear: number;
+  initialMonth: number;
+}) {
+  const [year, setYear] = useState(initialYear);
+  const [month, setMonth] = useState(initialMonth);
+  const [tasks, setTasks] = useState(initialTasks);
+  const [pending, startTransition] = useTransition();
+
+  const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
+  const cells = useMemo(() => getMonthGrid(year, month), [year, month]);
+
+  const tasksByDate = useMemo(() => {
+    const map = new Map<string, WeekTaskItem[]>();
+    for (const t of tasks) {
+      const key = t.startsAt.slice(0, 10);
+      const list = map.get(key) ?? [];
+      list.push(t);
+      map.set(key, list);
+    }
+    return map;
+  }, [tasks]);
+
+  const navigate = useCallback(
+    (dir: -1 | 1) => {
+      let newMonth = month + dir;
+      let newYear = year;
+      if (newMonth < 1) {
+        newMonth = 12;
+        newYear -= 1;
+      } else if (newMonth > 12) {
+        newMonth = 1;
+        newYear += 1;
+      }
+      setYear(newYear);
+      setMonth(newMonth);
+      startTransition(async () => {
+        const result = await fetchMonthTasksAction(newYear, newMonth);
+        setTasks(result);
+      });
+    },
+    [year, month],
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => navigate(-1)}
+          disabled={pending}
+        >
+          <ChevronLeft className="size-4" />
+        </Button>
+        <h2 className="text-lg font-semibold tracking-tight">
+          {MONTH_NAMES[month - 1]} {year}
+        </h2>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => navigate(1)}
+          disabled={pending}
+        >
+          <ChevronRight className="size-4" />
+        </Button>
+      </div>
+
+      <div className={cn("grid grid-cols-7 gap-px rounded-xl border border-border bg-border overflow-hidden", pending && "opacity-60 transition-opacity")}>
+        {DAY_NAMES.map((name) => (
+          <div
+            key={name}
+            className="bg-muted/50 px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+          >
+            {name}
+          </div>
+        ))}
+
+        {cells.map((cell, i) => {
+          const dayTasks = tasksByDate.get(cell.dateKey) ?? [];
+          const isToday = cell.dateKey === todayKey;
+
+          return (
+            <div
+              key={i}
+              className={cn(
+                "min-h-[90px] bg-card p-1.5 transition-colors",
+                !cell.inMonth && "bg-muted/20",
+              )}
+            >
+              <div className="mb-1 flex items-center justify-between">
+                <span
+                  className={cn(
+                    "flex size-6 items-center justify-center rounded-full text-xs font-medium",
+                    isToday && "bg-primary text-primary-foreground",
+                    !isToday && cell.inMonth && "text-foreground",
+                    !isToday && !cell.inMonth && "text-muted-foreground/50",
+                  )}
+                >
+                  {cell.day}
+                </span>
+                {dayTasks.length > 0 ? (
+                  <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+                    {dayTasks.length}
+                  </Badge>
+                ) : null}
+              </div>
+
+              <div className="space-y-0.5">
+                {dayTasks.slice(0, 3).map((task) => (
+                  <Link
+                    key={task.appointmentId}
+                    href={`/projekte?sheet=${task.projectId}`}
+                    className="block truncate rounded px-1 py-0.5 text-[10px] font-medium leading-tight transition-colors hover:opacity-80"
+                    style={{
+                      backgroundColor: task.calendarColor + "20",
+                      color: task.calendarColor,
+                      borderLeft: `2px solid ${task.calendarColor}`,
+                    }}
+                    title={`${formatTime(task.startsAt)} ${task.projectTitle}${task.technicianName ? ` — ${task.technicianName}` : ""}`}
+                  >
+                    {formatTime(task.startsAt)} {task.projectTitle}
+                  </Link>
+                ))}
+                {dayTasks.length > 3 ? (
+                  <p className="px-1 text-[10px] text-muted-foreground">
+                    +{dayTasks.length - 3} weitere
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Clock,
   MapPin,
+  Navigation,
 } from "lucide-react";
 
 function formatTimeRange(isoStart: string, isoEnd: string): string {
@@ -16,6 +17,11 @@ function formatTimeRange(isoStart: string, isoEnd: string): string {
   const fmt = (d: Date) =>
     `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
   return `${fmt(s)}–${fmt(e)}`;
+}
+
+function buildMapsUrl(address: string | null): string | null {
+  if (!address) return null;
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
 }
 
 function timeOfDayGreeting(): string {
@@ -168,14 +174,25 @@ export default async function TodayPage() {
                       {task.projectTitle}
                     </p>
                     {task.tenantDisplay || task.serviceAddressShort ? (
-                      <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                         <MapPin className="size-3 shrink-0" />
-                        <span className="line-clamp-1">
+                        <span className="line-clamp-1 flex-1">
                           {[task.tenantDisplay, task.serviceAddressShort]
                             .filter(Boolean)
                             .join(" · ")}
                         </span>
-                      </p>
+                        {buildMapsUrl(task.serviceAddressShort) ? (
+                          <a
+                            href={buildMapsUrl(task.serviceAddressShort)!}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary active:scale-95"
+                          >
+                            <Navigation className="size-3.5" />
+                          </a>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
                   <ChevronRight className="size-5 shrink-0 text-muted-foreground/40" />

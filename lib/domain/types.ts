@@ -17,6 +17,7 @@ export type OrganizationBranding = {
 
 export const appPageKeys = [
   "projekte",
+  "kalender",
   "mitarbeiter",
   "bestellformulare",
   "einstellungen",

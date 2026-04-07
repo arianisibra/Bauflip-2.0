@@ -388,6 +388,104 @@ export async function listWeekTasks(referenceDate = new Date()): Promise<WeekTas
     .filter((x): x is WeekTaskItem => x !== null);
 }
 
+export async function listMonthTasks(year: number, month: number): Promise<WeekTaskItem[]> {
+  const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
+  const end = new Date(year, month, 0, 23, 59, 59, 999);
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from("appointments")
+    .select(
+      `
+      id,
+      project_id,
+      kind,
+      starts_at,
+      ends_at,
+      assigned_technician_id,
+      projects (
+        id,
+        title,
+        status,
+        tenant_name,
+        service_street,
+        service_postal_code,
+        service_city,
+        service_country
+      )
+    `,
+    )
+    .gte("starts_at", start.toISOString())
+    .lte("starts_at", end.toISOString())
+    .order("starts_at", { ascending: true });
+
+  if (error || !data?.length) return [];
+
+  type NestedProject = {
+    title: string;
+    status: string;
+    tenant_name?: string | null;
+    service_street?: string | null;
+    service_postal_code?: string | null;
+    service_city?: string | null;
+    service_country?: string | null;
+  };
+
+  const rows = data as {
+    id: string;
+    project_id: string;
+    kind: WeekTaskItem["kind"];
+    starts_at: string;
+    ends_at: string;
+    assigned_technician_id: string | null;
+    projects: NestedProject | NestedProject[] | null;
+  }[];
+
+  const techIds = [...new Set(rows.map((r) => r.assigned_technician_id).filter(Boolean))] as string[];
+  const techMap = new Map<string, { display_name: string | null; calendar_color: string | null }>();
+  if (techIds.length > 0) {
+    const { data: profs } = await supabase
+      .from("profiles")
+      .select("id, display_name, calendar_color")
+      .in("id", techIds);
+    for (const p of profs ?? []) {
+      const r = p as { id: string; display_name: string | null; calendar_color: string | null };
+      techMap.set(r.id, { display_name: r.display_name, calendar_color: r.calendar_color });
+    }
+  }
+
+  return rows
+    .map((row) => {
+      const raw = row.projects;
+      const pr = Array.isArray(raw) ? raw[0] : raw;
+      if (!pr?.title) return null;
+      const tid = row.assigned_technician_id;
+      const tp = tid ? techMap.get(tid) : undefined;
+      const tenantRaw = pr.tenant_name != null ? String(pr.tenant_name).trim() : "";
+      const addrShort = formatServiceAddressFields({
+        serviceStreet: pr.service_street,
+        servicePostalCode: pr.service_postal_code,
+        serviceCity: pr.service_city,
+      });
+      return {
+        appointmentId: row.id,
+        startsAt: row.starts_at,
+        endsAt: row.ends_at,
+        kind: row.kind,
+        projectId: row.project_id,
+        projectTitle: pr.title,
+        projectStatus: pr.status as ProjectStatus,
+        assignedTechnicianId: tid,
+        technicianName: tp?.display_name ?? null,
+        calendarColor: resolveCalendarColor(tp?.calendar_color ?? null, tid),
+        tenantDisplay: tenantRaw || null,
+        serviceAddressShort: addrShort === "—" ? null : addrShort,
+      };
+    })
+    .filter((x): x is WeekTaskItem => x !== null);
+}
+
 export async function listAssignableProfiles(): Promise<UserProfile[]> {
   return listProfilesByRole("technician");
 }

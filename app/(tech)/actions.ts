@@ -7,21 +7,23 @@ import { validateOrderFormValues } from "@/lib/order-forms/validate-submission";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { technicianReportSchema } from "@/lib/validations/forms";
 
-export async function submitTechnicianReportAction(values: unknown) {
+type ActionResult = { success: true } | { success: false; error: string };
+
+export async function submitTechnicianReportAction(values: unknown): Promise<ActionResult> {
   const session = await getCurrentSession();
   if (!session || session.role !== "technician") {
-    throw new Error("Keine Berechtigung.");
+    return { success: false, error: "Keine Berechtigung." };
   }
 
   const parsed = technicianReportSchema.safeParse(values);
   if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "Ungültige Eingabe.");
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Ungültige Eingabe." };
   }
 
   const v = parsed.data;
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
-    throw new Error("Supabase nicht konfiguriert.");
+    return { success: false, error: "Supabase nicht konfiguriert." };
   }
 
   const { data: proj, error: projErr } = await supabase
@@ -31,7 +33,7 @@ export async function submitTechnicianReportAction(values: unknown) {
     .maybeSingle();
 
   if (projErr || !proj?.organization_id) {
-    throw new Error("Projekt nicht gefunden.");
+    return { success: false, error: "Projekt nicht gefunden." };
   }
 
   const organizationId = String(proj.organization_id);
@@ -42,29 +44,44 @@ export async function submitTechnicianReportAction(values: unknown) {
 
   for (const tpl of activeTemplates) {
     const rawValues = fromClient.get(tpl.id) ?? {};
-    const validated = validateOrderFormValues(tpl.id, tpl.fields, rawValues);
-    if (Object.keys(validated).length > 0) {
-      orderFormSubmissions.push({ templateId: tpl.id, valuesJson: validated });
-    } else if (tpl.fields.some((f) => f.required)) {
-      throw new Error(`Bestellformular „${tpl.name}“ ist unvollständig.`);
+    try {
+      const validated = validateOrderFormValues(tpl.id, tpl.fields, rawValues);
+      if (Object.keys(validated).length > 0) {
+        orderFormSubmissions.push({ templateId: tpl.id, valuesJson: validated });
+      } else if (tpl.fields.some((f) => f.required)) {
+        return { success: false, error: `Bestellformular „${tpl.name}" ist unvollständig.` };
+      }
+    } catch (validationErr) {
+      return {
+        success: false,
+        error: validationErr instanceof Error ? validationErr.message : "Validierung fehlgeschlagen.",
+      };
     }
   }
 
-  await addTechnicianReport(
-    {
-      projectId: v.projectId,
-      outcome: v.outcome,
-      summary: v.summary?.trim() ?? "",
-      measurementsJson: (v.measurementsJson?.trim() || "{}") as string,
-      workDescription: v.workDescription?.trim() ?? "",
-      timeSpentMinutes: null,
-    },
-    {
-      createdByProfileId: session.user.id,
-      orderFormSubmissions,
-    },
-  );
+  try {
+    await addTechnicianReport(
+      {
+        projectId: v.projectId,
+        outcome: v.outcome,
+        summary: v.summary?.trim() ?? "",
+        measurementsJson: (v.measurementsJson?.trim() || "{}") as string,
+        workDescription: v.workDescription?.trim() ?? "",
+        timeSpentMinutes: null,
+      },
+      {
+        createdByProfileId: session.user.id,
+        orderFormSubmissions,
+      },
+    );
+  } catch (dbErr) {
+    return {
+      success: false,
+      error: dbErr instanceof Error ? dbErr.message : "Speichern fehlgeschlagen.",
+    };
+  }
 
   revalidatePath("/tag");
   revalidatePath(`/auftrag/${v.projectId}`);
+  return { success: true };
 }
