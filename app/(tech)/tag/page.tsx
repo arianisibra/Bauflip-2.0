@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getCurrentSession } from "@/lib/auth/session";
 import { listWeekTasks } from "@/lib/db/repository";
+import { MapsNavButton } from "@/components/app/maps-nav-button";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertCircle,
@@ -8,7 +9,6 @@ import {
   ChevronRight,
   Clock,
   MapPin,
-  Navigation,
 } from "lucide-react";
 
 function formatTimeRange(isoStart: string, isoEnd: string): string {
@@ -17,11 +17,6 @@ function formatTimeRange(isoStart: string, isoEnd: string): string {
   const fmt = (d: Date) =>
     `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
   return `${fmt(s)}–${fmt(e)}`;
-}
-
-function buildMapsUrl(address: string | null): string | null {
-  if (!address) return null;
-  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
 }
 
 function timeOfDayGreeting(): string {
@@ -181,16 +176,8 @@ export default async function TodayPage() {
                             .filter(Boolean)
                             .join(" · ")}
                         </span>
-                        {buildMapsUrl(task.serviceAddressShort) ? (
-                          <a
-                            href={buildMapsUrl(task.serviceAddressShort)!}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary active:scale-95"
-                          >
-                            <Navigation className="size-3.5" />
-                          </a>
+                        {task.serviceAddressShort ? (
+                          <MapsNavButton address={task.serviceAddressShort} />
                         ) : null}
                       </div>
                     ) : null}
