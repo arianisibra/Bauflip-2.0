@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react";
-import { fetchWeekTasksAction } from "@/app/(tech)/kalender/actions";
+import { fetchWeekTasksAction } from "@/app/(tech)/wochenplan/actions";
 
 const DAY_NAMES_SHORT = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 

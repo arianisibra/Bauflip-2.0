@@ -24,6 +24,7 @@ const TECHNICIAN_ALLOWED_PREFIXES = [
   "/tag",
   "/auftrag",
   "/kalender",
+  "/wochenplan",
   "/mfa/setup",
   "/onboarding",
   "/anmeldung",
