@@ -13,9 +13,19 @@ function withSecurityHeaders(res: NextResponse): NextResponse {
     "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
   );
   res.headers.set("X-Frame-Options", "SAMEORIGIN");
+  // Cloudflare Turnstile: Script + iframe von challenges.cloudflare.com (sonst leeres Widget trotz Site-Key).
   res.headers.set(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://*.supabase.in wss://*.supabase.co; frame-ancestors 'self';",
+    [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' data:",
+      "connect-src 'self' https://*.supabase.co https://*.supabase.in wss://*.supabase.co https://challenges.cloudflare.com",
+      "frame-src 'self' https://challenges.cloudflare.com",
+      "frame-ancestors 'self'",
+    ].join("; "),
   );
   if (isProd) {
     res.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");

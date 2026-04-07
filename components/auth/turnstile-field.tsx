@@ -32,6 +32,7 @@ export function TurnstileField({ inputName = "turnstileToken", onToken }: Turnst
   const widgetContainerId = useId().replace(/:/g, "");
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   const [apiReady, setApiReady] = useState(false);
+  const [widgetError, setWidgetError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!apiReady || !siteKey || typeof window === "undefined" || !window.turnstile || !containerRef.current) {
@@ -39,11 +40,13 @@ export function TurnstileField({ inputName = "turnstileToken", onToken }: Turnst
     }
 
     const el = containerRef.current;
+    setWidgetError(null);
 
     widgetIdRef.current = window.turnstile.render(el, {
       sitekey: siteKey,
       theme: "light",
       callback: (token: string) => {
+        setWidgetError(null);
         if (hiddenInputRef.current) {
           hiddenInputRef.current.value = token;
         }
@@ -60,6 +63,9 @@ export function TurnstileField({ inputName = "turnstileToken", onToken }: Turnst
           hiddenInputRef.current.value = "";
         }
         onTokenRef.current?.("");
+        setWidgetError(
+          "Turnstile konnte nicht geladen werden. Prüfen Sie in Cloudflare, ob diese Domain (z. B. app.gross-storenbau.ch) unter «Hostname-Verwaltung» des Widgets erlaubt ist, und ob kein Browser-Blocker das Captcha blockiert.",
+        );
       },
     });
 
@@ -99,9 +105,19 @@ export function TurnstileField({ inputName = "turnstileToken", onToken }: Turnst
         src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
         strategy="afterInteractive"
         onLoad={() => setApiReady(true)}
+        onError={() =>
+          setWidgetError(
+            "Turnstile-Skript konnte nicht geladen werden (Netzwerk, CSP oder Blocker). Bitte Seite neu laden oder Netzwerk prüfen.",
+          )
+        }
       />
       <input ref={hiddenInputRef} type="hidden" name={inputName} />
       <div id={widgetContainerId} ref={containerRef} className="min-h-[65px] w-full" />
+      {widgetError ? (
+        <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive" role="alert">
+          {widgetError}
+        </p>
+      ) : null}
     </div>
   );
 }
