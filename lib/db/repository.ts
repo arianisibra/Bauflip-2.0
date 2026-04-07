@@ -715,20 +715,21 @@ export async function addProjectAttachment(
     mockProjectAttachments.push(a);
     return a;
   }
-  const { data, error } = await supabase
+  const attachmentId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const { error } = await supabase
     .from("project_attachments")
     .insert({
+      id: attachmentId,
       project_id: input.projectId,
       file_path: input.filePath,
       file_name: input.fileName,
       mime_type: input.fileType,
       size_bytes: input.sizeBytes,
       uploaded_by: input.uploadedBy,
-    })
-    .select(ATTACHMENT_DB_COLUMNS)
-    .maybeSingle();
-  if (error || !data) throw new Error(error?.message ?? "Anhang konnte nicht gespeichert werden.");
-  return mapProjectAttachmentRow(data as Record<string, unknown>);
+    });
+  if (error) throw new Error(error.message);
+  return { ...input, id: attachmentId, createdAt: now };
 }
 
 export async function addTechnicianReport(
@@ -756,9 +757,13 @@ export async function addTechnicianReport(
     parsedMeasurements = {};
   }
 
-  const { data, error } = await supabase
+  const reportId = crypto.randomUUID();
+  const now = new Date().toISOString();
+
+  const { error } = await supabase
     .from("technician_reports")
     .insert({
+      id: reportId,
       project_id: input.projectId,
       outcome: input.outcome,
       summary: input.summary,
@@ -766,12 +771,9 @@ export async function addTechnicianReport(
       work_description: input.workDescription,
       time_spent_minutes: input.timeSpentMinutes,
       created_by: options?.createdByProfileId ?? null,
-    })
-    .select("id, project_id, outcome, summary, measurements_json, work_description, time_spent_minutes, created_at")
-    .maybeSingle();
-  if (error || !data) throw new Error(error?.message ?? "Rapport konnte nicht gespeichert werden.");
+    });
+  if (error) throw new Error(error.message);
 
-  const reportId = String((data as Record<string, unknown>).id ?? "");
   const submissions = options?.orderFormSubmissions?.filter((s) => Object.keys(s.valuesJson).length > 0) ?? [];
   if (submissions.length > 0) {
     const { error: ofError } = await supabase.from("technician_report_order_forms").insert(
@@ -787,7 +789,12 @@ export async function addTechnicianReport(
   const status: ProjectStatus = input.outcome === "schaden_behoben" ? "abgeschlossen" : "einsatz_offen";
   await updateProject(input.projectId, { status });
 
-  return mapTechnicianReportRow(data as Record<string, unknown>);
+  return {
+    ...input,
+    id: reportId,
+    createdAt: now,
+    orderForms: [],
+  };
 }
 
 export async function listActiveOrderFormTemplatesForOrg(organizationId: string): Promise<OrderFormTemplate[]> {
