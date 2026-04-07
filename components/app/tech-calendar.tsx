@@ -6,7 +6,7 @@ import type { WeekTaskItem } from "@/lib/domain/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react";
 import { fetchWeekTasksAction } from "@/app/(tech)/wochenplan/actions";
 
 const DAY_NAMES_SHORT = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
@@ -148,15 +148,18 @@ export function TechCalendar({
                 <div className="space-y-1 border-t border-border/50 px-3 pb-3 pt-2">
                   {dayTasks.map((task) => {
                     const isBesichtigung = task.kind === "besichtigung";
+                    const isDone = task.projectStatus === "abgeschlossen";
                     return (
                       <Link
                         key={task.appointmentId}
                         href={`/auftrag/${task.projectId}`}
                         className={cn(
                           "flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-transform active:scale-[0.98]",
-                          isBesichtigung
-                            ? "border-l-4 border-amber-400 border-t-border border-r-border border-b-border bg-card"
-                            : "border-l-4 border-emerald-400 border-t-border border-r-border border-b-border bg-card",
+                          isDone
+                            ? "border-l-4 border-muted-foreground/30 border-t-border border-r-border border-b-border bg-card opacity-60"
+                            : isBesichtigung
+                              ? "border-l-4 border-amber-400 border-t-border border-r-border border-b-border bg-card"
+                              : "border-l-4 border-emerald-400 border-t-border border-r-border border-b-border bg-card",
                         )}
                       >
                         <div className="min-w-0 flex-1">
@@ -164,7 +167,7 @@ export function TechCalendar({
                             <Clock className="size-3" />
                             {formatTime(task.startsAt)}–{formatTime(task.endsAt)}
                           </p>
-                          <p className="mt-0.5 line-clamp-1 text-sm font-semibold text-foreground">
+                          <p className={cn("mt-0.5 line-clamp-1 text-sm font-semibold", isDone ? "text-muted-foreground line-through" : "text-foreground")}>
                             {task.projectTitle}
                           </p>
                           {task.serviceAddressShort ? (
@@ -174,17 +177,27 @@ export function TechCalendar({
                             </p>
                           ) : null}
                         </div>
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            "shrink-0 text-[10px]",
-                            isBesichtigung
-                              ? "border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-100"
-                              : "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200",
-                          )}
-                        >
-                          {isBesichtigung ? "Besichtigung" : "Ausführung"}
-                        </Badge>
+                        {isDone ? (
+                          <Badge
+                            variant="outline"
+                            className="shrink-0 gap-1 border-emerald-500/30 bg-emerald-500/10 text-[10px] text-emerald-800 dark:text-emerald-200"
+                          >
+                            <CheckCircle2 className="size-3" />
+                            Erledigt
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "shrink-0 text-[10px]",
+                              isBesichtigung
+                                ? "border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-100"
+                                : "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200",
+                            )}
+                          >
+                            {isBesichtigung ? "Besichtigung" : "Ausführung"}
+                          </Badge>
+                        )}
                       </Link>
                     );
                   })}
