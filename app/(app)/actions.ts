@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentSession } from "@/lib/auth/session";
-import { createProject, addProjectAttachment, getProjectCore } from "@/lib/db/repository";
+import { createProject, addProjectAttachment, getProjectCore, updateAttachmentNotes } from "@/lib/db/repository";
 import { intakeSchema } from "@/lib/validations/forms";
 import { PROJECT_FILE_MAX_BYTES, PROJECT_FILE_MIME, sanitizeFileBaseName } from "@/lib/storage/mime";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -97,6 +97,7 @@ export async function uploadProjectReportFileAction(
     });
     if (uploadError) return { success: false, error: uploadError.message };
 
+    const notes = String(formData.get("notes") ?? "").trim() || null;
     await addProjectAttachment({
       projectId,
       filePath: storagePath,
@@ -104,11 +105,26 @@ export async function uploadProjectReportFileAction(
       fileType: file.type,
       sizeBytes: file.size,
       uploadedBy: session.profile.id,
+      notes,
     });
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "Upload fehlgeschlagen." };
   }
 
   revalidatePath("/projekte");
+  return { success: true };
+}
+
+export async function updateAttachmentNotesAction(
+  attachmentId: string,
+  notes: string,
+): Promise<{ success: true } | { success: false; error: string }> {
+  const session = await getCurrentSession();
+  if (!session) return { success: false, error: "Nicht angemeldet." };
+  try {
+    await updateAttachmentNotes(attachmentId, notes);
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Speichern fehlgeschlagen." };
+  }
   return { success: true };
 }

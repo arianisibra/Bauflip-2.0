@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ProjectCore } from "@/lib/db/repository";
-import type { OrderFormTemplate } from "@/lib/domain/types";
+import type { OrderFormTemplate, ProjectAttachment } from "@/lib/domain/types";
 import { formatServiceAddress, managementLabel, tenantLabel } from "@/lib/tech/bundle-display";
 import { submitTechnicianReportAction } from "@/app/(tech)/actions";
-import { uploadProjectReportFileAction } from "@/app/(app)/actions";
+import { uploadProjectReportFileAction, updateAttachmentNotesAction } from "@/app/(app)/actions";
 import { MonteurOrderFormSections } from "@/components/app/monteur-order-form-sections";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import {
   MapPin,
   Navigation,
   Paperclip,
+  Trash2,
   User,
 } from "lucide-react";
 
@@ -85,8 +86,40 @@ export function MonteurAuftragClient({
   const [mode, setMode] = useState<"schaden_behoben" | "schaden_aufgenommen" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const imageAttachments = useMemo(
+    () => core.attachments.filter((a) => a.fileType.startsWith("image/")),
+    [core.attachments],
+  );
+
+  const handleUpload = useCallback(
+    async (file: File) => {
+      setUploading(true);
+      setError(null);
+      const fd = new FormData();
+      fd.set("projectId", p.id);
+      fd.set("file", file);
+      try {
+        const result = await uploadProjectReportFileAction(fd);
+        if (!result.success) {
+          setError(result.error);
+        } else {
+          router.refresh();
+        }
+      } catch {
+        setError("Upload fehlgeschlagen.");
+      } finally {
+        setUploading(false);
+      }
+    },
+    [p.id, router],
+  );
+
+  const saveNote = useCallback(async (attachmentId: string, notes: string) => {
+    await updateAttachmentNotesAction(attachmentId, notes);
+  }, []);
 
   const nextAppt = useMemo(
     () => [...core.appointments].sort((a, b) => a.startsAt.localeCompare(b.startsAt))[0],
@@ -186,21 +219,25 @@ export function MonteurAuftragClient({
             </div>
           ) : null}
           {core.attachments.length > 0 ? (
-            <div className="space-y-1">
+            <div className="space-y-2">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Anhänge
               </p>
-              <ul className="space-y-1">
-                {core.attachments.map((a) => (
-                  <li
-                    key={a.id}
-                    className="flex items-center gap-2 text-xs text-muted-foreground"
-                  >
-                    <Paperclip className="size-3 shrink-0" />
-                    {a.fileName}
-                  </li>
-                ))}
-              </ul>
+              {core.attachments.filter((a) => !a.fileType.startsWith("image/")).length > 0 && (
+                <ul className="space-y-1">
+                  {core.attachments
+                    .filter((a) => !a.fileType.startsWith("image/"))
+                    .map((a) => (
+                      <li
+                        key={a.id}
+                        className="flex items-center gap-2 text-xs text-muted-foreground"
+                      >
+                        <Paperclip className="size-3 shrink-0" />
+                        {a.fileName}
+                      </li>
+                    ))}
+                </ul>
+              )}
             </div>
           ) : null}
         </CardContent>
@@ -343,24 +380,38 @@ export function MonteurAuftragClient({
 
               <MonteurOrderFormSections templates={orderFormTemplates} />
 
-              {/* Photo upload zone */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Fotos (optional)</Label>
+              {/* Photo gallery + upload */}
+              <div className="space-y-3">
+                <Label className="text-xs font-medium">Fotos</Label>
+
+                {imageAttachments.length > 0 && (
+                  <div className="grid grid-cols-2 gap-2">
+                    {imageAttachments.map((a) => (
+                      <AttachmentCard key={a.id} attachment={a} onSaveNote={saveNote} />
+                    ))}
+                  </div>
+                )}
+
                 <button
                   type="button"
+                  disabled={uploading}
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/20 px-4 py-6 text-center transition-colors hover:bg-muted/40 active:scale-[0.99]"
+                  className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/20 px-4 py-5 text-center transition-colors hover:bg-muted/40 active:scale-[0.99] disabled:opacity-50"
                 >
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Camera className="size-5" />
-                    <ImagePlus className="size-5" />
-                  </div>
-                  {uploadedFileName ? (
-                    <p className="text-xs font-medium text-primary">{uploadedFileName}</p>
+                  {uploading ? (
+                    <BauflipLoadingButtonLabel>Wird hochgeladen…</BauflipLoadingButtonLabel>
                   ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Foto aufnehmen oder auswählen
-                    </p>
+                    <>
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Camera className="size-5" />
+                        <ImagePlus className="size-5" />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {imageAttachments.length > 0
+                          ? "Weiteres Foto hinzufügen"
+                          : "Foto aufnehmen oder auswählen"}
+                      </p>
+                    </>
                   )}
                 </button>
                 <Input
@@ -372,23 +423,8 @@ export function MonteurAuftragClient({
                   onChange={async (ev) => {
                     const file = ev.target.files?.[0];
                     if (!file) return;
-                    setUploadedFileName(file.name);
-                    const fd = new FormData();
-                    fd.set("projectId", p.id);
-                    fd.set("file", file);
-                    setPending(true);
-                    try {
-                      const result = await uploadProjectReportFileAction(fd);
-                      if (!result.success) {
-                        setError(result.error);
-                      } else {
-                        router.refresh();
-                      }
-                    } catch {
-                      setError("Upload fehlgeschlagen.");
-                    } finally {
-                      setPending(false);
-                    }
+                    await handleUpload(file);
+                    if (fileInputRef.current) fileInputRef.current.value = "";
                   }}
                 />
               </div>
@@ -416,5 +452,59 @@ export function MonteurAuftragClient({
         </Card>
       ) : null}
     </section>
+  );
+}
+
+function AttachmentCard({
+  attachment,
+  onSaveNote,
+}: {
+  attachment: ProjectAttachment;
+  onSaveNote: (id: string, notes: string) => Promise<void>;
+}) {
+  const [notes, setNotes] = useState(attachment.notes ?? "");
+  const [saving, setSaving] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
+
+  const handleNotesChange = (value: string) => {
+    setNotes(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setSaving(true);
+      await onSaveNote(attachment.id, value);
+      setSaving(false);
+    }, 800);
+  };
+
+  return (
+    <div className="group relative overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      {attachment.signedUrl ? (
+        <div className="relative aspect-square w-full overflow-hidden bg-muted">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={attachment.signedUrl}
+            alt={attachment.fileName}
+            className="size-full object-cover"
+          />
+        </div>
+      ) : (
+        <div className="flex aspect-square items-center justify-center bg-muted/50">
+          <Paperclip className="size-8 text-muted-foreground/40" />
+        </div>
+      )}
+      <div className="space-y-1 p-2">
+        <p className="truncate text-[10px] text-muted-foreground">{attachment.fileName}</p>
+        <textarea
+          className="w-full resize-none rounded-md border border-border bg-muted/30 px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none"
+          rows={2}
+          placeholder="Notiz hinzufügen…"
+          value={notes}
+          onChange={(e) => handleNotesChange(e.target.value)}
+        />
+        {saving && (
+          <p className="text-[10px] text-muted-foreground">Speichert…</p>
+        )}
+      </div>
+    </div>
   );
 }

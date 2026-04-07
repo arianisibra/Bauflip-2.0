@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
-import { getProjectCore, listActiveOrderFormTemplatesForOrg } from "@/lib/db/repository";
+import { getProjectCore, listActiveOrderFormTemplatesForOrg, signAttachmentUrls } from "@/lib/db/repository";
 import { MonteurAuftragClient } from "@/components/app/monteur-auftrag-client";
 
 type Params = { params: Promise<{ projectId: string }> };
@@ -25,10 +25,14 @@ export default async function MonteurAuftragPage({ params }: Params) {
     notFound();
   }
 
-  const orderFormTemplates =
+  const [orderFormTemplates, signedAttachments] = await Promise.all([
     core.project.organizationId != null
-      ? await listActiveOrderFormTemplatesForOrg(core.project.organizationId)
-      : [];
+      ? listActiveOrderFormTemplatesForOrg(core.project.organizationId)
+      : Promise.resolve([]),
+    signAttachmentUrls(core.attachments),
+  ]);
 
-  return <MonteurAuftragClient core={core} orderFormTemplates={orderFormTemplates} />;
+  const coreWithSignedUrls = { ...core, attachments: signedAttachments };
+
+  return <MonteurAuftragClient core={coreWithSignedUrls} orderFormTemplates={orderFormTemplates} />;
 }

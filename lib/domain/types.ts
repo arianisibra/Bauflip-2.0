@@ -146,7 +146,9 @@ export type ProjectAttachment = {
   filePath: string;
   sizeBytes: number | null;
   uploadedBy: string | null;
+  notes: string | null;
   createdAt: string;
+  signedUrl?: string;
 };
 
 export type SidebarItem = {

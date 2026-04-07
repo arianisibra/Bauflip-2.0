@@ -41,7 +41,7 @@ const APPOINTMENT_DB_COLUMNS =
 const PROJECT_LIST_COLUMNS = "id, title, type, status, tenant_name, created_at";
 
 const ATTACHMENT_DB_COLUMNS =
-  "id, project_id, file_path, file_name, mime_type, size_bytes, uploaded_by, created_at";
+  "id, project_id, file_path, file_name, mime_type, size_bytes, uploaded_by, notes, created_at";
 
 const TECH_REPORT_DB_COLUMNS =
   "id, project_id, outcome, summary, measurements_json, work_description, time_spent_minutes, created_at";
@@ -152,6 +152,7 @@ function mapProjectAttachmentRow(row: Record<string, unknown>): ProjectAttachmen
     filePath: String(row.file_path ?? ""),
     sizeBytes: row.size_bytes != null ? Number(row.size_bytes) : null,
     uploadedBy: row.uploaded_by ? String(row.uploaded_by) : null,
+    notes: row.notes ? String(row.notes) : null,
     createdAt: String(row.created_at ?? ""),
   };
 }
@@ -644,16 +645,17 @@ export async function updateProject(projectId: string, patch: ProjectPatch): Pro
     row.closed_at = new Date().toISOString();
   }
 
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("projects")
     .update(row)
-    .eq("id", projectId)
-    .select(PROJECT_DB_COLUMNS)
-    .single();
-  if (error || !data) {
-    throw new Error(error?.message ?? "Speichern fehlgeschlagen.");
+    .eq("id", projectId);
+  if (error) {
+    throw new Error(error.message);
   }
-  return mapProjectRow(data as Record<string, unknown>);
+
+  const fresh = await getProjectCore(projectId);
+  if (!fresh) throw new Error("Projekt nicht gefunden.");
+  return fresh.project;
 }
 
 export async function updateProjectStatus(projectId: string, status: ProjectStatus): Promise<Project> {
@@ -727,9 +729,32 @@ export async function addProjectAttachment(
       mime_type: input.fileType,
       size_bytes: input.sizeBytes,
       uploaded_by: input.uploadedBy,
+      notes: input.notes ?? null,
     });
   if (error) throw new Error(error.message);
   return { ...input, id: attachmentId, createdAt: now };
+}
+
+export async function updateAttachmentNotes(attachmentId: string, notes: string): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return;
+  const { error } = await supabase
+    .from("project_attachments")
+    .update({ notes })
+    .eq("id", attachmentId);
+  if (error) throw new Error(error.message);
+}
+
+export async function signAttachmentUrls(attachments: ProjectAttachment[]): Promise<ProjectAttachment[]> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase || attachments.length === 0) return attachments;
+  const paths = attachments.map((a) => a.filePath);
+  const { data } = await supabase.storage.from("project-files").createSignedUrls(paths, 3600);
+  if (!data) return attachments;
+  return attachments.map((a, i) => ({
+    ...a,
+    signedUrl: data[i]?.signedUrl ?? undefined,
+  }));
 }
 
 export async function addTechnicianReport(
