@@ -718,15 +718,15 @@ export async function addProjectAttachment(
   const { data, error } = await supabase
     .from("project_attachments")
     .insert({
-    project_id: input.projectId,
-    file_path: input.filePath,
-    file_name: input.fileName,
+      project_id: input.projectId,
+      file_path: input.filePath,
+      file_name: input.fileName,
       mime_type: input.fileType,
-    size_bytes: input.sizeBytes,
-    uploaded_by: input.uploadedBy,
+      size_bytes: input.sizeBytes,
+      uploaded_by: input.uploadedBy,
     })
-    .select("*")
-    .single();
+    .select(ATTACHMENT_DB_COLUMNS)
+    .maybeSingle();
   if (error || !data) throw new Error(error?.message ?? "Anhang konnte nicht gespeichert werden.");
   return mapProjectAttachmentRow(data as Record<string, unknown>);
 }
@@ -749,13 +749,20 @@ export async function addTechnicianReport(
     mockReports.push(r);
     return r;
   }
+  let parsedMeasurements: unknown = {};
+  try {
+    parsedMeasurements = JSON.parse(input.measurementsJson || "{}");
+  } catch {
+    parsedMeasurements = {};
+  }
+
   const { data, error } = await supabase
     .from("technician_reports")
     .insert({
       project_id: input.projectId,
       outcome: input.outcome,
       summary: input.summary,
-      measurements_json: input.measurementsJson,
+      measurements_json: parsedMeasurements,
       work_description: input.workDescription,
       time_spent_minutes: input.timeSpentMinutes,
       created_by: options?.createdByProfileId ?? null,
