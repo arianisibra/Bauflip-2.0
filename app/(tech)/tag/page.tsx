@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { getCurrentSession } from "@/lib/auth/session";
 import { listWeekTasks } from "@/lib/db/repository";
+import { todayKeySwiss, currentHourSwiss } from "@/lib/date/swiss";
 import { MapsNavButton } from "@/components/app/maps-nav-button";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertCircle,
   CalendarOff,
+  CheckCircle2,
   ChevronRight,
   Clock,
   MapPin,
@@ -15,12 +17,12 @@ function formatTimeRange(isoStart: string, isoEnd: string): string {
   const s = new Date(isoStart);
   const e = new Date(isoEnd);
   const fmt = (d: Date) =>
-    `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
+    d.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Zurich" });
   return `${fmt(s)}–${fmt(e)}`;
 }
 
 function timeOfDayGreeting(): string {
-  const h = new Date().getHours();
+  const h = currentHourSwiss();
   if (h < 12) return "Guten Morgen";
   if (h < 17) return "Guten Tag";
   return "Guten Abend";
@@ -34,17 +36,19 @@ export default async function TodayPage() {
 
   const tasks = await listWeekTasks();
   const now = new Date();
-  const todayKey = now.toISOString().slice(0, 10);
+  const todayKey = todayKeySwiss(now);
+
+  const taskDateKey = (iso: string) => todayKeySwiss(new Date(iso));
 
   const todaysTasks = tasks
-    .filter((t) => t.assignedTechnicianId === session.user.id && t.startsAt.slice(0, 10) === todayKey)
+    .filter((t) => t.assignedTechnicianId === session.user.id && taskDateKey(t.startsAt) === todayKey)
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
 
   const upcomingTasks = tasks
     .filter(
       (t) =>
         t.assignedTechnicianId === session.user.id &&
-        t.startsAt.slice(0, 10) > todayKey,
+        taskDateKey(t.startsAt) > todayKey,
     )
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
     .slice(0, 3);
@@ -118,11 +122,13 @@ export default async function TodayPage() {
                             weekday: "short",
                             day: "2-digit",
                             month: "2-digit",
+                            timeZone: "Europe/Zurich",
                           })}{" "}
                           ·{" "}
                           {new Date(task.startsAt).toLocaleTimeString("de-CH", {
                             hour: "2-digit",
                             minute: "2-digit",
+                            timeZone: "Europe/Zurich",
                           })}
                         </p>
                         <p className="mt-0.5 line-clamp-2 text-xs font-medium text-foreground">
@@ -140,12 +146,17 @@ export default async function TodayPage() {
           <div className="space-y-3">
             {todaysTasks.map((task) => {
               const isBesichtigung = task.kind === "besichtigung";
+              const isDone = task.projectStatus === "abgeschlossen";
               return (
                 <Link
                   key={task.appointmentId}
                   href={`/auftrag/${task.projectId}`}
                   className={`flex items-center gap-3 rounded-2xl border border-border border-l-4 bg-card px-4 py-4 shadow-sm transition-transform active:scale-[0.98] ${
-                    isBesichtigung ? "border-l-amber-400" : "border-l-emerald-400"
+                    isDone
+                      ? "border-l-muted-foreground/30 opacity-60"
+                      : isBesichtigung
+                        ? "border-l-amber-400"
+                        : "border-l-emerald-400"
                   }`}
                 >
                   <div className="min-w-0 flex-1">
@@ -154,18 +165,31 @@ export default async function TodayPage() {
                         <Clock className="size-3" />
                         {formatTimeRange(task.startsAt, task.endsAt)}
                       </p>
-                      <Badge
-                        variant="outline"
-                        className={
-                          isBesichtigung
-                            ? "border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-100"
-                            : "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
-                        }
-                      >
-                        {isBesichtigung ? "Besichtigung" : "Ausführung"}
-                      </Badge>
+                      <div className="flex items-center gap-1.5">
+                        {isDone && (
+                          <Badge
+                            variant="outline"
+                            className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
+                          >
+                            <CheckCircle2 className="size-3" />
+                            Erledigt
+                          </Badge>
+                        )}
+                        {!isDone && (
+                          <Badge
+                            variant="outline"
+                            className={
+                              isBesichtigung
+                                ? "border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-100"
+                                : "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
+                            }
+                          >
+                            {isBesichtigung ? "Besichtigung" : "Ausführung"}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
-                    <p className="mt-1.5 line-clamp-2 text-sm font-semibold text-foreground">
+                    <p className={`mt-1.5 line-clamp-2 text-sm font-semibold ${isDone ? "text-muted-foreground line-through" : "text-foreground"}`}>
                       {task.projectTitle}
                     </p>
                     {task.tenantDisplay || task.serviceAddressShort ? (

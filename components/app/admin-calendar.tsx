@@ -16,6 +16,12 @@ const MONTH_NAMES = [
   "Juli", "August", "September", "Oktober", "November", "Dezember",
 ];
 
+const TZ = "Europe/Zurich";
+
+function padDateKey(y: number, m: number, d: number): string {
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
 function getMonthGrid(year: number, month: number) {
   const firstDay = new Date(year, month - 1, 1);
   const lastDay = new Date(year, month, 0);
@@ -29,16 +35,15 @@ function getMonthGrid(year: number, month: number) {
     cells.push({
       day: d.getDate(),
       inMonth: false,
-      dateKey: d.toISOString().slice(0, 10),
+      dateKey: padDateKey(d.getFullYear(), d.getMonth() + 1, d.getDate()),
     });
   }
 
   for (let d = 1; d <= daysInMonth; d++) {
-    const date = new Date(year, month - 1, d);
     cells.push({
       day: d,
       inMonth: true,
-      dateKey: date.toISOString().slice(0, 10),
+      dateKey: padDateKey(year, month, d),
     });
   }
 
@@ -49,7 +54,7 @@ function getMonthGrid(year: number, month: number) {
       cells.push({
         day: d.getDate(),
         inMonth: false,
-        dateKey: d.toISOString().slice(0, 10),
+        dateKey: padDateKey(d.getFullYear(), d.getMonth() + 1, d.getDate()),
       });
     }
   }
@@ -57,9 +62,12 @@ function getMonthGrid(year: number, month: number) {
   return cells;
 }
 
+function toSwissDateKey(d: Date): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(d);
+}
+
 function formatTime(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
+  return new Date(iso).toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", timeZone: TZ });
 }
 
 export function AdminCalendar({
@@ -76,14 +84,14 @@ export function AdminCalendar({
   const [tasks, setTasks] = useState(initialTasks);
   const [pending, startTransition] = useTransition();
 
-  const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const todayKey = useMemo(() => toSwissDateKey(new Date()), []);
 
   const cells = useMemo(() => getMonthGrid(year, month), [year, month]);
 
   const tasksByDate = useMemo(() => {
     const map = new Map<string, WeekTaskItem[]>();
     for (const t of tasks) {
-      const key = t.startsAt.slice(0, 10);
+      const key = toSwissDateKey(new Date(t.startsAt));
       const list = map.get(key) ?? [];
       list.push(t);
       map.set(key, list);

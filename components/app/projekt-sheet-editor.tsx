@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ProjectCore } from "@/lib/db/repository";
-import type { UserProfile } from "@/lib/domain/types";
+import type { TechnicianReport, UserProfile } from "@/lib/domain/types";
 import { projectStatusLabels } from "@/lib/domain/types";
 import {
   addAppointmentAction,
   deleteAppointmentAction,
+  deleteReportAction,
   getProjectSheetDataAction,
   updateProjectStammdatenAction,
 } from "@/app/(app)/projekte/actions";
@@ -16,6 +17,211 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  CheckCircle2,
+  ChevronDown,
+  ClipboardList,
+  Download,
+  Trash2,
+} from "lucide-react";
+function buildReportText(r: TechnicianReport): string {
+  const lines: string[] = [];
+  lines.push(`Rapport – ${r.outcome === "schaden_behoben" ? "Schaden behoben" : "Schaden aufgenommen"}`);
+  lines.push(`Datum: ${new Date(r.createdAt).toLocaleString("de-CH", { timeZone: "Europe/Zurich" })}`);
+  lines.push("");
+  if (r.summary?.trim()) {
+    lines.push("Zusammenfassung:");
+    lines.push(r.summary.trim());
+    lines.push("");
+  }
+  if (r.workDescription?.trim()) {
+    lines.push("Arbeit / Material:");
+    lines.push(r.workDescription.trim());
+    lines.push("");
+  }
+  if (r.measurementsJson && r.measurementsJson !== "{}" && r.measurementsJson !== "{}") {
+    lines.push("Masse / Notizen:");
+    lines.push(r.measurementsJson);
+    lines.push("");
+  }
+  for (const of_ of r.orderForms) {
+    lines.push(`--- ${of_.templateName} ---`);
+    for (const f of of_.fields) {
+      const val = of_.values[f.key]?.trim() || "—";
+      lines.push(`  ${f.label}: ${val}`);
+    }
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+
+function downloadReport(r: TechnicianReport) {
+  const text = buildReportText(r);
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `rapport-${new Date(r.createdAt).toISOString().slice(0, 10)}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function ReportCard({
+  report: r,
+  canEdit,
+  onDelete,
+}: {
+  report: TechnicianReport;
+  canEdit: boolean;
+  onDelete: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const isBehoben = r.outcome === "schaden_behoben";
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+      {/* Header row - always visible */}
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/30"
+      >
+        <div
+          className={`flex size-7 shrink-0 items-center justify-center rounded-md ${
+            isBehoben
+              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+              : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+          }`}
+        >
+          {isBehoben ? <CheckCircle2 className="size-3.5" /> : <ClipboardList className="size-3.5" />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-foreground">
+            {isBehoben ? "Behoben" : "Aufgenommen"}
+            {r.summary?.trim() ? (
+              <span className="ml-1.5 font-normal text-muted-foreground">— {r.summary}</span>
+            ) : null}
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            {new Date(r.createdAt).toLocaleString("de-CH", { timeZone: "Europe/Zurich" })}
+          </p>
+        </div>
+        <ChevronDown
+          className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {/* Expanded content */}
+      {open && (
+        <div className="border-t border-border/60 px-3 py-3 text-sm">
+          {r.workDescription?.trim() ? (
+            <div className="mb-3">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Arbeit / Material
+              </p>
+              <p className="whitespace-pre-wrap text-xs text-foreground">
+                {r.workDescription}
+              </p>
+            </div>
+          ) : null}
+
+          {r.measurementsJson && r.measurementsJson !== "{}" ? (
+            <div className="mb-3">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Masse / Notizen
+              </p>
+              <p className="whitespace-pre-wrap text-xs text-foreground">
+                {r.measurementsJson}
+              </p>
+            </div>
+          ) : null}
+
+          {r.orderForms.length > 0 && (
+            <div className="mb-3 space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Bestellformulare
+              </p>
+              {r.orderForms.map((of_) => (
+                <div
+                  key={`${r.id}-${of_.templateId}`}
+                  className="rounded-md border border-border/60 bg-muted/20 px-2.5 py-2"
+                >
+                  <p className="text-xs font-semibold text-foreground">{of_.templateName}</p>
+                  <dl className="mt-1.5 space-y-1">
+                    {of_.fields.map((f) => (
+                      <div key={f.key} className="flex items-baseline gap-2 text-xs">
+                        <dt className="shrink-0 text-muted-foreground">{f.label}:</dt>
+                        <dd className="font-medium text-foreground">
+                          {of_.values[f.key]?.trim() || "—"}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-2 border-t border-border/60 pt-2.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={() => downloadReport(r)}
+            >
+              <Download className="size-3.5" />
+              Herunterladen
+            </Button>
+            {canEdit && (
+              <>
+                {confirming ? (
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      className="text-xs"
+                      onClick={async () => {
+                        setConfirming(false);
+                        await onDelete();
+                      }}
+                    >
+                      Ja, löschen
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => setConfirming(false)}
+                    >
+                      Abbrechen
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5 text-xs text-destructive hover:text-destructive"
+                    onClick={() => setConfirming(true)}
+                  >
+                    <Trash2 className="size-3.5" />
+                    Löschen
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ProjektSheetEditor({
   projectId,
   open,
@@ -248,7 +454,7 @@ export function ProjektSheetEditor({
             {core.appointments.map((a) => (
               <li key={a.id} className="flex items-center justify-between gap-2 rounded border px-2 py-1">
                 <span>
-                  {new Date(a.startsAt).toLocaleString("de-CH")} – {new Date(a.endsAt).toLocaleTimeString("de-CH")}
+                  {new Date(a.startsAt).toLocaleString("de-CH", { timeZone: "Europe/Zurich" })} – {new Date(a.endsAt).toLocaleTimeString("de-CH", { timeZone: "Europe/Zurich" })}
                 </span>
                 <Button
                   type="button"
@@ -307,39 +513,34 @@ export function ProjektSheetEditor({
         </ul>
       </section>
 
-      <section className="border-t pt-4">
-        <h3 className="mb-2 text-sm font-semibold">Letzte Rapporte</h3>
-        <ul className="space-y-3 text-sm">
-          {core.reports.map((r) => (
-            <li key={r.id} className="rounded border px-2 py-2">
-              <div>
-                <span className="font-medium">{r.outcome === "schaden_behoben" ? "Behoben" : "Aufgenommen"}</span>
-                {r.summary ? <span className="text-muted-foreground"> — {r.summary}</span> : null}
-              </div>
-              {r.workDescription?.trim() ? (
-                <p className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap">{r.workDescription}</p>
-              ) : null}
-              {r.orderForms.length > 0 ? (
-                <ul className="mt-2 space-y-2 border-t border-border/60 pt-2 text-xs">
-                  {r.orderForms.map((of) => (
-                    <li key={`${r.id}-${of.templateId}`} className="rounded-md bg-muted/30 px-2 py-1.5">
-                      <p className="font-medium text-foreground">{of.templateName}</p>
-                      <dl className="mt-1 space-y-0.5">
-                        {of.fields.map((f) => (
-                          <div key={f.key} className="flex flex-wrap gap-x-2">
-                            <dt className="text-muted-foreground">{f.label}:</dt>
-                            <dd className="font-medium">{of.values[f.key]?.trim() || "—"}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      </section>
+      {core.reports.length > 0 && (
+        <section className="border-t pt-4">
+          <h3 className="mb-3 text-sm font-semibold">
+            Rapporte ({core.reports.length})
+          </h3>
+          <div className="space-y-2">
+            {core.reports.map((r) => (
+              <ReportCard
+                key={r.id}
+                report={r}
+                canEdit={canEdit}
+                onDelete={async () => {
+                  setPending(true);
+                  try {
+                    await deleteReportAction(r.id);
+                    await load();
+                    router.refresh();
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : "Löschen fehlgeschlagen.");
+                  } finally {
+                    setPending(false);
+                  }
+                }}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
     </div>

@@ -6,7 +6,7 @@ import type { ProjectCore } from "@/lib/db/repository";
 import type { OrderFormTemplate, ProjectAttachment } from "@/lib/domain/types";
 import { formatServiceAddress, managementLabel, tenantLabel } from "@/lib/tech/bundle-display";
 import { submitTechnicianReportAction } from "@/app/(tech)/actions";
-import { uploadProjectReportFileAction, updateAttachmentNotesAction } from "@/app/(app)/actions";
+import { uploadProjectReportFileAction, updateAttachmentNotesAction, deleteAttachmentAction } from "@/app/(app)/actions";
 import { MonteurOrderFormSections } from "@/components/app/monteur-order-form-sections";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -121,6 +121,18 @@ export function MonteurAuftragClient({
     await updateAttachmentNotesAction(attachmentId, notes);
   }, []);
 
+  const deletePhoto = useCallback(
+    async (attachmentId: string, filePath: string) => {
+      const result = await deleteAttachmentAction(attachmentId, filePath);
+      if (!result.success) {
+        setError(result.error);
+      } else {
+        router.refresh();
+      }
+    },
+    [router],
+  );
+
   const nextAppt = useMemo(
     () => [...core.appointments].sort((a, b) => a.startsAt.localeCompare(b.startsAt))[0],
     [core.appointments],
@@ -137,7 +149,14 @@ export function MonteurAuftragClient({
                 {p.referenceCode}
               </Badge>
             ) : null}
-            <Badge variant="outline" className="text-[11px]">Auftrag</Badge>
+            {p.status === "abgeschlossen" ? (
+              <Badge variant="outline" className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200">
+                <CheckCircle2 className="size-3" />
+                Erledigt
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-[11px]">Auftrag</Badge>
+            )}
           </div>
           <CardTitle className="mt-1 text-xl leading-tight">{p.title}</CardTitle>
         </CardHeader>
@@ -158,7 +177,7 @@ export function MonteurAuftragClient({
           ) : null}
           <InfoRow icon={Clock} label="Termin">
             {nextAppt
-              ? `${new Date(nextAppt.startsAt).toLocaleString("de-CH")} – ${new Date(nextAppt.endsAt).toLocaleTimeString("de-CH")}`
+              ? `${new Date(nextAppt.startsAt).toLocaleString("de-CH", { timeZone: "Europe/Zurich" })} – ${new Date(nextAppt.endsAt).toLocaleTimeString("de-CH", { timeZone: "Europe/Zurich" })}`
               : "—"}
           </InfoRow>
           <InfoRow icon={User} label="Mieter">
@@ -221,19 +240,55 @@ export function MonteurAuftragClient({
           {core.attachments.length > 0 ? (
             <div className="space-y-2">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Anhänge
+                Anhänge ({core.attachments.length})
               </p>
+              {/* Image attachments as thumbnails */}
+              {core.attachments.filter((a) => a.fileType.startsWith("image/") && a.signedUrl).length > 0 && (
+                <div className="grid grid-cols-3 gap-1.5">
+                  {core.attachments
+                    .filter((a) => a.fileType.startsWith("image/") && a.signedUrl)
+                    .map((a) => (
+                      <a
+                        key={a.id}
+                        href={a.signedUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="relative aspect-square overflow-hidden rounded-lg border border-border bg-muted active:scale-95"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={a.signedUrl} alt={a.fileName} className="size-full object-cover" />
+                        {a.notes && (
+                          <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1.5 py-1 backdrop-blur-sm">
+                            <p className="line-clamp-1 text-[10px] text-white">{a.notes}</p>
+                          </div>
+                        )}
+                      </a>
+                    ))}
+                </div>
+              )}
+              {/* Non-image attachments as links */}
               {core.attachments.filter((a) => !a.fileType.startsWith("image/")).length > 0 && (
-                <ul className="space-y-1">
+                <ul className="space-y-1.5">
                   {core.attachments
                     .filter((a) => !a.fileType.startsWith("image/"))
                     .map((a) => (
-                      <li
-                        key={a.id}
-                        className="flex items-center gap-2 text-xs text-muted-foreground"
-                      >
-                        <Paperclip className="size-3 shrink-0" />
-                        {a.fileName}
+                      <li key={a.id}>
+                        {a.signedUrl ? (
+                          <a
+                            href={a.signedUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs font-medium text-primary transition-colors active:scale-[0.98] hover:bg-muted/50"
+                          >
+                            <Paperclip className="size-3.5 shrink-0" />
+                            <span className="min-w-0 truncate">{a.fileName}</span>
+                          </a>
+                        ) : (
+                          <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Paperclip className="size-3 shrink-0" />
+                            {a.fileName}
+                          </span>
+                        )}
                       </li>
                     ))}
                 </ul>
@@ -387,7 +442,7 @@ export function MonteurAuftragClient({
                 {imageAttachments.length > 0 && (
                   <div className="grid grid-cols-2 gap-2">
                     {imageAttachments.map((a) => (
-                      <AttachmentCard key={a.id} attachment={a} onSaveNote={saveNote} />
+                      <AttachmentCard key={a.id} attachment={a} onSaveNote={saveNote} onDelete={deletePhoto} />
                     ))}
                   </div>
                 )}
@@ -458,12 +513,15 @@ export function MonteurAuftragClient({
 function AttachmentCard({
   attachment,
   onSaveNote,
+  onDelete,
 }: {
   attachment: ProjectAttachment;
   onSaveNote: (id: string, notes: string) => Promise<void>;
+  onDelete: (id: string, filePath: string) => Promise<void>;
 }) {
   const [notes, setNotes] = useState(attachment.notes ?? "");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
 
   const handleNotesChange = (value: string) => {
@@ -476,6 +534,13 @@ function AttachmentCard({
     }, 800);
   };
 
+  const handleDelete = async () => {
+    setDeleting(true);
+    await onDelete(attachment.id, attachment.filePath);
+  };
+
+  if (deleting) return null;
+
   return (
     <div className="group relative overflow-hidden rounded-xl border border-border bg-card shadow-sm">
       {attachment.signedUrl ? (
@@ -486,10 +551,24 @@ function AttachmentCard({
             alt={attachment.fileName}
             className="size-full object-cover"
           />
+          <button
+            type="button"
+            onClick={handleDelete}
+            className="absolute right-1.5 top-1.5 flex size-7 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-opacity active:scale-95"
+          >
+            <Trash2 className="size-3.5" />
+          </button>
         </div>
       ) : (
-        <div className="flex aspect-square items-center justify-center bg-muted/50">
+        <div className="relative flex aspect-square items-center justify-center bg-muted/50">
           <Paperclip className="size-8 text-muted-foreground/40" />
+          <button
+            type="button"
+            onClick={handleDelete}
+            className="absolute right-1.5 top-1.5 flex size-7 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-opacity active:scale-95"
+          >
+            <Trash2 className="size-3.5" />
+          </button>
         </div>
       )}
       <div className="space-y-1 p-2">

@@ -27,9 +27,14 @@ function getWeekDates(reference: Date): Date[] {
   return dates;
 }
 
+const TZ = "Europe/Zurich";
+
+function toSwissDateKey(d: Date): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(d);
+}
+
 function formatTime(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
+  return new Date(iso).toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", timeZone: TZ });
 }
 
 function formatDateRange(dates: Date[]): string {
@@ -49,13 +54,13 @@ export function TechCalendar({
   const [tasks, setTasks] = useState(initialTasks);
   const [pending, startTransition] = useTransition();
 
-  const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const todayKey = useMemo(() => toSwissDateKey(new Date()), []);
   const weekDates = useMemo(() => getWeekDates(refDate), [refDate]);
 
   const tasksByDate = useMemo(() => {
     const map = new Map<string, WeekTaskItem[]>();
     for (const t of tasks) {
-      const key = t.startsAt.slice(0, 10);
+      const key = toSwissDateKey(new Date(t.startsAt));
       const list = map.get(key) ?? [];
       list.push(t);
       map.set(key, list);
@@ -104,7 +109,7 @@ export function TechCalendar({
 
       <div className="space-y-2">
         {weekDates.map((date, i) => {
-          const dateKey = date.toISOString().slice(0, 10);
+          const dateKey = toSwissDateKey(date);
           const isToday = dateKey === todayKey;
           const dayTasks = tasksByDate.get(dateKey) ?? [];
 

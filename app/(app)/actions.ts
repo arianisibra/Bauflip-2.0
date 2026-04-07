@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentSession } from "@/lib/auth/session";
-import { createProject, addProjectAttachment, getProjectCore, updateAttachmentNotes } from "@/lib/db/repository";
+import { createProject, addProjectAttachment, getProjectCore, updateAttachmentNotes, deleteProjectAttachment } from "@/lib/db/repository";
 import { intakeSchema } from "@/lib/validations/forms";
 import { PROJECT_FILE_MAX_BYTES, PROJECT_FILE_MIME, sanitizeFileBaseName } from "@/lib/storage/mime";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -126,5 +126,20 @@ export async function updateAttachmentNotesAction(
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "Speichern fehlgeschlagen." };
   }
+  return { success: true };
+}
+
+export async function deleteAttachmentAction(
+  attachmentId: string,
+  filePath: string,
+): Promise<{ success: true } | { success: false; error: string }> {
+  const session = await getCurrentSession();
+  if (!session) return { success: false, error: "Nicht angemeldet." };
+  try {
+    await deleteProjectAttachment(attachmentId, filePath);
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Löschen fehlgeschlagen." };
+  }
+  revalidatePath("/projekte");
   return { success: true };
 }

@@ -735,6 +735,14 @@ export async function addProjectAttachment(
   return { ...input, id: attachmentId, createdAt: now };
 }
 
+export async function deleteProjectAttachment(attachmentId: string, filePath: string): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return;
+  await supabase.storage.from("project-files").remove([filePath]);
+  const { error } = await supabase.from("project_attachments").delete().eq("id", attachmentId);
+  if (error) throw new Error(error.message);
+}
+
 export async function updateAttachmentNotes(attachmentId: string, notes: string): Promise<void> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return;
@@ -820,6 +828,18 @@ export async function addTechnicianReport(
     createdAt: now,
     orderForms: [],
   };
+}
+
+export async function deleteTechnicianReport(reportId: string): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const idx = mockReports.findIndex((r) => r.id === reportId);
+    if (idx !== -1) mockReports.splice(idx, 1);
+    return;
+  }
+  await supabase.from("technician_report_order_forms").delete().eq("technician_report_id", reportId);
+  const { error } = await supabase.from("technician_reports").delete().eq("id", reportId);
+  if (error) throw new Error(error.message);
 }
 
 export async function listActiveOrderFormTemplatesForOrg(organizationId: string): Promise<OrderFormTemplate[]> {

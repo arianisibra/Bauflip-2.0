@@ -6,6 +6,7 @@ import {
   addAppointment,
   deleteProject,
   deleteAppointment,
+  deleteTechnicianReport,
   getProjectCore,
   updateProject,
 } from "@/lib/db/repository";
@@ -100,5 +101,14 @@ export async function deleteProjectAction(projectId: string) {
     throw new Error("Projekt-ID fehlt.");
   }
   await deleteProject(projectId);
+  revalidatePath("/projekte");
+}
+
+export async function deleteReportAction(reportId: string) {
+  const session = await getCurrentSession();
+  if (!session || session.role !== "admin") {
+    throw new Error("Keine Berechtigung.");
+  }
+  await deleteTechnicianReport(reportId);
   revalidatePath("/projekte");
 }
