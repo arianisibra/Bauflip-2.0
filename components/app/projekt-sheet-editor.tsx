@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import type { ProjectCore } from "@/lib/db/repository";
 import type { TechnicianReport, UserProfile } from "@/lib/domain/types";
 import { projectStatusLabels } from "@/lib/domain/types";
@@ -85,6 +86,7 @@ function ReportCard({
       <button
         type="button"
         onClick={() => setOpen(!open)}
+        aria-expanded={open}
         className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/30"
       >
         <div
@@ -258,7 +260,7 @@ export function ProjektSheetEditor({
     return null;
   }
   if (error && !core) {
-    return <p className="text-sm text-red-600">{error}</p>;
+    return <p className="text-sm text-destructive">{error}</p>;
   }
   if (!core) {
     return <p className="text-sm text-muted-foreground">Laden…</p>;
@@ -295,10 +297,11 @@ export function ProjektSheetEditor({
               accessNotes: String(fd.get("accessNotes") ?? ""),
               nextOwnerUserId: String(fd.get("nextOwnerUserId") ?? ""),
             });
+            toast.success("Projekt gespeichert");
             await load();
             router.refresh();
           } catch (err) {
-            setError(err instanceof Error ? err.message : "Speichern fehlgeschlagen.");
+            toast.error(err instanceof Error ? err.message : "Speichern fehlgeschlagen.");
           } finally {
             setPending(false);
           }
@@ -460,10 +463,11 @@ export function ProjektSheetEditor({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="text-red-600"
+                  className="text-destructive"
                   onClick={async () => {
                     if (!window.confirm("Termin löschen?")) return;
                     await deleteAppointmentAction(a.id);
+                    toast.success("Termin gelöscht");
                     await load();
                     router.refresh();
                   }}
@@ -528,10 +532,11 @@ export function ProjektSheetEditor({
                   setPending(true);
                   try {
                     await deleteReportAction(r.id);
+                    toast.success("Rapport gelöscht");
                     await load();
                     router.refresh();
                   } catch (e) {
-                    setError(e instanceof Error ? e.message : "Löschen fehlgeschlagen.");
+                    toast.error(e instanceof Error ? e.message : "Löschen fehlgeschlagen.");
                   } finally {
                     setPending(false);
                   }
@@ -542,7 +547,7 @@ export function ProjektSheetEditor({
         </section>
       )}
 
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
     </div>
   );
 }

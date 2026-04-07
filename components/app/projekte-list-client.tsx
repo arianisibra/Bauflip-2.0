@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import type { OfficeProjectListItem, UserProfile } from "@/lib/domain/types";
 import { projectStatusLabels } from "@/lib/domain/types";
 import { deleteProjectAction } from "@/app/(app)/projekte/actions";
@@ -51,6 +52,7 @@ const ProjectTableRow = memo(function ProjectTableRow({ p, deletingId, selectedI
     >
       <TableCell className="font-medium">{p.title}</TableCell>
       <TableCell>{p.displayLabel ?? "—"}</TableCell>
+      <TableCell className="text-muted-foreground">{p.serviceAddressShort ?? "—"}</TableCell>
       <TableCell className="capitalize">{p.type}</TableCell>
       <TableCell>
         <StatusBadge status={p.status} />
@@ -60,7 +62,7 @@ const ProjectTableRow = memo(function ProjectTableRow({ p, deletingId, selectedI
           type="button"
           size="sm"
           variant="outline"
-          className="h-8 border-red-200 text-red-700 hover:bg-red-50"
+          className="h-8 border-destructive/30 text-destructive hover:bg-destructive/10"
           disabled={deletingId === p.id}
           onClick={(e) => {
             e.stopPropagation();
@@ -122,6 +124,7 @@ export function ProjekteListClient({
       return (
         normalize(p.title).includes(n) ||
         normalize(p.displayLabel ?? "").includes(n) ||
+        normalize(p.serviceAddressShort ?? "").includes(n) ||
         normalize(projectStatusLabels[p.status]).includes(n) ||
         normalize(p.type).includes(n)
       );
@@ -142,19 +145,18 @@ export function ProjekteListClient({
   const handleDeleteRow = useCallback(
     async (p: OfficeProjectListItem) => {
       const ok = window.confirm(`Projekt "${p.title}" wirklich löschen?`);
-      if (!ok) {
-        return;
-      }
+      if (!ok) return;
       try {
         setDeletingId(p.id);
         await deleteProjectAction(p.id);
+        toast.success("Projekt gelöscht");
         if (selectedRef.current?.id === p.id) {
           setOpen(false);
           setSelected(null);
         }
         router.refresh();
       } catch (err) {
-        window.alert(err instanceof Error ? err.message : "Löschen fehlgeschlagen.");
+        toast.error(err instanceof Error ? err.message : "Löschen fehlgeschlagen.");
       } finally {
         setDeletingId(null);
       }
@@ -202,6 +204,7 @@ export function ProjekteListClient({
               <TableRow className="hover:bg-transparent">
                 <TableHead>Projekt</TableHead>
                 <TableHead>Mieter / Kontakt</TableHead>
+                <TableHead>Adresse</TableHead>
                 <TableHead>Typ</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="w-[120px] text-right">Aktion</TableHead>

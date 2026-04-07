@@ -90,6 +90,7 @@ export function TechCalendar({
           className="size-9"
           onClick={() => navigate(-1)}
           disabled={pending}
+          aria-label="Vorherige Woche"
         >
           <ChevronLeft className="size-4" />
         </Button>
@@ -102,6 +103,7 @@ export function TechCalendar({
           className="size-9"
           onClick={() => navigate(1)}
           disabled={pending}
+          aria-label="Nächste Woche"
         >
           <ChevronRight className="size-4" />
         </Button>
@@ -158,7 +160,7 @@ export function TechCalendar({
                           isDone
                             ? "border-l-4 border-muted-foreground/30 border-t-border border-r-border border-b-border bg-card opacity-60"
                             : isBesichtigung
-                              ? "border-l-4 border-amber-400 border-t-border border-r-border border-b-border bg-card"
+                              ? "border-l-4 border-orange-500 border-t-border border-r-border border-b-border bg-card"
                               : "border-l-4 border-emerald-400 border-t-border border-r-border border-b-border bg-card",
                         )}
                       >
@@ -191,7 +193,7 @@ export function TechCalendar({
                             className={cn(
                               "shrink-0 text-[10px]",
                               isBesichtigung
-                                ? "border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-100"
+                                ? "border-orange-500/30 bg-orange-500/10 text-orange-900 dark:text-orange-200"
                                 : "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200",
                             )}
                           >

@@ -1,17 +1,19 @@
-import { notFound } from "next/navigation";
+import dynamic from "next/dynamic";
+import { notFound, redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
 import { getProjectCore, listActiveOrderFormTemplatesForOrg, signAttachmentUrls } from "@/lib/db/repository";
-import { MonteurAuftragClient } from "@/components/app/monteur-auftrag-client";
+
+const MonteurAuftragClient = dynamic(
+  () => import("@/components/app/monteur-auftrag-client").then((m) => m.MonteurAuftragClient),
+  { loading: () => <div className="flex h-[60vh] items-center justify-center"><div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div> },
+);
 
 type Params = { params: Promise<{ projectId: string }> };
 
 export default async function MonteurAuftragPage({ params }: Params) {
-  const session = await getCurrentSession();
-  if (!session || session.role !== "technician") {
-    return null;
-  }
-
-  const { projectId } = await params;
+  const [session, { projectId }] = await Promise.all([getCurrentSession(), params]);
+  if (!session) redirect("/anmeldung");
+  if (session.role !== "technician") redirect("/");
   const core = await getProjectCore(projectId);
   if (!core) {
     notFound();

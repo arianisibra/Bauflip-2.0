@@ -38,7 +38,7 @@ const PROJECT_DB_COLUMNS =
 const APPOINTMENT_DB_COLUMNS =
   "id, project_id, kind, starts_at, ends_at, assigned_technician_id, planning_notes, created_at";
 
-const PROJECT_LIST_COLUMNS = "id, title, type, status, tenant_name, created_at";
+const PROJECT_LIST_COLUMNS = "id, title, type, status, tenant_name, service_street, service_postal_code, service_city, created_at";
 
 const ATTACHMENT_DB_COLUMNS =
   "id, project_id, file_path, file_name, mime_type, size_bytes, uploaded_by, notes, created_at";
@@ -185,7 +185,7 @@ export const getOrganizationBranding = cache(async function getOrganizationBrand
   return { name, logoUrl };
 });
 
-export async function listProjectsForOffice(): Promise<OfficeProjectListItem[]> {
+export const listProjectsForOffice = cache(async function listProjectsForOffice(): Promise<OfficeProjectListItem[]> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
     return mockProjects.map((p) => ({
@@ -194,6 +194,7 @@ export async function listProjectsForOffice(): Promise<OfficeProjectListItem[]> 
       type: p.type,
       status: p.status,
       displayLabel: p.tenantName?.trim() || p.title,
+      serviceAddressShort: null,
     }));
   }
   const { data: oid } = await supabase.rpc("current_organization_id");
@@ -212,17 +213,23 @@ export async function listProjectsForOffice(): Promise<OfficeProjectListItem[]> 
   return (data as Record<string, unknown>[]).map((row) => {
     const title = String(row.title ?? "");
     const tenant = row.tenant_name != null ? String(row.tenant_name).trim() : "";
+    const addrShort = formatServiceAddressFields({
+      serviceStreet: row.service_street as string | null,
+      servicePostalCode: row.service_postal_code as string | null,
+      serviceCity: row.service_city as string | null,
+    });
     return {
       id: String(row.id),
       title,
       type: row.type as OfficeProjectListItem["type"],
       status: row.status as ProjectStatus,
       displayLabel: tenant || title,
+      serviceAddressShort: addrShort === "—" ? null : addrShort,
     };
   });
-}
+});
 
-export async function getProjectCore(projectId: string): Promise<ProjectCore | null> {
+export const getProjectCore = cache(async function getProjectCore(projectId: string): Promise<ProjectCore | null> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
     const project = mockProjects.find((x) => x.id === projectId);
@@ -286,9 +293,9 @@ export async function getProjectCore(projectId: string): Promise<ProjectCore | n
     attachments: ((attachments as Record<string, unknown>[]) ?? []).map(mapProjectAttachmentRow),
     reports: mergedReports,
   };
-}
+});
 
-export async function listWeekTasks(referenceDate = new Date()): Promise<WeekTaskItem[]> {
+export const listWeekTasks = cache(async function listWeekTasks(referenceDate = new Date()): Promise<WeekTaskItem[]> {
   const { start, end } = getWeekBounds(referenceDate);
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
@@ -387,9 +394,9 @@ export async function listWeekTasks(referenceDate = new Date()): Promise<WeekTas
       };
     })
     .filter((x): x is WeekTaskItem => x !== null);
-}
+});
 
-export async function listMonthTasks(year: number, month: number): Promise<WeekTaskItem[]> {
+export const listMonthTasks = cache(async function listMonthTasks(year: number, month: number): Promise<WeekTaskItem[]> {
   const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
   const end = new Date(year, month, 0, 23, 59, 59, 999);
   const supabase = await createSupabaseServerClient();
@@ -485,7 +492,7 @@ export async function listMonthTasks(year: number, month: number): Promise<WeekT
       };
     })
     .filter((x): x is WeekTaskItem => x !== null);
-}
+});
 
 export async function listAssignableProfiles(): Promise<UserProfile[]> {
   return listProfilesByRole("technician");
@@ -645,17 +652,17 @@ export async function updateProject(projectId: string, patch: ProjectPatch): Pro
     row.closed_at = new Date().toISOString();
   }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("projects")
     .update(row)
-    .eq("id", projectId);
+    .eq("id", projectId)
+    .select(PROJECT_DB_COLUMNS)
+    .maybeSingle();
   if (error) {
     throw new Error(error.message);
   }
-
-  const fresh = await getProjectCore(projectId);
-  if (!fresh) throw new Error("Projekt nicht gefunden.");
-  return fresh.project;
+  if (!data) throw new Error("Projekt nicht gefunden.");
+  return mapProjectRow(data as Record<string, unknown>);
 }
 
 export async function updateProjectStatus(projectId: string, status: ProjectStatus): Promise<Project> {

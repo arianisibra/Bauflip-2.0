@@ -114,7 +114,7 @@ export function TechProfileClient({ displayName, email }: Props) {
               ) : (
                 <Sun className="size-4 text-muted-foreground" />
               )}
-              Dark Mode
+              Dunkelmodus
             </span>
             <span
               className={`inline-flex h-6 w-10 items-center rounded-full p-0.5 transition-colors ${

@@ -60,7 +60,7 @@ export function OnboardingForm() {
         <Label htmlFor="password">Neues Passwort</Label>
         <Input id="password" name="password" type="password" placeholder="Mindestens 10 Zeichen" required />
       </div>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
       <Button type="submit" disabled={isPending}>
         {isPending ? (
           <BauflipLoadingButtonLabel variant="onPrimary">Konto wird aktiviert …</BauflipLoadingButtonLabel>

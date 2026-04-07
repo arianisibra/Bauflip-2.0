@@ -9,6 +9,6 @@ export async function fetchMonthTasksAction(
   month: number,
 ): Promise<WeekTaskItem[]> {
   const session = await getCurrentSession();
-  if (!session) return [];
+  if (!session || (session.role !== "office" && session.role !== "admin")) return [];
   return listMonthTasks(year, month);
 }

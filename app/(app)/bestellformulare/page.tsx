@@ -1,7 +1,12 @@
+import dynamic from "next/dynamic";
 import { notFound } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
-import { OrderFormTemplatesAdmin } from "@/components/app/order-form-templates-admin";
 import { listOrderFormTemplatesForOrg } from "@/lib/db/repository";
+
+const OrderFormTemplatesAdmin = dynamic(
+  () => import("@/components/app/order-form-templates-admin").then((m) => m.OrderFormTemplatesAdmin),
+  { loading: () => <div className="animate-pulse rounded-xl bg-muted/50 h-64" /> },
+);
 
 export default async function BestellformularePage() {
   const session = await getCurrentSession();

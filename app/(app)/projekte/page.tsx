@@ -9,9 +9,12 @@ type Props = {
 };
 
 export default async function ProjektePage(props: Props) {
-  const session = await getCurrentSession();
-  const sp = await props.searchParams;
-  const [projects, technicians] = await Promise.all([listProjectsForOffice(), listAssignableProfiles()]);
+  const [session, sp, projects, technicians] = await Promise.all([
+    getCurrentSession(),
+    props.searchParams,
+    listProjectsForOffice(),
+    listAssignableProfiles(),
+  ]);
   const canEditProjectSheet = session?.role === "office" || session?.role === "admin";
   const supabaseConfigured = hasSupabaseConfig();
 

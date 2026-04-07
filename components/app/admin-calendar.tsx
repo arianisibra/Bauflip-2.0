@@ -128,6 +128,7 @@ export function AdminCalendar({
           size="icon"
           onClick={() => navigate(-1)}
           disabled={pending}
+          aria-label="Vorheriger Monat"
         >
           <ChevronLeft className="size-4" />
         </Button>
@@ -139,6 +140,7 @@ export function AdminCalendar({
           size="icon"
           onClick={() => navigate(1)}
           disabled={pending}
+          aria-label="Nächster Monat"
         >
           <ChevronRight className="size-4" />
         </Button>

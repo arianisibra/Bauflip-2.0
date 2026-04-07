@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
 import { listWeekTasks } from "@/lib/db/repository";
 import { todayKeySwiss, currentHourSwiss } from "@/lib/date/swiss";
@@ -30,9 +31,7 @@ function timeOfDayGreeting(): string {
 
 export default async function TodayPage() {
   const session = await getCurrentSession();
-  if (!session) {
-    return null;
-  }
+  if (!session) redirect("/anmeldung");
 
   const tasks = await listWeekTasks();
   const now = new Date();
@@ -155,7 +154,7 @@ export default async function TodayPage() {
                     isDone
                       ? "border-l-muted-foreground/30 opacity-60"
                       : isBesichtigung
-                        ? "border-l-amber-400"
+                        ? "border-l-orange-500"
                         : "border-l-emerald-400"
                   }`}
                 >
@@ -180,7 +179,7 @@ export default async function TodayPage() {
                             variant="outline"
                             className={
                               isBesichtigung
-                                ? "border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-100"
+                                ? "border-orange-500/30 bg-orange-500/10 text-orange-900 dark:text-orange-200"
                                 : "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
                             }
                           >

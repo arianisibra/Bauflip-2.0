@@ -10,7 +10,7 @@ import {
   getProjectCore,
   updateProject,
 } from "@/lib/db/repository";
-import { projectStammdatenUpdateSchema } from "@/lib/validations/forms";
+import { projectStammdatenUpdateSchema, appointmentSchema } from "@/lib/validations/forms";
 
 function nz(s: string | undefined | null): string | null {
   if (s == null) return null;
@@ -19,6 +19,10 @@ function nz(s: string | undefined | null): string | null {
 }
 
 export async function getProjectSheetDataAction(projectId: string) {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
+    throw new Error("Keine Berechtigung.");
+  }
   const bundle = await getProjectCore(projectId);
   if (!bundle) {
     throw new Error("Projekt nicht gefunden.");
@@ -61,24 +65,23 @@ export async function updateProjectStammdatenAction(values: unknown) {
   revalidatePath("/projekte");
 }
 
-export async function addAppointmentAction(input: {
-  projectId: string;
-  kind: "besichtigung" | "ausfuehrung";
-  startsAt: string;
-  endsAt: string;
-  assignedTechnicianId?: string | null;
-}) {
+export async function addAppointmentAction(input: unknown) {
   const session = await getCurrentSession();
   if (!session || (session.role !== "office" && session.role !== "admin")) {
     throw new Error("Keine Berechtigung.");
   }
+  const parsed = appointmentSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Ungültige Eingabe.");
+  }
+  const v = parsed.data;
   await addAppointment({
-    projectId: input.projectId,
-    kind: input.kind,
-    startsAt: input.startsAt,
-    endsAt: input.endsAt,
-    assignedTechnicianId: input.assignedTechnicianId ?? null,
-    planningNotes: null,
+    projectId: v.projectId,
+    kind: v.kind,
+    startsAt: v.startsAt,
+    endsAt: v.endsAt,
+    assignedTechnicianId: v.assignedTechnicianId ?? null,
+    planningNotes: v.planningNotes ?? null,
   });
   revalidatePath("/projekte");
 }

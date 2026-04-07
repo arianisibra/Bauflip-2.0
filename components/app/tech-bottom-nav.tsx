@@ -25,8 +25,9 @@ export function TechBottomNav() {
             <Link
               key={tab.href}
               href={tab.href}
+              aria-current={active ? "page" : undefined}
               className={cn(
-                "flex flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 text-[11px] font-medium transition-colors",
+                "flex flex-1 flex-col items-center gap-0.5 rounded-xl px-3 py-2.5 text-[11px] font-medium transition-colors",
                 active
                   ? "text-primary"
                   : "text-muted-foreground active:text-foreground",

@@ -83,6 +83,7 @@ export type OfficeProjectListItem = {
   type: ProjectType;
   status: ProjectStatus;
   displayLabel: string | null;
+  serviceAddressShort: string | null;
 };
 
 export type WeekTaskItem = {

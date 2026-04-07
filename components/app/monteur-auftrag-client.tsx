@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import type { ProjectCore } from "@/lib/db/repository";
 import type { OrderFormTemplate, ProjectAttachment } from "@/lib/domain/types";
 import { formatServiceAddress, managementLabel, tenantLabel } from "@/lib/tech/bundle-display";
@@ -104,8 +105,9 @@ export function MonteurAuftragClient({
       try {
         const result = await uploadProjectReportFileAction(fd);
         if (!result.success) {
-          setError(result.error);
+          toast.error(result.error);
         } else {
+          toast.success("Datei hochgeladen");
           router.refresh();
         }
       } catch {
@@ -125,8 +127,9 @@ export function MonteurAuftragClient({
     async (attachmentId: string, filePath: string) => {
       const result = await deleteAttachmentAction(attachmentId, filePath);
       if (!result.success) {
-        setError(result.error);
+        toast.error(result.error);
       } else {
+        toast.success("Datei gelöscht");
         router.refresh();
       }
     },
@@ -383,9 +386,10 @@ export function MonteurAuftragClient({
                     orderForms: orderFormsPayloadFromFormData(fd, orderFormTemplates),
                   });
                   if (!result.success) {
-                    setError(result.error);
+                    toast.error(result.error);
                     return;
                   }
+                  toast.success("Rapport gespeichert");
                   router.push("/tag");
                   router.refresh();
                 } catch {

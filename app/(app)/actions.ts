@@ -84,13 +84,13 @@ export async function uploadProjectReportFileAction(
   if (!PROJECT_FILE_MIME.has(file.type)) return { success: false, error: "Dateityp nicht erlaubt." };
   if (file.size > PROJECT_FILE_MAX_BYTES) return { success: false, error: "Datei darf maximal 15 MB gross sein." };
 
-  const core = await getProjectCore(projectId);
-  if (!core) return { success: false, error: "Projekt nicht gefunden." };
-
   try {
+    const [core, arrayBuf] = await Promise.all([getProjectCore(projectId), file.arrayBuffer()]);
+    if (!core) return { success: false, error: "Projekt nicht gefunden." };
+
     const safe = sanitizeFileBaseName(file.name) || "datei";
     const storagePath = `${session.organizationId}/${projectId}/reports/${Date.now()}-${safe}`;
-    const buf = Buffer.from(await file.arrayBuffer());
+    const buf = Buffer.from(arrayBuf);
     const { error: uploadError } = await supabase.storage.from("project-files").upload(storagePath, buf, {
       contentType: file.type,
       upsert: false,
@@ -121,6 +121,8 @@ export async function updateAttachmentNotesAction(
 ): Promise<{ success: true } | { success: false; error: string }> {
   const session = await getCurrentSession();
   if (!session) return { success: false, error: "Nicht angemeldet." };
+  if (!attachmentId) return { success: false, error: "Anhang-ID fehlt." };
+  if (notes.length > 2000) return { success: false, error: "Notiz zu lang (max. 2000 Zeichen)." };
   try {
     await updateAttachmentNotes(attachmentId, notes);
   } catch (err) {
@@ -135,6 +137,7 @@ export async function deleteAttachmentAction(
 ): Promise<{ success: true } | { success: false; error: string }> {
   const session = await getCurrentSession();
   if (!session) return { success: false, error: "Nicht angemeldet." };
+  if (!attachmentId || !filePath) return { success: false, error: "Parameter fehlen." };
   try {
     await deleteProjectAttachment(attachmentId, filePath);
   } catch (err) {

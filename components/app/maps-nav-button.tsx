@@ -11,9 +11,10 @@ export function MapsNavButton({ address }: { address: string }) {
       target="_blank"
       rel="noopener noreferrer"
       onClick={(e) => e.stopPropagation()}
-      className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary active:scale-95"
+      className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary active:scale-95"
+      aria-label="Route in Google Maps öffnen"
     >
-      <Navigation className="size-3.5" />
+      <Navigation className="size-4.5" />
     </a>
   );
 }

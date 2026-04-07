@@ -1,11 +1,10 @@
+import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
 import { TechProfileClient } from "@/components/app/tech-profile-client";
 
 export default async function TechProfilePage() {
   const session = await getCurrentSession();
-  if (!session) {
-    return null;
-  }
+  if (!session) redirect("/anmeldung");
 
   const profile = session.profile;
 

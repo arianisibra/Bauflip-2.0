@@ -4,7 +4,6 @@ import type { NextRequest } from "next/server";
 
 const PUBLIC_PATHS = ["/anmeldung"];
 
-/** Security-Header auf jede Response (CSP später iterativ, s. Next-Docs). */
 function withSecurityHeaders(res: NextResponse): NextResponse {
   const isProd = process.env.NODE_ENV === "production";
   res.headers.set("X-Content-Type-Options", "nosniff");
@@ -14,6 +13,10 @@ function withSecurityHeaders(res: NextResponse): NextResponse {
     "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
   );
   res.headers.set("X-Frame-Options", "SAMEORIGIN");
+  res.headers.set(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://*.supabase.in wss://*.supabase.co; frame-ancestors 'self';",
+  );
   if (isProd) {
     res.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
   }
@@ -49,7 +52,7 @@ function mapRole(raw: string | null | undefined) {
   return "office";
 }
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const isStaticAsset =

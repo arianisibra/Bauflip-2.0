@@ -132,7 +132,7 @@ export function MfaSetupForm() {
         </Button>
       ) : null}
       {qrDataUrl ? (
-        <div className="rounded-md border bg-white p-4">
+        <div className="rounded-md border border-border bg-card p-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={qrDataUrl} alt="MFA QR Code" className="mx-auto size-56" />
         </div>
@@ -156,7 +156,7 @@ export function MfaSetupForm() {
           </Button>
         </div>
       ) : null}
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
     </div>
   );
 }

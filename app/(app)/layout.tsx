@@ -19,14 +19,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const items = getVisibleSidebarItems(role);
 
   return (
-    <div className="h-screen overflow-hidden bg-slate-100">
+    <div className="h-screen overflow-hidden bg-muted/40 dark:bg-background">
       <div className="flex h-full">
         <div className="overflow-hidden">
           <SidebarNav items={items} />
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-16 items-center justify-end border-b bg-white px-6">
+          <header className="flex h-16 items-center justify-end border-b border-border bg-card px-6">
             <UserAvatarButton organizationName={branding.name} organizationLogoUrl={branding.logoUrl} />
           </header>
           <main className="min-h-0 flex-1 overflow-y-auto px-6 py-6">{children}</main>

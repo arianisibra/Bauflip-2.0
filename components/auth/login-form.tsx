@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useActionState, useCallback, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { KeyRound, Mail } from "lucide-react";
+import { AlertCircle, KeyRound, Mail } from "lucide-react";
 import { loginAction } from "@/app/(auth)/anmeldung/actions";
 import { LoginSubmitButton } from "@/components/auth/login-submit-button";
 import { TurnstileField } from "@/components/auth/turnstile-field";
@@ -11,6 +11,7 @@ import { TurnstileField } from "@/components/auth/turnstile-field";
 const hasTurnstileSiteKey = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
 export function LoginForm() {
+  const [state, formAction] = useActionState(loginAction, null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const submitBlocked = hasTurnstileSiteKey && !turnstileToken;
   const handleTurnstileToken = useCallback((token: string) => {
@@ -18,11 +19,18 @@ export function LoginForm() {
   }, []);
 
   return (
-    <form action={loginAction} className="flex flex-col gap-4">
+    <form action={formAction} className="flex flex-col gap-4">
+      {state?.error && (
+        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
+          <AlertCircle className="size-4 shrink-0" />
+          {state.error}
+        </div>
+      )}
+
       <div className="flex flex-col gap-2">
         <Label htmlFor="email">E-Mail</Label>
         <div className="relative">
-          <Mail className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400" />
+          <Mail className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             id="email"
             name="email"
@@ -37,7 +45,7 @@ export function LoginForm() {
       <div className="flex flex-col gap-2">
         <Label htmlFor="password">Passwort</Label>
         <div className="relative">
-          <KeyRound className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400" />
+          <KeyRound className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             id="password"
             name="password"

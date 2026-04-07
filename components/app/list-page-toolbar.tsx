@@ -20,6 +20,7 @@ export function ListPageToolbar({ value, onChange, placeholder = "Suchen…" }: 
         placeholder={placeholder}
         className="h-9 pl-9"
         autoComplete="off"
+        aria-label={placeholder}
       />
     </div>
   );

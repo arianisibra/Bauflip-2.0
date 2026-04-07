@@ -1,10 +1,16 @@
+import dynamic from "next/dynamic";
+import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
 import { listMonthTasks } from "@/lib/db/repository";
-import { AdminCalendar } from "@/components/app/admin-calendar";
+
+const AdminCalendar = dynamic(
+  () => import("@/components/app/admin-calendar").then((m) => m.AdminCalendar),
+  { loading: () => <div className="animate-pulse rounded-xl bg-muted/50 h-96" /> },
+);
 
 export default async function KalenderPage() {
   const session = await getCurrentSession();
-  if (!session) return null;
+  if (!session) redirect("/anmeldung");
 
   const now = new Date();
   const tasks = await listMonthTasks(now.getFullYear(), now.getMonth() + 1);

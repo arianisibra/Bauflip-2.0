@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import type { OrderFormTemplate } from "@/lib/domain/types";
 import { createOrderFormCmsAction, updateOrderFormCmsAction } from "@/app/(app)/order-form-cms-actions";
 import { deleteOrderFormTemplateAction } from "@/app/(app)/order-form-template-actions";
@@ -504,9 +505,10 @@ function CmsFormEditor({
           isActive,
           fields: parsed.data,
         });
+        toast.success("Formular gespeichert");
         router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
+        toast.error(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
       }
     });
   };
@@ -516,10 +518,11 @@ function CmsFormEditor({
     startTransition(async () => {
       try {
         await deleteOrderFormTemplateAction(template.id);
+        toast.success("Formular gelöscht");
         router.refresh();
         onDeleted();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Löschen fehlgeschlagen.");
+        toast.error(e instanceof Error ? e.message : "Löschen fehlgeschlagen.");
       }
     });
   };
@@ -705,9 +708,10 @@ export function OrderFormTemplatesAdmin({ templates }: { templates: OrderFormTem
         setNewFormName("");
         setNewSupplier("");
         setSelectedId(id);
+        toast.success("Formular erstellt");
         router.refresh();
       } catch (e) {
-        setCreateError(e instanceof Error ? e.message : "Anlegen fehlgeschlagen.");
+        toast.error(e instanceof Error ? e.message : "Anlegen fehlgeschlagen.");
       }
     });
   };
