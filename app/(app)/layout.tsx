@@ -9,8 +9,10 @@ import { getVisibleSidebarItems } from "@/lib/navigation/sidebar-config";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await getCurrentSession();
   const role = session?.role ?? "office";
-  const branding = await getOrganizationBranding(session?.organizationId ?? null);
-  const mfaMissing = await isAdminMfaRequiredAndMissing();
+  const [branding, mfaMissing] = await Promise.all([
+    getOrganizationBranding(session?.organizationId ?? null),
+    isAdminMfaRequiredAndMissing(),
+  ]);
   if (mfaMissing && role === "admin") {
     redirect("/mfa/setup");
   }

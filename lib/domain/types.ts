@@ -1,3 +1,5 @@
+import type { OrderFormFieldDef } from "@/lib/order-forms/schema";
+
 export const projectTypes = ["reparatur", "ersatz", "neuinstallation"] as const;
 export type ProjectType = (typeof projectTypes)[number];
 
@@ -13,7 +15,14 @@ export type OrganizationBranding = {
   logoUrl: string | null;
 };
 
-export const appPageKeys = ["projekte", "mitarbeiter", "einstellungen"] as const;
+export const appPageKeys = [
+  "projekte",
+  "mitarbeiter",
+  "bestellformulare",
+  "einstellungen",
+  "mein_tag",
+  "monteur_profil",
+] as const;
 export type AppPageKey = (typeof appPageKeys)[number];
 
 export type UserProfile = {
@@ -94,6 +103,28 @@ export type WeekTaskItem = {
 export const technicianReportOutcomes = ["schaden_behoben", "schaden_aufgenommen"] as const;
 export type TechnicianReportOutcome = (typeof technicianReportOutcomes)[number];
 
+/** Admin-definierte Vorlage (CMS) für Bestell-/Rapport-Felder. */
+export type OrderFormTemplate = {
+  id: string;
+  organizationId: string;
+  /** Optional: Lieferant (Freitext), z. B. für CMS-Gruppierung. */
+  supplierName: string | null;
+  name: string;
+  slug: string;
+  description: string | null;
+  fields: OrderFormFieldDef[];
+  sortOrder: number;
+  isActive: boolean;
+};
+
+/** Gespeicherte Bestellformular-Daten zu einem Rapport (Anzeige Büro). */
+export type TechnicianReportOrderFormEntry = {
+  templateId: string;
+  templateName: string;
+  fields: OrderFormFieldDef[];
+  values: Record<string, string>;
+};
+
 export type TechnicianReport = {
   id: string;
   projectId: string;
@@ -103,6 +134,7 @@ export type TechnicianReport = {
   workDescription: string;
   timeSpentMinutes: number | null;
   createdAt: string;
+  orderForms: TechnicianReportOrderFormEntry[];
 };
 
 export type ProjectAttachment = {

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
-import { getProjectCore } from "@/lib/db/repository";
+import { getProjectCore, listActiveOrderFormTemplatesForOrg } from "@/lib/db/repository";
 import { MonteurAuftragClient } from "@/components/app/monteur-auftrag-client";
 
 type Params = { params: Promise<{ projectId: string }> };
@@ -25,5 +25,10 @@ export default async function MonteurAuftragPage({ params }: Params) {
     notFound();
   }
 
-  return <MonteurAuftragClient core={core} />;
+  const orderFormTemplates =
+    core.project.organizationId != null
+      ? await listActiveOrderFormTemplatesForOrg(core.project.organizationId)
+      : [];
+
+  return <MonteurAuftragClient core={core} orderFormTemplates={orderFormTemplates} />;
 }

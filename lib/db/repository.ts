@@ -3,17 +3,20 @@ import "server-only";
 import { cache } from "react";
 import type {
   Appointment,
-  OrganizationBranding,
   OfficeProjectListItem,
+  OrderFormTemplate,
+  OrganizationBranding,
   Project,
   ProjectAttachment,
   ProjectStatus,
   RoleType,
   TechnicianReport,
+  TechnicianReportOrderFormEntry,
   TechnicianReportOutcome,
   UserProfile,
   WeekTaskItem,
 } from "@/lib/domain/types";
+import { parseOrderFormFieldsJson } from "@/lib/order-forms/schema";
 import { getWeekBounds } from "@/lib/date/week-bounds";
 import { resolveCalendarColor } from "@/lib/calendar/team-colors";
 import { formatServiceAddressFields } from "@/lib/tech/bundle-display";
@@ -95,6 +98,30 @@ function mapAppointmentRow(row: Record<string, unknown>): Appointment {
   };
 }
 
+function valuesJsonToStringRecord(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (v == null) continue;
+    out[k] = String(v);
+  }
+  return out;
+}
+
+function mapOrderFormTemplateRow(row: Record<string, unknown>): OrderFormTemplate {
+  return {
+    id: String(row.id),
+    organizationId: String(row.organization_id ?? ""),
+    supplierName: row.supplier_name != null ? String(row.supplier_name).trim() || null : null,
+    name: String(row.name ?? ""),
+    slug: String(row.slug ?? ""),
+    description: row.description != null ? String(row.description) : null,
+    fields: parseOrderFormFieldsJson(row.fields),
+    sortOrder: Number(row.sort_order ?? 0),
+    isActive: Boolean(row.is_active),
+  };
+}
+
 function mapTechnicianReportRow(row: Record<string, unknown>): TechnicianReport {
   const o = String(row.outcome ?? "schaden_aufgenommen");
   const outcome: TechnicianReportOutcome =
@@ -112,6 +139,7 @@ function mapTechnicianReportRow(row: Record<string, unknown>): TechnicianReport 
     timeSpentMinutes:
       row.time_spent_minutes != null ? Number(row.time_spent_minutes) : null,
     createdAt: String(row.created_at ?? new Date().toISOString()),
+    orderForms: [],
   };
 }
 
@@ -219,11 +247,43 @@ export async function getProjectCore(projectId: string): Promise<ProjectCore | n
 
   if (!project) return null;
 
+  const reportRows = ((reports as Record<string, unknown>[]) ?? []).map(mapTechnicianReportRow);
+
+  let mergedReports = reportRows;
+  if (reportRows.length > 0) {
+    const ids = reportRows.map((r) => r.id);
+    const { data: ofRows } = await supabase
+      .from("technician_report_order_forms")
+    .select(
+        "technician_report_id, template_id, values_json, order_form_templates ( name, fields )",
+      )
+      .in("technician_report_id", ids);
+
+    const byReport = new Map<string, TechnicianReportOrderFormEntry[]>();
+    for (const raw of ofRows ?? []) {
+      const row = raw as Record<string, unknown>;
+      const rid = String(row.technician_report_id ?? "");
+      const tplWrap = row.order_form_templates as Record<string, unknown> | Record<string, unknown>[] | null;
+      const t = Array.isArray(tplWrap) ? tplWrap[0] : tplWrap;
+      if (!t || !rid) continue;
+      const entry: TechnicianReportOrderFormEntry = {
+        templateId: String(row.template_id ?? ""),
+        templateName: String(t.name ?? ""),
+        fields: parseOrderFormFieldsJson(t.fields),
+        values: valuesJsonToStringRecord(row.values_json),
+      };
+      const list = byReport.get(rid) ?? [];
+      list.push(entry);
+      byReport.set(rid, list);
+    }
+    mergedReports = reportRows.map((r) => ({ ...r, orderForms: byReport.get(r.id) ?? [] }));
+  }
+
   return {
     project: mapProjectRow(project as Record<string, unknown>),
     appointments: ((appointments as Record<string, unknown>[]) ?? []).map(mapAppointmentRow),
     attachments: ((attachments as Record<string, unknown>[]) ?? []).map(mapProjectAttachmentRow),
-    reports: ((reports as Record<string, unknown>[]) ?? []).map(mapTechnicianReportRow),
+    reports: mergedReports,
   };
 }
 
@@ -401,15 +461,15 @@ export async function createProject(input: ProjectCreateInput): Promise<Project>
     .from("projects")
     .insert({
       organization_id: orgId,
-      title: input.title,
-      type: input.type,
-      status: input.status,
-      next_owner_role: input.nextOwnerRole,
-      next_owner_user_id: input.nextOwnerUserId,
-      source: input.source,
-      intake_original_text: input.intakeOriginalText,
-      access_notes: input.accessNotes,
-      hints_and_notes: input.hintsAndNotes,
+    title: input.title,
+    type: input.type,
+    status: input.status,
+    next_owner_role: input.nextOwnerRole,
+    next_owner_user_id: input.nextOwnerUserId,
+    source: input.source,
+    intake_original_text: input.intakeOriginalText,
+    access_notes: input.accessNotes,
+    hints_and_notes: input.hintsAndNotes,
       tenant_name: input.tenantName,
       tenant_phone: input.tenantPhone,
       tenant_email: input.tenantEmail,
@@ -560,12 +620,12 @@ export async function addProjectAttachment(
   const { data, error } = await supabase
     .from("project_attachments")
     .insert({
-      project_id: input.projectId,
-      file_path: input.filePath,
-      file_name: input.fileName,
+    project_id: input.projectId,
+    file_path: input.filePath,
+    file_name: input.fileName,
       mime_type: input.fileType,
-      size_bytes: input.sizeBytes,
-      uploaded_by: input.uploadedBy,
+    size_bytes: input.sizeBytes,
+    uploaded_by: input.uploadedBy,
     })
     .select("*")
     .single();
@@ -574,11 +634,20 @@ export async function addProjectAttachment(
 }
 
 export async function addTechnicianReport(
-  input: Omit<TechnicianReport, "id" | "createdAt">,
+  input: Omit<TechnicianReport, "id" | "createdAt" | "orderForms">,
+  options?: {
+    createdByProfileId: string | null;
+    orderFormSubmissions?: { templateId: string; valuesJson: Record<string, string> }[];
+  },
 ): Promise<TechnicianReport> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
-    const r: TechnicianReport = { ...input, id: id("r"), createdAt: new Date().toISOString() };
+    const r: TechnicianReport = {
+      ...input,
+      id: id("r"),
+      createdAt: new Date().toISOString(),
+      orderForms: [],
+    };
     mockReports.push(r);
     return r;
   }
@@ -591,13 +660,118 @@ export async function addTechnicianReport(
       measurements_json: input.measurementsJson,
       work_description: input.workDescription,
       time_spent_minutes: input.timeSpentMinutes,
+      created_by: options?.createdByProfileId ?? null,
     })
     .select("*")
     .single();
   if (error || !data) throw new Error(error?.message ?? "Rapport konnte nicht gespeichert werden.");
 
+  const reportId = String((data as Record<string, unknown>).id ?? "");
+  const submissions = options?.orderFormSubmissions?.filter((s) => Object.keys(s.valuesJson).length > 0) ?? [];
+  if (submissions.length > 0) {
+    const { error: ofError } = await supabase.from("technician_report_order_forms").insert(
+      submissions.map((s) => ({
+        technician_report_id: reportId,
+        template_id: s.templateId,
+        values_json: s.valuesJson,
+      })),
+    );
+    if (ofError) throw new Error(ofError.message ?? "Bestellformular konnte nicht gespeichert werden.");
+  }
+
   const status: ProjectStatus = input.outcome === "schaden_behoben" ? "abgeschlossen" : "einsatz_offen";
   await updateProject(input.projectId, { status });
 
   return mapTechnicianReportRow(data as Record<string, unknown>);
+}
+
+export async function listActiveOrderFormTemplatesForOrg(organizationId: string): Promise<OrderFormTemplate[]> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return [];
+    const { data, error } = await supabase
+    .from("order_form_templates")
+    .select("id, organization_id, supplier_name, name, slug, description, fields, sort_order, is_active")
+    .eq("organization_id", organizationId)
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true });
+  if (error || !data) return [];
+  return (data as Record<string, unknown>[]).map(mapOrderFormTemplateRow);
+}
+
+export async function listOrderFormTemplatesForOrg(organizationId: string): Promise<OrderFormTemplate[]> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("order_form_templates")
+    .select("id, organization_id, supplier_name, name, slug, description, fields, sort_order, is_active")
+    .eq("organization_id", organizationId)
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true });
+  if (error || !data) return [];
+  return (data as Record<string, unknown>[]).map(mapOrderFormTemplateRow);
+}
+
+export async function insertOrderFormTemplate(row: {
+  organizationId: string;
+  supplierName: string | null;
+  name: string;
+  slug: string;
+  description: string | null;
+  fields: unknown;
+  sortOrder: number;
+  isActive: boolean;
+}): Promise<OrderFormTemplate> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) throw new Error("Supabase nicht konfiguriert.");
+  const { data, error } = await supabase
+    .from("order_form_templates")
+    .insert({
+      organization_id: row.organizationId,
+      supplier_name: row.supplierName,
+      name: row.name,
+      slug: row.slug,
+      description: row.description,
+      fields: row.fields,
+      sort_order: row.sortOrder,
+      is_active: row.isActive,
+    })
+    .select("id, organization_id, supplier_name, name, slug, description, fields, sort_order, is_active")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Vorlage konnte nicht angelegt werden.");
+  return mapOrderFormTemplateRow(data as Record<string, unknown>);
+}
+
+export async function updateOrderFormTemplate(
+  templateId: string,
+  patch: Partial<{
+    supplierName: string | null;
+  name: string;
+    slug: string;
+    description: string | null;
+    fields: unknown;
+    sortOrder: number;
+    isActive: boolean;
+  }>,
+): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) throw new Error("Supabase nicht konfiguriert.");
+  const dbPatch: Record<string, unknown> = {};
+  if (patch.supplierName !== undefined) dbPatch.supplier_name = patch.supplierName;
+  if (patch.name !== undefined) dbPatch.name = patch.name;
+  if (patch.slug !== undefined) dbPatch.slug = patch.slug;
+  if (patch.description !== undefined) dbPatch.description = patch.description;
+  if (patch.fields !== undefined) dbPatch.fields = patch.fields;
+  if (patch.sortOrder !== undefined) dbPatch.sort_order = patch.sortOrder;
+  if (patch.isActive !== undefined) dbPatch.is_active = patch.isActive;
+  dbPatch.updated_at = new Date().toISOString();
+  const { error } = await supabase.from("order_form_templates").update(dbPatch).eq("id", templateId);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteOrderFormTemplate(templateId: string): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) throw new Error("Supabase nicht konfiguriert.");
+  const { error } = await supabase.from("order_form_templates").delete().eq("id", templateId);
+  if (error) throw new Error(error.message);
 }

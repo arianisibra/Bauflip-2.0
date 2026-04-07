@@ -19,18 +19,21 @@ function withSecurityHeaders(res: NextResponse): NextResponse {
   }
   return res;
 }
-const technicianAllowedPrefixes = [
-  "/",
+/** Monteur: nur Einsatz-Routen und Onboarding/MFA, kein Büro (/projekte, /einstellungen, /mitarbeiter). */
+const TECHNICIAN_ALLOWED_PREFIXES = [
   "/tag",
   "/auftrag",
-  "/projekte",
-  "/einstellungen",
   "/mfa/setup",
   "/onboarding",
   "/anmeldung",
   "/profil",
   "/tech",
 ];
+
+function isTechnicianAllowedPath(pathname: string): boolean {
+  if (pathname === "/") return true;
+  return TECHNICIAN_ALLOWED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -94,17 +97,10 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
   const isAuthenticated = Boolean(user);
 
-  let role = "office";
+  let role: ReturnType<typeof mapRole> = "office";
   if (user) {
-    const { data: membership } = await supabase
-      .from("organization_memberships")
-      .select("role")
-      .eq("user_id", user.id)
-      .eq("is_active", true)
-      .limit(1)
-      .maybeSingle();
-
-    role = mapRole(membership?.role as string | null | undefined ?? (user.user_metadata?.role as string | null | undefined));
+    const rawMeta = user.user_metadata?.role as string | undefined;
+    role = mapRole(rawMeta);
   }
 
   if (!isAuthenticated && !isPublicPath) {
@@ -120,12 +116,7 @@ export async function proxy(request: NextRequest) {
     return withSecurityHeaders(NextResponse.redirect(appUrl));
   }
 
-  if (
-    isAuthenticated &&
-    role === "technician" &&
-    pathname !== "/" &&
-    !technicianAllowedPrefixes.some((prefix) => pathname.startsWith(prefix))
-  ) {
+  if (isAuthenticated && role === "technician" && !isTechnicianAllowedPath(pathname)) {
     if (pathname.startsWith("/api")) {
       return withSecurityHeaders(NextResponse.json({ error: "Kein Zugriff." }, { status: 403 }));
     }

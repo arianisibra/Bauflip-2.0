@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentSession } from "@/lib/auth/session";
-import { addTechnicianReport } from "@/lib/db/repository";
+import { addTechnicianReport, listActiveOrderFormTemplatesForOrg } from "@/lib/db/repository";
+import { validateOrderFormValues } from "@/lib/order-forms/validate-submission";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { technicianReportSchema } from "@/lib/validations/forms";
 
 export async function submitTechnicianReportAction(values: unknown) {
@@ -17,14 +19,51 @@ export async function submitTechnicianReportAction(values: unknown) {
   }
 
   const v = parsed.data;
-  await addTechnicianReport({
-    projectId: v.projectId,
-    outcome: v.outcome,
-    summary: v.summary?.trim() ?? "",
-    measurementsJson: (v.measurementsJson?.trim() || "{}") as string,
-    workDescription: v.workDescription?.trim() ?? "",
-    timeSpentMinutes: null,
-  });
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    throw new Error("Supabase nicht konfiguriert.");
+  }
+
+  const { data: proj, error: projErr } = await supabase
+    .from("projects")
+    .select("organization_id")
+    .eq("id", v.projectId)
+    .maybeSingle();
+
+  if (projErr || !proj?.organization_id) {
+    throw new Error("Projekt nicht gefunden.");
+  }
+
+  const organizationId = String(proj.organization_id);
+  const activeTemplates = await listActiveOrderFormTemplatesForOrg(organizationId);
+  const fromClient = new Map((v.orderForms ?? []).map((x) => [x.templateId, x.values]));
+
+  const orderFormSubmissions: { templateId: string; valuesJson: Record<string, string> }[] = [];
+
+  for (const tpl of activeTemplates) {
+    const rawValues = fromClient.get(tpl.id) ?? {};
+    const validated = validateOrderFormValues(tpl.id, tpl.fields, rawValues);
+    if (Object.keys(validated).length > 0) {
+      orderFormSubmissions.push({ templateId: tpl.id, valuesJson: validated });
+    } else if (tpl.fields.some((f) => f.required)) {
+      throw new Error(`Bestellformular „${tpl.name}“ ist unvollständig.`);
+    }
+  }
+
+  await addTechnicianReport(
+    {
+      projectId: v.projectId,
+      outcome: v.outcome,
+      summary: v.summary?.trim() ?? "",
+      measurementsJson: (v.measurementsJson?.trim() || "{}") as string,
+      workDescription: v.workDescription?.trim() ?? "",
+      timeSpentMinutes: null,
+    },
+    {
+      createdByProfileId: session.user.id,
+      orderFormSubmissions,
+    },
+  );
 
   revalidatePath("/tag");
   revalidatePath(`/auftrag/${v.projectId}`);

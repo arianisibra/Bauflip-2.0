@@ -1,6 +1,14 @@
 import Link from "next/link";
 import { getCurrentSession } from "@/lib/auth/session";
 import { listWeekTasks } from "@/lib/db/repository";
+import { Badge } from "@/components/ui/badge";
+import {
+  AlertCircle,
+  CalendarOff,
+  ChevronRight,
+  Clock,
+  MapPin,
+} from "lucide-react";
 
 function formatTimeRange(isoStart: string, isoEnd: string): string {
   const s = new Date(isoStart);
@@ -8,6 +16,13 @@ function formatTimeRange(isoStart: string, isoEnd: string): string {
   const fmt = (d: Date) =>
     `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
   return `${fmt(s)}–${fmt(e)}`;
+}
+
+function timeOfDayGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Guten Morgen";
+  if (h < 17) return "Guten Tag";
+  return "Guten Abend";
 }
 
 export default async function TodayPage() {
@@ -58,28 +73,34 @@ export default async function TodayPage() {
 
   return (
     <section className="flex flex-col gap-5 pb-4">
+      {/* Header */}
       <header className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Guten Tag, {session.profile.displayName}
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {timeOfDayGreeting()}, {session.profile.displayName}
         </p>
-        <h1 className="text-2xl font-semibold text-slate-900">Mein Tag</h1>
-        <p className="text-xs text-slate-500">
+        <h1 className="text-2xl font-semibold text-foreground">Mein Tag</h1>
+        <p className="text-xs text-muted-foreground">
           Heutige Einsätze. Für den Auftrag antippen.
         </p>
       </header>
 
+      {/* Today's tasks */}
       <section className="space-y-2">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Heutige Einsätze
         </h2>
         {todaysTasks.length === 0 ? (
           <div className="space-y-3">
-            <p className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-600">
-              Heute sind dir keine Einsätze zugewiesen.
-            </p>
+            <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-border bg-card px-4 py-8 text-center">
+              <CalendarOff className="size-8 text-muted-foreground/50" />
+              <p className="text-sm font-medium text-foreground">Keine Einsätze heute</p>
+              <p className="max-w-xs text-xs leading-relaxed text-muted-foreground">
+                Heute sind dir keine Einsätze zugewiesen. Geniesse den Tag!
+              </p>
+            </div>
             {upcomingTasks.length > 0 ? (
-              <div className="space-y-2 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-xs shadow-sm">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <div className="space-y-2 rounded-2xl border border-border bg-card px-4 py-4 shadow-sm">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                   Nächste Termine
                 </p>
                 <div className="space-y-2">
@@ -87,23 +108,27 @@ export default async function TodayPage() {
                     <Link
                       key={task.appointmentId}
                       href={`/auftrag/${task.projectId}`}
-                      className="block rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm active:scale-[0.99]"
+                      className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 shadow-sm transition-transform active:scale-[0.98]"
                     >
-                      <p className="text-[11px] font-medium text-slate-700">
-                        {new Date(task.startsAt).toLocaleDateString("de-CH", {
-                          weekday: "short",
-                          day: "2-digit",
-                          month: "2-digit",
-                        })}{" "}
-                        ·{" "}
-                        {new Date(task.startsAt).toLocaleTimeString("de-CH", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                      <p className="mt-0.5 line-clamp-2 text-xs text-slate-900">
-                        {task.projectTitle}
-                      </p>
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                          <Clock className="size-3" />
+                          {new Date(task.startsAt).toLocaleDateString("de-CH", {
+                            weekday: "short",
+                            day: "2-digit",
+                            month: "2-digit",
+                          })}{" "}
+                          ·{" "}
+                          {new Date(task.startsAt).toLocaleTimeString("de-CH", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                        <p className="mt-0.5 line-clamp-2 text-xs font-medium text-foreground">
+                          {task.projectTitle}
+                        </p>
+                      </div>
+                      <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
                     </Link>
                   ))}
                 </div>
@@ -112,44 +137,62 @@ export default async function TodayPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {todaysTasks.map((task) => (
-              <Link
-                key={task.appointmentId}
-                href={`/auftrag/${task.projectId}`}
-                className="block rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm active:scale-[0.99]"
-              >
-                <p className="flex items-center justify-between gap-2 text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                  <span>{formatTimeRange(task.startsAt, task.endsAt)}</span>
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[0.65rem] font-semibold ${
-                      task.kind === "besichtigung"
-                        ? "bg-amber-100 text-amber-800"
-                        : "bg-emerald-100 text-emerald-800"
-                    }`}
-                  >
-                    {task.kind === "besichtigung" ? "Besichtigung" : "Ausführung"}
-                  </span>
-                </p>
-                <p className="mt-1 line-clamp-2 text-sm font-semibold text-slate-900">
-                  {task.projectTitle}
-                </p>
-                {task.tenantDisplay || task.serviceAddressShort ? (
-                  <p className="mt-0.5 line-clamp-1 text-xs text-slate-600">
-                    {[task.tenantDisplay, task.serviceAddressShort].filter(Boolean).join(" · ")}
-                  </p>
-                ) : null}
-              </Link>
-            ))}
+            {todaysTasks.map((task) => {
+              const isBesichtigung = task.kind === "besichtigung";
+              return (
+                <Link
+                  key={task.appointmentId}
+                  href={`/auftrag/${task.projectId}`}
+                  className={`flex items-center gap-3 rounded-2xl border border-border border-l-4 bg-card px-4 py-4 shadow-sm transition-transform active:scale-[0.98] ${
+                    isBesichtigung ? "border-l-amber-400" : "border-l-emerald-400"
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                        <Clock className="size-3" />
+                        {formatTimeRange(task.startsAt, task.endsAt)}
+                      </p>
+                      <Badge
+                        variant="outline"
+                        className={
+                          isBesichtigung
+                            ? "border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-100"
+                            : "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
+                        }
+                      >
+                        {isBesichtigung ? "Besichtigung" : "Ausführung"}
+                      </Badge>
+                    </div>
+                    <p className="mt-1.5 line-clamp-2 text-sm font-semibold text-foreground">
+                      {task.projectTitle}
+                    </p>
+                    {task.tenantDisplay || task.serviceAddressShort ? (
+                      <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <MapPin className="size-3 shrink-0" />
+                        <span className="line-clamp-1">
+                          {[task.tenantDisplay, task.serviceAddressShort]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      </p>
+                    ) : null}
+                  </div>
+                  <ChevronRight className="size-5 shrink-0 text-muted-foreground/40" />
+                </Link>
+              );
+            })}
           </div>
         )}
       </section>
 
+      {/* Open reports */}
       {openRapportProjects.length > 0 ? (
         <section className="space-y-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Offene Einsätze
           </h2>
-          <p className="text-[11px] text-slate-500">
+          <p className="text-[11px] text-muted-foreground">
             Diese Aufträge sind noch in Arbeit.
           </p>
           <div className="space-y-2">
@@ -157,16 +200,20 @@ export default async function TodayPage() {
               <Link
                 key={item.projectId}
                 href={`/auftrag/${item.projectId}`}
-                className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm active:scale-[0.99]"
+                className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-sm transition-transform active:scale-[0.98]"
               >
-                <span className="line-clamp-1 text-slate-900">{item.projectTitle}</span>
-                <span
-                  className={`ml-3 inline-flex items-center rounded-full px-2 py-0.5 text-[0.65rem] font-semibold ${
-                    item.isOverdue ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-700"
-                  }`}
-                >
-                  {item.isOverdue ? "Überfällig" : "Offen"}
-                </span>
+                <span className="line-clamp-1 text-sm text-foreground">{item.projectTitle}</span>
+                <div className="flex shrink-0 items-center gap-2">
+                  {item.isOverdue ? (
+                    <Badge variant="destructive" className="gap-1">
+                      <AlertCircle className="size-3" />
+                      Überfällig
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline">Offen</Badge>
+                  )}
+                  <ChevronRight className="size-4 text-muted-foreground/40" />
+                </div>
               </Link>
             ))}
           </div>

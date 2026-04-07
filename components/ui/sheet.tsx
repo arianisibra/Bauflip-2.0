@@ -63,6 +63,7 @@ export function Sheet({ open, onOpenChange, title, description, children, footer
             side === "left" ? "left-0 border-r" : "right-0 border-l",
             className,
           )}
+          {...(!description ? { "aria-describedby": undefined } : {})}
           onPointerDownOutside={(event) => {
             if (isPointerOnPortaledSelect(event.target)) {
               event.preventDefault();

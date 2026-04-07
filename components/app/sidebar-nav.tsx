@@ -4,14 +4,17 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ComponentType } from "react";
-import { Cog, FolderKanban, Users } from "lucide-react";
+import { CalendarDays, ClipboardList, Cog, FolderKanban, UserRound, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SidebarItem } from "@/lib/domain/types";
 
 const iconByKey: Record<SidebarItem["key"], ComponentType<{ className?: string }>> = {
   projekte: FolderKanban,
   mitarbeiter: Users,
+  bestellformulare: ClipboardList,
   einstellungen: Cog,
+  mein_tag: CalendarDays,
+  monteur_profil: UserRound,
 };
 
 type SidebarNavProps = {
@@ -41,6 +44,7 @@ export function SidebarNav({ items }: SidebarNavProps) {
           width={120}
           height={32}
           className="h-8 w-auto"
+          style={{ width: "auto" }}
           priority
         />
       </div>

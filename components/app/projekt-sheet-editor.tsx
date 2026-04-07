@@ -309,11 +309,33 @@ export function ProjektSheetEditor({
 
       <section className="border-t pt-4">
         <h3 className="mb-2 text-sm font-semibold">Letzte Rapporte</h3>
-        <ul className="space-y-2 text-sm">
+        <ul className="space-y-3 text-sm">
           {core.reports.map((r) => (
-            <li key={r.id} className="rounded border px-2 py-1">
-              <span className="font-medium">{r.outcome === "schaden_behoben" ? "Behoben" : "Aufgenommen"}</span>
-              {r.summary ? <span className="text-muted-foreground"> — {r.summary}</span> : null}
+            <li key={r.id} className="rounded border px-2 py-2">
+              <div>
+                <span className="font-medium">{r.outcome === "schaden_behoben" ? "Behoben" : "Aufgenommen"}</span>
+                {r.summary ? <span className="text-muted-foreground"> — {r.summary}</span> : null}
+              </div>
+              {r.workDescription?.trim() ? (
+                <p className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap">{r.workDescription}</p>
+              ) : null}
+              {r.orderForms.length > 0 ? (
+                <ul className="mt-2 space-y-2 border-t border-border/60 pt-2 text-xs">
+                  {r.orderForms.map((of) => (
+                    <li key={`${r.id}-${of.templateId}`} className="rounded-md bg-muted/30 px-2 py-1.5">
+                      <p className="font-medium text-foreground">{of.templateName}</p>
+                      <dl className="mt-1 space-y-0.5">
+                        {of.fields.map((f) => (
+                          <div key={f.key} className="flex flex-wrap gap-x-2">
+                            <dt className="text-muted-foreground">{f.label}:</dt>
+                            <dd className="font-medium">{of.values[f.key]?.trim() || "—"}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </li>
           ))}
         </ul>

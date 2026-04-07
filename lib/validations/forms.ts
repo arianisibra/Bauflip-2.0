@@ -34,6 +34,14 @@ export const technicianReportSchema = z.object({
   summary: z.string().optional(),
   measurementsJson: z.string().optional(),
   workDescription: z.string().optional(),
+  orderForms: z
+    .array(
+      z.object({
+        templateId: z.string().uuid(),
+        values: z.record(z.string(), z.string()),
+      }),
+    )
+    .optional(),
 });
 
 export const profileSettingsSchema = z.object({

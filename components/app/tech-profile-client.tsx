@@ -1,6 +1,9 @@
 "use client";
 
 import { useLayoutEffect, useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Moon, Sun } from "lucide-react";
 
 type Props = {
   displayName: string | null;
@@ -19,6 +22,14 @@ function applyTheme(theme: Theme) {
   } else {
     root.classList.remove("dark");
   }
+}
+
+function initials(name: string | null): string {
+  if (!name) return "M";
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "M";
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return `${parts[0]![0]!}${parts[parts.length - 1]![0]!}`.toUpperCase();
 }
 
 export function TechProfileClient({ displayName, email }: Props) {
@@ -45,61 +56,84 @@ export function TechProfileClient({ displayName, email }: Props) {
 
   return (
     <section className="flex flex-col gap-5 pb-4">
-      <header className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Profil
-        </p>
-        <h1 className="text-2xl font-semibold text-slate-900">
-          {displayName || "Monteur"}
-        </h1>
-        <p className="text-xs text-slate-500">
-          Deine persönlichen Angaben und Anzeige-Einstellungen.
-        </p>
+      {/* Header with avatar */}
+      <header className="flex items-center gap-4">
+        <div className="flex size-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary ring-2 ring-primary/20">
+          {initials(displayName)}
+        </div>
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold text-foreground">
+            {displayName || "Monteur"}
+          </h1>
+          <div className="mt-0.5 flex items-center gap-2">
+            <Badge
+              variant="outline"
+              className="border-primary/25 bg-primary/10 text-primary"
+            >
+              Monteur
+            </Badge>
+          </div>
+        </div>
       </header>
 
-      <div className="space-y-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm shadow-sm">
-        <div className="flex items-center justify-between">
-          <span className="text-slate-600">Rolle</span>
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-800">
-            Monteur
-          </span>
-        </div>
-        {email ? (
+      {/* Info card */}
+      <Card className="border-border shadow-sm">
+        <CardContent className="space-y-3 pt-4">
+          {email ? (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">E-Mail</span>
+              <span className="text-xs font-medium text-foreground">{email}</span>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between">
-            <span className="text-slate-600">E-Mail</span>
-            <span className="text-xs font-medium text-slate-800">{email}</span>
+            <span className="text-sm text-muted-foreground">Rolle</span>
+            <Badge
+              variant="outline"
+              className="border-primary/25 bg-primary/10 font-medium text-primary"
+            >
+              Monteur
+            </Badge>
           </div>
-        ) : null}
-      </div>
+        </CardContent>
+      </Card>
 
-      <div className="space-y-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Anzeige
-        </p>
-        <button
-          type="button"
-          onClick={toggleTheme}
-          className="flex w-full items-center justify-between rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-800 active:scale-[0.99]"
-        >
-          <span>Dark Mode</span>
-          <span
-            className={`inline-flex h-5 w-9 items-center rounded-full p-0.5 ${
-              theme === "dark" ? "bg-sky-600" : "bg-slate-300"
-            }`}
+      {/* Display settings card */}
+      <Card className="border-border shadow-sm">
+        <CardContent className="space-y-3 pt-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Anzeige
+          </p>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="flex w-full items-center justify-between rounded-xl border border-border bg-muted/20 px-4 py-3 text-sm font-medium text-foreground transition-colors active:scale-[0.99] hover:bg-muted/40"
           >
+            <span className="flex items-center gap-2">
+              {theme === "dark" ? (
+                <Moon className="size-4 text-primary" />
+              ) : (
+                <Sun className="size-4 text-muted-foreground" />
+              )}
+              Dark Mode
+            </span>
             <span
-              className={`h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                theme === "dark" ? "translate-x-4" : ""
+              className={`inline-flex h-6 w-10 items-center rounded-full p-0.5 transition-colors ${
+                theme === "dark" ? "bg-primary" : "bg-muted"
               }`}
-            />
-          </span>
-        </button>
-        <p className="text-[11px] text-slate-500">
-          Gilt auf diesem Gerät und Browser. Weitere Einstellungen (Sprache,
-          Benachrichtigungen) können später ergänzt werden.
-        </p>
-      </div>
+            >
+              <span
+                className={`size-5 rounded-full bg-card shadow-sm transition-transform ${
+                  theme === "dark" ? "translate-x-4" : ""
+                }`}
+              />
+            </span>
+          </button>
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Gilt auf diesem Gerät und Browser. Weitere Einstellungen (Sprache,
+            Benachrichtigungen) können später ergänzt werden.
+          </p>
+        </CardContent>
+      </Card>
     </section>
   );
 }
-

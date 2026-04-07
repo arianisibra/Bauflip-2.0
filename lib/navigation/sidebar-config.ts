@@ -3,13 +3,21 @@ import type { AppPageKey, RoleType, SidebarItem } from "@/lib/domain/types";
 export const sidebarItems: SidebarItem[] = [
   { key: "projekte", label: "Projekte", href: "/projekte", section: "navigation" },
   { key: "mitarbeiter", label: "Mitarbeiter", href: "/mitarbeiter", section: "navigation" },
+  {
+    key: "bestellformulare",
+    label: "Bestellformulare",
+    href: "/bestellformulare",
+    section: "navigation",
+  },
   { key: "einstellungen", label: "Einstellungen", href: "/einstellungen", section: "system" },
+  { key: "mein_tag", label: "Mein Tag", href: "/tag", section: "navigation" },
+  { key: "monteur_profil", label: "Profil", href: "/profil", section: "system" },
 ];
 
 const roleVisibility: Record<RoleType, AppPageKey[]> = {
-  admin: sidebarItems.map((item) => item.key),
+  admin: ["projekte", "mitarbeiter", "bestellformulare", "einstellungen"],
   office: ["projekte", "mitarbeiter", "einstellungen"],
-  technician: ["projekte", "einstellungen"],
+  technician: ["mein_tag", "monteur_profil"],
 };
 
 export function getVisibleSidebarItems(role: RoleType) {
