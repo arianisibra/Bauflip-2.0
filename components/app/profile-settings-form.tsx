@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import { saveProfileSettingsAction } from "@/app/(app)/einstellungen/actions";
 import { BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
@@ -36,6 +37,12 @@ export function ProfileSettingsForm({
   canEditCompanySettings,
   organizationBilling,
 }: ProfileSettingsFormProps) {
+  const [displayName, setDisplayName] = useState(profile.displayName);
+  const [companyName, setCompanyName] = useState(organizationBilling?.companyName ?? "");
+  const [calendarColor, setCalendarColor] = useState(() =>
+    resolveCalendarColor(profile.calendarColor, profile.id),
+  );
+
   return (
     <Card className="overflow-hidden border-border/70 shadow-sm">
       <CardHeader className="border-b border-border/60 bg-muted/30 px-5 py-5 sm:px-6">
@@ -112,13 +119,28 @@ export function ProfileSettingsForm({
                   <Label htmlFor="displayName" className="text-sm font-medium">
                     Anzeigename
                   </Label>
-                  <Input id="displayName" name="displayName" defaultValue={profile.displayName} required className="h-10" />
+                  <Input
+                    id="displayName"
+                    name="displayName"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    required
+                    className="h-10"
+                  />
                 </div>
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="email" className="text-sm font-medium">
                     E-Mail
                   </Label>
-                  <Input id="email" name="email" type="email" defaultValue={profile.email} disabled readOnly className="h-10 bg-muted/50" />
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    value={profile.email}
+                    disabled
+                    readOnly
+                    className="h-10 bg-muted/50"
+                  />
                 </div>
               </div>
               </div>
@@ -179,7 +201,8 @@ export function ProfileSettingsForm({
                       <Input
                         id="companyName"
                         name="companyName"
-                        defaultValue={organizationBilling?.companyName || ""}
+                        value={companyName}
+                        onChange={(e) => setCompanyName(e.target.value)}
                         className="h-10"
                         disabled={!canEditCompanySettings}
                         placeholder="Firmenname"
@@ -202,7 +225,8 @@ export function ProfileSettingsForm({
                       name="calendarColor"
                       type="color"
                       className="h-11 w-16 cursor-pointer rounded-lg border border-input bg-background shadow-sm"
-                      defaultValue={resolveCalendarColor(profile.calendarColor, profile.id)}
+                      value={calendarColor}
+                      onChange={(e) => setCalendarColor(e.target.value)}
                     />
                     <span className="max-w-[14rem] text-xs leading-snug text-muted-foreground">
                       In der Wochen-Terminleiste und Team-Legende erkennbar.

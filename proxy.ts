@@ -8,9 +8,10 @@ function withSecurityHeaders(res: NextResponse): NextResponse {
   const isProd = process.env.NODE_ENV === "production";
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  // camera=(self): Monteur-Fotos per <input capture> / Kamera-API auf derselben Origin; Rest gesperrt.
   res.headers.set(
     "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+    "camera=(self), microphone=(), geolocation=(), payment=(), usb=()",
   );
   res.headers.set("X-Frame-Options", "SAMEORIGIN");
   // Cloudflare Turnstile: Script + iframe von challenges.cloudflare.com (sonst leeres Widget trotz Site-Key).
@@ -62,7 +63,7 @@ function mapRole(raw: string | null | undefined) {
   return "office";
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const isStaticAsset =

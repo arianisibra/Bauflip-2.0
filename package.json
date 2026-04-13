@@ -9,6 +9,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "bootstrap:first-admin": "node --env-file=.env.local scripts/bootstrap-first-admin.mts",
+    "db:login": "npx supabase login",
+    "db:link": "npx supabase link",
     "db:push": "npx supabase db push",
     "db:push:dry-run": "npx supabase db push --dry-run"
   },

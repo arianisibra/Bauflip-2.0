@@ -10,6 +10,7 @@ import {
   getProjectCore,
   updateProject,
 } from "@/lib/db/repository";
+import type { ProjectStatus } from "@/lib/domain/types";
 import { projectStammdatenUpdateSchema, appointmentSchema } from "@/lib/validations/forms";
 
 function nz(s: string | undefined | null): string | null {
@@ -104,6 +105,15 @@ export async function deleteProjectAction(projectId: string) {
     throw new Error("Projekt-ID fehlt.");
   }
   await deleteProject(projectId);
+  revalidatePath("/projekte");
+}
+
+export async function updateProjectStatusAction(projectId: string, status: ProjectStatus) {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
+    throw new Error("Keine Berechtigung.");
+  }
+  await updateProject(projectId, { status });
   revalidatePath("/projekte");
 }
 

@@ -2,9 +2,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
 import { listWeekTasks } from "@/lib/db/repository";
+import type { WeekTaskItem } from "@/lib/domain/types";
+import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
+import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 import { todayKeySwiss, currentHourSwiss } from "@/lib/date/swiss";
 import { MapsNavButton } from "@/components/app/maps-nav-button";
-import { Badge } from "@/components/ui/badge";
 import {
   AlertCircle,
   CalendarOff,
@@ -20,6 +23,15 @@ function formatTimeRange(isoStart: string, isoEnd: string): string {
   const fmt = (d: Date) =>
     d.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Zurich" });
   return `${fmt(s)}–${fmt(e)}`;
+}
+
+function ProjectStatusBadge({ status }: { status: string }) {
+  const label = projectStatusLabels[status as keyof typeof projectStatusLabels] ?? status;
+  return (
+    <Badge variant="outline" className={cn("px-1.5 py-0.5 text-[10px] font-medium", projectStatusBadgeClassName(status))}>
+      {label}
+    </Badge>
+  );
 }
 
 function timeOfDayGreeting(): string {
@@ -39,16 +51,16 @@ export default async function TodayPage() {
 
   const taskDateKey = (iso: string) => todayKeySwiss(new Date(iso));
 
+  const isTechnicianView = session.role === "technician";
+  const visibleTask = (t: WeekTaskItem) =>
+    isTechnicianView ? t.assignedTechnicianId === session.user.id : true;
+
   const todaysTasks = tasks
-    .filter((t) => t.assignedTechnicianId === session.user.id && taskDateKey(t.startsAt) === todayKey)
+    .filter((t) => visibleTask(t) && taskDateKey(t.startsAt) === todayKey)
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
 
   const upcomingTasks = tasks
-    .filter(
-      (t) =>
-        t.assignedTechnicianId === session.user.id &&
-        taskDateKey(t.startsAt) > todayKey,
-    )
+    .filter((t) => visibleTask(t) && taskDateKey(t.startsAt) > todayKey)
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
     .slice(0, 3);
 
@@ -57,7 +69,7 @@ export default async function TodayPage() {
     { projectId: string; projectTitle: string; isOverdue: boolean }
   >();
   for (const task of tasks) {
-    if (task.assignedTechnicianId !== session.user.id) continue;
+    if (!visibleTask(task)) continue;
     if (task.projectStatus !== "einsatz_offen") continue;
     const isOverdue = new Date(task.endsAt) < now;
     if (!openRapportByProject.has(task.projectId)) {
@@ -99,7 +111,9 @@ export default async function TodayPage() {
               <CalendarOff className="size-8 text-muted-foreground/50" />
               <p className="text-sm font-medium text-foreground">Keine Einsätze heute</p>
               <p className="max-w-xs text-xs leading-relaxed text-muted-foreground">
-                Heute sind dir keine Einsätze zugewiesen. Geniesse den Tag!
+                {isTechnicianView
+                  ? "Heute sind dir keine Einsätze zugewiesen. Geniesse den Tag!"
+                  : "Heute sind keine Termine in der Übersicht. Geniesse den Tag!"}
               </p>
             </div>
             {upcomingTasks.length > 0 ? (
@@ -164,8 +178,8 @@ export default async function TodayPage() {
                         <Clock className="size-3" />
                         {formatTimeRange(task.startsAt, task.endsAt)}
                       </p>
-                      <div className="flex items-center gap-1.5">
-                        {isDone && (
+                      <div className="flex flex-col items-end gap-1">
+                        {isDone ? (
                           <Badge
                             variant="outline"
                             className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
@@ -173,18 +187,20 @@ export default async function TodayPage() {
                             <CheckCircle2 className="size-3" />
                             Erledigt
                           </Badge>
-                        )}
-                        {!isDone && (
-                          <Badge
-                            variant="outline"
-                            className={
-                              isBesichtigung
-                                ? "border-orange-500/30 bg-orange-500/10 text-orange-900 dark:text-orange-200"
-                                : "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
-                            }
-                          >
-                            {isBesichtigung ? "Besichtigung" : "Ausführung"}
-                          </Badge>
+                        ) : (
+                          <>
+                            <Badge
+                              variant="outline"
+                              className={
+                                isBesichtigung
+                                  ? "border-orange-500/30 bg-orange-500/10 text-orange-900 dark:text-orange-200"
+                                  : "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
+                              }
+                            >
+                              {isBesichtigung ? "Besichtigung" : "Ausführung"}
+                            </Badge>
+                            <ProjectStatusBadge status={task.projectStatus} />
+                          </>
                         )}
                       </div>
                     </div>

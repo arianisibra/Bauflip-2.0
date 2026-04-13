@@ -4,21 +4,25 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { ProjectCore } from "@/lib/db/repository";
-import type { TechnicianReport, UserProfile } from "@/lib/domain/types";
-import { projectStatusLabels } from "@/lib/domain/types";
+import type { ProjectStatus, TechnicianReport, UserProfile } from "@/lib/domain/types";
+import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
+import { cn } from "@/lib/utils";
 import {
   addAppointmentAction,
   deleteAppointmentAction,
   deleteReportAction,
   getProjectSheetDataAction,
   updateProjectStammdatenAction,
+  updateProjectStatusAction,
 } from "@/app/(app)/projekte/actions";
 import { uploadProjectReportFileAction } from "@/app/(app)/actions";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  ArrowRight,
   CheckCircle2,
   ChevronDown,
   ClipboardList,
@@ -45,14 +49,21 @@ function buildReportText(r: TechnicianReport): string {
     lines.push(r.measurementsJson);
     lines.push("");
   }
-  for (const of_ of r.orderForms) {
-    lines.push(`--- ${of_.templateName} ---`);
+  r.orderForms.forEach((of_, ofIdx) => {
+    const sameTplCount = r.orderForms.filter((x) => x.templateId === of_.templateId).length;
+    const positionInTpl =
+      r.orderForms.slice(0, ofIdx).filter((x) => x.templateId === of_.templateId).length + 1;
+    const head =
+      sameTplCount > 1
+        ? `--- ${of_.templateName} (Position ${positionInTpl}) ---`
+        : `--- ${of_.templateName} ---`;
+    lines.push(head);
     for (const f of of_.fields) {
       const val = of_.values[f.key]?.trim() || "—";
       lines.push(`  ${f.label}: ${val}`);
     }
     lines.push("");
-  }
+  });
   return lines.join("\n");
 }
 
@@ -144,12 +155,21 @@ function ReportCard({
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Bestellformulare
               </p>
-              {r.orderForms.map((of_) => (
+              {r.orderForms.map((of_, ofIdx) => {
+                const sameTplCount = r.orderForms.filter((x) => x.templateId === of_.templateId).length;
+                const positionInTpl =
+                  r.orderForms.slice(0, ofIdx).filter((x) => x.templateId === of_.templateId).length + 1;
+                const positionLabel =
+                  sameTplCount > 1 ? ` · Position ${positionInTpl}` : "";
+                return (
                 <div
-                  key={`${r.id}-${of_.templateId}`}
+                  key={`${r.id}-${of_.templateId}-${ofIdx}`}
                   className="rounded-md border border-border/60 bg-muted/20 px-2.5 py-2"
                 >
-                  <p className="text-xs font-semibold text-foreground">{of_.templateName}</p>
+                  <p className="text-xs font-semibold text-foreground">
+                    {of_.templateName}
+                    <span className="font-normal text-muted-foreground">{positionLabel}</span>
+                  </p>
                   <dl className="mt-1.5 space-y-1">
                     {of_.fields.map((f) => (
                       <div key={f.key} className="flex items-baseline gap-2 text-xs">
@@ -161,7 +181,8 @@ function ReportCard({
                     ))}
                   </dl>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -224,6 +245,76 @@ function ReportCard({
   );
 }
 
+type PipelineAction = { label: string; nextStatus: ProjectStatus };
+
+const STATUS_PIPELINE: Partial<Record<ProjectStatus, PipelineAction[]>> = {
+  offerte_senden:    [{ label: "Offerte gesendet", nextStatus: "offerte_gesendet" }],
+  offerte_gesendet:  [{ label: "Offerte genehmigt", nextStatus: "offerte_genehmigt" }],
+  offerte_genehmigt: [{ label: "Material bestellen", nextStatus: "bestellen" }, { label: "Direkt abrechnen", nextStatus: "abrechnen" }],
+  bestellen:         [{ label: "Bestellt", nextStatus: "bestellt" }],
+  bestellt:          [{ label: "Material eingetroffen", nextStatus: "montagebereit" }],
+  abholbereit:       [{ label: "In Werkstatt", nextStatus: "werkstatt" }],
+  werkstatt:         [{ label: "Werkstatt fertig", nextStatus: "montagebereit" }],
+  abklaeren:         [{ label: "Offerte senden", nextStatus: "offerte_senden" }, { label: "Material bestellen", nextStatus: "bestellen" }],
+  subunternehmer:    [{ label: "Abrechnen", nextStatus: "abrechnen" }],
+  abrechnen:         [{ label: "Abgeschlossen", nextStatus: "abgeschlossen" }],
+};
+
+function StatusPipeline({
+  projectId,
+  currentStatus,
+  canEdit,
+  onStatusChanged,
+}: {
+  projectId: string;
+  currentStatus: ProjectStatus;
+  canEdit: boolean;
+  onStatusChanged: () => void;
+}) {
+  const [pending, setPending] = useState(false);
+  const actions = STATUS_PIPELINE[currentStatus] ?? [];
+  const label = projectStatusLabels[currentStatus] ?? currentStatus;
+
+  const advance = async (nextStatus: ProjectStatus) => {
+    setPending(true);
+    try {
+      await updateProjectStatusAction(projectId, nextStatus);
+      onStatusChanged();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-border bg-muted/20 px-3 py-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Status:</span>
+        <Badge variant="outline" className={cn("text-xs font-medium", projectStatusBadgeClassName(currentStatus))}>
+          {label}
+        </Badge>
+        {canEdit && actions.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {actions.map((action) => (
+              <button
+                key={action.nextStatus}
+                type="button"
+                disabled={pending}
+                onClick={() => advance(action.nextStatus)}
+                className="flex items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-2 py-0.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
+              >
+                <ArrowRight className="size-3" />
+                {action.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function ProjektSheetEditor({
   projectId,
   open,
@@ -270,6 +361,12 @@ export function ProjektSheetEditor({
 
   return (
     <div className="flex max-h-[min(80vh,720px)] flex-col gap-6 overflow-y-auto pr-1">
+      <StatusPipeline
+        projectId={projectId}
+        currentStatus={p.status}
+        canEdit={canEdit}
+        onStatusChanged={async () => { await load(); router.refresh(); }}
+      />
       <form
         className="grid gap-3 sm:grid-cols-2"
         onSubmit={async (e) => {
@@ -312,7 +409,7 @@ export function ProjektSheetEditor({
           <Input id="title" name="title" defaultValue={p.title} disabled={!canEdit} required />
         </div>
         <div className="text-xs text-muted-foreground sm:col-span-2">
-          {p.referenceCode ? `Auftrag ${p.referenceCode}` : "Ohne Nummer"} · Status: {projectStatusLabels[p.status]}
+          {p.referenceCode ? `Auftrag ${p.referenceCode}` : "Ohne Nummer"}
         </div>
 
         <div className="space-y-1">
@@ -373,7 +470,7 @@ export function ProjektSheetEditor({
         </div>
 
         <div className="space-y-1 sm:col-span-2">
-          <Label>Monteur (Vorschlag)</Label>
+          <Label>Zuständige Person (Vorschlag)</Label>
           <select
             name="nextOwnerUserId"
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
@@ -435,7 +532,7 @@ export function ProjektSheetEditor({
               <Input name="endsAt" type="datetime-local" required />
             </div>
             <div className="space-y-1 sm:col-span-2">
-              <Label>Monteur</Label>
+              <Label>Zuständige Person</Label>
               <select
                 name="assignedTechnicianId"
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
@@ -454,28 +551,44 @@ export function ProjektSheetEditor({
           </form>
 
           <ul className="mt-3 space-y-2 text-sm">
-            {core.appointments.map((a) => (
-              <li key={a.id} className="flex items-center justify-between gap-2 rounded border px-2 py-1">
-                <span>
-                  {new Date(a.startsAt).toLocaleString("de-CH", { timeZone: "Europe/Zurich" })} – {new Date(a.endsAt).toLocaleTimeString("de-CH", { timeZone: "Europe/Zurich" })}
-                </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-destructive"
-                  onClick={async () => {
-                    if (!window.confirm("Termin löschen?")) return;
-                    await deleteAppointmentAction(a.id);
-                    toast.success("Termin gelöscht");
-                    await load();
-                    router.refresh();
-                  }}
-                >
-                  ×
-                </Button>
-              </li>
-            ))}
+            {core.appointments.map((a) => {
+              const assignedPerson = a.assignedTechnicianId
+                ? technicians.find((t) => t.id === a.assignedTechnicianId)
+                : null;
+              return (
+                <li key={a.id} className="rounded-lg border border-border bg-muted/20 px-3 py-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 space-y-0.5">
+                      <p className="text-xs font-semibold text-foreground">
+                        {new Date(a.startsAt).toLocaleString("de-CH", { timeZone: "Europe/Zurich" })} – {new Date(a.endsAt).toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Zurich" })}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {a.kind === "besichtigung" ? "Besichtigung" : "Ausführung"}
+                        {assignedPerson ? ` · ${assignedPerson.displayName}` : " · Keine Person zugewiesen"}
+                      </p>
+                      {a.planningNotes?.trim() ? (
+                        <p className="text-[11px] text-muted-foreground italic">{a.planningNotes}</p>
+                      ) : null}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0 text-destructive hover:text-destructive"
+                      onClick={async () => {
+                        if (!window.confirm("Termin löschen?")) return;
+                        await deleteAppointmentAction(a.id);
+                        toast.success("Termin gelöscht");
+                        await load();
+                        router.refresh();
+                      }}
+                    >
+                      ×
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </section>
       ) : null}

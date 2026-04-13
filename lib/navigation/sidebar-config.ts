@@ -11,13 +11,14 @@ export const sidebarItems: SidebarItem[] = [
     section: "navigation",
   },
   { key: "einstellungen", label: "Einstellungen", href: "/einstellungen", section: "system" },
-  { key: "mein_tag", label: "Mein Tag", href: "/tag", section: "navigation" },
+  /** Eigener Abschnitt in der Sidebar (zwischen Navigation und System), damit Büro/Admin die Feld-Ansicht finden. */
+  { key: "mein_tag", label: "Mein Tag", href: "/tag", section: "einsatz" },
   { key: "monteur_profil", label: "Profil", href: "/profil", section: "system" },
 ];
 
 const roleVisibility: Record<RoleType, AppPageKey[]> = {
-  admin: ["projekte", "kalender", "mitarbeiter", "bestellformulare", "einstellungen"],
-  office: ["projekte", "kalender", "mitarbeiter", "einstellungen"],
+  admin: ["projekte", "kalender", "mitarbeiter", "bestellformulare", "einstellungen", "mein_tag"],
+  office: ["projekte", "kalender", "mitarbeiter", "einstellungen", "mein_tag"],
   technician: ["mein_tag", "monteur_profil"],
 };
 

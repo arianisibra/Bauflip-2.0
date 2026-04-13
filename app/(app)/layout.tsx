@@ -19,7 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const items = getVisibleSidebarItems(role);
 
   return (
-    <div className="h-screen overflow-hidden bg-muted/40 dark:bg-background">
+    <div className="h-screen overflow-hidden bg-muted/40 dark:bg-muted/35">
       <div className="flex h-full">
         <div className="overflow-hidden">
           <SidebarNav items={items} />

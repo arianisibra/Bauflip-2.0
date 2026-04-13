@@ -4,7 +4,9 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { ProjectCore } from "@/lib/db/repository";
-import type { OrderFormTemplate, ProjectAttachment } from "@/lib/domain/types";
+import type { OrderFormTemplate, ProjectAttachment, RapportNextStep } from "@/lib/domain/types";
+import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
+import { cn } from "@/lib/utils";
 import { formatServiceAddress, managementLabel, tenantLabel } from "@/lib/tech/bundle-display";
 import { submitTechnicianReportAction } from "@/app/(tech)/actions";
 import { uploadProjectReportFileAction, updateAttachmentNotesAction, deleteAttachmentAction } from "@/app/(app)/actions";
@@ -26,13 +28,18 @@ import {
   ClipboardList,
   Clock,
   FileText,
+  HelpCircle,
   ImagePlus,
   KeyRound,
   MapPin,
   Navigation,
   Paperclip,
+  ShoppingCart,
   Trash2,
+  Truck,
   User,
+  Users,
+  Wrench,
 } from "lucide-react";
 
 function buildMapsUrl(p: { serviceStreet: string | null; servicePostalCode: string | null; serviceCity: string | null }): string | null {
@@ -41,14 +48,27 @@ function buildMapsUrl(p: { serviceStreet: string | null; servicePostalCode: stri
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(parts.join(", "))}`;
 }
 
-function orderFormsPayloadFromFormData(fd: FormData, templates: OrderFormTemplate[]) {
-  return templates.map((t) => {
-    const values: Record<string, string> = {};
-    for (const f of t.fields) {
-      values[f.key] = String(fd.get(`orderForm__${t.id}__${f.key}`) ?? "");
-    }
-    return { templateId: t.id, values };
-  });
+function AuftragSectionDivider() {
+  return <div className="my-4 h-px w-full bg-border" aria-hidden />;
+}
+
+function orderFormsPayloadFromFormData(
+  fd: FormData,
+  templates: OrderFormTemplate[],
+  lines: { templateId: string; lineId: string }[],
+) {
+  const byTpl = new Map(templates.map((t) => [t.id, t]));
+  return lines
+    .map(({ templateId, lineId }) => {
+      const t = byTpl.get(templateId);
+      if (!t) return null;
+      const values: Record<string, string> = {};
+      for (const f of t.fields) {
+        values[f.key] = String(fd.get(`orderForm__${templateId}__${lineId}__${f.key}`) ?? "");
+      }
+      return { templateId, values };
+    })
+    .filter((x): x is { templateId: string; values: Record<string, string> } => x != null);
 }
 
 function InfoRow({
@@ -75,6 +95,83 @@ function InfoRow({
   );
 }
 
+type NextStepOption = {
+  value: RapportNextStep;
+  label: string;
+  description: string;
+  icon: typeof FileText;
+};
+
+const RAPPORT_NEXT_STEP_OPTIONS_ERSTBESUCH: NextStepOption[] = [
+  { value: "offerte_senden", label: "Offerte senden", description: "Masse aufgenommen, Offerte erstellen", icon: FileText },
+  { value: "bestellen", label: "Material bestellen", description: "Direkt bestellen, keine Offerte nötig", icon: ShoppingCart },
+  { value: "abklaeren", label: "Abklärungen nötig", description: "Weitere Informationen erforderlich", icon: HelpCircle },
+  { value: "abholbereit", label: "Werkstatt nötig", description: "Gerät muss in die Werkstatt", icon: Truck },
+  { value: "subunternehmer", label: "Subunternehmer", description: "Subunternehmer beauftragen", icon: Users },
+];
+
+const RAPPORT_NEXT_STEP_OPTIONS_MONTAGE: NextStepOption[] = [
+  { value: "einsatz_offen", label: "Weiterer Termin nötig", description: "Montage nicht abgeschlossen, Büro plant neuen Termin", icon: Clock },
+  { value: "abholbereit", label: "Werkstatt nötig", description: "Gerät muss in die Werkstatt", icon: Truck },
+  { value: "subunternehmer", label: "Subunternehmer", description: "Subunternehmer beauftragen", icon: Users },
+];
+
+/** Kontext-Hilfen unter dem Status-Badge (Farben: projectStatusBadgeClassNames in types). */
+const STATUS_CONFIG: Record<string, { description: string }> = {
+  offen: { description: "" },
+  termin_geplant: {
+    description: "Unten bei «Einsatz» Rapport ausfüllen oder Abschluss melden.",
+  },
+  einsatz_offen: { description: "Bestandesaufnahme oder Reparatur durchführen" },
+  offerte_senden: { description: "Büro erstellt Offerte" },
+  offerte_gesendet: { description: "Warte auf Kundenentscheid" },
+  offerte_genehmigt: { description: "Offerte akzeptiert — Material bestellen" },
+  bestellen: { description: "Büro bestellt Material" },
+  bestellt: { description: "Material wurde bestellt — warte auf Lieferung" },
+  montagebereit: { description: "Material eingetroffen — Montage ausführen" },
+  abholbereit: { description: "Gerät bereit zur Abholung für Werkstatt" },
+  werkstatt: { description: "Gerät in Werkstatt — Reparatur / Umbau" },
+  abklaeren: { description: "Weitere Abklärungen ausstehend" },
+  abrechnen: { description: "Arbeit abgeschlossen — Büro stellt Rechnung" },
+  subunternehmer: { description: "Subunternehmer in Bearbeitung" },
+  abgeschlossen: { description: "Auftrag vollständig abgeschlossen" },
+};
+
+function StatusBadge({ status }: { status: string }) {
+  const label = projectStatusLabels[status as keyof typeof projectStatusLabels] ?? status;
+  const cfg = STATUS_CONFIG[status];
+  if (!cfg && !(status in projectStatusLabels)) {
+    return <Badge variant="outline" className="text-[11px]">{status}</Badge>;
+  }
+  return (
+    <Badge variant="outline" className={cn("gap-1 text-[11px]", projectStatusBadgeClassName(status))}>
+      {status === "abgeschlossen" ? <CheckCircle2 className="size-3" /> : null}
+      {label}
+    </Badge>
+  );
+}
+
+function statusStandBannerVisible(status: string): boolean {
+  const cfg = STATUS_CONFIG[status];
+  return Boolean(cfg?.description);
+}
+
+function StatusContextBanner({ status }: { status: string }) {
+  const cfg = STATUS_CONFIG[status];
+  if (!cfg?.description) return null;
+  return (
+    <div className="flex items-start gap-2.5 rounded-xl border border-border bg-muted/20 px-3 py-2.5">
+      <Wrench className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Stand: {projectStatusLabels[status as keyof typeof projectStatusLabels] ?? status}
+        </p>
+        <p className="mt-0.5 text-xs text-foreground">{cfg.description}</p>
+      </div>
+    </div>
+  );
+}
+
 export function MonteurAuftragClient({
   core,
   orderFormTemplates = [],
@@ -84,7 +181,20 @@ export function MonteurAuftragClient({
 }) {
   const router = useRouter();
   const p = core.project;
+
+  // Montage-Kontext: 2./3. Termin (Material wurde bereits bestellt/vorhanden, oder Werkstattbesuch)
+  const isMontageContext =
+    p.status === "montagebereit" ||
+    p.status === "werkstatt" ||
+    (p.status === "termin_geplant" && core.reports.length > 0);
+
+  const nextStepOptions = isMontageContext
+    ? RAPPORT_NEXT_STEP_OPTIONS_MONTAGE
+    : RAPPORT_NEXT_STEP_OPTIONS_ERSTBESUCH;
+
   const [mode, setMode] = useState<"schaden_behoben" | "schaden_aufgenommen" | null>(null);
+  const [nextStatus, setNextStatus] = useState<RapportNextStep | null>(null);
+  const [orderFormLines, setOrderFormLines] = useState<{ templateId: string; lineId: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -141,25 +251,35 @@ export function MonteurAuftragClient({
     [core.appointments],
   );
 
+  const showStandStep = statusStandBannerVisible(p.status);
+
+  const toggleOrderFormTemplate = useCallback((templateId: string) => {
+    setOrderFormLines((prev) => {
+      const has = prev.some((l) => l.templateId === templateId);
+      if (has) return prev.filter((l) => l.templateId !== templateId);
+      return [...prev, { templateId, lineId: crypto.randomUUID() }];
+    });
+  }, []);
+
+  const addOrderFormLine = useCallback((templateId: string) => {
+    setOrderFormLines((prev) => [...prev, { templateId, lineId: crypto.randomUUID() }]);
+  }, []);
+
+  const removeOrderFormLine = useCallback((lineId: string) => {
+    setOrderFormLines((prev) => prev.filter((l) => l.lineId !== lineId));
+  }, []);
+
   return (
-    <section className="flex flex-col gap-4 pb-8">
-      {/* --- Header Card --- */}
+    <section className="flex flex-col pb-8">
       <Card className="overflow-hidden border-border shadow-sm">
         <CardHeader className="pb-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {p.referenceCode ? (
               <Badge variant="secondary" className="font-mono text-[11px]">
                 {p.referenceCode}
               </Badge>
             ) : null}
-            {p.status === "abgeschlossen" ? (
-              <Badge variant="outline" className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200">
-                <CheckCircle2 className="size-3" />
-                Erledigt
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="text-[11px]">Auftrag</Badge>
-            )}
+            <StatusBadge status={p.status} />
           </div>
           <CardTitle className="mt-1 text-xl leading-tight">{p.title}</CardTitle>
         </CardHeader>
@@ -168,15 +288,16 @@ export function MonteurAuftragClient({
             {formatServiceAddress(p)}
           </InfoRow>
           {buildMapsUrl(p) ? (
-            <a
-              href={buildMapsUrl(p)!}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2.5 text-sm font-medium text-primary transition-colors active:scale-[0.98] hover:bg-primary/10"
+            <button
+              type="button"
+              onClick={() => {
+                window.open(buildMapsUrl(p)!, "_blank", "noopener,noreferrer");
+              }}
+              className="flex w-full items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2.5 text-sm font-medium text-primary transition-colors active:scale-[0.98] hover:bg-primary/10"
             >
               <Navigation className="size-4" />
               Route starten
-            </a>
+            </button>
           ) : null}
           <InfoRow icon={Clock} label="Termin">
             {nextAppt
@@ -217,7 +338,12 @@ export function MonteurAuftragClient({
         </CardContent>
       </Card>
 
-      {/* --- Problem / Auftrag Card --- */}
+      <AuftragSectionDivider />
+
+      {showStandStep ? <StatusContextBanner status={p.status} /> : null}
+
+      {showStandStep ? <AuftragSectionDivider /> : null}
+
       <Card className="border-border shadow-sm">
         <CardHeader className="pb-2">
           <div className="flex items-center gap-2">
@@ -301,15 +427,16 @@ export function MonteurAuftragClient({
         </CardContent>
       </Card>
 
-      {/* --- Einsatz mode selection --- */}
+      <AuftragSectionDivider />
+
       <section className="space-y-2">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Einsatz
+          {isMontageContext ? "Montage" : "Einsatz"}
         </h2>
         <div className="grid gap-3 grid-cols-2">
           <button
             type="button"
-            onClick={() => setMode("schaden_behoben")}
+            onClick={() => { setMode("schaden_behoben"); setNextStatus(null); }}
             className={`flex flex-col items-center gap-2 rounded-2xl border-2 px-3 py-5 text-center transition-all active:scale-[0.97] ${
               mode === "schaden_behoben"
                 ? "border-primary bg-primary/5 ring-2 ring-primary/20"
@@ -322,15 +449,17 @@ export function MonteurAuftragClient({
               }`}
             />
             <div>
-              <p className="text-sm font-semibold text-foreground">Behoben</p>
+              <p className="text-sm font-semibold text-foreground">
+                {isMontageContext ? "Fertig" : "Behoben"}
+              </p>
               <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-                Reparatur abgeschlossen
+                {isMontageContext ? "Montage abgeschlossen" : "Reparatur abgeschlossen"}
               </p>
             </div>
           </button>
           <button
             type="button"
-            onClick={() => setMode("schaden_aufgenommen")}
+            onClick={() => { setMode("schaden_aufgenommen"); setNextStatus(null); }}
             className={`flex flex-col items-center gap-2 rounded-2xl border-2 px-3 py-5 text-center transition-all active:scale-[0.97] ${
               mode === "schaden_aufgenommen"
                 ? "border-primary bg-primary/5 ring-2 ring-primary/20"
@@ -343,18 +472,54 @@ export function MonteurAuftragClient({
               }`}
             />
             <div>
-              <p className="text-sm font-semibold text-foreground">Aufgenommen</p>
+              <p className="text-sm font-semibold text-foreground">
+                {isMontageContext ? "Nicht fertig" : "Aufgenommen"}
+              </p>
               <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-                Masse / Offerte folgt
+                {isMontageContext ? "Weiteres nötig, Büro entscheidet" : "Masse / Offerte folgt"}
               </p>
             </div>
           </button>
         </div>
       </section>
 
-      {/* --- Report form --- */}
+      {mode === "schaden_aufgenommen" ? (
+        <>
+          <AuftragSectionDivider />
+          <section className="space-y-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Nächster Schritt
+          </h2>
+          <div className="grid gap-2 grid-cols-1">
+            {nextStepOptions.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setNextStatus(opt.value)}
+                className={`flex items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left transition-all active:scale-[0.98] ${
+                  nextStatus === opt.value
+                    ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                    : "border-border bg-card hover:bg-muted/30"
+                }`}
+              >
+                <opt.icon
+                  className={`size-5 shrink-0 ${nextStatus === opt.value ? "text-primary" : "text-muted-foreground"}`}
+                />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">{opt.label}</p>
+                  <p className="text-[11px] leading-snug text-muted-foreground">{opt.description}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+        </>
+      ) : null}
+
       {mode ? (
-        <Card className="overflow-hidden border-border shadow-sm">
+        <>
+          <AuftragSectionDivider />
+          <Card className="overflow-hidden border-border shadow-sm">
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
               <FileText className="size-4 text-muted-foreground" />
@@ -362,8 +527,12 @@ export function MonteurAuftragClient({
                 <CardTitle className="text-sm">Rapport erfassen</CardTitle>
                 <CardDescription className="text-xs">
                   {mode === "schaden_behoben"
-                    ? "Kurze Zusammenfassung der Reparatur."
-                    : "Masse und Hinweise für die Offerte."}
+                    ? isMontageContext
+                      ? "Kurze Zusammenfassung der Montage."
+                      : "Kurze Zusammenfassung der Reparatur."
+                    : isMontageContext
+                      ? "Was wurde gemacht, was fehlt noch?"
+                      : "Masse und Hinweise für die Offerte."}
                 </CardDescription>
               </div>
             </div>
@@ -373,6 +542,10 @@ export function MonteurAuftragClient({
               className="flex flex-col gap-4"
               onSubmit={async (e) => {
                 e.preventDefault();
+                if (mode === "schaden_aufgenommen" && !nextStatus) {
+                  setError("Bitte wähle den nächsten Schritt aus.");
+                  return;
+                }
                 const fd = new FormData(e.currentTarget);
                 setPending(true);
                 setError(null);
@@ -380,10 +553,11 @@ export function MonteurAuftragClient({
                   const result = await submitTechnicianReportAction({
                     projectId: p.id,
                     outcome: mode,
+                    nextStatus: mode === "schaden_aufgenommen" ? nextStatus ?? undefined : undefined,
                     summary: String(fd.get("summary") ?? ""),
                     measurementsJson: String(fd.get("measurementsJson") ?? "{}"),
                     workDescription: String(fd.get("workDescription") ?? ""),
-                    orderForms: orderFormsPayloadFromFormData(fd, orderFormTemplates),
+                    orderForms: orderFormsPayloadFromFormData(fd, orderFormTemplates, orderFormLines),
                   });
                   if (!result.success) {
                     toast.error(result.error);
@@ -404,13 +578,13 @@ export function MonteurAuftragClient({
                 <>
                   <div className="space-y-1.5">
                     <Label htmlFor="summary" className="text-xs font-medium">
-                      Kurze Notiz
+                      Zusammenfassung
                     </Label>
-                    <Textarea id="summary" name="summary" rows={3} />
+                    <Textarea id="summary" name="summary" rows={3} placeholder={isMontageContext ? "Was wurde montiert / repariert?" : "Kurze Beschreibung der Reparatur"} />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="workDescription" className="text-xs font-medium">
-                      Material / Hinweise
+                      Material / verwendete Teile
                     </Label>
                     <Textarea id="workDescription" name="workDescription" rows={2} />
                   </div>
@@ -418,26 +592,40 @@ export function MonteurAuftragClient({
               ) : (
                 <>
                   <div className="space-y-1.5">
-                    <Label htmlFor="measurementsJson" className="text-xs font-medium">
-                      Masse und Notizen
+                    <Label htmlFor="summary" className="text-xs font-medium">
+                      Zusammenfassung
                     </Label>
-                    <Textarea
-                      id="measurementsJson"
-                      name="measurementsJson"
-                      rows={4}
-                      defaultValue="{}"
-                    />
+                    <Textarea id="summary" name="summary" rows={3} placeholder={isMontageContext ? "Was wurde gemacht, was fehlt noch?" : "Kurze Beschreibung der Situation"} />
                   </div>
+                  {!isMontageContext && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="measurementsJson" className="text-xs font-medium">
+                        Masse und Notizen
+                      </Label>
+                      <Textarea
+                        id="measurementsJson"
+                        name="measurementsJson"
+                        rows={4}
+                        placeholder="Freitext: Masse, Sonderwünsche …"
+                      />
+                    </div>
+                  )}
                   <div className="space-y-1.5">
                     <Label htmlFor="workDescription" className="text-xs font-medium">
-                      Hinweis für Bestellung / Offerte
+                      {isMontageContext ? "Was fehlt noch / Hinweise" : "Hinweis für Bestellung / Offerte"}
                     </Label>
                     <Textarea id="workDescription" name="workDescription" rows={3} />
                   </div>
                 </>
               )}
 
-              <MonteurOrderFormSections templates={orderFormTemplates} />
+              <MonteurOrderFormSections
+                templates={orderFormTemplates}
+                lines={orderFormLines}
+                onToggleTemplate={toggleOrderFormTemplate}
+                onAddLine={addOrderFormLine}
+                onRemoveLine={removeOrderFormLine}
+              />
 
               {/* Photo gallery + upload */}
               <div className="space-y-3">
@@ -509,6 +697,7 @@ export function MonteurAuftragClient({
             </form>
           </CardContent>
         </Card>
+        </>
       ) : null}
     </section>
   );

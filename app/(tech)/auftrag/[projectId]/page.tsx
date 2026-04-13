@@ -13,18 +13,29 @@ type Params = { params: Promise<{ projectId: string }> };
 export default async function MonteurAuftragPage({ params }: Params) {
   const [session, { projectId }] = await Promise.all([getCurrentSession(), params]);
   if (!session) redirect("/anmeldung");
-  if (session.role !== "technician") redirect("/");
   const core = await getProjectCore(projectId);
   if (!core) {
     notFound();
   }
 
-  const isAssigned =
-    core.appointments.some((a) => a.assignedTechnicianId === session.user.id) ||
-    core.project.nextOwnerUserId === session.user.id;
-
-  if (!isAssigned) {
-    notFound();
+  if (session.role === "technician") {
+    const isAssigned =
+      core.appointments.some((a) => a.assignedTechnicianId === session.user.id) ||
+      core.project.nextOwnerUserId === session.user.id;
+    if (!isAssigned) {
+      notFound();
+    }
+  } else if (session.role === "admin" || session.role === "office") {
+    const orgId = core.project.organizationId;
+    if (
+      !session.organizationId ||
+      !orgId ||
+      session.organizationId !== orgId
+    ) {
+      notFound();
+    }
+  } else {
+    redirect("/");
   }
 
   const [orderFormTemplates, signedAttachments] = await Promise.all([

@@ -1,13 +1,17 @@
 import { getCurrentSession } from "@/lib/auth/session";
 import { listWeekTasks } from "@/lib/db/repository";
+import { canAccessTechFieldRoutes } from "@/lib/domain/types";
 import { TechCalendar } from "@/components/app/tech-calendar";
 
 export default async function TechKalenderPage() {
   const session = await getCurrentSession();
-  if (!session || session.role !== "technician") return null;
+  if (!session || !canAccessTechFieldRoutes(session.role)) return null;
 
   const tasks = await listWeekTasks();
-  const myTasks = tasks.filter((t) => t.assignedTechnicianId === session.user.id);
+  const myTasks =
+    session.role === "technician"
+      ? tasks.filter((t) => t.assignedTechnicianId === session.user.id)
+      : tasks;
 
   return (
     <section className="flex flex-col gap-5 pb-4">

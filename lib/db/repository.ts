@@ -9,6 +9,7 @@ import type {
   Project,
   ProjectAttachment,
   ProjectStatus,
+  RapportNextStep,
   RoleType,
   TechnicianReport,
   TechnicianReportOrderFormEntry,
@@ -16,6 +17,7 @@ import type {
   UserProfile,
   WeekTaskItem,
 } from "@/lib/domain/types";
+import { RAPPORT_NEXT_STEP_BEHOBEN } from "@/lib/domain/types";
 import { parseOrderFormFieldsJson } from "@/lib/order-forms/schema";
 import { getWeekBounds } from "@/lib/date/week-bounds";
 import { resolveCalendarColor } from "@/lib/calendar/team-colors";
@@ -45,6 +47,14 @@ const ATTACHMENT_DB_COLUMNS =
 
 const TECH_REPORT_DB_COLUMNS =
   "id, project_id, outcome, summary, measurements_json, work_description, time_spent_minutes, created_at";
+
+/** Ein `current_organization_id`-RPC pro Request — mehrere Repo-Aufrufe teilen sich das Ergebnis. */
+export const getCachedCurrentOrganizationId = cache(async function getCachedCurrentOrganizationId(): Promise<string | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return null;
+  const { data: oid } = await supabase.rpc("current_organization_id");
+  return (oid as string | null) ?? null;
+});
 
 function id(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -197,8 +207,7 @@ export const listProjectsForOffice = cache(async function listProjectsForOffice(
       serviceAddressShort: null,
     }));
   }
-  const { data: oid } = await supabase.rpc("current_organization_id");
-  const orgId = oid as string | null;
+  const orgId = await getCachedCurrentOrganizationId();
   let q = supabase
     .from("projects")
     .select(PROJECT_LIST_COLUMNS)
@@ -494,17 +503,44 @@ export const listMonthTasks = cache(async function listMonthTasks(year: number, 
     .filter((x): x is WeekTaskItem => x !== null);
 });
 
-export async function listAssignableProfiles(): Promise<UserProfile[]> {
-  return listProfilesByRole("technician");
-}
+export const listAssignableProfiles = cache(async function listAssignableProfiles(): Promise<UserProfile[]> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return mockProfiles.filter((p) => p.role === "technician" || p.role === "admin" || p.role === "office");
+  }
+  const orgId = await getCachedCurrentOrganizationId();
+  if (!orgId) return [];
+  const { data, error } = await supabase
+    .from("organization_memberships")
+    .select("user_id, profiles!inner(id, display_name, role, avatar_url, calendar_color, calendar_position)")
+    .eq("organization_id", orgId)
+    .eq("is_active", true)
+    .in("role", ["technician", "admin", "office"]);
+  if (error || !data) return [];
+  const out: UserProfile[] = [];
+  for (const row of data as { user_id: string; profiles: Record<string, unknown> | Record<string, unknown>[] }[]) {
+    const pr = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+    if (!pr) continue;
+    const role = isRoleType(pr.role) ? pr.role : "technician";
+    out.push({
+      id: String(pr.id),
+      displayName: String(pr.display_name ?? ""),
+      email: "",
+      role,
+      avatarUrl: pr.avatar_url != null ? String(pr.avatar_url) : null,
+      calendarColor: pr.calendar_color != null ? String(pr.calendar_color) : "#6366f1",
+      calendarPosition: typeof pr.calendar_position === "number" ? pr.calendar_position : 0,
+    });
+  }
+  return out.sort((a, b) => a.displayName.localeCompare(b.displayName, "de-CH"));
+});
 
-export async function listProfilesByRole(role: RoleType): Promise<UserProfile[]> {
+export const listProfilesByRole = cache(async function listProfilesByRole(role: RoleType): Promise<UserProfile[]> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
     return mockProfiles.filter((p) => p.role === role);
   }
-  const { data: oid } = await supabase.rpc("current_organization_id");
-  const orgId = oid as string | null;
+  const orgId = await getCachedCurrentOrganizationId();
   if (!orgId) {
     return [];
   }
@@ -534,7 +570,7 @@ export async function listProfilesByRole(role: RoleType): Promise<UserProfile[]>
     });
   }
   return out.sort((a, b) => a.displayName.localeCompare(b.displayName, "de-CH"));
-}
+});
 
 export type ProjectCreateInput = Omit<
   Project,
@@ -557,8 +593,7 @@ export async function createProject(input: ProjectCreateInput): Promise<Project>
     return p;
   }
 
-  const { data: oid } = await supabase.rpc("current_organization_id");
-  const orgId = (oid as string | null) ?? input.organizationId;
+  const orgId = (await getCachedCurrentOrganizationId()) ?? input.organizationId;
   if (!orgId) {
     throw new Error("Keine Organisation.");
   }
@@ -777,6 +812,8 @@ export async function addTechnicianReport(
   options?: {
     createdByProfileId: string | null;
     orderFormSubmissions?: { templateId: string; valuesJson: Record<string, string> }[];
+    /** Vom Monteur/Admin gewählter nächster Schritt (nur bei outcome=schaden_aufgenommen) */
+    nextStatus?: RapportNextStep;
   },
 ): Promise<TechnicianReport> {
   const supabase = await createSupabaseServerClient();
@@ -826,7 +863,14 @@ export async function addTechnicianReport(
     if (ofError) throw new Error(ofError.message ?? "Bestellformular konnte nicht gespeichert werden.");
   }
 
-  const status: ProjectStatus = input.outcome === "schaden_behoben" ? "abgeschlossen" : "einsatz_offen";
+  let status: ProjectStatus;
+  if (input.outcome === "schaden_behoben") {
+    status = RAPPORT_NEXT_STEP_BEHOBEN; // "abrechnen"
+  } else if (options?.nextStatus) {
+    status = options.nextStatus;
+  } else {
+    status = "einsatz_offen"; // Fallback für Rückwärtskompatibilität
+  }
   await updateProject(input.projectId, { status });
 
   return {

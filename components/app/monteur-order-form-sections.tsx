@@ -7,14 +7,15 @@ import {
   isOrderFormFieldEffectivelyRequired,
 } from "@/lib/order-forms/field-runtime";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, Plus } from "lucide-react";
 
-function OrderFormFieldsForTemplate({ tpl }: { tpl: OrderFormTemplate }) {
+function OrderFormFieldsForTemplate({ tpl, lineId }: { tpl: OrderFormTemplate; lineId: string }) {
   const [values, setValues] = useState<Record<string, string>>({});
   const fields = tpl.fields;
 
@@ -30,7 +31,7 @@ function OrderFormFieldsForTemplate({ tpl }: { tpl: OrderFormTemplate }) {
         if (!visibility[index]) {
           return null;
         }
-        const name = `orderForm__${tpl.id}__${f.key}`;
+        const name = `orderForm__${tpl.id}__${lineId}__${f.key}`;
         const effReq = isOrderFormFieldEffectivelyRequired(f, index, fields, visibility, values);
         const ph =
           f.placeholder?.trim() ||
@@ -52,7 +53,7 @@ function OrderFormFieldsForTemplate({ tpl }: { tpl: OrderFormTemplate }) {
                 name={name}
                 rows={3}
                 placeholder={ph}
-                required={effReq}
+                required={false}
                 value={values[f.key] ?? ""}
                 onChange={(e) => setVal(f.key, e.target.value)}
               />
@@ -82,7 +83,7 @@ function OrderFormFieldsForTemplate({ tpl }: { tpl: OrderFormTemplate }) {
                 type="text"
                 inputMode="decimal"
                 placeholder={ph}
-                required={effReq}
+                required={false}
                 value={values[f.key] ?? ""}
                 onChange={(e) => setVal(f.key, e.target.value)}
               />
@@ -92,7 +93,7 @@ function OrderFormFieldsForTemplate({ tpl }: { tpl: OrderFormTemplate }) {
                 name={name}
                 type="text"
                 placeholder={ph}
-                required={effReq}
+                required={false}
                 value={values[f.key] ?? ""}
                 onChange={(e) => setVal(f.key, e.target.value)}
               />
@@ -104,46 +105,115 @@ function OrderFormFieldsForTemplate({ tpl }: { tpl: OrderFormTemplate }) {
   );
 }
 
-export function MonteurOrderFormSections({ templates }: { templates: OrderFormTemplate[] }) {
+export type OrderFormLineRef = { templateId: string; lineId: string };
+
+export function MonteurOrderFormSections({
+  templates,
+  lines,
+  onToggleTemplate,
+  onAddLine,
+  onRemoveLine,
+}: {
+  templates: OrderFormTemplate[];
+  lines: OrderFormLineRef[];
+  onToggleTemplate: (templateId: string) => void;
+  onAddLine: (templateId: string) => void;
+  onRemoveLine: (lineId: string) => void;
+}) {
   if (templates.length === 0) return null;
 
   return (
-    <div className="space-y-4 border-t border-border pt-4">
-      <div className="flex items-center gap-2">
-        <ClipboardList className="size-4 text-muted-foreground" />
+    <div className="space-y-3 border-t border-border pt-4">
+      <div className="flex items-start gap-2">
+        <ClipboardList className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         <div>
           <h3 className="text-sm font-semibold text-foreground">Bestellformulare</h3>
-          <p className="text-[11px] text-muted-foreground">
-            Vom Administrator definiert.
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Vorlage auswählen; bei mehreren gleichen Produkten (z. B. zwei Rolläden) «Weitere Position»
+            nutzen. «Pflicht» gilt pro ausgewählter Position (Prüfung beim Speichern).
           </p>
         </div>
       </div>
-      {templates.map((tpl) => (
-        <Card key={tpl.id} size="sm" className="border-border shadow-sm">
-          <CardHeader className="pb-2">
-            <div className="flex items-center gap-2">
-              {tpl.supplierName?.trim() ? (
-                <Badge variant="outline" className="text-[10px]">
-                  {tpl.supplierName.trim()}
-                </Badge>
+
+      <div className="space-y-2">
+        {templates.map((tpl) => {
+          const linesForTpl = lines.filter((l) => l.templateId === tpl.id);
+          const selected = linesForTpl.length > 0;
+          return (
+            <Card key={tpl.id} size="sm" className="overflow-hidden border-border shadow-sm">
+              <label className="flex cursor-pointer items-start gap-3 p-3 transition-colors hover:bg-muted/30">
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  onChange={() => onToggleTemplate(tpl.id)}
+                  className="mt-1 size-4 shrink-0 rounded border-input accent-primary"
+                  aria-label={`${tpl.name} auswählen`}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {tpl.supplierName?.trim() ? (
+                      <Badge variant="outline" className="text-[10px]">
+                        {tpl.supplierName.trim()}
+                      </Badge>
+                    ) : null}
+                    <span className="text-sm font-semibold text-foreground">{tpl.name}</span>
+                  </div>
+                  {tpl.description ? (
+                    <p className="mt-0.5 text-xs text-muted-foreground">{tpl.description}</p>
+                  ) : null}
+                </div>
+              </label>
+
+              {selected ? (
+                <CardContent className="space-y-3 border-t border-border/60 bg-muted/10 px-3 py-3 pt-3">
+                  {tpl.fields.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Noch keine Felder in dieser Vorlage.</p>
+                  ) : (
+                    <>
+                      <div className="space-y-4">
+                        {linesForTpl.map((line, idx) => (
+                          <div
+                            key={line.lineId}
+                            className="space-y-3 rounded-lg border border-border/60 bg-background/40 p-3"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                Position {idx + 1}
+                              </p>
+                              {linesForTpl.length > 1 ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 text-xs text-destructive hover:text-destructive"
+                                  onClick={() => onRemoveLine(line.lineId)}
+                                >
+                                  Entfernen
+                                </Button>
+                              ) : null}
+                            </div>
+                            <OrderFormFieldsForTemplate tpl={tpl} lineId={line.lineId} />
+                          </div>
+                        ))}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full gap-1.5 text-xs"
+                        onClick={() => onAddLine(tpl.id)}
+                      >
+                        <Plus className="size-3.5" />
+                        Weitere Position ({tpl.name})
+                      </Button>
+                    </>
+                  )}
+                </CardContent>
               ) : null}
-              <CardTitle className="text-sm">{tpl.name}</CardTitle>
-            </div>
-            {tpl.description ? (
-              <p className="text-xs text-muted-foreground">{tpl.description}</p>
-            ) : null}
-          </CardHeader>
-          <CardContent className="space-y-3 pt-0">
-            {tpl.fields.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Noch keine Felder in dieser Vorlage.
-              </p>
-            ) : (
-              <OrderFormFieldsForTemplate tpl={tpl} />
-            )}
-          </CardContent>
-        </Card>
-      ))}
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+-- QR-Rechnung / Gläubiger-Stammdaten auf organizations (Tabelle existiert im Kern-Schema)
 alter table public.organizations
   add column if not exists billing_iban text,
   add column if not exists billing_creditor_name text,

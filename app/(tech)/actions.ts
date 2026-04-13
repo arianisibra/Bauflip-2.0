@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentSession } from "@/lib/auth/session";
+import { canAccessTechFieldRoutes } from "@/lib/domain/types";
 import { addTechnicianReport, listActiveOrderFormTemplatesForOrg } from "@/lib/db/repository";
 import { validateOrderFormValues } from "@/lib/order-forms/validate-submission";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -11,7 +12,7 @@ type ActionResult = { success: true } | { success: false; error: string };
 
 export async function submitTechnicianReportAction(values: unknown): Promise<ActionResult> {
   const session = await getCurrentSession();
-  if (!session || session.role !== "technician") {
+  if (!session || !canAccessTechFieldRoutes(session.role)) {
     return { success: false, error: "Keine Berechtigung." };
   }
 
@@ -38,12 +39,16 @@ export async function submitTechnicianReportAction(values: unknown): Promise<Act
 
   const organizationId = String(proj.organization_id);
   const activeTemplates = await listActiveOrderFormTemplatesForOrg(organizationId);
-  const fromClient = new Map((v.orderForms ?? []).map((x) => [x.templateId, x.values]));
+  const templateById = new Map(activeTemplates.map((t) => [t.id, t]));
 
   const orderFormSubmissions: { templateId: string; valuesJson: Record<string, string> }[] = [];
 
-  for (const tpl of activeTemplates) {
-    const rawValues = fromClient.get(tpl.id) ?? {};
+  for (const entry of v.orderForms ?? []) {
+    const tpl = templateById.get(entry.templateId);
+    if (!tpl) {
+      return { success: false, error: "Unbekannte oder inaktive Bestellformular-Vorlage." };
+    }
+    const rawValues = entry.values ?? {};
     try {
       const validated = validateOrderFormValues(tpl.id, tpl.fields, rawValues);
       if (Object.keys(validated).length > 0) {
@@ -72,6 +77,7 @@ export async function submitTechnicianReportAction(values: unknown): Promise<Act
       {
         createdByProfileId: session.user.id,
         orderFormSubmissions,
+        nextStatus: v.nextStatus,
       },
     );
   } catch (dbErr) {

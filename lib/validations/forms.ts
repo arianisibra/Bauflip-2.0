@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { projectStatuses, projectTypes } from "@/lib/domain/types";
+import { projectStatuses, projectTypes, RAPPORT_ALL_NEXT_STEPS } from "@/lib/domain/types";
 
 export const intakeSchema = z.object({
   title: z.string().min(2, "Titel fehlt."),
@@ -31,6 +31,8 @@ export const appointmentSchema = z.object({
 export const technicianReportSchema = z.object({
   projectId: z.string().min(1),
   outcome: z.enum(["schaden_behoben", "schaden_aufgenommen"]),
+  /** Nächster Workflow-Schritt (pflicht bei outcome=schaden_aufgenommen, App-seitig erzwungen) */
+  nextStatus: z.enum(RAPPORT_ALL_NEXT_STEPS).optional(),
   summary: z.string().optional(),
   measurementsJson: z.string().optional(),
   workDescription: z.string().optional(),
