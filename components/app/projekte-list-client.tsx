@@ -1,5 +1,6 @@
 "use client";
 
+import { useVirtualizer } from "@tanstack/react-virtual";
 import dynamic from "next/dynamic";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -35,18 +36,31 @@ function normalize(s: string) {
   return s.toLowerCase().trim();
 }
 
+/** Above this row count, tbody uses windowing to limit DOM nodes. */
+const PROJECT_TABLE_VIRTUAL_THRESHOLD = 55;
+const PROJECT_TABLE_ROW_ESTIMATE_PX = 49;
+
 type RowProps = {
   p: OfficeProjectListItem;
   deletingId: string | null;
   selectedId: string | null;
   onOpen: (p: OfficeProjectListItem) => void;
   onDelete: (p: OfficeProjectListItem) => void;
+  /** Striped row when virtualized table cannot use :nth-child(even). */
+  zebraEven?: boolean;
 };
 
-const ProjectTableRow = memo(function ProjectTableRow({ p, deletingId, selectedId, onOpen, onDelete }: RowProps) {
+const ProjectTableRow = memo(function ProjectTableRow({
+  p,
+  deletingId,
+  selectedId,
+  onOpen,
+  onDelete,
+  zebraEven,
+}: RowProps) {
   return (
     <TableRow
-      className="cursor-pointer"
+      className={`cursor-pointer${zebraEven ? " bg-sky-50/40 dark:bg-muted/25" : ""}`}
       data-state={selectedId === p.id ? "selected" : undefined}
       onClick={() => onOpen(p)}
     >
@@ -132,6 +146,20 @@ export function ProjekteListClient({
   }, [projects, q]);
   const hasSearch = q.trim().length > 0;
   const showEmptyState = filtered.length === 0;
+  const useVirtualTable = filtered.length > PROJECT_TABLE_VIRTUAL_THRESHOLD;
+  const scrollParentRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: useVirtualTable ? filtered.length : 0,
+    getScrollElement: () => scrollParentRef.current,
+    estimateSize: () => PROJECT_TABLE_ROW_ESTIMATE_PX,
+    overscan: 12,
+  });
+  const virtualItems = useVirtualTable ? virtualizer.getVirtualItems() : [];
+  const paddingTop = useVirtualTable && virtualItems.length > 0 ? virtualItems[0].start : 0;
+  const paddingBottom =
+    useVirtualTable && virtualItems.length > 0
+      ? virtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end
+      : 0;
 
   const handleOpenRow = useCallback(
     (p: OfficeProjectListItem) => {
@@ -197,6 +225,50 @@ export function ProjekteListClient({
                 + Erste Anfrage erfassen
               </Button>
             </div>
+          </div>
+        ) : useVirtualTable ? (
+          <div
+            ref={scrollParentRef}
+            className="relative max-h-[min(70vh,32rem)] w-full overflow-auto rounded-lg border border-border bg-card shadow-sm"
+          >
+            <table className="w-full caption-bottom text-sm">
+              <TableHeader className="sticky top-0 z-10 border-b bg-card shadow-[0_1px_0_0_hsl(var(--border))]">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Projekt</TableHead>
+                  <TableHead>Mieter / Kontakt</TableHead>
+                  <TableHead>Adresse</TableHead>
+                  <TableHead>Typ</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-[120px] text-right">Aktion</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paddingTop > 0 ? (
+                  <tr aria-hidden>
+                    <td colSpan={6} className="h-0 border-0 p-0" style={{ height: paddingTop }} />
+                  </tr>
+                ) : null}
+                {virtualItems.map((vi) => {
+                  const p = filtered[vi.index];
+                  return (
+                    <ProjectTableRow
+                      key={p.id}
+                      p={p}
+                      deletingId={deletingId}
+                      selectedId={selected?.id ?? null}
+                      onOpen={handleOpenRow}
+                      onDelete={handleDeleteRow}
+                      zebraEven={vi.index % 2 === 1}
+                    />
+                  );
+                })}
+                {paddingBottom > 0 ? (
+                  <tr aria-hidden>
+                    <td colSpan={6} className="h-0 border-0 p-0" style={{ height: paddingBottom }} />
+                  </tr>
+                ) : null}
+              </TableBody>
+            </table>
           </div>
         ) : (
           <Table className="[&_tbody_tr:nth-child(even)]:bg-sky-50/40 dark:[&_tbody_tr:nth-child(even)]:bg-muted/25">

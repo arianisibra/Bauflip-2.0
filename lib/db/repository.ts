@@ -23,6 +23,7 @@ import { getWeekBounds } from "@/lib/date/week-bounds";
 import { resolveCalendarColor } from "@/lib/calendar/team-colors";
 import { formatServiceAddressFields } from "@/lib/tech/bundle-display";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { withSlowLog } from "@/lib/observability/slow-log";
 import {
   mockAppointments,
   mockProfiles,
@@ -30,6 +31,15 @@ import {
   mockProjects,
   mockReports,
 } from "@/lib/db/mock-data";
+
+/** Optional safety cap for office project list (server env). Unset = no limit. */
+function projectListMaxRows(): number | undefined {
+  const raw = process.env.PROJECT_LIST_MAX_ROWS?.trim();
+  if (!raw) return undefined;
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 1) return undefined;
+  return Math.min(n, 50_000);
+}
 
 export { mapUserProfileRow } from "./repository-map";
 
@@ -196,125 +206,132 @@ export const getOrganizationBranding = cache(async function getOrganizationBrand
 });
 
 export const listProjectsForOffice = cache(async function listProjectsForOffice(): Promise<OfficeProjectListItem[]> {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) {
-    return mockProjects.map((p) => ({
-      id: p.id,
-      title: p.title,
-      type: p.type,
-      status: p.status,
-      displayLabel: p.tenantName?.trim() || p.title,
-      serviceAddressShort: null,
-    }));
-  }
-  const orgId = await getCachedCurrentOrganizationId();
-  let q = supabase
-    .from("projects")
-    .select(PROJECT_LIST_COLUMNS)
-    .order("created_at", { ascending: false });
-  if (orgId) {
-    q = q.eq("organization_id", orgId);
-  }
-  const { data, error } = await q;
-  if (error || !data) {
-    return [];
-  }
-  return (data as Record<string, unknown>[]).map((row) => {
-    const title = String(row.title ?? "");
-    const tenant = row.tenant_name != null ? String(row.tenant_name).trim() : "";
-    const addrShort = formatServiceAddressFields({
-      serviceStreet: row.service_street as string | null,
-      servicePostalCode: row.service_postal_code as string | null,
-      serviceCity: row.service_city as string | null,
+  return withSlowLog("listProjectsForOffice", async () => {
+    const supabase = await createSupabaseServerClient();
+    if (!supabase) {
+      return mockProjects.map((p) => ({
+        id: p.id,
+        title: p.title,
+        type: p.type,
+        status: p.status,
+        displayLabel: p.tenantName?.trim() || p.title,
+        serviceAddressShort: null,
+      }));
+    }
+    const orgId = await getCachedCurrentOrganizationId();
+    let q = supabase
+      .from("projects")
+      .select(PROJECT_LIST_COLUMNS)
+      .order("created_at", { ascending: false });
+    if (orgId) {
+      q = q.eq("organization_id", orgId);
+    }
+    const maxRows = projectListMaxRows();
+    if (maxRows) {
+      q = q.limit(maxRows);
+    }
+    const { data, error } = await q;
+    if (error || !data) {
+      return [];
+    }
+    return (data as Record<string, unknown>[]).map((row) => {
+      const title = String(row.title ?? "");
+      const tenant = row.tenant_name != null ? String(row.tenant_name).trim() : "";
+      const addrShort = formatServiceAddressFields({
+        serviceStreet: row.service_street as string | null,
+        servicePostalCode: row.service_postal_code as string | null,
+        serviceCity: row.service_city as string | null,
+      });
+      return {
+        id: String(row.id),
+        title,
+        type: row.type as OfficeProjectListItem["type"],
+        status: row.status as ProjectStatus,
+        displayLabel: tenant || title,
+        serviceAddressShort: addrShort === "—" ? null : addrShort,
+      };
     });
-    return {
-      id: String(row.id),
-      title,
-      type: row.type as OfficeProjectListItem["type"],
-      status: row.status as ProjectStatus,
-      displayLabel: tenant || title,
-      serviceAddressShort: addrShort === "—" ? null : addrShort,
-    };
   });
 });
 
 export const getProjectCore = cache(async function getProjectCore(projectId: string): Promise<ProjectCore | null> {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) {
-    const project = mockProjects.find((x) => x.id === projectId);
-    if (!project) return null;
-    return {
-      project,
-      appointments: mockAppointments.filter((a) => a.projectId === projectId),
-      attachments: mockProjectAttachments.filter((a) => a.projectId === projectId),
-      reports: mockReports.filter((r) => r.projectId === projectId),
-    };
-  }
-
-  const [{ data: project }, { data: appointments }, { data: attachments }, { data: reports }] = await Promise.all([
-    supabase.from("projects").select(PROJECT_DB_COLUMNS).eq("id", projectId).maybeSingle(),
-    supabase
-      .from("appointments")
-      .select(APPOINTMENT_DB_COLUMNS)
-      .eq("project_id", projectId)
-      .order("starts_at"),
-    supabase.from("project_attachments").select(ATTACHMENT_DB_COLUMNS).eq("project_id", projectId).order("created_at"),
-    supabase.from("technician_reports").select(TECH_REPORT_DB_COLUMNS).eq("project_id", projectId).order("created_at"),
-  ]);
-
-  if (!project) return null;
-
-  const reportRows = ((reports as Record<string, unknown>[]) ?? []).map(mapTechnicianReportRow);
-
-  let mergedReports = reportRows;
-  if (reportRows.length > 0) {
-    const ids = reportRows.map((r) => r.id);
-    const { data: ofRows } = await supabase
-      .from("technician_report_order_forms")
-    .select(
-        "technician_report_id, template_id, values_json, order_form_templates ( name, fields )",
-      )
-      .in("technician_report_id", ids);
-
-    const byReport = new Map<string, TechnicianReportOrderFormEntry[]>();
-    for (const raw of ofRows ?? []) {
-      const row = raw as Record<string, unknown>;
-      const rid = String(row.technician_report_id ?? "");
-      const tplWrap = row.order_form_templates as Record<string, unknown> | Record<string, unknown>[] | null;
-      const t = Array.isArray(tplWrap) ? tplWrap[0] : tplWrap;
-      if (!t || !rid) continue;
-      const entry: TechnicianReportOrderFormEntry = {
-        templateId: String(row.template_id ?? ""),
-        templateName: String(t.name ?? ""),
-        fields: parseOrderFormFieldsJson(t.fields),
-        values: valuesJsonToStringRecord(row.values_json),
+  return withSlowLog("getProjectCore", async () => {
+    const supabase = await createSupabaseServerClient();
+    if (!supabase) {
+      const project = mockProjects.find((x) => x.id === projectId);
+      if (!project) return null;
+      return {
+        project,
+        appointments: mockAppointments.filter((a) => a.projectId === projectId),
+        attachments: mockProjectAttachments.filter((a) => a.projectId === projectId),
+        reports: mockReports.filter((r) => r.projectId === projectId),
       };
-      const list = byReport.get(rid) ?? [];
-      list.push(entry);
-      byReport.set(rid, list);
     }
-    mergedReports = reportRows.map((r) => ({ ...r, orderForms: byReport.get(r.id) ?? [] }));
-  }
 
-  return {
-    project: mapProjectRow(project as Record<string, unknown>),
-    appointments: ((appointments as Record<string, unknown>[]) ?? []).map(mapAppointmentRow),
-    attachments: ((attachments as Record<string, unknown>[]) ?? []).map(mapProjectAttachmentRow),
-    reports: mergedReports,
-  };
+    const [{ data: project }, { data: appointments }, { data: attachments }, { data: reports }] = await Promise.all([
+      supabase.from("projects").select(PROJECT_DB_COLUMNS).eq("id", projectId).maybeSingle(),
+      supabase
+        .from("appointments")
+        .select(APPOINTMENT_DB_COLUMNS)
+        .eq("project_id", projectId)
+        .order("starts_at"),
+      supabase.from("project_attachments").select(ATTACHMENT_DB_COLUMNS).eq("project_id", projectId).order("created_at"),
+      supabase.from("technician_reports").select(TECH_REPORT_DB_COLUMNS).eq("project_id", projectId).order("created_at"),
+    ]);
+
+    if (!project) return null;
+
+    const reportRows = ((reports as Record<string, unknown>[]) ?? []).map(mapTechnicianReportRow);
+
+    let mergedReports = reportRows;
+    if (reportRows.length > 0) {
+      const ids = reportRows.map((r) => r.id);
+      const { data: ofRows } = await supabase
+        .from("technician_report_order_forms")
+        .select("technician_report_id, template_id, values_json, order_form_templates ( name, fields )")
+        .in("technician_report_id", ids);
+
+      const byReport = new Map<string, TechnicianReportOrderFormEntry[]>();
+      for (const raw of ofRows ?? []) {
+        const row = raw as Record<string, unknown>;
+        const rid = String(row.technician_report_id ?? "");
+        const tplWrap = row.order_form_templates as Record<string, unknown> | Record<string, unknown>[] | null;
+        const t = Array.isArray(tplWrap) ? tplWrap[0] : tplWrap;
+        if (!t || !rid) continue;
+        const entry: TechnicianReportOrderFormEntry = {
+          templateId: String(row.template_id ?? ""),
+          templateName: String(t.name ?? ""),
+          fields: parseOrderFormFieldsJson(t.fields),
+          values: valuesJsonToStringRecord(row.values_json),
+        };
+        const list = byReport.get(rid) ?? [];
+        list.push(entry);
+        byReport.set(rid, list);
+      }
+      mergedReports = reportRows.map((r) => ({ ...r, orderForms: byReport.get(r.id) ?? [] }));
+    }
+
+    return {
+      project: mapProjectRow(project as Record<string, unknown>),
+      appointments: ((appointments as Record<string, unknown>[]) ?? []).map(mapAppointmentRow),
+      attachments: ((attachments as Record<string, unknown>[]) ?? []).map(mapProjectAttachmentRow),
+      reports: mergedReports,
+    };
+  });
 });
 
 export const listWeekTasks = cache(async function listWeekTasks(referenceDate = new Date()): Promise<WeekTaskItem[]> {
-  const { start, end } = getWeekBounds(referenceDate);
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) {
-    return [];
-  }
+  return withSlowLog("listWeekTasks", async () => {
+    const { start, end } = getWeekBounds(referenceDate);
+    const supabase = await createSupabaseServerClient();
+    if (!supabase) {
+      return [];
+    }
 
-  const { data, error } = await supabase
-    .from("appointments")
-    .select(
-      `
+    const { data, error } = await supabase
+      .from("appointments")
+      .select(
+        `
       id,
       project_id,
       kind,
@@ -332,77 +349,78 @@ export const listWeekTasks = cache(async function listWeekTasks(referenceDate = 
         service_country
       )
     `,
-    )
-    .gte("starts_at", start.toISOString())
-    .lte("starts_at", end.toISOString())
-    .order("starts_at", { ascending: true });
+      )
+      .gte("starts_at", start.toISOString())
+      .lte("starts_at", end.toISOString())
+      .order("starts_at", { ascending: true });
 
-  if (error || !data?.length) {
-    return [];
-  }
-
-  type NestedProject = {
-    title: string;
-    status: string;
-    tenant_name?: string | null;
-    service_street?: string | null;
-    service_postal_code?: string | null;
-    service_city?: string | null;
-    service_country?: string | null;
-  };
-
-  const rows = data as {
-    id: string;
-    project_id: string;
-    kind: WeekTaskItem["kind"];
-    starts_at: string;
-    ends_at: string;
-    assigned_technician_id: string | null;
-    projects: NestedProject | NestedProject[] | null;
-  }[];
-
-  const techIds = [...new Set(rows.map((r) => r.assigned_technician_id).filter(Boolean))] as string[];
-  const techMap = new Map<string, { display_name: string | null; calendar_color: string | null }>();
-  if (techIds.length > 0) {
-    const { data: profs } = await supabase
-      .from("profiles")
-      .select("id, display_name, calendar_color")
-      .in("id", techIds);
-    for (const p of profs ?? []) {
-      const r = p as { id: string; display_name: string | null; calendar_color: string | null };
-      techMap.set(r.id, { display_name: r.display_name, calendar_color: r.calendar_color });
+    if (error || !data?.length) {
+      return [];
     }
-  }
 
-  return rows
-    .map((row) => {
-      const raw = row.projects;
-      const pr = Array.isArray(raw) ? raw[0] : raw;
-      if (!pr?.title) return null;
-      const tid = row.assigned_technician_id;
-      const tp = tid ? techMap.get(tid) : undefined;
-      const tenantRaw = pr.tenant_name != null ? String(pr.tenant_name).trim() : "";
-      const addrShort = formatServiceAddressFields({
-        serviceStreet: pr.service_street,
-        servicePostalCode: pr.service_postal_code,
-        serviceCity: pr.service_city,
-      });
-      return {
-        appointmentId: row.id,
-        startsAt: row.starts_at,
-        endsAt: row.ends_at,
-        kind: row.kind,
-        projectId: row.project_id,
-        projectTitle: pr.title,
-        projectStatus: pr.status as ProjectStatus,
-        assignedTechnicianId: tid,
-        technicianName: tp?.display_name ?? null,
-        calendarColor: resolveCalendarColor(tp?.calendar_color ?? null, tid),
-        tenantDisplay: tenantRaw || null,
-        serviceAddressShort: addrShort === "—" ? null : addrShort,
-      };
-    })
-    .filter((x): x is WeekTaskItem => x !== null);
+    type NestedProject = {
+      title: string;
+      status: string;
+      tenant_name?: string | null;
+      service_street?: string | null;
+      service_postal_code?: string | null;
+      service_city?: string | null;
+      service_country?: string | null;
+    };
+
+    const rows = data as {
+      id: string;
+      project_id: string;
+      kind: WeekTaskItem["kind"];
+      starts_at: string;
+      ends_at: string;
+      assigned_technician_id: string | null;
+      projects: NestedProject | NestedProject[] | null;
+    }[];
+
+    const techIds = [...new Set(rows.map((r) => r.assigned_technician_id).filter(Boolean))] as string[];
+    const techMap = new Map<string, { display_name: string | null; calendar_color: string | null }>();
+    if (techIds.length > 0) {
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("id, display_name, calendar_color")
+        .in("id", techIds);
+      for (const p of profs ?? []) {
+        const r = p as { id: string; display_name: string | null; calendar_color: string | null };
+        techMap.set(r.id, { display_name: r.display_name, calendar_color: r.calendar_color });
+      }
+    }
+
+    return rows
+      .map((row) => {
+        const raw = row.projects;
+        const pr = Array.isArray(raw) ? raw[0] : raw;
+        if (!pr?.title) return null;
+        const tid = row.assigned_technician_id;
+        const tp = tid ? techMap.get(tid) : undefined;
+        const tenantRaw = pr.tenant_name != null ? String(pr.tenant_name).trim() : "";
+        const addrShort = formatServiceAddressFields({
+          serviceStreet: pr.service_street,
+          servicePostalCode: pr.service_postal_code,
+          serviceCity: pr.service_city,
+        });
+        return {
+          appointmentId: row.id,
+          startsAt: row.starts_at,
+          endsAt: row.ends_at,
+          kind: row.kind,
+          projectId: row.project_id,
+          projectTitle: pr.title,
+          projectStatus: pr.status as ProjectStatus,
+          assignedTechnicianId: tid,
+          technicianName: tp?.display_name ?? null,
+          calendarColor: resolveCalendarColor(tp?.calendar_color ?? null, tid),
+          tenantDisplay: tenantRaw || null,
+          serviceAddressShort: addrShort === "—" ? null : addrShort,
+        };
+      })
+      .filter((x): x is WeekTaskItem => x !== null);
+  });
 });
 
 export const listMonthTasks = cache(async function listMonthTasks(year: number, month: number): Promise<WeekTaskItem[]> {
