@@ -21,9 +21,16 @@ export function IntakeForm() {
         setPending(true);
         try {
           const res = await createIntakeAction(fd);
-          router.refresh();
           if (res?.projectId) {
+            // Kein `router.refresh()` vor `push`: Refresh würde dieselbe /projekte-RSC sofort erneut ausführen;
+            // schlägt das fehl, landet die Next-Production-Meldung im `catch` obwohl der Auftrag schon angelegt ist.
             router.push(`/projekte?openProjectId=${encodeURIComponent(res.projectId)}`);
+          } else {
+            try {
+              router.refresh();
+            } catch (refreshErr) {
+              console.warn("[intake] router.refresh nach Anlage ohne projectId", refreshErr);
+            }
           }
         } catch (e) {
           const raw = e instanceof Error ? e.message : String(e);
