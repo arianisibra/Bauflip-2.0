@@ -25,7 +25,13 @@ function mapRole(raw: string | null | undefined): RoleType {
 }
 
 export const getCurrentSession = cache(async function getCurrentSession(): Promise<CurrentSession | null> {
-  const cookieStore = await cookies();
+  let cookieStore: Awaited<ReturnType<typeof cookies>>;
+  try {
+    cookieStore = await cookies();
+  } catch (err) {
+    console.error("[bauflip] cookies() in getCurrentSession failed", err);
+    return null;
+  }
   /**
    * Mock-Cookies (bauflip_mock_*) nur in Development oder wenn explizit erlaubt.
    * In Live-Umgebungen ALLOW_MOCK_AUTH niemals setzen — dokumentiert in .env.example.

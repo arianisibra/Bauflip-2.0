@@ -16,7 +16,13 @@ export async function createSupabaseServerClient() {
     return null;
   }
 
-  const cookieStore = await cookies();
+  let cookieStore: Awaited<ReturnType<typeof cookies>>;
+  try {
+    cookieStore = await cookies();
+  } catch (err) {
+    console.error("[supabase] cookies() in createSupabaseServerClient failed", err);
+    return null;
+  }
   const mockAuthEnabled =
     process.env.NODE_ENV !== "production" || process.env.ALLOW_MOCK_AUTH === "true";
   const mockAuthenticated = cookieStore.get("bauflip_mock_auth")?.value === "1";

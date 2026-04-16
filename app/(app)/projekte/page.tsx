@@ -9,12 +9,16 @@ type Props = {
 };
 
 export default async function ProjektePage(props: Props) {
-  const [session, sp, projects, technicians] = await Promise.all([
+  const searchParams = await Promise.resolve(props.searchParams ?? {});
+  const [session, projects, technicians] = await Promise.all([
     getCurrentSession(),
-    props.searchParams,
     listProjectsForOffice(),
     listAssignableProfiles(),
   ]);
+  const openProjectId =
+    typeof (searchParams as { openProjectId?: unknown }).openProjectId === "string"
+      ? (searchParams as { openProjectId: string }).openProjectId
+      : undefined;
   const canEditProjectSheet = session?.role === "office" || session?.role === "admin";
   const supabaseConfigured = hasSupabaseConfig();
 
@@ -32,7 +36,7 @@ export default async function ProjektePage(props: Props) {
         projects={projects}
         technicians={technicians}
         canEditProjectSheet={canEditProjectSheet}
-        initialOpenProjectId={sp.openProjectId}
+        initialOpenProjectId={openProjectId}
       />
     </section>
   );
