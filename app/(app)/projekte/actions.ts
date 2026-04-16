@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { getCurrentSession } from "@/lib/auth/session";
 import {
   addAppointment,
@@ -17,6 +18,12 @@ function nz(s: string | undefined | null): string | null {
   if (s == null) return null;
   const t = String(s).trim();
   return t === "" ? null : t;
+}
+
+function revalidateProjekteSoon() {
+  after(() => {
+    revalidatePath("/projekte");
+  });
 }
 
 export async function getProjectSheetDataAction(projectId: string) {
@@ -63,7 +70,7 @@ export async function updateProjectStammdatenAction(values: unknown) {
     nextOwnerUserId: v.nextOwnerUserId && v.nextOwnerUserId !== "" ? v.nextOwnerUserId : null,
   });
 
-  revalidatePath("/projekte");
+  revalidateProjekteSoon();
 }
 
 export async function addAppointmentAction(input: unknown) {
@@ -84,7 +91,7 @@ export async function addAppointmentAction(input: unknown) {
     assignedTechnicianId: v.assignedTechnicianId ?? null,
     planningNotes: v.planningNotes ?? null,
   });
-  revalidatePath("/projekte");
+  revalidateProjekteSoon();
 }
 
 export async function deleteAppointmentAction(appointmentId: string) {
@@ -93,7 +100,7 @@ export async function deleteAppointmentAction(appointmentId: string) {
     throw new Error("Keine Berechtigung.");
   }
   await deleteAppointment(appointmentId);
-  revalidatePath("/projekte");
+  revalidateProjekteSoon();
 }
 
 export async function deleteProjectAction(projectId: string) {
@@ -105,7 +112,7 @@ export async function deleteProjectAction(projectId: string) {
     throw new Error("Projekt-ID fehlt.");
   }
   await deleteProject(projectId);
-  revalidatePath("/projekte");
+  revalidateProjekteSoon();
 }
 
 export async function updateProjectStatusAction(projectId: string, status: ProjectStatus) {
@@ -114,7 +121,7 @@ export async function updateProjectStatusAction(projectId: string, status: Proje
     throw new Error("Keine Berechtigung.");
   }
   await updateProject(projectId, { status });
-  revalidatePath("/projekte");
+  revalidateProjekteSoon();
 }
 
 export async function deleteReportAction(reportId: string) {
@@ -123,5 +130,5 @@ export async function deleteReportAction(reportId: string) {
     throw new Error("Keine Berechtigung.");
   }
   await deleteTechnicianReport(reportId);
-  revalidatePath("/projekte");
+  revalidateProjekteSoon();
 }

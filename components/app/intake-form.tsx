@@ -26,7 +26,16 @@ export function IntakeForm() {
             router.push(`/projekte?openProjectId=${encodeURIComponent(res.projectId)}`);
           }
         } catch (e) {
-          setError(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
+          const raw = e instanceof Error ? e.message : String(e);
+          const digest = e instanceof Error && "digest" in e ? String((e as Error & { digest?: string }).digest ?? "") : "";
+          const isNextGeneric =
+            raw.includes("An error occurred in the Server Components render") ||
+            raw.includes("server components render");
+          setError(
+            isNextGeneric
+              ? `Der Server konnte die Seite nach dem Speichern nicht aktualisieren. Bitte die Seite neu laden.${digest ? ` (Referenz: ${digest})` : ""}`
+              : raw || "Speichern fehlgeschlagen.",
+          );
         } finally {
           setPending(false);
         }
