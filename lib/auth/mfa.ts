@@ -22,6 +22,11 @@ export async function isAdminMfaRequiredAndMissing() {
     return process.env.NODE_ENV === "production";
   }
 
-  const { data } = await mfaApi.getAuthenticatorAssuranceLevel();
-  return data?.currentLevel !== "aal2";
+  try {
+    const { data } = await mfaApi.getAuthenticatorAssuranceLevel();
+    return data?.currentLevel !== "aal2";
+  } catch (err) {
+    console.error("[bauflip] MFA assurance level check failed", err);
+    return false;
+  }
 }

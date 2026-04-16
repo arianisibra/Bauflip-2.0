@@ -37,8 +37,15 @@ export async function createSupabaseServerClient() {
         return cookieStore.getAll();
       },
       setAll(cookiesToSet) {
-        for (const cookie of cookiesToSet) {
-          cookieStore.set(cookie.name, cookie.value, cookie.options);
+        try {
+          for (const cookie of cookiesToSet) {
+            cookieStore.set(cookie.name, cookie.value, cookie.options);
+          }
+        } catch {
+          // Server Components cannot always set cookies during render; session refresh runs in `proxy` middleware.
+          if (process.env.NODE_ENV === "development") {
+            console.warn("[supabase] cookie set skipped in Server Component (expected if middleware refreshed session).");
+          }
         }
       },
     },
