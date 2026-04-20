@@ -25,7 +25,13 @@ function mapRole(raw: string | null | undefined): RoleType {
 }
 
 export const getCurrentSession = cache(async function getCurrentSession(): Promise<CurrentSession | null> {
-  const cookieStore = await cookies();
+  let cookieStore: Awaited<ReturnType<typeof cookies>>;
+  try {
+    cookieStore = await cookies();
+  } catch (err) {
+    console.error("[bauflip] cookies() in getCurrentSession failed", err);
+    return null;
+  }
   /**
    * Mock-Cookies (bauflip_mock_*) nur in Development oder wenn explizit erlaubt.
    * In Live-Umgebungen ALLOW_MOCK_AUTH niemals setzen — dokumentiert in .env.example.
@@ -41,7 +47,13 @@ export const getCurrentSession = cache(async function getCurrentSession(): Promi
   const mockRole = mapRole(cookieStore.get("bauflip_mock_role")?.value);
   const mockEmail = cookieStore.get("bauflip_mock_email")?.value ?? "mock@bauflip.ch";
 
-  const supabase = await createSupabaseServerClient();
+  let supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  try {
+    supabase = await createSupabaseServerClient();
+  } catch (err) {
+    console.error("[bauflip] createSupabaseServerClient failed", err);
+    return null;
+  }
   if (!supabase) {
     if (mockAuthEnabled && mockAuthenticated) {
       return {
@@ -66,9 +78,17 @@ export const getCurrentSession = cache(async function getCurrentSession(): Promi
     return null;
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let user: User | null = null;
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    if (error) {
+      console.warn("[bauflip] auth.getUser:", error.message);
+    }
+    user = data?.user ?? null;
+  } catch (err) {
+    console.error("[bauflip] auth.getUser failed", err);
+    user = null;
+  }
 
   if (!user) {
     if (mockAuthEnabled && mockAuthenticated) {
@@ -94,77 +114,100 @@ export const getCurrentSession = cache(async function getCurrentSession(): Promi
     return null;
   }
 
-  const [membershipResponse, profileResponse] = await Promise.all([
-    supabase
-      .from("organization_memberships")
-      .select("role, organization_id")
-      .eq("user_id", user.id)
-      .eq("is_active", true)
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from("profiles")
-      .select("id, display_name, role, avatar_url, calendar_color, calendar_position")
-      .eq("id", user.id)
-      .maybeSingle(),
-  ]);
+  try {
+    const [membershipResponse, profileResponse] = await Promise.all([
+      supabase
+        .from("organization_memberships")
+        .select("role, organization_id")
+        .eq("user_id", user.id)
+        .eq("is_active", true)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("profiles")
+        .select("id, display_name, role, avatar_url, calendar_color, calendar_position")
+        .eq("id", user.id)
+        .maybeSingle(),
+    ]);
 
-  const membershipRole = membershipResponse.data?.role as string | null | undefined;
-  const role = mapRole(membershipRole ?? (user.user_metadata?.role as string | null | undefined));
-  const organizationId = (membershipResponse.data?.organization_id as string | null | undefined) ?? null;
+    const membershipRole = membershipResponse.data?.role as string | null | undefined;
+    const role = mapRole(membershipRole ?? (user.user_metadata?.role as string | null | undefined));
+    const organizationId = (membershipResponse.data?.organization_id as string | null | undefined) ?? null;
 
-  if (!profileResponse.data) {
+    if (!profileResponse.data) {
+      const displayName =
+        String(user.user_metadata?.display_name ?? "").trim() ||
+        user.email?.split("@")[0] ||
+        "Benutzer";
+      const { data: inserted } = await supabase
+        .from("profiles")
+        .upsert(
+          {
+            id: user.id,
+            display_name: displayName,
+            role,
+          },
+          { onConflict: "id" },
+        )
+        .select("id, display_name, role, avatar_url, calendar_color, calendar_position")
+        .single();
+
+      if (inserted) {
+        return {
+          user,
+          role,
+          organizationId,
+          profile: mapUserProfileRow(inserted as Record<string, unknown>, user.email ?? ""),
+        };
+      }
+    }
+
+    const row = profileResponse.data as Record<string, unknown> | null;
+
+    return {
+      user,
+      role,
+      organizationId,
+      profile: (() => {
+        if (!row) {
+          return {
+            id: user.id,
+            displayName: user.email?.split("@")[0] ?? "Benutzer",
+            email: user.email ?? "",
+            role,
+            avatarUrl: null,
+            calendarColor: null,
+            calendarPosition: 0,
+          };
+        }
+        // Ensure profile role stays consistent with resolved session role.
+        const mapped = mapUserProfileRow(row, user.email ?? "");
+        return { ...mapped, role };
+      })(),
+    };
+  } catch (err) {
+    console.error("[bauflip] session membership/profile failed", err);
+    const role = mapRole(user.user_metadata?.role as string | null | undefined);
     const displayName =
       String(user.user_metadata?.display_name ?? "").trim() ||
       user.email?.split("@")[0] ||
       "Benutzer";
-    const { data: inserted } = await supabase
-      .from("profiles")
-      .upsert(
-        {
-          id: user.id,
-          display_name: displayName,
-          role,
-        },
-        { onConflict: "id" },
-      )
-      .select("id, display_name, role, avatar_url, calendar_color, calendar_position")
-      .single();
-
-    if (inserted) {
-      return {
-        user,
+    return {
+      user,
+      role,
+      organizationId: null,
+      profile: {
+        id: user.id,
+        displayName,
+        email: user.email ?? "",
         role,
-        organizationId,
-        profile: mapUserProfileRow(inserted as Record<string, unknown>, user.email ?? ""),
-      };
-    }
+        avatarUrl: null,
+        calendarColor: null,
+        calendarPosition: 0,
+      },
+    };
   }
-
-  const row = profileResponse.data as Record<string, unknown> | null;
-
-  return {
-    user,
-    role,
-    organizationId,
-    profile: (() => {
-      if (!row) {
-        return {
-          id: user.id,
-          displayName: user.email?.split("@")[0] ?? "Benutzer",
-          email: user.email ?? "",
-          role,
-          avatarUrl: null,
-          calendarColor: null,
-          calendarPosition: 0,
-        };
-      }
-      // Ensure profile role stays consistent with resolved session role.
-      const mapped = mapUserProfileRow(row, user.email ?? "");
-      return { ...mapped, role };
-    })(),
-  };
 });
 
 export async function getCurrentRole(): Promise<RoleType> {

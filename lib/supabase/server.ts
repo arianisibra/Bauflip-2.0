@@ -16,7 +16,13 @@ export async function createSupabaseServerClient() {
     return null;
   }
 
-  const cookieStore = await cookies();
+  let cookieStore: Awaited<ReturnType<typeof cookies>>;
+  try {
+    cookieStore = await cookies();
+  } catch (err) {
+    console.error("[supabase] cookies() in createSupabaseServerClient failed", err);
+    return null;
+  }
   const mockAuthEnabled =
     process.env.NODE_ENV !== "production" || process.env.ALLOW_MOCK_AUTH === "true";
   const mockAuthenticated = cookieStore.get("bauflip_mock_auth")?.value === "1";
@@ -43,6 +49,9 @@ export async function createSupabaseServerClient() {
           }
         } catch {
           /* Session refresh writes cookies; some server contexts reject writes (see Supabase SSR + Next.js docs). */
+          if (process.env.NODE_ENV === "development") {
+            console.warn("[supabase] cookie set skipped (session refresh may run in proxy).");
+          }
         }
       },
     },
