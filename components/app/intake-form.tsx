@@ -21,7 +21,6 @@ export function IntakeForm() {
         setPending(true);
         try {
           const res = await createIntakeAction(fd);
-          router.refresh();
           if (res?.projectId) {
             router.push(`/projekte?openProjectId=${encodeURIComponent(res.projectId)}`);
           }
