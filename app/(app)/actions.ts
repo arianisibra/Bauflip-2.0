@@ -78,6 +78,9 @@ export async function uploadProjectReportFileAction(
 ): Promise<{ success: true } | { success: false; error: string }> {
   const session = await getCurrentSession();
   if (!session) return { success: false, error: "Nicht angemeldet." };
+  if (session.role !== "office" && session.role !== "admin") {
+    return { success: false, error: "Keine Berechtigung." };
+  }
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { success: false, error: "Supabase ist nicht konfiguriert." };
 
@@ -128,6 +131,9 @@ export async function updateAttachmentNotesAction(
 ): Promise<{ success: true } | { success: false; error: string }> {
   const session = await getCurrentSession();
   if (!session) return { success: false, error: "Nicht angemeldet." };
+  if (session.role !== "office" && session.role !== "admin") {
+    return { success: false, error: "Keine Berechtigung." };
+  }
   if (!attachmentId) return { success: false, error: "Anhang-ID fehlt." };
   if (notes.length > 2000) return { success: false, error: "Notiz zu lang (max. 2000 Zeichen)." };
   try {
@@ -144,6 +150,9 @@ export async function deleteAttachmentAction(
 ): Promise<{ success: true } | { success: false; error: string }> {
   const session = await getCurrentSession();
   if (!session) return { success: false, error: "Nicht angemeldet." };
+  if (session.role !== "office" && session.role !== "admin") {
+    return { success: false, error: "Keine Berechtigung." };
+  }
   if (!attachmentId || !filePath) return { success: false, error: "Parameter fehlen." };
   try {
     await deleteProjectAttachment(attachmentId, filePath);
