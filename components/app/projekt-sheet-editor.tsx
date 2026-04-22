@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { ProjectCore } from "@/lib/db/repository";
 import type { ProjectStatus, TechnicianReport, UserProfile } from "@/lib/domain/types";
@@ -269,7 +268,7 @@ function StatusPipeline({
   projectId: string;
   currentStatus: ProjectStatus;
   canEdit: boolean;
-  onStatusChanged: () => void;
+  onStatusChanged: (core: ProjectCore) => void;
 }) {
   const [pending, setPending] = useState(false);
   const actions = STATUS_PIPELINE[currentStatus] ?? [];
@@ -278,8 +277,8 @@ function StatusPipeline({
   const advance = async (nextStatus: ProjectStatus) => {
     setPending(true);
     try {
-      await updateProjectStatusAction(projectId, nextStatus);
-      onStatusChanged();
+      const { core } = await updateProjectStatusAction(projectId, nextStatus);
+      onStatusChanged(core);
     } catch (e) {
       console.error(e);
     } finally {
@@ -326,7 +325,6 @@ export function ProjektSheetEditor({
   canEdit: boolean;
   technicians: UserProfile[];
 }) {
-  const router = useRouter();
   const [core, setCore] = useState<ProjectCore | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -365,7 +363,7 @@ export function ProjektSheetEditor({
         projectId={projectId}
         currentStatus={p.status}
         canEdit={canEdit}
-        onStatusChanged={async () => { await load(); router.refresh(); }}
+        onStatusChanged={(core) => setCore(core)}
       />
       <form
         className="grid gap-3 sm:grid-cols-2"
@@ -376,7 +374,7 @@ export function ProjektSheetEditor({
           setPending(true);
           setError(null);
           try {
-            await updateProjectStammdatenAction({
+            const { core: nextCore } = await updateProjectStammdatenAction({
               projectId,
               title: String(fd.get("title") ?? ""),
               intakeOriginalText: String(fd.get("intakeOriginalText") ?? ""),
@@ -395,8 +393,7 @@ export function ProjektSheetEditor({
               nextOwnerUserId: String(fd.get("nextOwnerUserId") ?? ""),
             });
             toast.success("Projekt gespeichert");
-            await load();
-            router.refresh();
+            setCore(nextCore);
           } catch (err) {
             toast.error(err instanceof Error ? err.message : "Speichern fehlgeschlagen.");
           } finally {
@@ -507,15 +504,14 @@ export function ProjektSheetEditor({
               try {
                 const starts = String(fd.get("startsAt") ?? "");
                 const ends = String(fd.get("endsAt") ?? "");
-                await addAppointmentAction({
+                const { core: nextCore } = await addAppointmentAction({
                   projectId,
                   kind: "ausfuehrung",
                   startsAt: new Date(starts).toISOString(),
                   endsAt: new Date(ends).toISOString(),
                   assignedTechnicianId: String(fd.get("assignedTechnicianId") ?? "") || null,
                 });
-                await load();
-                router.refresh();
+                setCore(nextCore);
               } catch (err) {
                 setError(err instanceof Error ? err.message : "Termin fehlgeschlagen.");
               } finally {
@@ -577,10 +573,9 @@ export function ProjektSheetEditor({
                       className="shrink-0 text-destructive hover:text-destructive"
                       onClick={async () => {
                         if (!window.confirm("Termin löschen?")) return;
-                        await deleteAppointmentAction(a.id);
+                        const { core: nextCore } = await deleteAppointmentAction(a.id, projectId);
                         toast.success("Termin gelöscht");
-                        await load();
-                        router.refresh();
+                        setCore(nextCore);
                       }}
                     >
                       ×
@@ -609,7 +604,6 @@ export function ProjektSheetEditor({
             try {
               await uploadProjectReportFileAction(fd);
               await load();
-              router.refresh();
               if (input) input.value = "";
             } catch (err) {
               setError(err instanceof Error ? err.message : "Upload fehlgeschlagen.");
@@ -644,10 +638,9 @@ export function ProjektSheetEditor({
                 onDelete={async () => {
                   setPending(true);
                   try {
-                    await deleteReportAction(r.id);
+                    const { core: nextCore } = await deleteReportAction(r.id, projectId);
                     toast.success("Rapport gelöscht");
-                    await load();
-                    router.refresh();
+                    setCore(nextCore);
                   } catch (e) {
                     toast.error(e instanceof Error ? e.message : "Löschen fehlgeschlagen.");
                   } finally {

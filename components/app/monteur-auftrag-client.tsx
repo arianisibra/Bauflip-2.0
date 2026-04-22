@@ -565,7 +565,6 @@ export function MonteurAuftragClient({
                   }
                   toast.success("Rapport gespeichert");
                   router.push("/tag");
-                  router.refresh();
                 } catch {
                   setError("Speichern fehlgeschlagen.");
                 } finally {

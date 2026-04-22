@@ -165,9 +165,12 @@ export function ProjekteListClient({
     (p: OfficeProjectListItem) => {
       setSelected(p);
       setOpen(true);
-      router.replace(`/projekte?openProjectId=${encodeURIComponent(p.id)}`, { scroll: false });
+      // Sync URL for deep-linking WITHOUT triggering an RSC refetch of the list.
+      const params = new URLSearchParams(globalThis.location.search);
+      params.set("openProjectId", p.id);
+      globalThis.history.replaceState(null, "", `/projekte?${params.toString()}`);
     },
-    [router],
+    [],
   );
 
   const handleDeleteRow = useCallback(
@@ -304,13 +307,12 @@ export function ProjekteListClient({
           setOpen(next);
           if (!next) {
             setSelected(null);
-            if (typeof window !== "undefined") {
-              const params = new URLSearchParams(window.location.search);
-              if (params.has("openProjectId")) {
-                params.delete("openProjectId");
-                const suffix = params.toString();
-                router.replace(suffix ? `/projekte?${suffix}` : "/projekte", { scroll: false });
-              }
+            // Strip ?openProjectId without triggering an RSC refetch.
+            const params = new URLSearchParams(globalThis.location.search);
+            if (params.has("openProjectId")) {
+              params.delete("openProjectId");
+              const suffix = params.toString();
+              globalThis.history.replaceState(null, "", suffix ? `/projekte?${suffix}` : "/projekte");
             }
           }
         }}

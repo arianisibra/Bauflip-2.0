@@ -11,8 +11,15 @@ import {
   getProjectCore,
   updateProject,
 } from "@/lib/db/repository";
+import type { ProjectCore } from "@/lib/db/repository";
 import type { ProjectStatus } from "@/lib/domain/types";
 import { projectStammdatenUpdateSchema, appointmentSchema } from "@/lib/validations/forms";
+
+async function coreOrThrow(projectId: string): Promise<ProjectCore> {
+  const bundle = await getProjectCore(projectId);
+  if (!bundle) throw new Error("Projekt nicht gefunden.");
+  return bundle;
+}
 
 function nz(s: string | undefined | null): string | null {
   if (s == null) return null;
@@ -38,7 +45,7 @@ export async function getProjectSheetDataAction(projectId: string) {
   return { bundle };
 }
 
-export async function updateProjectStammdatenAction(values: unknown) {
+export async function updateProjectStammdatenAction(values: unknown): Promise<{ core: ProjectCore }> {
   const session = await getCurrentSession();
   if (!session || (session.role !== "office" && session.role !== "admin")) {
     throw new Error("Keine Berechtigung.");
@@ -70,10 +77,12 @@ export async function updateProjectStammdatenAction(values: unknown) {
     nextOwnerUserId: v.nextOwnerUserId && v.nextOwnerUserId !== "" ? v.nextOwnerUserId : null,
   });
 
+  const core = await coreOrThrow(v.projectId);
   revalidateProjekteSoon();
+  return { core };
 }
 
-export async function addAppointmentAction(input: unknown) {
+export async function addAppointmentAction(input: unknown): Promise<{ core: ProjectCore }> {
   const session = await getCurrentSession();
   if (!session || (session.role !== "office" && session.role !== "admin")) {
     throw new Error("Keine Berechtigung.");
@@ -91,16 +100,23 @@ export async function addAppointmentAction(input: unknown) {
     assignedTechnicianId: v.assignedTechnicianId ?? null,
     planningNotes: v.planningNotes ?? null,
   });
+  const core = await coreOrThrow(v.projectId);
   revalidateProjekteSoon();
+  return { core };
 }
 
-export async function deleteAppointmentAction(appointmentId: string) {
+export async function deleteAppointmentAction(
+  appointmentId: string,
+  projectId: string,
+): Promise<{ core: ProjectCore }> {
   const session = await getCurrentSession();
   if (!session || (session.role !== "office" && session.role !== "admin")) {
     throw new Error("Keine Berechtigung.");
   }
   await deleteAppointment(appointmentId);
+  const core = await coreOrThrow(projectId);
   revalidateProjekteSoon();
+  return { core };
 }
 
 export async function deleteProjectAction(projectId: string) {
@@ -115,20 +131,30 @@ export async function deleteProjectAction(projectId: string) {
   revalidateProjekteSoon();
 }
 
-export async function updateProjectStatusAction(projectId: string, status: ProjectStatus) {
+export async function updateProjectStatusAction(
+  projectId: string,
+  status: ProjectStatus,
+): Promise<{ core: ProjectCore }> {
   const session = await getCurrentSession();
   if (!session || (session.role !== "office" && session.role !== "admin")) {
     throw new Error("Keine Berechtigung.");
   }
   await updateProject(projectId, { status });
+  const core = await coreOrThrow(projectId);
   revalidateProjekteSoon();
+  return { core };
 }
 
-export async function deleteReportAction(reportId: string) {
+export async function deleteReportAction(
+  reportId: string,
+  projectId: string,
+): Promise<{ core: ProjectCore }> {
   const session = await getCurrentSession();
   if (!session || session.role !== "admin") {
     throw new Error("Keine Berechtigung.");
   }
   await deleteTechnicianReport(reportId);
+  const core = await coreOrThrow(projectId);
   revalidateProjekteSoon();
+  return { core };
 }
