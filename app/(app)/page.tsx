@@ -1,10 +1,7 @@
 import { redirect } from "next/navigation";
-import { getCurrentSession } from "@/lib/auth/session";
 
-export default async function AppRootPage() {
-  const session = await getCurrentSession();
-  if (session?.role === "technician") {
-    redirect("/tag");
-  }
+// Role-based routing happens in proxy.ts (middleware) before this renders.
+// Kept as a safety net in case middleware is bypassed.
+export default function AppRootPage() {
   redirect("/projekte");
 }
