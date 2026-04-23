@@ -46,3 +46,33 @@ export function dispatchRealtimeEvent(qc: QueryClient, event: RealtimeEvent): vo
       return;
   }
 }
+
+// ─── BroadcastChannel bridge (same-origin cross-tab sync) ───────────────────
+
+const CHANNEL_NAME = "bauflip-cache-events";
+
+type Sentinel = { __bauflipChannel?: BroadcastChannel };
+
+/** Lazy singleton. Returns null in environments without BroadcastChannel. */
+function getChannel(): BroadcastChannel | null {
+  if (typeof BroadcastChannel === "undefined") return null;
+  const g = globalThis as unknown as Sentinel;
+  g.__bauflipChannel ??= new BroadcastChannel(CHANNEL_NAME);
+  return g.__bauflipChannel;
+}
+
+/** Publish an event so other tabs invalidate their matching queries. */
+export function broadcast(event: RealtimeEvent): void {
+  getChannel()?.postMessage(event);
+}
+
+/** Subscribe a QueryClient to incoming broadcasts from other tabs. Returns unsubscribe. */
+export function subscribeToBroadcast(qc: QueryClient): () => void {
+  const ch = getChannel();
+  if (!ch) return () => {};
+  const handler = (e: MessageEvent) => {
+    dispatchRealtimeEvent(qc, e.data as RealtimeEvent);
+  };
+  ch.addEventListener("message", handler);
+  return () => ch.removeEventListener("message", handler);
+}

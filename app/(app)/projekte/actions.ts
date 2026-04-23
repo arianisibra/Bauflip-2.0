@@ -7,11 +7,12 @@ import {
   deleteAppointment,
   deleteTechnicianReport,
   getProjectCore,
+  listAssignableProfiles,
   updateProject,
 } from "@/lib/db/repository";
 import type { ProjectCore } from "@/lib/db/repository";
 import { listProjectsForOffice } from "@/lib/db/repository";
-import type { OfficeProjectListItem, ProjectStatus } from "@/lib/domain/types";
+import type { OfficeProjectListItem, ProjectStatus, UserProfile } from "@/lib/domain/types";
 import { projectStammdatenUpdateSchema, appointmentSchema } from "@/lib/validations/forms";
 
 // Note: mutation actions used to call `revalidatePath("/projekte")` via
@@ -49,6 +50,14 @@ export async function listProjectsForOfficeAction(): Promise<OfficeProjectListIt
     throw new Error("Keine Berechtigung.");
   }
   return listProjectsForOffice();
+}
+
+export async function listAssignableProfilesAction(): Promise<UserProfile[]> {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
+    throw new Error("Keine Berechtigung.");
+  }
+  return listAssignableProfiles();
 }
 
 export async function updateProjectStammdatenAction(values: unknown): Promise<{ core: ProjectCore }> {

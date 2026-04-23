@@ -12,13 +12,20 @@
  */
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { ProjectCore } from "@/lib/db/repository";
-import type { OfficeProjectListItem, ProjectStatus } from "@/lib/domain/types";
+import type {
+  OfficeProjectListItem,
+  OrderFormTemplate,
+  ProjectStatus,
+  UserProfile,
+  WeekTaskItem,
+} from "@/lib/domain/types";
 import {
   addAppointmentAction,
   deleteAppointmentAction,
   deleteProjectAction,
   deleteReportAction,
   getProjectSheetDataAction,
+  listAssignableProfilesAction,
   listProjectsForOfficeAction,
   updateProjectStammdatenAction,
   updateProjectStatusAction,
@@ -29,13 +36,25 @@ import {
   updateAttachmentNotesAction,
   uploadProjectReportFileAction,
 } from "@/app/(app)/actions";
+import { fetchMonthTasksAction } from "@/app/(app)/kalender/actions";
+import { fetchWeekTasksAction } from "@/app/(tech)/wochenplan/actions";
 import {
+  createOrderFormCmsAction,
+  updateOrderFormCmsAction,
+} from "@/app/(app)/order-form-cms-actions";
+import {
+  deleteOrderFormTemplateAction,
+  listOrderFormTemplatesForOrgAction,
+} from "@/app/(app)/order-form-template-actions";
+import {
+  afterOrderFormTemplateChange,
   afterProjectDeleted,
   invalidateAttachmentAdjacencies,
   invalidateProjectAdjacencies,
   invalidateReportAdjacencies,
 } from "./invalidations";
 import { queryKeys } from "./keys";
+import { broadcast } from "./realtime";
 
 type UploadResult = { success: true } | { success: false; error: string };
 
@@ -61,6 +80,36 @@ export function useProjectsList(initialData?: OfficeProjectListItem[]) {
   });
 }
 
+export function useAssignableProfiles(initialData?: UserProfile[]) {
+  return useQuery<UserProfile[]>({
+    queryKey: queryKeys.assignableProfiles(),
+    queryFn: () => listAssignableProfilesAction(),
+    initialData,
+  });
+}
+
+export function useWeekTasks(isoDate: string) {
+  return useQuery<WeekTaskItem[]>({
+    queryKey: queryKeys.weekTasks.byDate(isoDate),
+    queryFn: () => fetchWeekTasksAction(isoDate),
+  });
+}
+
+export function useMonthTasks(year: number, month: number) {
+  return useQuery<WeekTaskItem[]>({
+    queryKey: queryKeys.monthTasks.byYearMonth(year, month),
+    queryFn: () => fetchMonthTasksAction(year, month),
+  });
+}
+
+export function useOrderFormTemplates(initialData?: OrderFormTemplate[]) {
+  return useQuery<OrderFormTemplate[]>({
+    queryKey: queryKeys.orderFormTemplates.all(),
+    queryFn: () => listOrderFormTemplatesForOrgAction(),
+    initialData,
+  });
+}
+
 // ───────── Mutation helpers ─────────
 
 /** Seed the core cache with a fresh bundle so the sheet re-renders without a refetch. */
@@ -77,6 +126,7 @@ export function useUpdateStammdaten() {
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
       invalidateProjectAdjacencies(qc, core.project.id);
+      broadcast({ type: "project.core_changed", projectId: core.project.id });
     },
   });
 }
@@ -88,6 +138,7 @@ export function useAddAppointment() {
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
       invalidateProjectAdjacencies(qc, core.project.id);
+      broadcast({ type: "appointment.changed", projectId: core.project.id });
     },
   });
 }
@@ -99,6 +150,7 @@ export function useDeleteAppointment() {
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
       invalidateProjectAdjacencies(qc, core.project.id);
+      broadcast({ type: "appointment.changed", projectId: core.project.id });
     },
   });
 }
@@ -110,6 +162,7 @@ export function useUpdateProjectStatus() {
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
       invalidateProjectAdjacencies(qc, core.project.id);
+      broadcast({ type: "project.core_changed", projectId: core.project.id });
     },
   });
 }
@@ -121,6 +174,7 @@ export function useDeleteReport() {
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
       invalidateReportAdjacencies(qc, core.project.id);
+      broadcast({ type: "report.changed", projectId: core.project.id });
     },
   });
 }
@@ -131,6 +185,7 @@ export function useDeleteProject() {
     mutationFn: (projectId) => deleteProjectAction(projectId),
     onSuccess: (_, projectId) => {
       afterProjectDeleted(qc, projectId);
+      broadcast({ type: "project.deleted", projectId });
     },
   });
 }
@@ -139,8 +194,47 @@ export function useCreateIntake() {
   const qc = useQueryClient();
   return useMutation<{ projectId: string }, Error, FormData>({
     mutationFn: (formData) => createIntakeAction(formData),
-    onSuccess: () => {
+    onSuccess: ({ projectId }) => {
       qc.invalidateQueries({ queryKey: queryKeys.projects.list() });
+      // Reuse `project.core_changed` — receivers will invalidate the list.
+      broadcast({ type: "project.core_changed", projectId });
+    },
+  });
+}
+
+// ───────── Order form template mutations ─────────
+
+type CmsPayload = Parameters<typeof createOrderFormCmsAction>[0];
+
+export function useCreateOrderFormTemplate() {
+  const qc = useQueryClient();
+  return useMutation<{ id: string }, Error, CmsPayload>({
+    mutationFn: (payload) => createOrderFormCmsAction(payload),
+    onSuccess: () => {
+      afterOrderFormTemplateChange(qc);
+      broadcast({ type: "order_form_template.changed" });
+    },
+  });
+}
+
+export function useUpdateOrderFormTemplate() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, { templateId: string; payload: CmsPayload }>({
+    mutationFn: ({ templateId, payload }) => updateOrderFormCmsAction(templateId, payload),
+    onSuccess: () => {
+      afterOrderFormTemplateChange(qc);
+      broadcast({ type: "order_form_template.changed" });
+    },
+  });
+}
+
+export function useDeleteOrderFormTemplate() {
+  const qc = useQueryClient();
+  return useMutation<unknown, Error, string>({
+    mutationFn: (templateId) => deleteOrderFormTemplateAction(templateId),
+    onSuccess: () => {
+      afterOrderFormTemplateChange(qc);
+      broadcast({ type: "order_form_template.changed" });
     },
   });
 }

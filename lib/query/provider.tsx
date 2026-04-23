@@ -1,7 +1,8 @@
 "use client";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState, type ReactNode } from "react";
+import { subscribeToBroadcast } from "./realtime";
 
 /**
  * One QueryClient per browser session. `useState` gives each component tree
@@ -26,7 +27,24 @@ function makeQueryClient(): QueryClient {
   });
 }
 
-export function QueryProvider({ children }: { children: ReactNode }) {
+export function QueryProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [client] = useState(makeQueryClient);
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={client}>
+      <BroadcastBridge />
+      {children}
+    </QueryClientProvider>
+  );
+}
+
+/**
+ * Subscribes this tab's QueryClient to the cross-tab BroadcastChannel so that
+ * a mutation in tab A invalidates the matching queries in tab B without any
+ * server round-trip. The wire is already in place for SSE/Realtime later —
+ * same `dispatchRealtimeEvent` entry point.
+ */
+function BroadcastBridge() {
+  const qc = useQueryClient();
+  useEffect(() => subscribeToBroadcast(qc), [qc]);
+  return null;
 }

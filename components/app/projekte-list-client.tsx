@@ -6,7 +6,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { OfficeProjectListItem, UserProfile } from "@/lib/domain/types";
 import { projectStatusLabels } from "@/lib/domain/types";
-import { useDeleteProject, useProjectsList } from "@/lib/query/hooks";
+import { useAssignableProfiles, useDeleteProject, useProjectsList } from "@/lib/query/hooks";
 import { ListPageToolbar } from "@/components/app/list-page-toolbar";
 import { Sheet } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -91,7 +91,7 @@ const ProjectTableRow = memo(function ProjectTableRow({
 
 export function ProjekteListClient({
   projects: initialProjects,
-  technicians,
+  technicians: initialTechnicians,
   canEditProjectSheet,
   initialOpenProjectId,
 }: {
@@ -101,6 +101,8 @@ export function ProjekteListClient({
   initialOpenProjectId?: string;
 }) {
   const { data: projects = initialProjects } = useProjectsList(initialProjects);
+  // Seed the assignable-profiles cache; the sheet editor reads via the same hook.
+  useAssignableProfiles(initialTechnicians);
   const deleteProject = useDeleteProject();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -321,7 +323,6 @@ export function ProjekteListClient({
             projectId={selected.id}
             open={open}
             canEdit={canEditProjectSheet}
-            technicians={technicians}
           />
         ) : null}
       </Sheet>

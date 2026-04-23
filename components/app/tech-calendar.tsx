@@ -1,13 +1,15 @@
 "use client";
 
-import { useCallback, useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import type { WeekTaskItem } from "@/lib/domain/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react";
-import { fetchWeekTasksAction } from "@/app/(tech)/wochenplan/actions";
+import { useWeekTasks } from "@/lib/query/hooks";
+import { queryKeys } from "@/lib/query/keys";
 
 const DAY_NAMES_SHORT = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
@@ -50,9 +52,18 @@ export function TechCalendar({
   initialTasks: WeekTaskItem[];
   userId: string;
 }) {
+  const qc = useQueryClient();
   const [refDate, setRefDate] = useState(() => new Date());
-  const [tasks, setTasks] = useState(initialTasks);
-  const [pending, startTransition] = useTransition();
+  const refDateIso = useMemo(() => refDate.toISOString(), [refDate]);
+
+  // Seed the initial week's cache from SSR so the first render has data without a fetch.
+  useMemo(() => {
+    qc.setQueryData(queryKeys.weekTasks.byDate(refDateIso), initialTasks);
+    // Run once on mount for the initial date — subsequent dates fetch via the hook.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const { data: tasks = [], isFetching: pending } = useWeekTasks(refDateIso);
 
   const todayKey = useMemo(() => toSwissDateKey(new Date()), []);
   const weekDates = useMemo(() => getWeekDates(refDate), [refDate]);
@@ -73,10 +84,6 @@ export function TechCalendar({
       const next = new Date(refDate);
       next.setDate(refDate.getDate() + dir * 7);
       setRefDate(next);
-      startTransition(async () => {
-        const result = await fetchWeekTasksAction(next.toISOString());
-        setTasks(result);
-      });
     },
     [refDate],
   );

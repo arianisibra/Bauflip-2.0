@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import type { TechnicianReport, UserProfile, ProjectStatus } from "@/lib/domain/types";
+import type { TechnicianReport, ProjectStatus } from "@/lib/domain/types";
 import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 import {
   useAddAppointment,
+  useAssignableProfiles,
   useDeleteAppointment,
   useDeleteReport,
   useProjectCore,
@@ -313,14 +314,13 @@ export function ProjektSheetEditor({
   projectId,
   open,
   canEdit,
-  technicians,
 }: {
   projectId: string;
   open: boolean;
   canEdit: boolean;
-  technicians: UserProfile[];
 }) {
   const coreQuery = useProjectCore(projectId, open);
+  const { data: technicians = [] } = useAssignableProfiles();
   const updateStammdaten = useUpdateStammdaten();
   const addAppointment = useAddAppointment();
   const deleteAppointment = useDeleteAppointment();

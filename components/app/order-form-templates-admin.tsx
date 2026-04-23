@@ -1,11 +1,14 @@
 "use client";
 
-import { useCallback, useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useMemo, useState } from "react";
+import {
+  useCreateOrderFormTemplate,
+  useDeleteOrderFormTemplate,
+  useOrderFormTemplates,
+  useUpdateOrderFormTemplate,
+} from "@/lib/query/hooks";
 import { toast } from "sonner";
 import type { OrderFormTemplate } from "@/lib/domain/types";
-import { createOrderFormCmsAction, updateOrderFormCmsAction } from "@/app/(app)/order-form-cms-actions";
-import { deleteOrderFormTemplateAction } from "@/app/(app)/order-form-template-actions";
 import type { OrderFormFieldDef } from "@/lib/order-forms/schema";
 import { orderFormFieldsSchema, slugifyOrderFormSlug } from "@/lib/order-forms/schema";
 import { Badge } from "@/components/ui/badge";
@@ -424,8 +427,9 @@ function CmsFormEditor({
   template: OrderFormTemplate;
   onDeleted: () => void;
 }) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const updateTpl = useUpdateOrderFormTemplate();
+  const deleteTpl = useDeleteOrderFormTemplate();
+  const pending = updateTpl.isPending || deleteTpl.isPending;
   const [error, setError] = useState<string | null>(null);
 
   const [supplierName, setSupplierName] = useState(template.supplierName ?? "");
@@ -486,7 +490,7 @@ function CmsFormEditor({
     });
   }, []);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setError(null);
     const defs = uiFieldsToDefs(fields);
     const parsed = orderFormFieldsSchema.safeParse(defs);
@@ -495,36 +499,33 @@ function CmsFormEditor({
       return;
     }
     const sortNum = Number(sortOrder) || 0;
-    startTransition(async () => {
-      try {
-        await updateOrderFormCmsAction(template.id, {
+    try {
+      await updateTpl.mutateAsync({
+        templateId: template.id,
+        payload: {
           supplierName,
           name: formName.trim(),
           description: template.description ?? "",
           sortOrder: sortNum,
           isActive,
           fields: parsed.data,
-        });
-        toast.success("Formular gespeichert");
-        router.refresh();
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
-      }
-    });
+        },
+      });
+      toast.success("Formular gespeichert");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
+    }
   };
 
-  const handleDeleteForm = () => {
+  const handleDeleteForm = async () => {
     if (!window.confirm(`Formular „${formName}" wirklich löschen?`)) return;
-    startTransition(async () => {
-      try {
-        await deleteOrderFormTemplateAction(template.id);
-        toast.success("Formular gelöscht");
-        router.refresh();
-        onDeleted();
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Löschen fehlgeschlagen.");
-      }
-    });
+    try {
+      await deleteTpl.mutateAsync(template.id);
+      toast.success("Formular gelöscht");
+      onDeleted();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Löschen fehlgeschlagen.");
+    }
   };
 
   return (
@@ -670,10 +671,11 @@ function CmsFormEditor({
 // Main export
 // ---------------------------------------------------------------------------
 
-export function OrderFormTemplatesAdmin({ templates }: { templates: OrderFormTemplate[] }) {
-  const router = useRouter();
+export function OrderFormTemplatesAdmin({ templates: initialTemplates }: { templates: OrderFormTemplate[] }) {
+  const { data: templates = initialTemplates } = useOrderFormTemplates(initialTemplates);
+  const createTpl = useCreateOrderFormTemplate();
+  const createPending = createTpl.isPending;
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [createPending, startCreateTransition] = useTransition();
   const [createError, setCreateError] = useState<string | null>(null);
   const [newSupplier, setNewSupplier] = useState("");
   const [newFormName, setNewFormName] = useState("");
@@ -689,31 +691,28 @@ export function OrderFormTemplatesAdmin({ templates }: { templates: OrderFormTem
 
   const selected = selectedId ? templates.find((t) => t.id === selectedId) : undefined;
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     setCreateError(null);
     const name = newFormName.trim();
     if (name.length < 2) {
       setCreateError("Bitte Formularname angeben (min. 2 Zeichen).");
       return;
     }
-    startCreateTransition(async () => {
-      try {
-        const { id } = await createOrderFormCmsAction({
-          supplierName: newSupplier,
-          name,
-          sortOrder: 0,
-          isActive: true,
-          fields: [],
-        });
-        setNewFormName("");
-        setNewSupplier("");
-        setSelectedId(id);
-        toast.success("Formular erstellt");
-        router.refresh();
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Anlegen fehlgeschlagen.");
-      }
-    });
+    try {
+      const { id } = await createTpl.mutateAsync({
+        supplierName: newSupplier,
+        name,
+        sortOrder: 0,
+        isActive: true,
+        fields: [],
+      });
+      setNewFormName("");
+      setNewSupplier("");
+      setSelectedId(id);
+      toast.success("Formular erstellt");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Anlegen fehlgeschlagen.");
+    }
   };
 
   return (

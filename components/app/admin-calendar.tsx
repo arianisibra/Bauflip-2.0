@@ -1,13 +1,15 @@
 "use client";
 
-import { useCallback, useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import type { WeekTaskItem } from "@/lib/domain/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { fetchMonthTasksAction } from "@/app/(app)/kalender/actions";
+import { useMonthTasks } from "@/lib/query/hooks";
+import { queryKeys } from "@/lib/query/keys";
 
 const DAY_NAMES = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
@@ -79,13 +81,19 @@ export function AdminCalendar({
   initialYear: number;
   initialMonth: number;
 }) {
+  const qc = useQueryClient();
   const [year, setYear] = useState(initialYear);
   const [month, setMonth] = useState(initialMonth);
-  const [tasks, setTasks] = useState(initialTasks);
-  const [pending, startTransition] = useTransition();
+
+  // Seed initial month cache from SSR once — subsequent nav fetches via the hook.
+  useMemo(() => {
+    qc.setQueryData(queryKeys.monthTasks.byYearMonth(initialYear, initialMonth), initialTasks);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const { data: tasks = [], isFetching: pending } = useMonthTasks(year, month);
 
   const todayKey = useMemo(() => toSwissDateKey(new Date()), []);
-
   const cells = useMemo(() => getMonthGrid(year, month), [year, month]);
 
   const tasksByDate = useMemo(() => {
@@ -112,10 +120,6 @@ export function AdminCalendar({
       }
       setYear(newYear);
       setMonth(newMonth);
-      startTransition(async () => {
-        const result = await fetchMonthTasksAction(newYear, newMonth);
-        setTasks(result);
-      });
     },
     [year, month],
   );
