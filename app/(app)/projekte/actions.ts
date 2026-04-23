@@ -1,7 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { after } from "next/server";
 import { getCurrentSession } from "@/lib/auth/session";
 import {
   addAppointment,
@@ -12,8 +10,14 @@ import {
   updateProject,
 } from "@/lib/db/repository";
 import type { ProjectCore } from "@/lib/db/repository";
-import type { ProjectStatus } from "@/lib/domain/types";
+import { listProjectsForOffice } from "@/lib/db/repository";
+import type { OfficeProjectListItem, ProjectStatus } from "@/lib/domain/types";
 import { projectStammdatenUpdateSchema, appointmentSchema } from "@/lib/validations/forms";
+
+// Note: mutation actions used to call `revalidatePath("/projekte")` via
+// `after()`. That's been removed — client cache is owned by TanStack Query,
+// and `/projekte` is dynamically rendered, so there's no server-side cache
+// entry to flush. Keeping revalidatePath would force a redundant RSC refetch.
 
 async function coreOrThrow(projectId: string): Promise<ProjectCore> {
   const bundle = await getProjectCore(projectId);
@@ -27,12 +31,6 @@ function nz(s: string | undefined | null): string | null {
   return t === "" ? null : t;
 }
 
-function revalidateProjekteSoon() {
-  after(() => {
-    revalidatePath("/projekte");
-  });
-}
-
 export async function getProjectSheetDataAction(projectId: string) {
   const session = await getCurrentSession();
   if (!session || (session.role !== "office" && session.role !== "admin")) {
@@ -43,6 +41,14 @@ export async function getProjectSheetDataAction(projectId: string) {
     throw new Error("Projekt nicht gefunden.");
   }
   return { bundle };
+}
+
+export async function listProjectsForOfficeAction(): Promise<OfficeProjectListItem[]> {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
+    throw new Error("Keine Berechtigung.");
+  }
+  return listProjectsForOffice();
 }
 
 export async function updateProjectStammdatenAction(values: unknown): Promise<{ core: ProjectCore }> {
@@ -78,7 +84,6 @@ export async function updateProjectStammdatenAction(values: unknown): Promise<{ 
   });
 
   const core = await coreOrThrow(v.projectId);
-  revalidateProjekteSoon();
   return { core };
 }
 
@@ -101,7 +106,6 @@ export async function addAppointmentAction(input: unknown): Promise<{ core: Proj
     planningNotes: v.planningNotes ?? null,
   });
   const core = await coreOrThrow(v.projectId);
-  revalidateProjekteSoon();
   return { core };
 }
 
@@ -115,7 +119,6 @@ export async function deleteAppointmentAction(
   }
   await deleteAppointment(appointmentId);
   const core = await coreOrThrow(projectId);
-  revalidateProjekteSoon();
   return { core };
 }
 
@@ -128,7 +131,6 @@ export async function deleteProjectAction(projectId: string) {
     throw new Error("Projekt-ID fehlt.");
   }
   await deleteProject(projectId);
-  revalidateProjekteSoon();
 }
 
 export async function updateProjectStatusAction(
@@ -141,7 +143,6 @@ export async function updateProjectStatusAction(
   }
   await updateProject(projectId, { status });
   const core = await coreOrThrow(projectId);
-  revalidateProjekteSoon();
   return { core };
 }
 
@@ -155,6 +156,5 @@ export async function deleteReportAction(
   }
   await deleteTechnicianReport(reportId);
   const core = await coreOrThrow(projectId);
-  revalidateProjekteSoon();
   return { core };
 }

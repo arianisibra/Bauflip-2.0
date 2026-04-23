@@ -3,11 +3,10 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import dynamic from "next/dynamic";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { OfficeProjectListItem, UserProfile } from "@/lib/domain/types";
 import { projectStatusLabels } from "@/lib/domain/types";
-import { deleteProjectAction } from "@/app/(app)/projekte/actions";
+import { useDeleteProject, useProjectsList } from "@/lib/query/hooks";
 import { ListPageToolbar } from "@/components/app/list-page-toolbar";
 import { Sheet } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -91,7 +90,7 @@ const ProjectTableRow = memo(function ProjectTableRow({
 });
 
 export function ProjekteListClient({
-  projects,
+  projects: initialProjects,
   technicians,
   canEditProjectSheet,
   initialOpenProjectId,
@@ -101,13 +100,13 @@ export function ProjekteListClient({
   canEditProjectSheet: boolean;
   initialOpenProjectId?: string;
 }) {
+  const { data: projects = initialProjects } = useProjectsList(initialProjects);
+  const deleteProject = useDeleteProject();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<OfficeProjectListItem | null>(null);
   const [intakeOpen, setIntakeOpen] = useState(false);
   const [pendingOpenProjectId, setPendingOpenProjectId] = useState(initialOpenProjectId ?? "");
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const router = useRouter();
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
 
@@ -178,22 +177,19 @@ export function ProjekteListClient({
       const ok = window.confirm(`Projekt "${p.title}" wirklich löschen?`);
       if (!ok) return;
       try {
-        setDeletingId(p.id);
-        await deleteProjectAction(p.id);
+        await deleteProject.mutateAsync(p.id);
         toast.success("Projekt gelöscht");
         if (selectedRef.current?.id === p.id) {
           setOpen(false);
           setSelected(null);
         }
-        router.refresh();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Löschen fehlgeschlagen.");
-      } finally {
-        setDeletingId(null);
       }
     },
-    [router],
+    [deleteProject],
   );
+  const deletingId = deleteProject.isPending ? (deleteProject.variables as string | undefined) ?? null : null;
 
   return (
     <>
@@ -332,7 +328,16 @@ export function ProjekteListClient({
 
       <Sheet open={intakeOpen} onOpenChange={setIntakeOpen} title="Neue Anfrage" className="max-w-2xl overflow-y-auto">
         <div className="p-4">
-          <IntakeForm />
+          <IntakeForm
+            onCreated={(projectId) => {
+              // The project is already in the refetched list; surface it in the sheet.
+              setIntakeOpen(false);
+              setPendingOpenProjectId(projectId);
+              const params = new URLSearchParams(globalThis.location.search);
+              params.set("openProjectId", projectId);
+              globalThis.history.pushState(null, "", `/projekte?${params.toString()}`);
+            }}
+          />
         </div>
       </Sheet>
     </>

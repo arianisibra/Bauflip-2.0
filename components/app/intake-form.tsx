@@ -1,50 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { createIntakeAction } from "@/app/(app)/actions";
+import { useCreateIntake } from "@/lib/query/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
-export function IntakeForm() {
-  const router = useRouter();
+export function IntakeForm({ onCreated }: { onCreated?: (projectId: string) => void }) {
+  const createIntake = useCreateIntake();
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const pending = createIntake.isPending;
 
   return (
     <form
       className="flex flex-col gap-4"
       action={async (fd) => {
         setError(null);
-        setPending(true);
         try {
-          const res = await createIntakeAction(fd);
-          if (res?.projectId) {
-            // Kein `router.refresh()` vor `push`: Refresh würde dieselbe /projekte-RSC sofort erneut ausführen;
-            // schlägt das fehl, landet die Next-Production-Meldung im `catch` obwohl der Auftrag schon angelegt ist.
-            router.push(`/projekte?openProjectId=${encodeURIComponent(res.projectId)}`);
-          } else {
-            try {
-              router.refresh();
-            } catch (refreshErr) {
-              console.warn("[intake] router.refresh nach Anlage ohne projectId", refreshErr);
-            }
-          }
+          const res = await createIntake.mutateAsync(fd);
+          if (res?.projectId) onCreated?.(res.projectId);
         } catch (e) {
-          const raw = e instanceof Error ? e.message : String(e);
-          const digest = e instanceof Error && "digest" in e ? String((e as Error & { digest?: string }).digest ?? "") : "";
-          const isNextGeneric =
-            raw.includes("An error occurred in the Server Components render") ||
-            raw.includes("server components render");
-          setError(
-            isNextGeneric
-              ? `Der Server konnte die Seite nach dem Speichern nicht aktualisieren. Bitte die Seite neu laden.${digest ? ` (Referenz: ${digest})` : ""}`
-              : raw || "Speichern fehlgeschlagen.",
-          );
-        } finally {
-          setPending(false);
+          setError(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
         }
       }}
     >

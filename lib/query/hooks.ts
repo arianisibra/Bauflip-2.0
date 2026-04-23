@@ -12,27 +12,28 @@
  */
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { ProjectCore } from "@/lib/db/repository";
-import type { ProjectStatus } from "@/lib/domain/types";
+import type { OfficeProjectListItem, ProjectStatus } from "@/lib/domain/types";
 import {
   addAppointmentAction,
   deleteAppointmentAction,
   deleteProjectAction,
   deleteReportAction,
   getProjectSheetDataAction,
+  listProjectsForOfficeAction,
   updateProjectStammdatenAction,
   updateProjectStatusAction,
 } from "@/app/(app)/projekte/actions";
 import {
+  createIntakeAction,
   deleteAttachmentAction,
   updateAttachmentNotesAction,
   uploadProjectReportFileAction,
 } from "@/app/(app)/actions";
 import {
-  afterAppointmentChange,
-  afterAttachmentChange,
-  afterProjectCoreChange,
   afterProjectDeleted,
-  afterReportChange,
+  invalidateAttachmentAdjacencies,
+  invalidateProjectAdjacencies,
+  invalidateReportAdjacencies,
 } from "./invalidations";
 import { queryKeys } from "./keys";
 
@@ -52,6 +53,14 @@ export function useProjectCore(projectId: string | null, enabled = true) {
   });
 }
 
+export function useProjectsList(initialData?: OfficeProjectListItem[]) {
+  return useQuery<OfficeProjectListItem[]>({
+    queryKey: queryKeys.projects.list(),
+    queryFn: () => listProjectsForOfficeAction(),
+    initialData,
+  });
+}
+
 // ───────── Mutation helpers ─────────
 
 /** Seed the core cache with a fresh bundle so the sheet re-renders without a refetch. */
@@ -67,7 +76,7 @@ export function useUpdateStammdaten() {
     mutationFn: (values) => updateProjectStammdatenAction(values),
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
-      afterProjectCoreChange(qc, core.project.id);
+      invalidateProjectAdjacencies(qc, core.project.id);
     },
   });
 }
@@ -78,7 +87,7 @@ export function useAddAppointment() {
     mutationFn: (input) => addAppointmentAction(input),
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
-      afterAppointmentChange(qc, core.project.id);
+      invalidateProjectAdjacencies(qc, core.project.id);
     },
   });
 }
@@ -89,7 +98,7 @@ export function useDeleteAppointment() {
     mutationFn: ({ appointmentId, projectId }) => deleteAppointmentAction(appointmentId, projectId),
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
-      afterAppointmentChange(qc, core.project.id);
+      invalidateProjectAdjacencies(qc, core.project.id);
     },
   });
 }
@@ -100,7 +109,7 @@ export function useUpdateProjectStatus() {
     mutationFn: ({ projectId, status }) => updateProjectStatusAction(projectId, status),
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
-      afterProjectCoreChange(qc, core.project.id);
+      invalidateProjectAdjacencies(qc, core.project.id);
     },
   });
 }
@@ -111,7 +120,7 @@ export function useDeleteReport() {
     mutationFn: ({ reportId, projectId }) => deleteReportAction(reportId, projectId),
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
-      afterReportChange(qc, core.project.id);
+      invalidateReportAdjacencies(qc, core.project.id);
     },
   });
 }
@@ -126,12 +135,22 @@ export function useDeleteProject() {
   });
 }
 
+export function useCreateIntake() {
+  const qc = useQueryClient();
+  return useMutation<{ projectId: string }, Error, FormData>({
+    mutationFn: (formData) => createIntakeAction(formData),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.projects.list() });
+    },
+  });
+}
+
 export function useUploadAttachment() {
   const qc = useQueryClient();
   return useMutation<UploadResult, Error, { formData: FormData; projectId: string }>({
     mutationFn: ({ formData }) => uploadProjectReportFileAction(formData),
     onSuccess: (result, { projectId }) => {
-      if (result.success) afterAttachmentChange(qc, projectId);
+      if (result.success) invalidateAttachmentAdjacencies(qc, projectId);
     },
   });
 }
@@ -141,7 +160,7 @@ export function useUpdateAttachmentNotes() {
   return useMutation<UploadResult, Error, { attachmentId: string; notes: string; projectId: string }>({
     mutationFn: ({ attachmentId, notes }) => updateAttachmentNotesAction(attachmentId, notes),
     onSuccess: (result, { projectId }) => {
-      if (result.success) afterAttachmentChange(qc, projectId);
+      if (result.success) invalidateAttachmentAdjacencies(qc, projectId);
     },
   });
 }
@@ -151,7 +170,7 @@ export function useDeleteAttachment() {
   return useMutation<UploadResult, Error, { attachmentId: string; filePath: string; projectId: string }>({
     mutationFn: ({ attachmentId, filePath }) => deleteAttachmentAction(attachmentId, filePath),
     onSuccess: (result, { projectId }) => {
-      if (result.success) afterAttachmentChange(qc, projectId);
+      if (result.success) invalidateAttachmentAdjacencies(qc, projectId);
     },
   });
 }

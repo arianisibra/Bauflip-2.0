@@ -1,7 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { after } from "next/server";
 import { getCurrentSession } from "@/lib/auth/session";
 import { createProject, addProjectAttachment, getProjectCore, updateAttachmentNotes, deleteProjectAttachment } from "@/lib/db/repository";
 import { intakeSchema } from "@/lib/validations/forms";
@@ -65,11 +63,7 @@ export async function createIntakeAction(formData: FormData) {
     serviceCountry: "CH",
   });
 
-  // Nicht synchron während der Action: sonst kann Next die /projekte-RSC sofort neu ausführen;
-  // schlägt das fehl, landet die generische Production-Meldung im Client-`catch` (z. B. Intake-Formular).
-  after(() => {
-    revalidatePath("/projekte");
-  });
+  // Client-side cache invalidation is owned by TanStack via `useCreateIntake.onSuccess`.
   return { projectId: project.id };
 }
 
@@ -119,9 +113,7 @@ export async function uploadProjectReportFileAction(
     return { success: false, error: err instanceof Error ? err.message : "Upload fehlgeschlagen." };
   }
 
-  after(() => {
-    revalidatePath("/projekte");
-  });
+  // Client-side cache invalidation is owned by TanStack via `useUploadAttachment.onSuccess`.
   return { success: true };
 }
 
@@ -159,8 +151,6 @@ export async function deleteAttachmentAction(
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "Löschen fehlgeschlagen." };
   }
-  after(() => {
-    revalidatePath("/projekte");
-  });
+  // Client-side cache invalidation is owned by TanStack via `useDeleteAttachment.onSuccess`.
   return { success: true };
 }
