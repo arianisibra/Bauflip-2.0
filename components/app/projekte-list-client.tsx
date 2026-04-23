@@ -4,9 +4,11 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import dynamic from "next/dynamic";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import type { OfficeProjectListItem, UserProfile } from "@/lib/domain/types";
 import { projectStatusLabels } from "@/lib/domain/types";
-import { useAssignableProfiles, useDeleteProject, useProjectsList } from "@/lib/query/hooks";
+import { useDeleteProject, useProjectsList } from "@/lib/query/hooks";
+import { queryKeys } from "@/lib/query/keys";
 import { ListPageToolbar } from "@/components/app/list-page-toolbar";
 import { Sheet } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -100,9 +102,15 @@ export function ProjekteListClient({
   canEditProjectSheet: boolean;
   initialOpenProjectId?: string;
 }) {
+  const qc = useQueryClient();
   const { data: projects = initialProjects } = useProjectsList(initialProjects);
-  // Seed the assignable-profiles cache; the sheet editor reads via the same hook.
-  useAssignableProfiles(initialTechnicians);
+  // Seed the assignable-profiles cache WITHOUT subscribing — the sheet editor
+  // reads it via useAssignableProfiles() when it opens. Avoids a fetch on every
+  // /projekte page render.
+  useMemo(() => {
+    qc.setQueryData(queryKeys.assignableProfiles(), initialTechnicians);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const deleteProject = useDeleteProject();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);

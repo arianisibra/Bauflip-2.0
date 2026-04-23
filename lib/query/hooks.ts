@@ -85,6 +85,9 @@ export function useAssignableProfiles(initialData?: UserProfile[]) {
     queryKey: queryKeys.assignableProfiles(),
     queryFn: () => listAssignableProfilesAction(),
     initialData,
+    // Team membership changes rarely and is covered by SSE (`afterMembershipChange`),
+    // so we don't want time-based staleness to trigger periodic refetches.
+    staleTime: Infinity,
   });
 }
 
