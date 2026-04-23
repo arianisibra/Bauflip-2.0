@@ -1,0 +1,157 @@
+"use client";
+
+/**
+ * Query and mutation hooks for the project sheet.
+ *
+ * Rules:
+ * - Components never call `invalidateQueries` directly. Use these hooks; they
+ *   delegate to the central `invalidations` helpers.
+ * - Mutations that return a fresh `ProjectCore` seed the cache via
+ *   `setQueryData` before invalidating adjacent queries — no refetch of the
+ *   just-mutated resource.
+ */
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import type { ProjectCore } from "@/lib/db/repository";
+import type { ProjectStatus } from "@/lib/domain/types";
+import {
+  addAppointmentAction,
+  deleteAppointmentAction,
+  deleteProjectAction,
+  deleteReportAction,
+  getProjectSheetDataAction,
+  updateProjectStammdatenAction,
+  updateProjectStatusAction,
+} from "@/app/(app)/projekte/actions";
+import {
+  deleteAttachmentAction,
+  updateAttachmentNotesAction,
+  uploadProjectReportFileAction,
+} from "@/app/(app)/actions";
+import {
+  afterAppointmentChange,
+  afterAttachmentChange,
+  afterProjectCoreChange,
+  afterProjectDeleted,
+  afterReportChange,
+} from "./invalidations";
+import { queryKeys } from "./keys";
+
+type UploadResult = { success: true } | { success: false; error: string };
+
+// ───────── Queries ─────────
+
+export function useProjectCore(projectId: string | null, enabled = true) {
+  return useQuery<ProjectCore>({
+    queryKey: projectId ? queryKeys.projects.core(projectId) : ["projects", "core", "__disabled"],
+    enabled: Boolean(projectId) && enabled,
+    queryFn: async () => {
+      if (!projectId) throw new Error("projectId required");
+      const { bundle } = await getProjectSheetDataAction(projectId);
+      return bundle;
+    },
+  });
+}
+
+// ───────── Mutation helpers ─────────
+
+/** Seed the core cache with a fresh bundle so the sheet re-renders without a refetch. */
+function primeCore(qc: QueryClient, projectId: string, core: ProjectCore) {
+  qc.setQueryData(queryKeys.projects.core(projectId), core);
+}
+
+// ───────── Mutations ─────────
+
+export function useUpdateStammdaten() {
+  const qc = useQueryClient();
+  return useMutation<{ core: ProjectCore }, Error, Parameters<typeof updateProjectStammdatenAction>[0]>({
+    mutationFn: (values) => updateProjectStammdatenAction(values),
+    onSuccess: ({ core }) => {
+      primeCore(qc, core.project.id, core);
+      afterProjectCoreChange(qc, core.project.id);
+    },
+  });
+}
+
+export function useAddAppointment() {
+  const qc = useQueryClient();
+  return useMutation<{ core: ProjectCore }, Error, Parameters<typeof addAppointmentAction>[0]>({
+    mutationFn: (input) => addAppointmentAction(input),
+    onSuccess: ({ core }) => {
+      primeCore(qc, core.project.id, core);
+      afterAppointmentChange(qc, core.project.id);
+    },
+  });
+}
+
+export function useDeleteAppointment() {
+  const qc = useQueryClient();
+  return useMutation<{ core: ProjectCore }, Error, { appointmentId: string; projectId: string }>({
+    mutationFn: ({ appointmentId, projectId }) => deleteAppointmentAction(appointmentId, projectId),
+    onSuccess: ({ core }) => {
+      primeCore(qc, core.project.id, core);
+      afterAppointmentChange(qc, core.project.id);
+    },
+  });
+}
+
+export function useUpdateProjectStatus() {
+  const qc = useQueryClient();
+  return useMutation<{ core: ProjectCore }, Error, { projectId: string; status: ProjectStatus }>({
+    mutationFn: ({ projectId, status }) => updateProjectStatusAction(projectId, status),
+    onSuccess: ({ core }) => {
+      primeCore(qc, core.project.id, core);
+      afterProjectCoreChange(qc, core.project.id);
+    },
+  });
+}
+
+export function useDeleteReport() {
+  const qc = useQueryClient();
+  return useMutation<{ core: ProjectCore }, Error, { reportId: string; projectId: string }>({
+    mutationFn: ({ reportId, projectId }) => deleteReportAction(reportId, projectId),
+    onSuccess: ({ core }) => {
+      primeCore(qc, core.project.id, core);
+      afterReportChange(qc, core.project.id);
+    },
+  });
+}
+
+export function useDeleteProject() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: (projectId) => deleteProjectAction(projectId),
+    onSuccess: (_, projectId) => {
+      afterProjectDeleted(qc, projectId);
+    },
+  });
+}
+
+export function useUploadAttachment() {
+  const qc = useQueryClient();
+  return useMutation<UploadResult, Error, { formData: FormData; projectId: string }>({
+    mutationFn: ({ formData }) => uploadProjectReportFileAction(formData),
+    onSuccess: (result, { projectId }) => {
+      if (result.success) afterAttachmentChange(qc, projectId);
+    },
+  });
+}
+
+export function useUpdateAttachmentNotes() {
+  const qc = useQueryClient();
+  return useMutation<UploadResult, Error, { attachmentId: string; notes: string; projectId: string }>({
+    mutationFn: ({ attachmentId, notes }) => updateAttachmentNotesAction(attachmentId, notes),
+    onSuccess: (result, { projectId }) => {
+      if (result.success) afterAttachmentChange(qc, projectId);
+    },
+  });
+}
+
+export function useDeleteAttachment() {
+  const qc = useQueryClient();
+  return useMutation<UploadResult, Error, { attachmentId: string; filePath: string; projectId: string }>({
+    mutationFn: ({ attachmentId, filePath }) => deleteAttachmentAction(attachmentId, filePath),
+    onSuccess: (result, { projectId }) => {
+      if (result.success) afterAttachmentChange(qc, projectId);
+    },
+  });
+}

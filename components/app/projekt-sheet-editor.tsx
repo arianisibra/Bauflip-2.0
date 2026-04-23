@@ -1,20 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
-import type { ProjectCore } from "@/lib/db/repository";
-import type { ProjectStatus, TechnicianReport, UserProfile } from "@/lib/domain/types";
+import type { TechnicianReport, UserProfile, ProjectStatus } from "@/lib/domain/types";
 import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 import {
-  addAppointmentAction,
-  deleteAppointmentAction,
-  deleteReportAction,
-  getProjectSheetDataAction,
-  updateProjectStammdatenAction,
-  updateProjectStatusAction,
-} from "@/app/(app)/projekte/actions";
-import { uploadProjectReportFileAction } from "@/app/(app)/actions";
+  useAddAppointment,
+  useDeleteAppointment,
+  useDeleteReport,
+  useProjectCore,
+  useUpdateProjectStatus,
+  useUpdateStammdaten,
+  useUploadAttachment,
+} from "@/lib/query/hooks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -263,28 +262,24 @@ function StatusPipeline({
   projectId,
   currentStatus,
   canEdit,
-  onStatusChanged,
 }: {
   projectId: string;
   currentStatus: ProjectStatus;
   canEdit: boolean;
-  onStatusChanged: (core: ProjectCore) => void;
 }) {
-  const [pending, setPending] = useState(false);
+  const updateStatus = useUpdateProjectStatus();
   const actions = STATUS_PIPELINE[currentStatus] ?? [];
   const label = projectStatusLabels[currentStatus] ?? currentStatus;
 
-  const advance = async (nextStatus: ProjectStatus) => {
-    setPending(true);
-    try {
-      const { core } = await updateProjectStatusAction(projectId, nextStatus);
-      onStatusChanged(core);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setPending(false);
-    }
+  const advance = (nextStatus: ProjectStatus) => {
+    updateStatus.mutate({ projectId, status: nextStatus }, {
+      onError: (e) => {
+        console.error(e);
+        toast.error(e instanceof Error ? e.message : "Status konnte nicht geändert werden.");
+      },
+    });
   };
+  const pending = updateStatus.isPending;
 
   return (
     <div className="rounded-lg border border-border bg-muted/20 px-3 py-2.5">
@@ -325,37 +320,36 @@ export function ProjektSheetEditor({
   canEdit: boolean;
   technicians: UserProfile[];
 }) {
-  const [core, setCore] = useState<ProjectCore | null>(null);
+  const coreQuery = useProjectCore(projectId, open);
+  const updateStammdaten = useUpdateStammdaten();
+  const addAppointment = useAddAppointment();
+  const deleteAppointment = useDeleteAppointment();
+  const deleteReport = useDeleteReport();
+  const uploadAttachment = useUploadAttachment();
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      const { bundle } = await getProjectSheetDataAction(projectId);
-      setCore(bundle);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Laden fehlgeschlagen.");
-    }
-  }, [projectId]);
-
-  useEffect(() => {
-    if (open && projectId) {
-      void load();
-    }
-  }, [open, projectId, load]);
 
   if (!open) {
     return null;
   }
-  if (error && !core) {
-    return <p className="text-sm text-destructive">{error}</p>;
+  if (coreQuery.isError && !coreQuery.data) {
+    return (
+      <p className="text-sm text-destructive">
+        {coreQuery.error instanceof Error ? coreQuery.error.message : "Laden fehlgeschlagen."}
+      </p>
+    );
   }
-  if (!core) {
+  if (!coreQuery.data) {
     return <p className="text-sm text-muted-foreground">Laden…</p>;
   }
 
+  const core = coreQuery.data;
   const p = core.project;
+  const pending =
+    updateStammdaten.isPending ||
+    addAppointment.isPending ||
+    deleteAppointment.isPending ||
+    deleteReport.isPending ||
+    uploadAttachment.isPending;
 
   return (
     <div className="flex max-h-[min(80vh,720px)] flex-col gap-6 overflow-y-auto pr-1">
@@ -363,18 +357,16 @@ export function ProjektSheetEditor({
         projectId={projectId}
         currentStatus={p.status}
         canEdit={canEdit}
-        onStatusChanged={(core) => setCore(core)}
       />
       <form
         className="grid gap-3 sm:grid-cols-2"
-        onSubmit={async (e) => {
+        onSubmit={(e) => {
           e.preventDefault();
           if (!canEdit) return;
           const fd = new FormData(e.currentTarget);
-          setPending(true);
           setError(null);
-          try {
-            const { core: nextCore } = await updateProjectStammdatenAction({
+          updateStammdaten.mutate(
+            {
               projectId,
               title: String(fd.get("title") ?? ""),
               intakeOriginalText: String(fd.get("intakeOriginalText") ?? ""),
@@ -391,14 +383,12 @@ export function ProjektSheetEditor({
               hintsAndNotes: String(fd.get("hintsAndNotes") ?? ""),
               accessNotes: String(fd.get("accessNotes") ?? ""),
               nextOwnerUserId: String(fd.get("nextOwnerUserId") ?? ""),
-            });
-            toast.success("Projekt gespeichert");
-            setCore(nextCore);
-          } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Speichern fehlgeschlagen.");
-          } finally {
-            setPending(false);
-          }
+            },
+            {
+              onSuccess: () => toast.success("Projekt gespeichert"),
+              onError: (err) => toast.error(err instanceof Error ? err.message : "Speichern fehlgeschlagen."),
+            },
+          );
         }}
       >
         <div className="space-y-1 sm:col-span-2">
@@ -497,26 +487,24 @@ export function ProjektSheetEditor({
           <h3 className="mb-2 text-sm font-semibold">Termin planen</h3>
           <form
             className="grid gap-2 sm:grid-cols-2"
-            onSubmit={async (e) => {
+            onSubmit={(e) => {
               e.preventDefault();
               const fd = new FormData(e.currentTarget);
-              setPending(true);
-              try {
-                const starts = String(fd.get("startsAt") ?? "");
-                const ends = String(fd.get("endsAt") ?? "");
-                const { core: nextCore } = await addAppointmentAction({
+              const starts = String(fd.get("startsAt") ?? "");
+              const ends = String(fd.get("endsAt") ?? "");
+              addAppointment.mutate(
+                {
                   projectId,
                   kind: "ausfuehrung",
                   startsAt: new Date(starts).toISOString(),
                   endsAt: new Date(ends).toISOString(),
                   assignedTechnicianId: String(fd.get("assignedTechnicianId") ?? "") || null,
-                });
-                setCore(nextCore);
-              } catch (err) {
-                setError(err instanceof Error ? err.message : "Termin fehlgeschlagen.");
-              } finally {
-                setPending(false);
-              }
+                },
+                {
+                  onError: (err) =>
+                    setError(err instanceof Error ? err.message : "Termin fehlgeschlagen."),
+                },
+              );
             }}
           >
             <div className="space-y-1">
@@ -571,11 +559,16 @@ export function ProjektSheetEditor({
                       variant="ghost"
                       size="sm"
                       className="shrink-0 text-destructive hover:text-destructive"
-                      onClick={async () => {
+                      onClick={() => {
                         if (!window.confirm("Termin löschen?")) return;
-                        const { core: nextCore } = await deleteAppointmentAction(a.id, projectId);
-                        toast.success("Termin gelöscht");
-                        setCore(nextCore);
+                        deleteAppointment.mutate(
+                          { appointmentId: a.id, projectId },
+                          {
+                            onSuccess: () => toast.success("Termin gelöscht"),
+                            onError: (err) =>
+                              toast.error(err instanceof Error ? err.message : "Löschen fehlgeschlagen."),
+                          },
+                        );
                       }}
                     >
                       ×
@@ -600,15 +593,15 @@ export function ProjektSheetEditor({
             const file = input?.files?.[0];
             if (!file) return;
             fd.set("file", file);
-            setPending(true);
             try {
-              await uploadProjectReportFileAction(fd);
-              await load();
-              if (input) input.value = "";
+              const result = await uploadAttachment.mutateAsync({ formData: fd, projectId });
+              if (result.success) {
+                if (input) input.value = "";
+              } else {
+                setError(result.error);
+              }
             } catch (err) {
               setError(err instanceof Error ? err.message : "Upload fehlgeschlagen.");
-            } finally {
-              setPending(false);
             }
           }}
         >
@@ -636,15 +629,11 @@ export function ProjektSheetEditor({
                 report={r}
                 canEdit={canEdit}
                 onDelete={async () => {
-                  setPending(true);
                   try {
-                    const { core: nextCore } = await deleteReportAction(r.id, projectId);
+                    await deleteReport.mutateAsync({ reportId: r.id, projectId });
                     toast.success("Rapport gelöscht");
-                    setCore(nextCore);
                   } catch (e) {
                     toast.error(e instanceof Error ? e.message : "Löschen fehlgeschlagen.");
-                  } finally {
-                    setPending(false);
                   }
                 }}
               />
