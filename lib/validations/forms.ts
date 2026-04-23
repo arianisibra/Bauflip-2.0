@@ -24,8 +24,8 @@ export const appointmentSchema = z.object({
   kind: z.enum(["besichtigung", "ausfuehrung"]),
   startsAt: z.string().min(1),
   endsAt: z.string().min(1),
-  assignedTechnicianId: z.string().optional(),
-  planningNotes: z.string().optional(),
+  assignedTechnicianId: z.string().nullish(),
+  planningNotes: z.string().nullish(),
 });
 
 export const technicianReportSchema = z.object({

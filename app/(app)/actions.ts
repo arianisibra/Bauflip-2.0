@@ -1,7 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { after } from "next/server";
 import { getCurrentSession } from "@/lib/auth/session";
 import { createProject, addProjectAttachment, getProjectCore, updateAttachmentNotes, deleteProjectAttachment } from "@/lib/db/repository";
 import { intakeSchema } from "@/lib/validations/forms";
@@ -65,11 +63,7 @@ export async function createIntakeAction(formData: FormData) {
     serviceCountry: "CH",
   });
 
-  // Nicht synchron während der Action: sonst kann Next die /projekte-RSC sofort neu ausführen;
-  // schlägt das fehl, landet die generische Production-Meldung im Client-`catch` (z. B. Intake-Formular).
-  after(() => {
-    revalidatePath("/projekte");
-  });
+  // Client-side cache invalidation is owned by TanStack via `useCreateIntake.onSuccess`.
   return { projectId: project.id };
 }
 
@@ -78,6 +72,9 @@ export async function uploadProjectReportFileAction(
 ): Promise<{ success: true } | { success: false; error: string }> {
   const session = await getCurrentSession();
   if (!session) return { success: false, error: "Nicht angemeldet." };
+  if (session.role !== "office" && session.role !== "admin") {
+    return { success: false, error: "Keine Berechtigung." };
+  }
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { success: false, error: "Supabase ist nicht konfiguriert." };
 
@@ -116,9 +113,7 @@ export async function uploadProjectReportFileAction(
     return { success: false, error: err instanceof Error ? err.message : "Upload fehlgeschlagen." };
   }
 
-  after(() => {
-    revalidatePath("/projekte");
-  });
+  // Client-side cache invalidation is owned by TanStack via `useUploadAttachment.onSuccess`.
   return { success: true };
 }
 
@@ -128,6 +123,9 @@ export async function updateAttachmentNotesAction(
 ): Promise<{ success: true } | { success: false; error: string }> {
   const session = await getCurrentSession();
   if (!session) return { success: false, error: "Nicht angemeldet." };
+  if (session.role !== "office" && session.role !== "admin") {
+    return { success: false, error: "Keine Berechtigung." };
+  }
   if (!attachmentId) return { success: false, error: "Anhang-ID fehlt." };
   if (notes.length > 2000) return { success: false, error: "Notiz zu lang (max. 2000 Zeichen)." };
   try {
@@ -144,14 +142,15 @@ export async function deleteAttachmentAction(
 ): Promise<{ success: true } | { success: false; error: string }> {
   const session = await getCurrentSession();
   if (!session) return { success: false, error: "Nicht angemeldet." };
+  if (session.role !== "office" && session.role !== "admin") {
+    return { success: false, error: "Keine Berechtigung." };
+  }
   if (!attachmentId || !filePath) return { success: false, error: "Parameter fehlen." };
   try {
     await deleteProjectAttachment(attachmentId, filePath);
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "Löschen fehlgeschlagen." };
   }
-  after(() => {
-    revalidatePath("/projekte");
-  });
+  // Client-side cache invalidation is owned by TanStack via `useDeleteAttachment.onSuccess`.
   return { success: true };
 }

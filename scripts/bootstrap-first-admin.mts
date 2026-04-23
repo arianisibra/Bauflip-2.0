@@ -85,6 +85,14 @@ if (membershipError) {
   throw new Error(`Could not create membership: ${membershipError.message}`);
 }
 
+// Mirror role into user_metadata so the middleware can read it without a DB lookup.
+const { error: metaError } = await admin.auth.admin.updateUserById(authUser.id, {
+  user_metadata: { ...authUser.user_metadata, role: "admin" },
+});
+if (metaError) {
+  throw new Error(`Could not set user_metadata.role: ${metaError.message}`);
+}
+
 console.log("Bootstrap completed.");
 console.log(`Admin: ${bootstrapEmail}`);
 console.log(`Organization ID: ${organizationId}`);

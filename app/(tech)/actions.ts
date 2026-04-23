@@ -5,12 +5,16 @@ import { getCurrentSession } from "@/lib/auth/session";
 import { canAccessTechFieldRoutes } from "@/lib/domain/types";
 import { addTechnicianReport, listActiveOrderFormTemplatesForOrg } from "@/lib/db/repository";
 import { validateOrderFormValues } from "@/lib/order-forms/validate-submission";
+import { publish } from "@/lib/sse/hub";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { technicianReportSchema } from "@/lib/validations/forms";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
-export async function submitTechnicianReportAction(values: unknown): Promise<ActionResult> {
+export async function submitTechnicianReportAction(
+  values: unknown,
+  tabId?: string,
+): Promise<ActionResult> {
   const session = await getCurrentSession();
   if (!session || !canAccessTechFieldRoutes(session.role)) {
     return { success: false, error: "Keine Berechtigung." };
@@ -89,5 +93,16 @@ export async function submitTechnicianReportAction(values: unknown): Promise<Act
 
   revalidatePath("/tag");
   revalidatePath(`/auftrag/${v.projectId}`);
+
+  // Notify admin/office in this org. Use `project.core_changed` (not
+  // `report.changed`) because submitting a report also mutates the project's
+  // status via `nextStatus`, so the office list's status badge needs to
+  // refresh — `project.core_changed` invalidates core + list + calendars.
+  publish(organizationId, {
+    type: "project.core_changed",
+    projectId: v.projectId,
+    originTabId: tabId,
+  });
+
   return { success: true };
 }

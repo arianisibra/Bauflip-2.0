@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
 import { inviteEmployeeAction, listTeamMembersAction, type TeamMemberListItem } from "@/app/(app)/einstellungen/actions";
 import { InviteRoleSelect } from "@/components/app/invite-role-select";
@@ -119,9 +120,12 @@ function StatChip({
 
 export default async function MitarbeiterPage() {
   const session = await getCurrentSession();
-  const role = session?.role ?? "office";
-  const isAdmin = role === "admin";
-  const teamMembers = isAdmin ? await listTeamMembersAction() : [];
+  if (!session || session.role !== "admin") {
+    redirect("/projekte");
+  }
+  const role = session.role;
+  const isAdmin = true;
+  const teamMembers = await listTeamMembersAction();
 
   const activeCount = teamMembers.filter((m) => m.status === "aktiv").length;
   const pendingCount = teamMembers.filter((m) => m.status === "eingeladen").length;

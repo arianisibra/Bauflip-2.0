@@ -1,32 +1,22 @@
 "use client";
 
-import { useCallback, useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import type { WeekTaskItem } from "@/lib/domain/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react";
-import { fetchWeekTasksAction } from "@/app/(tech)/wochenplan/actions";
+import {
+  shiftSwissWeekReference,
+  swissWeekDays,
+  swissWeekReferenceIso,
+} from "@/lib/date/swiss-week";
+import { useWeekTasks } from "@/lib/query/hooks";
+import { queryKeys } from "@/lib/query/keys";
 
 const DAY_NAMES_SHORT = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-
-function getWeekDates(reference: Date): Date[] {
-  const day = reference.getDay();
-  const mondayOffset = day === 0 ? -6 : 1 - day;
-  const monday = new Date(reference);
-  monday.setDate(reference.getDate() + mondayOffset);
-  monday.setHours(0, 0, 0, 0);
-
-  const dates: Date[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    dates.push(d);
-  }
-  return dates;
-}
-
 const TZ = "Europe/Zurich";
 
 function toSwissDateKey(d: Date): string {
@@ -37,12 +27,6 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", timeZone: TZ });
 }
 
-function formatDateRange(dates: Date[]): string {
-  if (dates.length < 2) return "";
-  const fmt = new Intl.DateTimeFormat("de-CH", { day: "numeric", month: "short" });
-  return `${fmt.format(dates[0])} – ${fmt.format(dates[dates.length - 1])}`;
-}
-
 export function TechCalendar({
   initialTasks,
   userId,
@@ -50,12 +34,28 @@ export function TechCalendar({
   initialTasks: WeekTaskItem[];
   userId: string;
 }) {
-  const [refDate, setRefDate] = useState(() => new Date());
-  const [tasks, setTasks] = useState(initialTasks);
-  const [pending, startTransition] = useTransition();
+  const qc = useQueryClient();
+  // UTC-noon of the Swiss Monday — stable across remounts (shared cache
+  // with /tag) and TZ-independent.
+  const [refDateIso, setRefDateIso] = useState(() => swissWeekReferenceIso());
+
+  // Seed the initial week's cache from SSR so the first render has data without a fetch.
+  useMemo(() => {
+    qc.setQueryData(queryKeys.weekTasks.byDate(refDateIso), initialTasks);
+    // Run once on mount for the initial date — subsequent dates fetch via the hook.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const { data: tasks = [], isFetching: pending } = useWeekTasks(refDateIso);
 
   const todayKey = useMemo(() => toSwissDateKey(new Date()), []);
-  const weekDates = useMemo(() => getWeekDates(refDate), [refDate]);
+  const weekDays = useMemo(() => swissWeekDays(refDateIso), [refDateIso]);
+  const headerRange = useMemo(() => {
+    if (weekDays.length < 2) return "";
+    const first = weekDays[0];
+    const last = weekDays[weekDays.length - 1];
+    return `${first.day}. ${first.monthShort} – ${last.day}. ${last.monthShort}`;
+  }, [weekDays]);
 
   const tasksByDate = useMemo(() => {
     const map = new Map<string, WeekTaskItem[]>();
@@ -70,15 +70,9 @@ export function TechCalendar({
 
   const navigate = useCallback(
     (dir: -1 | 1) => {
-      const next = new Date(refDate);
-      next.setDate(refDate.getDate() + dir * 7);
-      setRefDate(next);
-      startTransition(async () => {
-        const result = await fetchWeekTasksAction(next.toISOString());
-        setTasks(result);
-      });
+      setRefDateIso((current) => shiftSwissWeekReference(current, dir));
     },
-    [refDate],
+    [],
   );
 
   return (
@@ -95,7 +89,7 @@ export function TechCalendar({
           <ChevronLeft className="size-4" />
         </Button>
         <p className="text-sm font-semibold text-foreground">
-          {formatDateRange(weekDates)}
+          {headerRange}
         </p>
         <Button
           variant="outline"
@@ -110,8 +104,8 @@ export function TechCalendar({
       </div>
 
       <div className="space-y-2">
-        {weekDates.map((date, i) => {
-          const dateKey = toSwissDateKey(date);
+        {weekDays.map((dayInfo, i) => {
+          const dateKey = dayInfo.key;
           const isToday = dateKey === todayKey;
           const dayTasks = tasksByDate.get(dateKey) ?? [];
 
@@ -132,7 +126,7 @@ export function TechCalendar({
                       : "bg-muted/50 text-foreground",
                   )}
                 >
-                  {date.getDate()}
+                  {dayInfo.day}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className={cn("text-sm font-medium", isToday ? "text-primary" : "text-foreground")}>

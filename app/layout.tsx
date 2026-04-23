@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Poppins } from "next/font/google";
 import { Toaster } from "sonner";
 import { WebVitalsReporter } from "@/components/observability/web-vitals-reporter";
+import { QueryProvider } from "@/lib/query/provider";
 import "./globals.css";
 
 const poppins = Poppins({
@@ -44,9 +45,11 @@ export default function RootLayout({
         className={`${poppins.className} min-h-full flex flex-col`}
         suppressHydrationWarning
       >
-        {children}
-        <WebVitalsReporter />
-        <Toaster richColors closeButton position="top-center" />
+        <QueryProvider>
+          {children}
+          <WebVitalsReporter />
+          <Toaster richColors closeButton position="top-center" />
+        </QueryProvider>
       </body>
     </html>
   );

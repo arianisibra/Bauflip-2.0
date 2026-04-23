@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/anmeldung"];
+const PUBLIC_PATHS = ["/anmeldung", "/onboarding", "/mfa/setup"];
 
 function withSecurityHeaders(res: NextResponse): NextResponse {
   const isProd = process.env.NODE_ENV === "production";
@@ -23,7 +23,7 @@ function withSecurityHeaders(res: NextResponse): NextResponse {
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
-      "connect-src 'self' https://*.supabase.co https://*.supabase.in wss://*.supabase.co https://challenges.cloudflare.com",
+      "connect-src 'self' http://127.0.0.1:54321 http://localhost:54321 ws://127.0.0.1:54321 ws://localhost:54321 https://*.supabase.co https://*.supabase.in wss://*.supabase.co https://challenges.cloudflare.com",
       "frame-src 'self' https://challenges.cloudflare.com",
       "frame-ancestors 'self'",
     ].join("; "),
@@ -44,6 +44,8 @@ const TECHNICIAN_ALLOWED_PREFIXES = [
   "/anmeldung",
   "/profil",
   "/tech",
+  // SSE realtime stream — same origin, auth'd via session cookie.
+  "/api/events",
 ];
 
 function isTechnicianAllowedPath(pathname: string): boolean {
@@ -128,19 +130,46 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isAuthenticated && pathname === "/anmeldung") {
-    const appUrl = new URL("/", request.url);
-    return withSecurityHeaders(NextResponse.redirect(appUrl));
+    return withSecurityHeaders(NextResponse.redirect(new URL("/", request.url)));
+  }
+
+  if (isAuthenticated && pathname === "/") {
+    return redirectRootByRole(supabase, user!, role, request);
   }
 
   if (isAuthenticated && role === "technician" && !isTechnicianAllowedPath(pathname)) {
-    if (pathname.startsWith("/api")) {
-      return withSecurityHeaders(NextResponse.json({ error: "Kein Zugriff." }, { status: 403 }));
-    }
-    const appUrl = new URL("/", request.url);
-    return withSecurityHeaders(NextResponse.redirect(appUrl));
+    return denyTechnician(pathname, request);
   }
 
   return response;
+}
+
+async function redirectRootByRole(
+  supabase: ReturnType<typeof createServerClient>,
+  user: { id: string },
+  fallbackRole: ReturnType<typeof mapRole>,
+  request: NextRequest,
+): Promise<NextResponse> {
+  // Resolve role from membership here (before any layout streams) so
+  // technicians don't flash the office sidebar.
+  const { data: membership } = await supabase
+    .from("organization_memberships")
+    .select("role")
+    .eq("user_id", user.id)
+    .eq("is_active", true)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  const resolvedRole = mapRole((membership?.role as string | undefined) ?? fallbackRole);
+  const dest = resolvedRole === "technician" ? "/tag" : "/projekte";
+  return withSecurityHeaders(NextResponse.redirect(new URL(dest, request.url)));
+}
+
+function denyTechnician(pathname: string, request: NextRequest): NextResponse {
+  if (pathname.startsWith("/api")) {
+    return withSecurityHeaders(NextResponse.json({ error: "Kein Zugriff." }, { status: 403 }));
+  }
+  return withSecurityHeaders(NextResponse.redirect(new URL("/", request.url)));
 }
 
 export const config = {

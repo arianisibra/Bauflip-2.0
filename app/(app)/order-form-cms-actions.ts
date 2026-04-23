@@ -1,10 +1,11 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getCurrentSession } from "@/lib/auth/session";
 import { insertOrderFormTemplate, updateOrderFormTemplate } from "@/lib/db/repository";
 import { orderFormFieldsSchema, slugifyOrderFormSlug } from "@/lib/order-forms/schema";
+
+// Client-side cache invalidation is owned by TanStack hooks in lib/query/hooks.ts.
 
 const cmsPayloadSchema = z.object({
   supplierName: z.string().max(200),
@@ -44,7 +45,6 @@ export async function createOrderFormCmsAction(payload: unknown): Promise<{ id: 
     isActive: v.isActive,
   });
 
-  revalidatePath("/bestellformulare");
   return { id: created.id };
 }
 
@@ -74,6 +74,4 @@ export async function updateOrderFormCmsAction(templateId: string, payload: unkn
     sortOrder: v.sortOrder,
     isActive: v.isActive,
   });
-
-  revalidatePath("/bestellformulare");
 }

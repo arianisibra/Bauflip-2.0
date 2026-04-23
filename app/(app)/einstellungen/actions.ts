@@ -415,6 +415,14 @@ export async function acceptInviteOnboardingAction() {
     { onConflict: "id" },
   );
 
+  // Mirror role into user_metadata so the middleware can read it without a DB lookup.
+  const adminClient = createSupabaseAdminClient();
+  if (adminClient) {
+    await adminClient.auth.admin.updateUserById(user.id, {
+      user_metadata: { ...user.user_metadata, role: invite.role },
+    });
+  }
+
   const { error: invitationUpdateError } = await supabase
     .from("invitations")
     .update({ accepted_at: new Date().toISOString() })
