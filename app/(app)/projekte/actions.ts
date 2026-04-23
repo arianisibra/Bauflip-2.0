@@ -13,6 +13,7 @@ import {
 import type { ProjectCore } from "@/lib/db/repository";
 import { listProjectsForOffice } from "@/lib/db/repository";
 import type { OfficeProjectListItem, ProjectStatus, UserProfile } from "@/lib/domain/types";
+import { publish } from "@/lib/sse/hub";
 import { projectStammdatenUpdateSchema, appointmentSchema } from "@/lib/validations/forms";
 
 // Note: mutation actions used to call `revalidatePath("/projekte")` via
@@ -96,7 +97,10 @@ export async function updateProjectStammdatenAction(values: unknown): Promise<{ 
   return { core };
 }
 
-export async function addAppointmentAction(input: unknown): Promise<{ core: ProjectCore }> {
+export async function addAppointmentAction(
+  input: unknown,
+  tabId?: string,
+): Promise<{ core: ProjectCore }> {
   const session = await getCurrentSession();
   if (!session || (session.role !== "office" && session.role !== "admin")) {
     throw new Error("Keine Berechtigung.");
@@ -115,12 +119,20 @@ export async function addAppointmentAction(input: unknown): Promise<{ core: Proj
     planningNotes: v.planningNotes ?? null,
   });
   const core = await coreOrThrow(v.projectId);
+  if (session.organizationId) {
+    publish(session.organizationId, {
+      type: "appointment.changed",
+      projectId: v.projectId,
+      originTabId: tabId,
+    });
+  }
   return { core };
 }
 
 export async function deleteAppointmentAction(
   appointmentId: string,
   projectId: string,
+  tabId?: string,
 ): Promise<{ core: ProjectCore }> {
   const session = await getCurrentSession();
   if (!session || (session.role !== "office" && session.role !== "admin")) {
@@ -128,6 +140,13 @@ export async function deleteAppointmentAction(
   }
   await deleteAppointment(appointmentId);
   const core = await coreOrThrow(projectId);
+  if (session.organizationId) {
+    publish(session.organizationId, {
+      type: "appointment.changed",
+      projectId,
+      originTabId: tabId,
+    });
+  }
   return { core };
 }
 
@@ -145,6 +164,7 @@ export async function deleteProjectAction(projectId: string) {
 export async function updateProjectStatusAction(
   projectId: string,
   status: ProjectStatus,
+  tabId?: string,
 ): Promise<{ core: ProjectCore }> {
   const session = await getCurrentSession();
   if (!session || (session.role !== "office" && session.role !== "admin")) {
@@ -152,6 +172,13 @@ export async function updateProjectStatusAction(
   }
   await updateProject(projectId, { status });
   const core = await coreOrThrow(projectId);
+  if (session.organizationId) {
+    publish(session.organizationId, {
+      type: "project.core_changed",
+      projectId,
+      originTabId: tabId,
+    });
+  }
   return { core };
 }
 

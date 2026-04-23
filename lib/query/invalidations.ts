@@ -3,78 +3,110 @@
  *
  * Two flavors:
  * - `after*Change(qc, ...)` — **full** invalidation (primary + adjacent).
- *   Used by external triggers (SSE, BroadcastChannel, Realtime) that only
- *   know "something changed" and have no payload to prime with.
+ *   Used by external triggers (SSE) that only know "something changed" and
+ *   have no payload to prime with.
  * - `invalidate*Adjacencies(qc, ...)` — **adjacent only**. Used by mutation
  *   hooks that already called `setQueryData` on the primary; invalidating
  *   the primary here would cause a pointless refetch.
  *
  * All helpers are pure functions over a `QueryClient` → callable from React,
- * plain event listeners, anywhere.
+ * plain event listeners, anywhere. The optional `opts.refetchType` is forwarded
+ * to TanStack's `invalidateQueries`. SSE callers pass `"all"` so stale queries
+ * refetch silently in the background even if the user isn't currently viewing
+ * them.
  */
 import type { QueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./keys";
 
+export type RefetchType = "active" | "inactive" | "all" | "none";
+export type InvalidateOpts = { refetchType?: RefetchType };
+
+function inv(qc: QueryClient, queryKey: readonly unknown[], opts: InvalidateOpts = {}): void {
+  qc.invalidateQueries({ queryKey, refetchType: opts.refetchType });
+}
+
 // ─── Adjacent-only (for mutation hooks) ───────────────────────────────────
 
-/** List + scheduling views; excludes the project's own core. */
-export function invalidateProjectAdjacencies(qc: QueryClient, _projectId: string): void {
-  qc.invalidateQueries({ queryKey: queryKeys.projects.list() });
-  qc.invalidateQueries({ queryKey: queryKeys.weekTasks.all() });
-  qc.invalidateQueries({ queryKey: queryKeys.monthTasks.all() });
+export function invalidateProjectAdjacencies(
+  qc: QueryClient,
+  _projectId: string,
+  opts?: InvalidateOpts,
+): void {
+  inv(qc, queryKeys.projects.list(), opts);
+  inv(qc, queryKeys.weekTasks.all(), opts);
+  inv(qc, queryKeys.monthTasks.all(), opts);
 }
 
-/** Report CRUD only affects the project's sheet (primary). No adjacencies. */
-export function invalidateReportAdjacencies(_qc: QueryClient, _projectId: string): void {
-  // nothing — the sheet is the only surface; primed via setQueryData
+export function invalidateReportAdjacencies(
+  _qc: QueryClient,
+  _projectId: string,
+  _opts?: InvalidateOpts,
+): void {
+  // no adjacencies — sheet is the only surface
 }
 
-/** Attachment CRUD — same story as reports. */
-export function invalidateAttachmentAdjacencies(_qc: QueryClient, _projectId: string): void {
-  // nothing
+export function invalidateAttachmentAdjacencies(
+  _qc: QueryClient,
+  _projectId: string,
+  _opts?: InvalidateOpts,
+): void {
+  // no adjacencies
 }
 
-// ─── Full invalidation (for external events — SSE / Realtime / etc.) ──────
+// ─── Full invalidation (for external events — SSE / etc.) ─────────────────
 
-/** Stammdaten or status changed. Invalidates the sheet *and* adjacent views. */
-export function afterProjectCoreChange(qc: QueryClient, projectId: string): void {
-  qc.invalidateQueries({ queryKey: queryKeys.projects.core(projectId) });
-  invalidateProjectAdjacencies(qc, projectId);
+export function afterProjectCoreChange(
+  qc: QueryClient,
+  projectId: string,
+  opts?: InvalidateOpts,
+): void {
+  inv(qc, queryKeys.projects.core(projectId), opts);
+  invalidateProjectAdjacencies(qc, projectId, opts);
 }
 
-/** Appointment added/deleted/reassigned. */
-export function afterAppointmentChange(qc: QueryClient, projectId: string): void {
-  qc.invalidateQueries({ queryKey: queryKeys.projects.core(projectId) });
-  invalidateProjectAdjacencies(qc, projectId);
+export function afterAppointmentChange(
+  qc: QueryClient,
+  projectId: string,
+  opts?: InvalidateOpts,
+): void {
+  inv(qc, queryKeys.projects.core(projectId), opts);
+  invalidateProjectAdjacencies(qc, projectId, opts);
 }
 
-/** Technician report submitted/deleted. */
-export function afterReportChange(qc: QueryClient, projectId: string): void {
-  qc.invalidateQueries({ queryKey: queryKeys.projects.core(projectId) });
-  invalidateReportAdjacencies(qc, projectId);
+export function afterReportChange(
+  qc: QueryClient,
+  projectId: string,
+  opts?: InvalidateOpts,
+): void {
+  inv(qc, queryKeys.projects.core(projectId), opts);
+  invalidateReportAdjacencies(qc, projectId, opts);
 }
 
-/** Attachment upload/update/delete. */
-export function afterAttachmentChange(qc: QueryClient, projectId: string): void {
-  qc.invalidateQueries({ queryKey: queryKeys.projects.core(projectId) });
-  invalidateAttachmentAdjacencies(qc, projectId);
+export function afterAttachmentChange(
+  qc: QueryClient,
+  projectId: string,
+  opts?: InvalidateOpts,
+): void {
+  inv(qc, queryKeys.projects.core(projectId), opts);
+  invalidateAttachmentAdjacencies(qc, projectId, opts);
 }
 
-/** Full project deletion — core is gone, list must drop the row. */
-export function afterProjectDeleted(qc: QueryClient, projectId: string): void {
+export function afterProjectDeleted(
+  qc: QueryClient,
+  projectId: string,
+  opts?: InvalidateOpts,
+): void {
   qc.removeQueries({ queryKey: queryKeys.projects.core(projectId) });
-  qc.invalidateQueries({ queryKey: queryKeys.projects.list() });
-  qc.invalidateQueries({ queryKey: queryKeys.weekTasks.all() });
-  qc.invalidateQueries({ queryKey: queryKeys.monthTasks.all() });
+  inv(qc, queryKeys.projects.list(), opts);
+  inv(qc, queryKeys.weekTasks.all(), opts);
+  inv(qc, queryKeys.monthTasks.all(), opts);
 }
 
-/** Team membership changes (invite, role change) — assignable-person dropdown. */
-export function afterMembershipChange(qc: QueryClient): void {
-  qc.invalidateQueries({ queryKey: queryKeys.assignableProfiles() });
+export function afterMembershipChange(qc: QueryClient, opts?: InvalidateOpts): void {
+  inv(qc, queryKeys.assignableProfiles(), opts);
 }
 
-/** Order form template CRUD. */
-export function afterOrderFormTemplateChange(qc: QueryClient): void {
-  qc.invalidateQueries({ queryKey: queryKeys.orderFormTemplates.all() });
-  qc.invalidateQueries({ queryKey: queryKeys.projects.all() });
+export function afterOrderFormTemplateChange(qc: QueryClient, opts?: InvalidateOpts): void {
+  inv(qc, queryKeys.orderFormTemplates.all(), opts);
+  inv(qc, queryKeys.projects.all(), opts);
 }

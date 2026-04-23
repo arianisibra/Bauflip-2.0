@@ -44,6 +44,8 @@ const TECHNICIAN_ALLOWED_PREFIXES = [
   "/anmeldung",
   "/profil",
   "/tech",
+  // SSE realtime stream — same origin, auth'd via session cookie.
+  "/api/events",
 ];
 
 function isTechnicianAllowedPath(pathname: string): boolean {

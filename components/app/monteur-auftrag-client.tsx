@@ -9,6 +9,7 @@ import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/t
 import { cn } from "@/lib/utils";
 import { formatServiceAddress, managementLabel, tenantLabel } from "@/lib/tech/bundle-display";
 import { submitTechnicianReportAction } from "@/app/(tech)/actions";
+import { getTabId } from "@/lib/query/tab-id";
 import { uploadProjectReportFileAction, updateAttachmentNotesAction, deleteAttachmentAction } from "@/app/(app)/actions";
 import { MonteurOrderFormSections } from "@/components/app/monteur-order-form-sections";
 import { Badge } from "@/components/ui/badge";
@@ -558,7 +559,7 @@ export function MonteurAuftragClient({
                     measurementsJson: String(fd.get("measurementsJson") ?? "{}"),
                     workDescription: String(fd.get("workDescription") ?? ""),
                     orderForms: orderFormsPayloadFromFormData(fd, orderFormTemplates, orderFormLines),
-                  });
+                  }, getTabId());
                   if (!result.success) {
                     toast.error(result.error);
                     return;

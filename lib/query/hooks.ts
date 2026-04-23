@@ -54,7 +54,7 @@ import {
   invalidateReportAdjacencies,
 } from "./invalidations";
 import { queryKeys } from "./keys";
-import { broadcast } from "./realtime";
+import { getTabId } from "./tab-id";
 
 type UploadResult = { success: true } | { success: false; error: string };
 
@@ -126,7 +126,6 @@ export function useUpdateStammdaten() {
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
       invalidateProjectAdjacencies(qc, core.project.id);
-      broadcast({ type: "project.core_changed", projectId: core.project.id });
     },
   });
 }
@@ -134,11 +133,10 @@ export function useUpdateStammdaten() {
 export function useAddAppointment() {
   const qc = useQueryClient();
   return useMutation<{ core: ProjectCore }, Error, Parameters<typeof addAppointmentAction>[0]>({
-    mutationFn: (input) => addAppointmentAction(input),
+    mutationFn: (input) => addAppointmentAction(input, getTabId()),
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
       invalidateProjectAdjacencies(qc, core.project.id);
-      broadcast({ type: "appointment.changed", projectId: core.project.id });
     },
   });
 }
@@ -146,11 +144,11 @@ export function useAddAppointment() {
 export function useDeleteAppointment() {
   const qc = useQueryClient();
   return useMutation<{ core: ProjectCore }, Error, { appointmentId: string; projectId: string }>({
-    mutationFn: ({ appointmentId, projectId }) => deleteAppointmentAction(appointmentId, projectId),
+    mutationFn: ({ appointmentId, projectId }) =>
+      deleteAppointmentAction(appointmentId, projectId, getTabId()),
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
       invalidateProjectAdjacencies(qc, core.project.id);
-      broadcast({ type: "appointment.changed", projectId: core.project.id });
     },
   });
 }
@@ -158,11 +156,11 @@ export function useDeleteAppointment() {
 export function useUpdateProjectStatus() {
   const qc = useQueryClient();
   return useMutation<{ core: ProjectCore }, Error, { projectId: string; status: ProjectStatus }>({
-    mutationFn: ({ projectId, status }) => updateProjectStatusAction(projectId, status),
+    mutationFn: ({ projectId, status }) =>
+      updateProjectStatusAction(projectId, status, getTabId()),
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
       invalidateProjectAdjacencies(qc, core.project.id);
-      broadcast({ type: "project.core_changed", projectId: core.project.id });
     },
   });
 }
@@ -174,7 +172,6 @@ export function useDeleteReport() {
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
       invalidateReportAdjacencies(qc, core.project.id);
-      broadcast({ type: "report.changed", projectId: core.project.id });
     },
   });
 }
@@ -185,7 +182,6 @@ export function useDeleteProject() {
     mutationFn: (projectId) => deleteProjectAction(projectId),
     onSuccess: (_, projectId) => {
       afterProjectDeleted(qc, projectId);
-      broadcast({ type: "project.deleted", projectId });
     },
   });
 }
@@ -194,10 +190,8 @@ export function useCreateIntake() {
   const qc = useQueryClient();
   return useMutation<{ projectId: string }, Error, FormData>({
     mutationFn: (formData) => createIntakeAction(formData),
-    onSuccess: ({ projectId }) => {
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.projects.list() });
-      // Reuse `project.core_changed` — receivers will invalidate the list.
-      broadcast({ type: "project.core_changed", projectId });
     },
   });
 }
@@ -212,7 +206,6 @@ export function useCreateOrderFormTemplate() {
     mutationFn: (payload) => createOrderFormCmsAction(payload),
     onSuccess: () => {
       afterOrderFormTemplateChange(qc);
-      broadcast({ type: "order_form_template.changed" });
     },
   });
 }
@@ -223,7 +216,6 @@ export function useUpdateOrderFormTemplate() {
     mutationFn: ({ templateId, payload }) => updateOrderFormCmsAction(templateId, payload),
     onSuccess: () => {
       afterOrderFormTemplateChange(qc);
-      broadcast({ type: "order_form_template.changed" });
     },
   });
 }
@@ -234,7 +226,6 @@ export function useDeleteOrderFormTemplate() {
     mutationFn: (templateId) => deleteOrderFormTemplateAction(templateId),
     onSuccess: () => {
       afterOrderFormTemplateChange(qc);
-      broadcast({ type: "order_form_template.changed" });
     },
   });
 }

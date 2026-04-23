@@ -1,13 +1,13 @@
 /**
- * Remote-event dispatcher. Single entry point for cache invalidations triggered
- * by something *other than* the current tab's own mutation — e.g., SSE,
- * WebSocket, Supabase Realtime, BroadcastChannel, postMessage.
+ * Realtime-event dispatcher. Single entry point for cache invalidations
+ * triggered by something *other than* the current tab's own mutation — today
+ * that's SSE from /api/events (wired in `sse-bridge.tsx`). The same
+ * dispatcher would accept events from a Redis-backed hub, Supabase Realtime,
+ * or `postMessage` without any logic changes.
  *
- * Wiring an event source is a separate concern: subscribe somewhere, parse the
- * message into a `RealtimeEvent`, then call `dispatchRealtimeEvent(qc, event)`.
- *
- * All invalidation logic lives in `./invalidations.ts`. Add a new event kind
- * here if the server ever emits a new class of change.
+ * Events carry an optional `originTabId`. The SSE bridge filters echoes by
+ * comparing against the local tab ID *before* dispatching, so this module
+ * stays source-agnostic.
  */
 import type { QueryClient } from "@tanstack/react-query";
 import * as inv from "./invalidations";
@@ -21,58 +21,40 @@ export type RealtimeEvent =
   | { type: "membership.changed" }
   | { type: "order_form_template.changed" };
 
-export function dispatchRealtimeEvent(qc: QueryClient, event: RealtimeEvent): void {
+export type DispatchOpts = inv.InvalidateOpts;
+
+/**
+ * Route an event to the correct invalidation helper. `opts.refetchType`
+ * controls whether inactive queries should refetch silently — SSE callers
+ * pass `"all"` so the data is already fresh when the user navigates to the
+ * affected page.
+ */
+export function dispatchRealtimeEvent(
+  qc: QueryClient,
+  event: RealtimeEvent,
+  opts: DispatchOpts = {},
+): void {
   switch (event.type) {
     case "project.core_changed":
-      inv.afterProjectCoreChange(qc, event.projectId);
+      inv.afterProjectCoreChange(qc, event.projectId, opts);
       return;
     case "project.deleted":
-      inv.afterProjectDeleted(qc, event.projectId);
+      inv.afterProjectDeleted(qc, event.projectId, opts);
       return;
     case "appointment.changed":
-      inv.afterAppointmentChange(qc, event.projectId);
+      inv.afterAppointmentChange(qc, event.projectId, opts);
       return;
     case "report.changed":
-      inv.afterReportChange(qc, event.projectId);
+      inv.afterReportChange(qc, event.projectId, opts);
       return;
     case "attachment.changed":
-      inv.afterAttachmentChange(qc, event.projectId);
+      inv.afterAttachmentChange(qc, event.projectId, opts);
       return;
     case "membership.changed":
-      inv.afterMembershipChange(qc);
+      inv.afterMembershipChange(qc, opts);
       return;
     case "order_form_template.changed":
-      inv.afterOrderFormTemplateChange(qc);
+      inv.afterOrderFormTemplateChange(qc, opts);
       return;
   }
-}
-
-// ─── BroadcastChannel bridge (same-origin cross-tab sync) ───────────────────
-
-const CHANNEL_NAME = "bauflip-cache-events";
-
-type Sentinel = { __bauflipChannel?: BroadcastChannel };
-
-/** Lazy singleton. Returns null in environments without BroadcastChannel. */
-function getChannel(): BroadcastChannel | null {
-  if (typeof BroadcastChannel === "undefined") return null;
-  const g = globalThis as unknown as Sentinel;
-  g.__bauflipChannel ??= new BroadcastChannel(CHANNEL_NAME);
-  return g.__bauflipChannel;
-}
-
-/** Publish an event so other tabs invalidate their matching queries. */
-export function broadcast(event: RealtimeEvent): void {
-  getChannel()?.postMessage(event);
-}
-
-/** Subscribe a QueryClient to incoming broadcasts from other tabs. Returns unsubscribe. */
-export function subscribeToBroadcast(qc: QueryClient): () => void {
-  const ch = getChannel();
-  if (!ch) return () => {};
-  const handler = (e: MessageEvent) => {
-    dispatchRealtimeEvent(qc, e.data as RealtimeEvent);
-  };
-  ch.addEventListener("message", handler);
-  return () => ch.removeEventListener("message", handler);
 }
