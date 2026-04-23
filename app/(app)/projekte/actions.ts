@@ -150,7 +150,7 @@ export async function deleteAppointmentAction(
   return { core };
 }
 
-export async function deleteProjectAction(projectId: string) {
+export async function deleteProjectAction(projectId: string, tabId?: string) {
   const session = await getCurrentSession();
   if (!session || (session.role !== "office" && session.role !== "admin")) {
     throw new Error("Keine Berechtigung.");
@@ -159,6 +159,13 @@ export async function deleteProjectAction(projectId: string) {
     throw new Error("Projekt-ID fehlt.");
   }
   await deleteProject(projectId);
+  if (session.organizationId) {
+    publish(session.organizationId, {
+      type: "project.deleted",
+      projectId,
+      originTabId: tabId,
+    });
+  }
 }
 
 export async function updateProjectStatusAction(

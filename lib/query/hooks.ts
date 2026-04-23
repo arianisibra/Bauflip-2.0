@@ -179,7 +179,7 @@ export function useDeleteReport() {
 export function useDeleteProject() {
   const qc = useQueryClient();
   return useMutation<void, Error, string>({
-    mutationFn: (projectId) => deleteProjectAction(projectId),
+    mutationFn: (projectId) => deleteProjectAction(projectId, getTabId()),
     onSuccess: (_, projectId) => {
       afterProjectDeleted(qc, projectId);
     },
