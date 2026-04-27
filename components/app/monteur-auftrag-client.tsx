@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { ProjectCore } from "@/lib/db/repository";
@@ -16,7 +17,10 @@ import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/t
 import { cn } from "@/lib/utils";
 import { formatServiceAddress, managementLabel, tenantLabel } from "@/lib/tech/bundle-display";
 import { submitTechnicianReportAction } from "@/app/(tech)/actions";
+import { useAuftragProjectCore } from "@/lib/query/hooks";
+import { queryKeys } from "@/lib/query/keys";
 import { getTabId } from "@/lib/query/tab-id";
+import { pickMonteurAppointmentDisplay } from "@/lib/tech/auftrag-appointments";
 import { uploadProjectReportFileAction, updateAttachmentNotesAction, deleteAttachmentAction } from "@/app/(app)/actions";
 import { MonteurOrderFormSections } from "@/components/app/monteur-order-form-sections";
 import { Badge } from "@/components/ui/badge";
@@ -300,10 +304,13 @@ export function MonteurAuftragClient({
   orderFormTemplates?: OrderFormTemplate[];
 }) {
   const router = useRouter();
-  const p = core.project;
+  const qc = useQueryClient();
+  const { data: liveCore = core } = useAuftragProjectCore(core.project.id, core);
+  const bundle = liveCore;
+  const p = bundle.project;
 
   // Montage-Kontext: Material bestellt / montagebereit / Nachtermin — kein neues Bestellformular.
-  const isMontageContext = isMonteurMontageContext(p.status as ProjectStatus, core.reports.length);
+  const isMontageContext = isMonteurMontageContext(p.status as ProjectStatus, bundle.reports.length);
 
   const nextStepOptions = isMontageContext
     ? RAPPORT_NEXT_STEP_OPTIONS_MONTAGE
@@ -320,8 +327,8 @@ export function MonteurAuftragClient({
   const rapportSubmitLockRef = useRef(false);
 
   const imageAttachments = useMemo(
-    () => core.attachments.filter((a) => a.fileType.startsWith("image/")),
-    [core.attachments],
+    () => bundle.attachments.filter((a) => a.fileType.startsWith("image/")),
+    [bundle.attachments],
   );
 
   const handleUpload = useCallback(
@@ -337,7 +344,7 @@ export function MonteurAuftragClient({
           toast.error(result.error);
         } else {
           toast.success("Datei hochgeladen");
-          router.refresh();
+          void qc.invalidateQueries({ queryKey: queryKeys.projects.auftragCore(p.id) });
         }
       } catch {
         setError("Upload fehlgeschlagen.");
@@ -345,12 +352,18 @@ export function MonteurAuftragClient({
         setUploading(false);
       }
     },
-    [p.id, router],
+    [p.id, qc],
   );
 
-  const saveNote = useCallback(async (attachmentId: string, notes: string) => {
-    await updateAttachmentNotesAction(attachmentId, notes);
-  }, []);
+  const saveNote = useCallback(
+    async (attachmentId: string, notes: string) => {
+      const result = await updateAttachmentNotesAction(attachmentId, notes);
+      if (result.success) {
+        void qc.invalidateQueries({ queryKey: queryKeys.projects.auftragCore(p.id) });
+      }
+    },
+    [p.id, qc],
+  );
 
   const deletePhoto = useCallback(
     async (attachmentId: string, filePath: string) => {
@@ -359,15 +372,15 @@ export function MonteurAuftragClient({
         toast.error(result.error);
       } else {
         toast.success("Datei gelöscht");
-        router.refresh();
+        void qc.invalidateQueries({ queryKey: queryKeys.projects.auftragCore(p.id) });
       }
     },
-    [router],
+    [p.id, qc],
   );
 
-  const nextAppt = useMemo(
-    () => [...core.appointments].sort((a, b) => a.startsAt.localeCompare(b.startsAt))[0],
-    [core.appointments],
+  const { displayAppt, furtherFuture, allPast } = useMemo(
+    () => pickMonteurAppointmentDisplay(bundle.appointments),
+    [bundle.appointments],
   );
 
   const showStandStep = statusStandBannerVisible(p.status);
@@ -418,11 +431,33 @@ export function MonteurAuftragClient({
               Route starten
             </button>
           ) : null}
-          <InfoRow icon={Clock} label="Termin">
-            {nextAppt
-              ? `${new Date(nextAppt.startsAt).toLocaleString("de-CH", { timeZone: "Europe/Zurich" })} – ${new Date(nextAppt.endsAt).toLocaleTimeString("de-CH", { timeZone: "Europe/Zurich" })}`
-              : "—"}
+          <InfoRow icon={Clock} label={allPast && displayAppt ? "Letzter Termin" : "Nächster Termin"}>
+            {displayAppt ? (
+              <span className="block">
+                {`${new Date(displayAppt.startsAt).toLocaleString("de-CH", { timeZone: "Europe/Zurich" })} – ${new Date(displayAppt.endsAt).toLocaleTimeString("de-CH", { timeZone: "Europe/Zurich" })}`}
+                {allPast ? (
+                  <span className="mt-0.5 block text-[11px] font-normal text-muted-foreground">
+                    Kein weiterer Termin geplant.
+                  </span>
+                ) : null}
+              </span>
+            ) : (
+              "—"
+            )}
           </InfoRow>
+          {furtherFuture.length > 0 ? (
+            <div className="rounded-lg border border-border bg-muted/15 px-3 py-2 text-xs text-muted-foreground">
+              <p className="font-semibold text-foreground">Weitere Termine</p>
+              <ul className="mt-1 list-inside list-disc space-y-0.5">
+                {furtherFuture.map((a) => (
+                  <li key={a.id}>
+                    {new Date(a.startsAt).toLocaleString("de-CH", { timeZone: "Europe/Zurich" })} –{" "}
+                    {new Date(a.endsAt).toLocaleTimeString("de-CH", { timeZone: "Europe/Zurich" })}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           <InfoRow icon={User} label="Mieter">
             <span>{tenantLabel(p)}</span>
             {p.tenantPhone?.trim() ? (
@@ -485,15 +520,15 @@ export function MonteurAuftragClient({
               </div>
             </div>
           ) : null}
-          {core.attachments.length > 0 ? (
+          {bundle.attachments.length > 0 ? (
             <div className="space-y-2">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Anhänge ({core.attachments.length})
+                Anhänge ({bundle.attachments.length})
               </p>
               {/* Image attachments as thumbnails */}
-              {core.attachments.filter((a) => a.fileType.startsWith("image/") && a.signedUrl).length > 0 && (
+              {bundle.attachments.filter((a) => a.fileType.startsWith("image/") && a.signedUrl).length > 0 && (
                 <div className="grid grid-cols-3 gap-1.5">
-                  {core.attachments
+                  {bundle.attachments
                     .filter((a) => a.fileType.startsWith("image/") && a.signedUrl)
                     .map((a) => (
                       <a
@@ -515,9 +550,9 @@ export function MonteurAuftragClient({
                 </div>
               )}
               {/* Non-image attachments as links */}
-              {core.attachments.filter((a) => !a.fileType.startsWith("image/")).length > 0 && (
+              {bundle.attachments.filter((a) => !a.fileType.startsWith("image/")).length > 0 && (
                 <ul className="space-y-1.5">
-                  {core.attachments
+                  {bundle.attachments
                     .filter((a) => !a.fileType.startsWith("image/"))
                     .map((a) => (
                       <li key={a.id}>
@@ -548,9 +583,9 @@ export function MonteurAuftragClient({
 
       <AuftragSectionDivider />
 
-      {core.reports.length > 0 ? (
+      {bundle.reports.length > 0 ? (
         <>
-          <MonteurPriorReportsSection reports={core.reports} />
+          <MonteurPriorReportsSection reports={bundle.reports} />
           <AuftragSectionDivider />
         </>
       ) : null}

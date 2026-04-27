@@ -11,6 +11,8 @@ export const queryKeys = {
     all: () => ["projects"] as const,
     list: () => ["projects", "list"] as const,
     core: (projectId: string) => ["projects", "core", projectId] as const,
+    /** Auftragsseite Monteur/Admin-Preview: eigener Key wegen anderer Server-Action als Büro-Sheet. */
+    auftragCore: (projectId: string) => ["projects", "auftrag-core", projectId] as const,
   },
   weekTasks: {
     all: () => ["week-tasks"] as const,

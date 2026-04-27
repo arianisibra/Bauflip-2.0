@@ -21,6 +21,13 @@ import { todayKeySwiss } from "@/lib/date/swiss";
 import { Badge } from "@/components/ui/badge";
 import { MapsNavButton } from "@/components/app/maps-nav-button";
 
+function profileInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return `${parts[0]![0]!}${parts[parts.length - 1]![0]!}`.toUpperCase();
+}
+
 function formatTimeRange(isoStart: string, isoEnd: string): string {
   const s = new Date(isoStart);
   const e = new Date(isoEnd);
@@ -43,6 +50,7 @@ export function TechDayView({
   referenceIso,
   greeting,
   displayName,
+  avatarUrl = null,
   isTechnicianView,
   currentUserId,
 }: {
@@ -50,6 +58,8 @@ export function TechDayView({
   referenceIso: string;
   greeting: string;
   displayName: string;
+  /** Gleiche URL wie unter Einstellungen (`profiles.avatar_url`). */
+  avatarUrl?: string | null;
   isTechnicianView: boolean;
   currentUserId: string;
 }) {
@@ -108,16 +118,35 @@ export function TechDayView({
 
   return (
     <section className="flex flex-col gap-5 pb-4">
-      <header className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {greeting}, {displayName}
-        </p>
-        <h1 className="text-2xl font-semibold text-foreground">Mein Tag</h1>
-        <p className="text-xs text-muted-foreground">
-          Heutige Einsätze. Für den Auftrag antippen.
-        </p>
+      <header className="space-y-2">
+        <div className="flex gap-3 sm:gap-4">
+          <Link
+            href="/einstellungen"
+            className={cn(
+              "relative flex size-14 shrink-0 overflow-hidden rounded-full border-2 border-border/80 bg-muted shadow-inner ring-2 ring-background",
+              "transition-[box-shadow] hover:ring-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            )}
+            title="Profil und Profilbild bearbeiten"
+          >
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={avatarUrl} alt="" className="size-full object-cover" />
+            ) : (
+              <span className="flex size-full items-center justify-center px-2 text-center text-xs font-semibold leading-tight text-muted-foreground">
+                {profileInitials(displayName)}
+              </span>
+            )}
+          </Link>
+          <div className="min-w-0 flex-1 space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {greeting}, {displayName}
+            </p>
+            <h1 className="text-2xl font-semibold text-foreground">Mein Tag</h1>
+            <p className="text-xs text-muted-foreground">Heutige Einsätze. Für den Auftrag antippen.</p>
+          </div>
+        </div>
         {isFetching ? (
-          <div className="pt-1">
+          <div className="pt-0.5">
             <BauflipLoadingInline label="Termine werden aktualisiert …" />
           </div>
         ) : null}

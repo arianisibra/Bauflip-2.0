@@ -27,6 +27,7 @@ export default async function TodayPage() {
       referenceIso={referenceIso}
       greeting={timeOfDayGreeting()}
       displayName={session.profile.displayName}
+      avatarUrl={session.profile.avatarUrl}
       isTechnicianView={session.role === "technician"}
       currentUserId={session.user.id}
     />

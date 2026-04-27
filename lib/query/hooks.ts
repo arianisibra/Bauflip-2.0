@@ -10,6 +10,7 @@
  *   `setQueryData` before invalidating adjacent queries — no refetch of the
  *   just-mutated resource.
  */
+import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { ProjectCore } from "@/lib/db/repository";
 import type {
@@ -37,6 +38,7 @@ import {
   uploadProjectReportFileAction,
 } from "@/app/(app)/actions";
 import { fetchMonthTasksAction } from "@/app/(app)/kalender/actions";
+import { fetchAuftragProjectCoreAction } from "@/app/(tech)/auftrag-data-actions";
 import { fetchWeekTasksAction } from "@/app/(tech)/wochenplan/actions";
 import {
   createOrderFormCmsAction,
@@ -69,6 +71,21 @@ export function useProjectCore(projectId: string | null, enabled = true) {
       const { bundle } = await getProjectSheetDataAction(projectId);
       return bundle;
     },
+  });
+}
+
+/** Auftragsseite: SSE `appointment.changed` invalidiert diesen Key; SSR-`initialCore` wird in den Cache gespiegelt. */
+export function useAuftragProjectCore(projectId: string, initialCore: ProjectCore) {
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    qc.setQueryData(queryKeys.projects.auftragCore(projectId), initialCore);
+  }, [qc, projectId, initialCore]);
+
+  return useQuery<ProjectCore>({
+    queryKey: queryKeys.projects.auftragCore(projectId),
+    queryFn: () => fetchAuftragProjectCoreAction(projectId),
+    initialData: initialCore,
   });
 }
 
