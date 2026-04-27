@@ -70,14 +70,14 @@ The App Router splits the UI into logical **layouts**:
   - **`/mitarbeiter`** — Team / memberships management.
   - **`/bestellformulare`** — **Admin-only** CMS for **supplier order form templates** (dynamic fields, used from technician rapport).
   - **`/einstellungen`** — Organization and profile settings.
-- **`/tag`**, **`/profil`** — Also linked from the office sidebar as **“Mein Tag”** / profile so office staff can use the **same field views** as technicians when needed.
+- **`/tag`**, **`/profil`** — Also linked from the office sidebar as **“Mein Tag”** / profile. **`/tag`** shows only **appointments assigned to the current user** (same filter as for technicians), so Büro does not see other people’s day list there; the **team week** stays on **`/wochenplan`** for desk roles.
 
 ### Field / technician: `app/(tech)/`
 
 - **`layout.tsx`** — Mobile-first shell, **bottom navigation** (`TechBottomNav`: Mein Tag, Kalender, Profil).
-- **`/tag`** — **“Mein Tag”**: today’s (week-scoped) tasks from `listWeekTasks()`.
+- **`/tag`** — **“Mein Tag”** (`TechDayView`): week-scoped data from `listWeekTasks()`, UI filtered to **`assignedTechnicianId === session.user.id`** for every role (avoids Büro seeing other Monteure’s slots here).
 - **`/auftrag/[projectId]`** — Single job view + **rapport form** (`MonteurAuftragClient`).
-- **`/wochenplan`** — Week calendar for the technician.
+- **`/wochenplan`** — Week calendar: technicians see **their** tasks; office/admin see **all org** tasks in that week (`TechCalendar` + `fetchWeekTasksAction` role branch).
 - **`/profil`** — Profile.
 
 ### Auth: `app/(auth)/`

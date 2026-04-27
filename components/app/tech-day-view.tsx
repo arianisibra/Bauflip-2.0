@@ -183,8 +183,7 @@ export function TechDayView({
     const now = new Date();
     const todayKey = todayKeySwiss(now);
     const taskDateKey = (iso: string) => todayKeySwiss(new Date(iso));
-    const visibleTask = (t: WeekTaskItem) =>
-      isTechnicianView ? t.assignedTechnicianId === currentUserId : true;
+    const visibleTask = (t: WeekTaskItem) => t.assignedTechnicianId === currentUserId;
 
     const todaysFlat = tasks
       .filter((t) => visibleTask(t) && taskDateKey(t.startsAt) === todayKey)
@@ -282,9 +281,7 @@ export function TechDayView({
               <CalendarOff className="size-8 text-muted-foreground/50" />
               <p className="text-sm font-medium text-foreground">Keine Einsätze heute</p>
               <p className="max-w-xs text-xs leading-relaxed text-muted-foreground">
-                {isTechnicianView
-                  ? "Heute sind dir keine Einsätze zugewiesen. Geniesse den Tag!"
-                  : "Heute sind keine Termine in der Übersicht. Geniesse den Tag!"}
+                Heute sind dir keine Einsätze zugewiesen. Geniesse den Tag!
               </p>
             </div>
             {upcomingHas ? (

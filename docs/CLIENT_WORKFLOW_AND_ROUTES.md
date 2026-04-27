@@ -32,8 +32,8 @@ Technicians are restricted by the edge **`proxy`**: allowed paths include **`/ta
 | **`/mitarbeiter`** | **Team**: organization members / invitations. |
 | **`/bestellformulare`** | **Admin only**: configure **supplier order form templates** (used on technician rapport). |
 | **`/einstellungen`** | **Settings**: organization, profile, integrations, etc. |
-| **`/tag`** | **“Mein Tag”** (today’s jobs in a week context): list tasks → open job. |
-| **`/wochenplan`** | **Technician week calendar**; tasks link to job. |
+| **`/tag`** | **“Mein Tag”**: only appointments **assigned to the signed-in user** (Monteur, Büro, Admin — same rule); tap → job. |
+| **`/wochenplan`** | **Week calendar**: technicians see **their** week; office/admin see the **whole team** for that week; tasks link to job. |
 | **`/auftrag/<projectId>`** | **Single job (field)**: address, contacts, attachments, **visit report (Rapport)** form. After save → back to **`/tag`**. |
 | **`/profil`** | User **profile** (field bottom nav + sidebar for office). |
 | **`/tech`** | **Redirects** to **`/tag`** (field home shortcut). |
@@ -60,8 +60,8 @@ Technicians are restricted by the edge **`proxy`**: allowed paths include **`/ta
 
 1. **`/anmeldung`** → sign in.  
 2. **`/`** may redirect; field home is **`/tag`** (also **`/tech`** → **`/tag`**).  
-3. **`/tag`** — see **today’s** assignments; tap a row → **`/auftrag/<projectId>`**.  
-4. **`/wochenplan`** — week view; open **`/auftrag/<projectId>`** from a task.  
+3. **`/tag`** — **today’s slots assigned to you**; tap a row → **`/auftrag/<projectId>`**.  
+4. **`/wochenplan`** — **your** week; open **`/auftrag/<projectId>`** from a task.  
 5. **`/auftrag/<projectId>`** — read job details, fill **Rapport** (outcome, next step, optional supplier forms), submit → **`/tag`**.  
 6. **`/profil`** — profile from bottom navigation.
 
