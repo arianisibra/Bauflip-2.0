@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { formatServiceAddress, managementLabel, tenantLabel } from "@/lib/tech/bundle-display";
 import { submitTechnicianReportAction } from "@/app/(tech)/actions";
 import { useAuftragProjectCore } from "@/lib/query/hooks";
-import { queryKeys } from "@/lib/query/keys";
+import { afterProjectCoreChange } from "@/lib/query/invalidations";
 import { getTabId } from "@/lib/query/tab-id";
 import { pickMonteurAppointmentDisplay } from "@/lib/tech/auftrag-appointments";
 import { uploadProjectReportFileAction, updateAttachmentNotesAction, deleteAttachmentAction } from "@/app/(app)/actions";
@@ -339,12 +339,12 @@ export function MonteurAuftragClient({
       fd.set("projectId", p.id);
       fd.set("file", file);
       try {
-        const result = await uploadProjectReportFileAction(fd);
+        const result = await uploadProjectReportFileAction(fd, getTabId());
         if (!result.success) {
           toast.error(result.error);
         } else {
           toast.success("Datei hochgeladen");
-          void qc.invalidateQueries({ queryKey: queryKeys.projects.auftragCore(p.id) });
+          void afterProjectCoreChange(qc, p.id);
         }
       } catch {
         setError("Upload fehlgeschlagen.");
@@ -357,9 +357,9 @@ export function MonteurAuftragClient({
 
   const saveNote = useCallback(
     async (attachmentId: string, notes: string) => {
-      const result = await updateAttachmentNotesAction(attachmentId, notes);
+      const result = await updateAttachmentNotesAction(attachmentId, notes, getTabId());
       if (result.success) {
-        void qc.invalidateQueries({ queryKey: queryKeys.projects.auftragCore(p.id) });
+        void afterProjectCoreChange(qc, p.id);
       }
     },
     [p.id, qc],
@@ -367,12 +367,12 @@ export function MonteurAuftragClient({
 
   const deletePhoto = useCallback(
     async (attachmentId: string, filePath: string) => {
-      const result = await deleteAttachmentAction(attachmentId, filePath);
+      const result = await deleteAttachmentAction(attachmentId, filePath, getTabId());
       if (!result.success) {
         toast.error(result.error);
       } else {
         toast.success("Datei gelöscht");
-        void qc.invalidateQueries({ queryKey: queryKeys.projects.auftragCore(p.id) });
+        void afterProjectCoreChange(qc, p.id);
       }
     },
     [p.id, qc],

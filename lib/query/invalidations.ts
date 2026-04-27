@@ -61,6 +61,7 @@ export function afterProjectCoreChange(
   opts?: InvalidateOpts,
 ): void {
   inv(qc, queryKeys.projects.core(projectId), opts);
+  inv(qc, queryKeys.projects.auftragCore(projectId), opts);
   invalidateProjectAdjacencies(qc, projectId, opts);
 }
 

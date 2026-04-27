@@ -50,8 +50,8 @@ import {
 } from "@/app/(app)/order-form-template-actions";
 import {
   afterOrderFormTemplateChange,
+  afterProjectCoreChange,
   afterProjectDeleted,
-  invalidateAttachmentAdjacencies,
   invalidateProjectAdjacencies,
   invalidateReportAdjacencies,
 } from "./invalidations";
@@ -253,9 +253,9 @@ export function useDeleteOrderFormTemplate() {
 export function useUploadAttachment() {
   const qc = useQueryClient();
   return useMutation<UploadResult, Error, { formData: FormData; projectId: string }>({
-    mutationFn: ({ formData }) => uploadProjectReportFileAction(formData),
+    mutationFn: ({ formData }) => uploadProjectReportFileAction(formData, getTabId()),
     onSuccess: (result, { projectId }) => {
-      if (result.success) invalidateAttachmentAdjacencies(qc, projectId);
+      if (result.success) afterProjectCoreChange(qc, projectId);
     },
   });
 }
@@ -263,9 +263,9 @@ export function useUploadAttachment() {
 export function useUpdateAttachmentNotes() {
   const qc = useQueryClient();
   return useMutation<UploadResult, Error, { attachmentId: string; notes: string; projectId: string }>({
-    mutationFn: ({ attachmentId, notes }) => updateAttachmentNotesAction(attachmentId, notes),
+    mutationFn: ({ attachmentId, notes }) => updateAttachmentNotesAction(attachmentId, notes, getTabId()),
     onSuccess: (result, { projectId }) => {
-      if (result.success) invalidateAttachmentAdjacencies(qc, projectId);
+      if (result.success) afterProjectCoreChange(qc, projectId);
     },
   });
 }
@@ -273,9 +273,9 @@ export function useUpdateAttachmentNotes() {
 export function useDeleteAttachment() {
   const qc = useQueryClient();
   return useMutation<UploadResult, Error, { attachmentId: string; filePath: string; projectId: string }>({
-    mutationFn: ({ attachmentId, filePath }) => deleteAttachmentAction(attachmentId, filePath),
+    mutationFn: ({ attachmentId, filePath }) => deleteAttachmentAction(attachmentId, filePath, getTabId()),
     onSuccess: (result, { projectId }) => {
-      if (result.success) invalidateAttachmentAdjacencies(qc, projectId);
+      if (result.success) afterProjectCoreChange(qc, projectId);
     },
   });
 }

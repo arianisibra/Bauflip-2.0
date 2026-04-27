@@ -13,6 +13,7 @@ import { intakeSchema } from "@/lib/validations/forms";
 import { PROJECT_FILE_MAX_BYTES, PROJECT_FILE_MIME, sanitizeFileBaseName } from "@/lib/storage/mime";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { RoleType } from "@/lib/domain/types";
+import { publish } from "@/lib/sse/hub";
 
 function canManageProjectReportFiles(role: RoleType): boolean {
   return role === "office" || role === "admin" || role === "technician";
@@ -104,6 +105,7 @@ export async function createIntakeAction(formData: FormData) {
 
 export async function uploadProjectReportFileAction(
   formData: FormData,
+  tabId?: string,
 ): Promise<{ success: true } | { success: false; error: string }> {
   const session = await getCurrentSession();
   if (!session) return { success: false, error: "Nicht angemeldet." };
@@ -146,6 +148,13 @@ export async function uploadProjectReportFileAction(
       uploadedBy: session.profile.id,
       notes,
     });
+    if (session.organizationId) {
+      publish(session.organizationId, {
+        type: "project.core_changed",
+        projectId,
+        originTabId: tabId,
+      });
+    }
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "Upload fehlgeschlagen." };
   }
@@ -157,6 +166,7 @@ export async function uploadProjectReportFileAction(
 export async function updateAttachmentNotesAction(
   attachmentId: string,
   notes: string,
+  tabId?: string,
 ): Promise<{ success: true } | { success: false; error: string }> {
   const session = await getCurrentSession();
   if (!session) return { success: false, error: "Nicht angemeldet." };
@@ -182,12 +192,21 @@ export async function updateAttachmentNotesAction(
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "Speichern fehlgeschlagen." };
   }
+  const pid = String(att.project_id);
+  if (session.organizationId) {
+    publish(session.organizationId, {
+      type: "project.core_changed",
+      projectId: pid,
+      originTabId: tabId,
+    });
+  }
   return { success: true };
 }
 
 export async function deleteAttachmentAction(
   attachmentId: string,
   filePath: string,
+  tabId?: string,
 ): Promise<{ success: true } | { success: false; error: string }> {
   const session = await getCurrentSession();
   if (!session) return { success: false, error: "Nicht angemeldet." };
@@ -211,6 +230,14 @@ export async function deleteAttachmentAction(
     await deleteProjectAttachment(attachmentId, filePath);
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "Löschen fehlgeschlagen." };
+  }
+  const pid = String(att.project_id);
+  if (session.organizationId) {
+    publish(session.organizationId, {
+      type: "project.core_changed",
+      projectId: pid,
+      originTabId: tabId,
+    });
   }
   // Client-side cache invalidation is owned by TanStack via `useDeleteAttachment.onSuccess`.
   return { success: true };
