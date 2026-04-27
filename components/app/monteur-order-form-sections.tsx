@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import type { KeyboardEvent } from "react";
 import type { OrderFormTemplate } from "@/lib/domain/types";
 import {
   computeOrderFormVisibilityMask,
@@ -14,6 +15,46 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ClipboardList, Plus } from "lucide-react";
+
+const ORDER_FORMS_ROOT_ATTR = "data-monteur-order-forms";
+
+/** Nur markierte Felder — vermeidet z. B. «Entfernen» (steht im DOM vor den Inputs). */
+const ORDER_FORM_FIELD_ATTR = "[data-order-form-field]";
+
+function listFocusableInOrderForms(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(ORDER_FORM_FIELD_ATTR)).filter((el) => {
+    if (el.closest("[data-radix-popper-content-wrapper]")) return false;
+    if (el.getAttribute("aria-hidden") === "true") return false;
+    if (el.hasAttribute("disabled")) return false;
+    const style = window.getComputedStyle(el);
+    if (style.display === "none" || style.visibility === "hidden") return false;
+    return el.getClientRects().length > 0;
+  });
+}
+
+function focusNextInOrderForms(current: HTMLElement): boolean {
+  const root = current.closest(`[${ORDER_FORMS_ROOT_ATTR}]`);
+  if (!(root instanceof HTMLElement)) return false;
+  const list = listFocusableInOrderForms(root);
+  const i = list.indexOf(current);
+  if (i === -1) return false;
+  const next = list[i + 1];
+  if (!next) return false;
+  next.focus();
+  return true;
+}
+
+function handleOrderFormEnterKeyNav(e: KeyboardEvent<HTMLElement>): void {
+  if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+  if (e.shiftKey) return;
+  const el = e.currentTarget;
+  if (el instanceof HTMLTextAreaElement) return;
+  if (!(el instanceof HTMLInputElement)) return;
+  const t = el.type;
+  if (t === "checkbox" || t === "radio" || t === "submit" || t === "button") return;
+  focusNextInOrderForms(el);
+  e.preventDefault();
+}
 
 function OrderFormFieldsForTemplate({ tpl, lineId }: { tpl: OrderFormTemplate; lineId: string }) {
   const [values, setValues] = useState<Record<string, string>>({});
@@ -55,6 +96,7 @@ function OrderFormFieldsForTemplate({ tpl, lineId }: { tpl: OrderFormTemplate; l
                 placeholder={ph}
                 required={false}
                 value={values[f.key] ?? ""}
+                data-order-form-field=""
                 onChange={(e) => setVal(f.key, e.target.value)}
               />
             ) : f.type === "select" && f.options?.length ? (
@@ -64,7 +106,7 @@ function OrderFormFieldsForTemplate({ tpl, lineId }: { tpl: OrderFormTemplate; l
                   value={values[f.key] ?? ""}
                   onValueChange={(v) => setVal(f.key, String(v))}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger data-order-form-field="">
                     <SelectValue placeholder={effReq ? "Bitte wählen…" : "—"} />
                   </SelectTrigger>
                   <SelectContent>
@@ -85,7 +127,9 @@ function OrderFormFieldsForTemplate({ tpl, lineId }: { tpl: OrderFormTemplate; l
                 placeholder={ph}
                 required={false}
                 value={values[f.key] ?? ""}
+                data-order-form-field=""
                 onChange={(e) => setVal(f.key, e.target.value)}
+                onKeyDown={handleOrderFormEnterKeyNav}
               />
             ) : (
               <Input
@@ -95,7 +139,9 @@ function OrderFormFieldsForTemplate({ tpl, lineId }: { tpl: OrderFormTemplate; l
                 placeholder={ph}
                 required={false}
                 value={values[f.key] ?? ""}
+                data-order-form-field=""
                 onChange={(e) => setVal(f.key, e.target.value)}
+                onKeyDown={handleOrderFormEnterKeyNav}
               />
             )}
           </div>
@@ -123,14 +169,15 @@ export function MonteurOrderFormSections({
   if (templates.length === 0) return null;
 
   return (
-    <div className="space-y-3 border-t border-border pt-4">
+    <div className="space-y-3 border-t border-border pt-4" data-monteur-order-forms="">
       <div className="flex items-start gap-2">
         <ClipboardList className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         <div>
           <h3 className="text-sm font-semibold text-foreground">Bestellformulare</h3>
           <p className="text-[11px] leading-relaxed text-muted-foreground">
             Vorlage auswählen; bei mehreren gleichen Produkten (z. B. zwei Rolläden) «Weitere Position»
-            nutzen. «Pflicht» gilt pro ausgewählter Position (Prüfung beim Speichern).
+            nutzen. «Pflicht» gilt pro ausgewählter Position (Prüfung beim Speichern).             Einzeilige Felder: <span className="font-medium text-foreground">Enter</span> springt zum nächsten Feld;
+            mehrzeilige Texte und Auswahllisten: <span className="font-medium text-foreground">Tab</span>.
           </p>
         </div>
       </div>
@@ -201,6 +248,7 @@ export function MonteurOrderFormSections({
                         variant="outline"
                         size="sm"
                         className="w-full gap-1.5 text-xs"
+                        data-order-form-field=""
                         onClick={() => onAddLine(tpl.id)}
                       >
                         <Plus className="size-3.5" />

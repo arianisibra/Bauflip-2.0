@@ -1,10 +1,45 @@
 "use server";
 
 import { getCurrentSession } from "@/lib/auth/session";
-import { createProject, addProjectAttachment, getProjectCore, updateAttachmentNotes, deleteProjectAttachment } from "@/lib/db/repository";
+import {
+  createProject,
+  addProjectAttachment,
+  getProjectCore,
+  updateAttachmentNotes,
+  deleteProjectAttachment,
+  type ProjectCore,
+} from "@/lib/db/repository";
 import { intakeSchema } from "@/lib/validations/forms";
 import { PROJECT_FILE_MAX_BYTES, PROJECT_FILE_MIME, sanitizeFileBaseName } from "@/lib/storage/mime";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import type { RoleType } from "@/lib/domain/types";
+
+function canManageProjectReportFiles(role: RoleType): boolean {
+  return role === "office" || role === "admin" || role === "technician";
+}
+
+function ensureProjectAccessForReportFiles(
+  session: { role: RoleType; user: { id: string }; organizationId: string | null },
+  core: ProjectCore,
+): { ok: true } | { ok: false; error: string } {
+  if (session.role === "office" || session.role === "admin") {
+    if (!session.organizationId || session.organizationId !== core.project.organizationId) {
+      return { ok: false, error: "Keine Berechtigung." };
+    }
+    return { ok: true };
+  }
+  if (session.role === "technician") {
+    const isAssigned =
+      core.appointments.some((a) => a.assignedTechnicianId === session.user.id) ||
+      core.project.nextOwnerUserId === session.user.id;
+    if (!isAssigned) return { ok: false, error: "Keine Berechtigung." };
+    if (!session.organizationId || session.organizationId !== core.project.organizationId) {
+      return { ok: false, error: "Keine Berechtigung." };
+    }
+    return { ok: true };
+  }
+  return { ok: false, error: "Keine Berechtigung." };
+}
 
 export async function createIntakeAction(formData: FormData) {
   const session = await getCurrentSession();
@@ -72,7 +107,7 @@ export async function uploadProjectReportFileAction(
 ): Promise<{ success: true } | { success: false; error: string }> {
   const session = await getCurrentSession();
   if (!session) return { success: false, error: "Nicht angemeldet." };
-  if (session.role !== "office" && session.role !== "admin") {
+  if (!canManageProjectReportFiles(session.role)) {
     return { success: false, error: "Keine Berechtigung." };
   }
   const supabase = await createSupabaseServerClient();
@@ -89,6 +124,8 @@ export async function uploadProjectReportFileAction(
   try {
     const [core, arrayBuf] = await Promise.all([getProjectCore(projectId), file.arrayBuffer()]);
     if (!core) return { success: false, error: "Projekt nicht gefunden." };
+    const access = ensureProjectAccessForReportFiles(session, core);
+    if (!access.ok) return { success: false, error: access.error };
 
     const safe = sanitizeFileBaseName(file.name) || "datei";
     const storagePath = `${session.organizationId}/${projectId}/reports/${Date.now()}-${safe}`;
@@ -123,11 +160,23 @@ export async function updateAttachmentNotesAction(
 ): Promise<{ success: true } | { success: false; error: string }> {
   const session = await getCurrentSession();
   if (!session) return { success: false, error: "Nicht angemeldet." };
-  if (session.role !== "office" && session.role !== "admin") {
+  if (!canManageProjectReportFiles(session.role)) {
     return { success: false, error: "Keine Berechtigung." };
   }
   if (!attachmentId) return { success: false, error: "Anhang-ID fehlt." };
   if (notes.length > 2000) return { success: false, error: "Notiz zu lang (max. 2000 Zeichen)." };
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return { success: false, error: "Supabase ist nicht konfiguriert." };
+  const { data: att } = await supabase
+    .from("project_attachments")
+    .select("project_id")
+    .eq("id", attachmentId)
+    .maybeSingle();
+  if (!att?.project_id) return { success: false, error: "Anhang nicht gefunden." };
+  const core = await getProjectCore(String(att.project_id));
+  if (!core) return { success: false, error: "Projekt nicht gefunden." };
+  const access = ensureProjectAccessForReportFiles(session, core);
+  if (!access.ok) return { success: false, error: access.error };
   try {
     await updateAttachmentNotes(attachmentId, notes);
   } catch (err) {
@@ -142,10 +191,22 @@ export async function deleteAttachmentAction(
 ): Promise<{ success: true } | { success: false; error: string }> {
   const session = await getCurrentSession();
   if (!session) return { success: false, error: "Nicht angemeldet." };
-  if (session.role !== "office" && session.role !== "admin") {
+  if (!canManageProjectReportFiles(session.role)) {
     return { success: false, error: "Keine Berechtigung." };
   }
   if (!attachmentId || !filePath) return { success: false, error: "Parameter fehlen." };
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return { success: false, error: "Supabase ist nicht konfiguriert." };
+  const { data: att } = await supabase
+    .from("project_attachments")
+    .select("project_id")
+    .eq("id", attachmentId)
+    .maybeSingle();
+  if (!att?.project_id) return { success: false, error: "Anhang nicht gefunden." };
+  const core = await getProjectCore(String(att.project_id));
+  if (!core) return { success: false, error: "Projekt nicht gefunden." };
+  const access = ensureProjectAccessForReportFiles(session, core);
+  if (!access.ok) return { success: false, error: access.error };
   try {
     await deleteProjectAttachment(attachmentId, filePath);
   } catch (err) {

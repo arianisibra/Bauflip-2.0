@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useCreateIntake } from "@/lib/query/hooks";
+import { BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +16,7 @@ export function IntakeForm({ onCreated }: { onCreated?: (projectId: string) => v
   return (
     <form
       className="flex flex-col gap-4"
+      aria-busy={pending}
       action={async (fd) => {
         setError(null);
         try {
@@ -96,7 +98,11 @@ export function IntakeForm({ onCreated }: { onCreated?: (projectId: string) => v
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       <Button type="submit" disabled={pending}>
-        {pending ? "Speichern…" : "Auftrag anlegen"}
+        {pending ? (
+          <BauflipLoadingButtonLabel variant="onPrimary">Wird angelegt …</BauflipLoadingButtonLabel>
+        ) : (
+          "Auftrag anlegen"
+        )}
       </Button>
     </form>
   );

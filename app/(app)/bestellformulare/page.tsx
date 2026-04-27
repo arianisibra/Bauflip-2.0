@@ -2,10 +2,17 @@ import dynamic from "next/dynamic";
 import { notFound } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
 import { listOrderFormTemplatesForOrg } from "@/lib/db/repository";
+import { BauflipLoading } from "@/components/ui/bauflip-loading";
 
 const OrderFormTemplatesAdmin = dynamic(
   () => import("@/components/app/order-form-templates-admin").then((m) => m.OrderFormTemplatesAdmin),
-  { loading: () => <div className="animate-pulse rounded-xl bg-muted/50 h-64" /> },
+  {
+    loading: () => (
+      <div className="flex min-h-[14rem] items-center justify-center py-10" role="status" aria-live="polite">
+        <BauflipLoading size="sm" label="Formulare werden geladen …" />
+      </div>
+    ),
+  },
 );
 
 export default async function BestellformularePage() {

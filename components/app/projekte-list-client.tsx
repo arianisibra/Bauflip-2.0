@@ -3,6 +3,7 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import dynamic from "next/dynamic";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import type { OfficeProjectListItem, UserProfile } from "@/lib/domain/types";
@@ -10,6 +11,7 @@ import { projectStatusLabels } from "@/lib/domain/types";
 import { useDeleteProject, useProjectsList } from "@/lib/query/hooks";
 import { queryKeys } from "@/lib/query/keys";
 import { ListPageToolbar } from "@/components/app/list-page-toolbar";
+import { BauflipLoading } from "@/components/ui/bauflip-loading";
 import { Sheet } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/app/status-badge";
@@ -25,13 +27,21 @@ import {
 const ProjektSheetEditor = dynamic(
   () => import("@/components/app/projekt-sheet-editor").then((m) => ({ default: m.ProjektSheetEditor })),
   {
-    loading: () => <p className="p-4 text-sm text-muted-foreground">Laden…</p>,
+    loading: () => (
+      <div className="flex justify-center p-8" role="status" aria-live="polite">
+        <BauflipLoading size="sm" label="Projekt wird geladen …" />
+      </div>
+    ),
   },
 );
 
-const IntakeForm = dynamic(() =>
-  import("@/components/app/intake-form").then((m) => ({ default: m.IntakeForm })),
-);
+const IntakeForm = dynamic(() => import("@/components/app/intake-form").then((m) => ({ default: m.IntakeForm })), {
+  loading: () => (
+    <div className="flex justify-center py-10" role="status" aria-live="polite">
+      <BauflipLoading size="sm" label="Formular wird geladen …" />
+    </div>
+  ),
+});
 
 function normalize(s: string) {
   return s.toLowerCase().trim();
@@ -84,7 +94,14 @@ const ProjectTableRow = memo(function ProjectTableRow({
             void onDelete(p);
           }}
         >
-          Löschen
+          {deletingId === p.id ? (
+            <span className="inline-flex items-center gap-1.5">
+              <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden />
+              Löschen …
+            </span>
+          ) : (
+            "Löschen"
+          )}
         </Button>
       </TableCell>
     </TableRow>
@@ -176,6 +193,7 @@ export function ProjekteListClient({
       setOpen(true);
       // Sync URL for deep-linking WITHOUT triggering an RSC refetch of the list.
       const params = new URLSearchParams(globalThis.location.search);
+      params.delete("sheet");
       params.set("openProjectId", p.id);
       globalThis.history.replaceState(null, "", `/projekte?${params.toString()}`);
     },
@@ -315,8 +333,16 @@ export function ProjekteListClient({
             setSelected(null);
             // Strip ?openProjectId without triggering an RSC refetch.
             const params = new URLSearchParams(globalThis.location.search);
+            let changed = false;
             if (params.has("openProjectId")) {
               params.delete("openProjectId");
+              changed = true;
+            }
+            if (params.has("sheet")) {
+              params.delete("sheet");
+              changed = true;
+            }
+            if (changed) {
               const suffix = params.toString();
               globalThis.history.replaceState(null, "", suffix ? `/projekte?${suffix}` : "/projekte");
             }
@@ -343,6 +369,7 @@ export function ProjekteListClient({
               setIntakeOpen(false);
               setPendingOpenProjectId(projectId);
               const params = new URLSearchParams(globalThis.location.search);
+              params.delete("sheet");
               params.set("openProjectId", projectId);
               globalThis.history.pushState(null, "", `/projekte?${params.toString()}`);
             }}

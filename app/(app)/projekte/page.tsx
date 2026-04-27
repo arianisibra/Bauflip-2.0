@@ -5,20 +5,21 @@ import { hasSupabaseConfig } from "@/lib/supabase/server";
 import { ProjekteListClient } from "@/components/app/projekte-list-client";
 
 type Props = {
-  searchParams: Promise<{ openProjectId?: string }>;
+  /** `sheet` wird vom Kalender verwendet — gleiche Bedeutung wie `openProjectId`. */
+  searchParams: Promise<{ openProjectId?: string; sheet?: string }>;
 };
 
 export default async function ProjektePage(props: Props) {
-  const searchParams = await Promise.resolve(props.searchParams ?? {});
+  const searchParams = (await props.searchParams) ?? {};
   const [session, projects, technicians] = await Promise.all([
     getCurrentSession(),
     listProjectsForOffice(),
     listAssignableProfiles(),
   ]);
-  const openProjectId =
-    typeof (searchParams as { openProjectId?: unknown }).openProjectId === "string"
-      ? (searchParams as { openProjectId: string }).openProjectId
-      : undefined;
+  const rawOpen =
+    typeof searchParams.openProjectId === "string" ? searchParams.openProjectId.trim() : "";
+  const rawSheet = typeof searchParams.sheet === "string" ? searchParams.sheet.trim() : "";
+  const openProjectId = rawOpen || rawSheet || undefined;
   const canEditProjectSheet = session?.role === "office" || session?.role === "admin";
   const supabaseConfigured = hasSupabaseConfig();
 

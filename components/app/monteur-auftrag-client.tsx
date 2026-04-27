@@ -4,7 +4,14 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { ProjectCore } from "@/lib/db/repository";
-import type { OrderFormTemplate, ProjectAttachment, RapportNextStep } from "@/lib/domain/types";
+import type {
+  OrderFormTemplate,
+  ProjectAttachment,
+  ProjectStatus,
+  RapportNextStep,
+  TechnicianReport,
+} from "@/lib/domain/types";
+import { isMonteurMontageContext } from "@/lib/tech/monteur-context";
 import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 import { formatServiceAddress, managementLabel, tenantLabel } from "@/lib/tech/bundle-display";
@@ -32,6 +39,7 @@ import {
   HelpCircle,
   ImagePlus,
   KeyRound,
+  Loader2,
   MapPin,
   Navigation,
   Paperclip,
@@ -157,6 +165,117 @@ function statusStandBannerVisible(status: string): boolean {
   return Boolean(cfg?.description);
 }
 
+function MonteurPriorReportsSection({ reports }: { reports: TechnicianReport[] }) {
+  const sorted = useMemo(
+    () => [...reports].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    [reports],
+  );
+  if (sorted.length === 0) return null;
+
+  return (
+    <Card className="border-border shadow-sm">
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          <ClipboardList className="size-4 text-muted-foreground" />
+          <div>
+            <CardTitle className="text-sm">Frühere Rapporte und Bestellungen</CardTitle>
+            <CardDescription className="text-xs">
+              Vom Büro / vorherigem Einsatz — bitte mitnehmen, was hier bestellt oder vermerkt ist.
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-2 pt-0">
+        {sorted.map((r, idx) => {
+          const isBehoben = r.outcome === "schaden_behoben";
+          return (
+            <details
+              key={r.id}
+              className="group rounded-lg border border-border/80 bg-muted/10 open:bg-card"
+              open={idx === sorted.length - 1}
+            >
+              <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-2.5 marker:hidden [&::-webkit-details-marker]:hidden">
+                <div
+                  className={`flex size-7 shrink-0 items-center justify-center rounded-md ${
+                    isBehoben
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                      : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                  }`}
+                >
+                  {isBehoben ? <CheckCircle2 className="size-3.5" /> : <ClipboardList className="size-3.5" />}
+                </div>
+                <div className="min-w-0 flex-1 text-left">
+                  <p className="text-sm font-medium text-foreground">
+                    {isBehoben ? "Behoben" : "Aufgenommen"}
+                    {r.summary?.trim() ? (
+                      <span className="ml-1.5 font-normal text-muted-foreground">— {r.summary}</span>
+                    ) : null}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {new Date(r.createdAt).toLocaleString("de-CH", { timeZone: "Europe/Zurich" })}
+                  </p>
+                </div>
+              </summary>
+              <div className="space-y-3 border-t border-border/60 px-3 py-3 text-sm">
+                {r.workDescription?.trim() ? (
+                  <div>
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Arbeit / Material
+                    </p>
+                    <p className="whitespace-pre-wrap text-xs text-foreground">{r.workDescription}</p>
+                  </div>
+                ) : null}
+                {r.measurementsJson && r.measurementsJson !== "{}" ? (
+                  <div>
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Masse / Notizen
+                    </p>
+                    <p className="whitespace-pre-wrap text-xs text-foreground">{r.measurementsJson}</p>
+                  </div>
+                ) : null}
+                {r.orderForms.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Bestellformulare
+                    </p>
+                    {r.orderForms.map((of_, ofIdx) => {
+                      const sameTplCount = r.orderForms.filter((x) => x.templateId === of_.templateId).length;
+                      const positionInTpl =
+                        r.orderForms.slice(0, ofIdx).filter((x) => x.templateId === of_.templateId).length + 1;
+                      const positionLabel = sameTplCount > 1 ? ` · Position ${positionInTpl}` : "";
+                      return (
+                        <div
+                          key={`${r.id}-${of_.templateId}-${ofIdx}`}
+                          className="rounded-md border border-border/60 bg-muted/20 px-2.5 py-2"
+                        >
+                          <p className="text-xs font-semibold text-foreground">
+                            {of_.templateName}
+                            <span className="font-normal text-muted-foreground">{positionLabel}</span>
+                          </p>
+                          <dl className="mt-1.5 space-y-1">
+                            {of_.fields.map((f) => (
+                              <div key={f.key} className="flex items-baseline gap-2 text-xs">
+                                <dt className="shrink-0 text-muted-foreground">{f.label}:</dt>
+                                <dd className="font-medium text-foreground">
+                                  {of_.values[f.key]?.trim() || "—"}
+                                </dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            </details>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
 function StatusContextBanner({ status }: { status: string }) {
   const cfg = STATUS_CONFIG[status];
   if (!cfg?.description) return null;
@@ -183,11 +302,8 @@ export function MonteurAuftragClient({
   const router = useRouter();
   const p = core.project;
 
-  // Montage-Kontext: 2./3. Termin (Material wurde bereits bestellt/vorhanden, oder Werkstattbesuch)
-  const isMontageContext =
-    p.status === "montagebereit" ||
-    p.status === "werkstatt" ||
-    (p.status === "termin_geplant" && core.reports.length > 0);
+  // Montage-Kontext: Material bestellt / montagebereit / Nachtermin — kein neues Bestellformular.
+  const isMontageContext = isMonteurMontageContext(p.status as ProjectStatus, core.reports.length);
 
   const nextStepOptions = isMontageContext
     ? RAPPORT_NEXT_STEP_OPTIONS_MONTAGE
@@ -200,6 +316,8 @@ export function MonteurAuftragClient({
   const [pending, setPending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  /** Verhindert doppeltes Absenden (Doppeltipp / Race vor React-Re-Render). */
+  const rapportSubmitLockRef = useRef(false);
 
   const imageAttachments = useMemo(
     () => core.attachments.filter((a) => a.fileType.startsWith("image/")),
@@ -430,6 +548,13 @@ export function MonteurAuftragClient({
 
       <AuftragSectionDivider />
 
+      {core.reports.length > 0 ? (
+        <>
+          <MonteurPriorReportsSection reports={core.reports} />
+          <AuftragSectionDivider />
+        </>
+      ) : null}
+
       <section className="space-y-2">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {isMontageContext ? "Montage" : "Einsatz"}
@@ -543,23 +668,40 @@ export function MonteurAuftragClient({
               className="flex flex-col gap-4"
               onSubmit={async (e) => {
                 e.preventDefault();
+                const ne = e.nativeEvent as SubmitEvent;
+                if ("submitter" in ne && ne.submitter === null) {
+                  return;
+                }
+                if (
+                  ne.submitter &&
+                  (!(ne.submitter instanceof HTMLButtonElement) || ne.submitter.type !== "submit")
+                ) {
+                  return;
+                }
                 if (mode === "schaden_aufgenommen" && !nextStatus) {
                   setError("Bitte wähle den nächsten Schritt aus.");
                   return;
                 }
+                if (rapportSubmitLockRef.current) return;
+                rapportSubmitLockRef.current = true;
                 const fd = new FormData(e.currentTarget);
                 setPending(true);
                 setError(null);
                 try {
-                  const result = await submitTechnicianReportAction({
-                    projectId: p.id,
-                    outcome: mode,
-                    nextStatus: mode === "schaden_aufgenommen" ? nextStatus ?? undefined : undefined,
-                    summary: String(fd.get("summary") ?? ""),
-                    measurementsJson: String(fd.get("measurementsJson") ?? "{}"),
-                    workDescription: String(fd.get("workDescription") ?? ""),
-                    orderForms: orderFormsPayloadFromFormData(fd, orderFormTemplates, orderFormLines),
-                  }, getTabId());
+                  const result = await submitTechnicianReportAction(
+                    {
+                      projectId: p.id,
+                      outcome: mode,
+                      nextStatus: mode === "schaden_aufgenommen" ? nextStatus ?? undefined : undefined,
+                      summary: String(fd.get("summary") ?? ""),
+                      measurementsJson: String(fd.get("measurementsJson") ?? "{}"),
+                      workDescription: String(fd.get("workDescription") ?? ""),
+                      orderForms: isMontageContext
+                        ? []
+                        : orderFormsPayloadFromFormData(fd, orderFormTemplates, orderFormLines),
+                    },
+                    getTabId(),
+                  );
                   if (!result.success) {
                     toast.error(result.error);
                     return;
@@ -569,6 +711,7 @@ export function MonteurAuftragClient({
                 } catch {
                   setError("Speichern fehlgeschlagen.");
                 } finally {
+                  rapportSubmitLockRef.current = false;
                   setPending(false);
                 }
               }}
@@ -619,13 +762,15 @@ export function MonteurAuftragClient({
                 </>
               )}
 
-              <MonteurOrderFormSections
-                templates={orderFormTemplates}
-                lines={orderFormLines}
-                onToggleTemplate={toggleOrderFormTemplate}
-                onAddLine={addOrderFormLine}
-                onRemoveLine={removeOrderFormLine}
-              />
+              {!isMontageContext && orderFormTemplates.length > 0 ? (
+                <MonteurOrderFormSections
+                  templates={orderFormTemplates}
+                  lines={orderFormLines}
+                  onToggleTemplate={toggleOrderFormTemplate}
+                  onAddLine={addOrderFormLine}
+                  onRemoveLine={removeOrderFormLine}
+                />
+              ) : null}
 
               {/* Photo gallery + upload */}
               <div className="space-y-3">
@@ -773,9 +918,12 @@ function AttachmentCard({
           value={notes}
           onChange={(e) => handleNotesChange(e.target.value)}
         />
-        {saving && (
-          <p className="text-[10px] text-muted-foreground">Speichert…</p>
-        )}
+        {saving ? (
+          <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+            <Loader2 className="size-3 shrink-0 animate-spin text-primary" aria-hidden />
+            Speichert …
+          </p>
+        ) : null}
       </div>
     </div>
   );

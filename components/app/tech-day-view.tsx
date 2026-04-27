@@ -14,6 +14,7 @@ import {
 import type { WeekTaskItem } from "@/lib/domain/types";
 import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
 import { useWeekTasks } from "@/lib/query/hooks";
+import { BauflipLoadingInline } from "@/components/ui/bauflip-loading";
 import { queryKeys } from "@/lib/query/keys";
 import { cn } from "@/lib/utils";
 import { todayKeySwiss } from "@/lib/date/swiss";
@@ -61,7 +62,7 @@ export function TechDayView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { data: tasks = initialTasks } = useWeekTasks(referenceIso);
+  const { data: tasks = initialTasks, isFetching } = useWeekTasks(referenceIso);
 
   const { todaysTasks, upcomingTasks, openRapportProjects } = useMemo(() => {
     const now = new Date();
@@ -115,6 +116,11 @@ export function TechDayView({
         <p className="text-xs text-muted-foreground">
           Heutige Einsätze. Für den Auftrag antippen.
         </p>
+        {isFetching ? (
+          <div className="pt-1">
+            <BauflipLoadingInline label="Termine werden aktualisiert …" />
+          </div>
+        ) : null}
       </header>
 
       <section className="space-y-2">

@@ -13,6 +13,7 @@ import type { OrderFormFieldDef } from "@/lib/order-forms/schema";
 import { orderFormFieldsSchema, slugifyOrderFormSlug } from "@/lib/order-forms/schema";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,6 +32,7 @@ import {
   Package,
   Plus,
   Settings2,
+  Loader2,
   SlidersHorizontal,
   Trash2,
   Type,
@@ -430,6 +432,8 @@ function CmsFormEditor({
   const updateTpl = useUpdateOrderFormTemplate();
   const deleteTpl = useDeleteOrderFormTemplate();
   const pending = updateTpl.isPending || deleteTpl.isPending;
+  const savePending = updateTpl.isPending;
+  const deletePending = deleteTpl.isPending;
   const [error, setError] = useState<string | null>(null);
 
   const [supplierName, setSupplierName] = useState(template.supplierName ?? "");
@@ -649,7 +653,11 @@ function CmsFormEditor({
 
       <CardFooter className="flex-wrap gap-3">
         <Button type="button" onClick={handleSave} disabled={pending}>
-          {pending ? "Speichern…" : "Änderungen speichern"}
+          {savePending ? (
+            <BauflipLoadingButtonLabel variant="onPrimary">Speichern …</BauflipLoadingButtonLabel>
+          ) : (
+            "Änderungen speichern"
+          )}
         </Button>
         <Button
           type="button"
@@ -659,8 +667,12 @@ function CmsFormEditor({
           onClick={handleDeleteForm}
           disabled={pending}
         >
-          <Trash2 className="size-3.5" />
-          Formular löschen
+          {deletePending ? (
+            <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden />
+          ) : (
+            <Trash2 className="size-3.5" aria-hidden />
+          )}
+          {deletePending ? "Wird gelöscht …" : "Formular löschen"}
         </Button>
       </CardFooter>
     </Card>
@@ -766,7 +778,11 @@ export function OrderFormTemplatesAdmin({ templates: initialTemplates }: { templ
           </CardContent>
           <CardFooter className="border-t border-border/50 bg-card px-3 py-3">
             <Button type="button" className="w-full" size="sm" onClick={handleCreate} disabled={createPending}>
-              {createPending ? "Wird erstellt…" : "Formular erstellen"}
+              {createPending ? (
+                <BauflipLoadingButtonLabel variant="onPrimary">Wird erstellt …</BauflipLoadingButtonLabel>
+              ) : (
+                "Formular erstellen"
+              )}
             </Button>
           </CardFooter>
           {createError ? (

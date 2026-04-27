@@ -7,6 +7,7 @@ import type { WeekTaskItem } from "@/lib/domain/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { BauflipLoadingInline } from "@/components/ui/bauflip-loading";
 import { CheckCircle2, ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react";
 import {
   shiftSwissWeekReference,
@@ -88,9 +89,10 @@ export function TechCalendar({
         >
           <ChevronLeft className="size-4" />
         </Button>
-        <p className="text-sm font-semibold text-foreground">
-          {headerRange}
-        </p>
+        <div className="flex min-h-9 flex-col items-center justify-center gap-1 text-center">
+          <p className="text-sm font-semibold text-foreground">{headerRange}</p>
+          {pending ? <BauflipLoadingInline label="Wird geladen …" /> : null}
+        </div>
         <Button
           variant="outline"
           size="icon"

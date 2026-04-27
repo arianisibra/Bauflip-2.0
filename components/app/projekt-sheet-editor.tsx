@@ -26,8 +26,10 @@ import {
   ChevronDown,
   ClipboardList,
   Download,
+  Loader2,
   Trash2,
 } from "lucide-react";
+import { BauflipLoading, BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
 function buildReportText(r: TechnicianReport): string {
   const lines: string[] = [];
   lines.push(`Rapport – ${r.outcome === "schaden_behoben" ? "Schaden behoben" : "Schaden aufgenommen"}`);
@@ -88,6 +90,7 @@ function ReportCard({
 }) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const isBehoben = r.outcome === "schaden_behoben";
 
   return (
@@ -206,18 +209,29 @@ function ReportCard({
                       variant="destructive"
                       size="sm"
                       className="text-xs"
+                      disabled={deleting}
                       onClick={async () => {
-                        setConfirming(false);
-                        await onDelete();
+                        setDeleting(true);
+                        try {
+                          await onDelete();
+                        } finally {
+                          setDeleting(false);
+                          setConfirming(false);
+                        }
                       }}
                     >
-                      Ja, löschen
+                      {deleting ? (
+                        <BauflipLoadingButtonLabel variant="onPrimary">Wird gelöscht …</BauflipLoadingButtonLabel>
+                      ) : (
+                        "Ja, löschen"
+                      )}
                     </Button>
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
                       className="text-xs"
+                      disabled={deleting}
                       onClick={() => setConfirming(false)}
                     >
                       Abbrechen
@@ -299,7 +313,11 @@ function StatusPipeline({
                 onClick={() => advance(action.nextStatus)}
                 className="flex items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-2 py-0.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
               >
-                <ArrowRight className="size-3" />
+                {pending ? (
+                  <Loader2 className="size-3 shrink-0 animate-spin" aria-hidden />
+                ) : (
+                  <ArrowRight className="size-3" aria-hidden />
+                )}
                 {action.label}
               </button>
             ))}
@@ -339,7 +357,11 @@ export function ProjektSheetEditor({
     );
   }
   if (!coreQuery.data) {
-    return <p className="text-sm text-muted-foreground">Laden…</p>;
+    return (
+      <div className="flex justify-center py-10" role="status" aria-live="polite">
+        <BauflipLoading size="sm" label="Projekt wird geladen …" />
+      </div>
+    );
   }
 
   const core = coreQuery.data;
@@ -475,8 +497,12 @@ export function ProjektSheetEditor({
 
         {canEdit ? (
           <div className="sm:col-span-2">
-            <Button type="submit" disabled={pending}>
-              {pending ? "Speichern…" : "Speichern"}
+            <Button type="submit" disabled={updateStammdaten.isPending}>
+              {updateStammdaten.isPending ? (
+                <BauflipLoadingButtonLabel variant="onPrimary">Speichern …</BauflipLoadingButtonLabel>
+              ) : (
+                "Speichern"
+              )}
             </Button>
           </div>
         ) : null}
@@ -529,8 +555,12 @@ export function ProjektSheetEditor({
                 ))}
               </select>
             </div>
-            <Button type="submit" size="sm" disabled={pending}>
-              Termin speichern
+            <Button type="submit" size="sm" disabled={addAppointment.isPending}>
+              {addAppointment.isPending ? (
+                <BauflipLoadingButtonLabel variant="onPrimary">Speichern …</BauflipLoadingButtonLabel>
+              ) : (
+                "Termin speichern"
+              )}
             </Button>
           </form>
 
@@ -559,6 +589,7 @@ export function ProjektSheetEditor({
                       variant="ghost"
                       size="sm"
                       className="shrink-0 text-destructive hover:text-destructive"
+                      disabled={pending}
                       onClick={() => {
                         if (!window.confirm("Termin löschen?")) return;
                         deleteAppointment.mutate(
@@ -571,7 +602,12 @@ export function ProjektSheetEditor({
                         );
                       }}
                     >
-                      ×
+                      {deleteAppointment.isPending &&
+                      deleteAppointment.variables?.appointmentId === a.id ? (
+                        <Loader2 className="size-3.5 animate-spin" aria-label="Wird gelöscht" />
+                      ) : (
+                        "×"
+                      )}
                     </Button>
                   </div>
                 </li>
@@ -606,8 +642,12 @@ export function ProjektSheetEditor({
           }}
         >
           <Input name="file" type="file" accept="image/*,application/pdf" />
-          <Button type="submit" size="sm" variant="outline" disabled={pending}>
-            Hochladen
+          <Button type="submit" size="sm" variant="outline" disabled={uploadAttachment.isPending}>
+            {uploadAttachment.isPending ? (
+              <BauflipLoadingButtonLabel variant="onSurface">Wird hochgeladen …</BauflipLoadingButtonLabel>
+            ) : (
+              "Hochladen"
+            )}
           </Button>
         </form>
         <ul className="mt-2 space-y-1 text-xs text-muted-foreground">

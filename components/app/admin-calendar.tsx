@@ -7,6 +7,7 @@ import type { WeekTaskItem } from "@/lib/domain/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { BauflipLoadingInline } from "@/components/ui/bauflip-loading";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useMonthTasks } from "@/lib/query/hooks";
 import { queryKeys } from "@/lib/query/keys";
@@ -136,9 +137,12 @@ export function AdminCalendar({
         >
           <ChevronLeft className="size-4" />
         </Button>
-        <h2 className="text-lg font-semibold tracking-tight">
-          {MONTH_NAMES[month - 1]} {year}
-        </h2>
+        <div className="flex min-h-9 flex-col items-center justify-center gap-1 text-center">
+          <h2 className="text-lg font-semibold tracking-tight">
+            {MONTH_NAMES[month - 1]} {year}
+          </h2>
+          {pending ? <BauflipLoadingInline label="Wird geladen …" /> : null}
+        </div>
         <Button
           variant="outline"
           size="icon"

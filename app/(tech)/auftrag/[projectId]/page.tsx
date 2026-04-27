@@ -1,11 +1,19 @@
 import dynamic from "next/dynamic";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
+import { isMonteurMontageContext } from "@/lib/tech/monteur-context";
 import { getProjectCore, listActiveOrderFormTemplatesForOrg, signAttachmentUrls } from "@/lib/db/repository";
+import { BauflipLoading } from "@/components/ui/bauflip-loading";
 
 const MonteurAuftragClient = dynamic(
   () => import("@/components/app/monteur-auftrag-client").then((m) => m.MonteurAuftragClient),
-  { loading: () => <div className="flex h-[60vh] items-center justify-center"><div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div> },
+  {
+    loading: () => (
+      <div className="flex h-[50vh] min-h-[12rem] items-center justify-center" role="status" aria-live="polite">
+        <BauflipLoading size="sm" label="Auftrag wird geladen …" />
+      </div>
+    ),
+  },
 );
 
 type Params = { params: Promise<{ projectId: string }> };
@@ -38,8 +46,13 @@ export default async function MonteurAuftragPage({ params }: Params) {
     redirect("/");
   }
 
+  const skipOrderFormTemplates = isMonteurMontageContext(
+    core.project.status,
+    core.reports.length,
+  );
+
   const [orderFormTemplates, signedAttachments] = await Promise.all([
-    core.project.organizationId != null
+    !skipOrderFormTemplates && core.project.organizationId != null
       ? listActiveOrderFormTemplatesForOrg(core.project.organizationId)
       : Promise.resolve([]),
     signAttachmentUrls(core.attachments),

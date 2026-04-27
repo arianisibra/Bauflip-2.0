@@ -2,10 +2,17 @@ import dynamic from "next/dynamic";
 import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
 import { listMonthTasks } from "@/lib/db/repository";
+import { BauflipLoading } from "@/components/ui/bauflip-loading";
 
 const AdminCalendar = dynamic(
   () => import("@/components/app/admin-calendar").then((m) => m.AdminCalendar),
-  { loading: () => <div className="animate-pulse rounded-xl bg-muted/50 h-96" /> },
+  {
+    loading: () => (
+      <div className="flex min-h-[18rem] items-center justify-center py-12" role="status" aria-live="polite">
+        <BauflipLoading size="sm" label="Kalender wird geladen …" />
+      </div>
+    ),
+  },
 );
 
 export default async function KalenderPage() {

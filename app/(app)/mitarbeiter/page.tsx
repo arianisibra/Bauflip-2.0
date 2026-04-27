@@ -2,10 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
 import { inviteEmployeeAction, listTeamMembersAction, type TeamMemberListItem } from "@/app/(app)/einstellungen/actions";
+import { InviteEmployeeSubmitButton } from "@/components/app/invite-employee-submit-button";
 import { InviteRoleSelect } from "@/components/app/invite-role-select";
 import { TurnstileField } from "@/components/auth/turnstile-field";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -291,9 +291,7 @@ export default async function MitarbeiterPage() {
                 </p>
               </CardContent>
               <CardFooter className="border-t border-border/50 bg-card px-4 py-3">
-                <Button type="submit" className="w-full" size="sm">
-                  Einladung senden
-                </Button>
+                <InviteEmployeeSubmitButton />
               </CardFooter>
             </form>
           </Card>
