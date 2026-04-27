@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
 import { canAccessTechFieldRoutes } from "@/lib/domain/types";
 import { TechBottomNav } from "@/components/app/tech-bottom-nav";
+import { TechThemeScope } from "@/components/app/tech-theme-scope";
 
 export default async function TechLayout({ children }: { children: React.ReactNode }) {
   const session = await getCurrentSession();
@@ -13,11 +14,19 @@ export default async function TechLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    <div className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-muted/30 dark:bg-muted/35">
-      <main className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col gap-4 overflow-y-auto overscroll-y-contain px-4 py-4">
-        {children}
-      </main>
-      <TechBottomNav />
-    </div>
+    <>
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `try{if(localStorage.getItem("bauflip_theme")==="dark")document.documentElement.classList.add("dark");else document.documentElement.classList.remove("dark")}catch{}`,
+        }}
+      />
+      <TechThemeScope />
+      <div className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-muted/30 dark:bg-muted/35">
+        <main className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col gap-4 overflow-y-auto overscroll-y-contain px-4 py-4">
+          {children}
+        </main>
+        <TechBottomNav />
+      </div>
+    </>
   );
 }
