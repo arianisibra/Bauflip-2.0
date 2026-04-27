@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import type { WeekTaskItem } from "@/lib/domain/types";
+import { groupWeekTasksByProjectDay } from "@/lib/tech/group-week-tasks-by-project-day";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -165,7 +166,8 @@ export function AdminCalendar({
         ))}
 
         {cells.map((cell, i) => {
-          const dayTasks = tasksByDate.get(cell.dateKey) ?? [];
+          const dayTasksRaw = tasksByDate.get(cell.dateKey) ?? [];
+          const dayGroups = groupWeekTasksByProjectDay(dayTasksRaw);
           const isToday = cell.dateKey === todayKey;
 
           return (
@@ -187,32 +189,37 @@ export function AdminCalendar({
                 >
                   {cell.day}
                 </span>
-                {dayTasks.length > 0 ? (
+                {dayGroups.length > 0 ? (
                   <Badge variant="secondary" className="h-4 px-1 text-[10px]">
-                    {dayTasks.length}
+                    {dayGroups.length}
                   </Badge>
                 ) : null}
               </div>
 
               <div className="space-y-0.5">
-                {dayTasks.slice(0, 3).map((task) => (
-                  <Link
-                    key={task.appointmentId}
-                    href={`/projekte?sheet=${task.projectId}`}
-                    className="block truncate rounded px-1 py-0.5 text-[10px] font-medium leading-tight transition-colors hover:opacity-80"
-                    style={{
-                      backgroundColor: task.calendarColor + "20",
-                      color: task.calendarColor,
-                      borderLeft: `2px solid ${task.calendarColor}`,
-                    }}
-                    title={`${formatTime(task.startsAt)} ${task.projectTitle}${task.technicianName ? ` — ${task.technicianName}` : ""}`}
-                  >
-                    {formatTime(task.startsAt)} {task.projectTitle}
-                  </Link>
-                ))}
-                {dayTasks.length > 3 ? (
+                {dayGroups.slice(0, 3).map((group) => {
+                  const task = group.primary;
+                  const timesTitle = group.slots.map((s) => formatTime(s.startsAt)).join(", ");
+                  return (
+                    <Link
+                      key={group.key}
+                      href={`/projekte?sheet=${task.projectId}`}
+                      className="block truncate rounded px-1 py-0.5 text-[10px] font-medium leading-tight transition-colors hover:opacity-80"
+                      style={{
+                        backgroundColor: task.calendarColor + "20",
+                        color: task.calendarColor,
+                        borderLeft: `2px solid ${task.calendarColor}`,
+                      }}
+                      title={`${timesTitle} ${task.projectTitle}${task.technicianName ? ` — ${task.technicianName}` : ""}`}
+                    >
+                      {formatTime(task.startsAt)}
+                      {group.slots.length > 1 ? ` (+${group.slots.length - 1})` : ""} {task.projectTitle}
+                    </Link>
+                  );
+                })}
+                {dayGroups.length > 3 ? (
                   <p className="px-1 text-[10px] text-muted-foreground">
-                    +{dayTasks.length - 3} weitere
+                    +{dayGroups.length - 3} weitere
                   </p>
                 ) : null}
               </div>

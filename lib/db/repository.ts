@@ -17,7 +17,7 @@ import type {
   UserProfile,
   WeekTaskItem,
 } from "@/lib/domain/types";
-import { RAPPORT_NEXT_STEP_BEHOBEN } from "@/lib/domain/types";
+import { RAPPORT_NEXT_STEP_BEHOBEN, nextProjectStatusAfterAppointmentBooked } from "@/lib/domain/types";
 import { parseOrderFormFieldsJson } from "@/lib/order-forms/schema";
 import { getWeekBounds } from "@/lib/date/week-bounds";
 import { resolveCalendarColor } from "@/lib/calendar/team-colors";
@@ -738,6 +738,14 @@ export async function addAppointment(input: Omit<Appointment, "id" | "createdAt"
   if (!supabase) {
     const a: Appointment = { ...input, id: id("a"), createdAt: new Date().toISOString() };
     mockAppointments.push(a);
+    const mockP = mockProjects.find((p) => p.id === input.projectId);
+    if (mockP) {
+      const next = nextProjectStatusAfterAppointmentBooked(mockP.status);
+      if (next !== null && next !== mockP.status) {
+        mockP.status = next;
+        mockP.updatedAt = new Date().toISOString();
+      }
+    }
     return a;
   }
   const { data, error } = await supabase
@@ -753,7 +761,14 @@ export async function addAppointment(input: Omit<Appointment, "id" | "createdAt"
     .select(APPOINTMENT_DB_COLUMNS)
     .single();
   if (error || !data) throw new Error(error?.message ?? "Termin konnte nicht gespeichert werden.");
-  await updateProject(input.projectId, { status: "termin_geplant" });
+
+  const { data: statusRow } = await supabase.from("projects").select("status").eq("id", input.projectId).maybeSingle();
+  const currentStatus = (statusRow?.status as ProjectStatus | undefined) ?? "offen";
+  const nextStatus = nextProjectStatusAfterAppointmentBooked(currentStatus);
+  if (nextStatus !== null && nextStatus !== currentStatus) {
+    await updateProject(input.projectId, { status: nextStatus });
+  }
+
   return mapAppointmentRow(data as Record<string, unknown>);
 }
 

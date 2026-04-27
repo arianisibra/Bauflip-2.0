@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import type { TechnicianReport, ProjectStatus } from "@/lib/domain/types";
+import type { Appointment, TechnicianReport, ProjectStatus } from "@/lib/domain/types";
 import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 import {
@@ -565,7 +565,7 @@ export function ProjektSheetEditor({
           </form>
 
           <ul className="mt-3 space-y-2 text-sm">
-            {core.appointments.map((a) => {
+            {core.appointments.map((a: Appointment, appointmentIndex: number) => {
               const assignedPerson = a.assignedTechnicianId
                 ? technicians.find((t) => t.id === a.assignedTechnicianId)
                 : null;
@@ -576,9 +576,21 @@ export function ProjektSheetEditor({
                       <p className="text-xs font-semibold text-foreground">
                         {new Date(a.startsAt).toLocaleString("de-CH", { timeZone: "Europe/Zurich" })} – {new Date(a.endsAt).toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Zurich" })}
                       </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {a.kind === "besichtigung" ? "Besichtigung" : "Ausführung"}
-                        {assignedPerson ? ` · ${assignedPerson.displayName}` : " · Keine Person zugewiesen"}
+                      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-muted-foreground">
+                        <span>
+                          {a.kind === "besichtigung" ? "Besichtigung" : "Ausführung"}
+                          {assignedPerson ? ` · ${assignedPerson.displayName}` : " · Keine Person zugewiesen"}
+                        </span>
+                        {appointmentIndex > 0 ? (
+                          <span className="rounded-md bg-primary/10 px-1.5 py-0 text-[10px] font-medium text-primary">
+                            Folgetermin
+                          </span>
+                        ) : null}
+                        {appointmentIndex === 0 && p.status === "montagebereit" ? (
+                          <span className="rounded-md bg-emerald-500/10 px-1.5 py-0 text-[10px] font-medium text-emerald-800 dark:text-emerald-200">
+                            Montage
+                          </span>
+                        ) : null}
                       </p>
                       {a.planningNotes?.trim() ? (
                         <p className="text-[11px] text-muted-foreground italic">{a.planningNotes}</p>

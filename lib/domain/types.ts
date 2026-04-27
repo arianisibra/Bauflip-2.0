@@ -23,6 +23,16 @@ export const projectStatuses = [
 ] as const;
 export type ProjectStatus = (typeof projectStatuses)[number];
 
+/**
+ * Nach neu gebuchtem Termin: welcher Projektstatus gesetzt werden soll.
+ * `null` = Status nicht anfassen (kein pauschales „Termin geplant“).
+ */
+export function nextProjectStatusAfterAppointmentBooked(current: ProjectStatus): ProjectStatus | null {
+  if (current === "offen") return "termin_geplant";
+  if (current === "einsatz_offen") return "montagebereit";
+  return null;
+}
+
 /** Status-Optionen nach Rapport "Aufgenommen" beim Erstbesuch (Bestandesaufnahme) */
 export const RAPPORT_NEXT_STEPS_AUFGENOMMEN = [
   "offerte_senden",

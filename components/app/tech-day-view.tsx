@@ -12,6 +12,8 @@ import {
   MapPin,
 } from "lucide-react";
 import type { WeekTaskItem } from "@/lib/domain/types";
+import type { WeekTaskProjectDayGroup } from "@/lib/tech/group-week-tasks-by-project-day";
+import { groupWeekTasksByProjectDay } from "@/lib/tech/group-week-tasks-by-project-day";
 import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
 import { useWeekTasks } from "@/lib/query/hooks";
 import { BauflipLoadingInline } from "@/components/ui/bauflip-loading";
@@ -45,6 +47,109 @@ function ProjectStatusBadge({ status }: { status: string }) {
   );
 }
 
+function MonteurTodayGroupCard({ group }: { group: WeekTaskProjectDayGroup }) {
+  const task = group.primary;
+  const isBesichtigung = task.kind === "besichtigung";
+  const isDone = task.projectStatus === "abgeschlossen";
+  return (
+    <Link
+      href={`/auftrag/${task.projectId}`}
+      className={`flex items-center gap-3 rounded-2xl border border-border border-l-4 bg-card px-4 py-4 shadow-sm transition-transform active:scale-[0.98] ${
+        isDone
+          ? "border-l-muted-foreground/30 opacity-60"
+          : isBesichtigung
+            ? "border-l-orange-500"
+            : "border-l-emerald-400"
+      }`}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0 space-y-1">
+            {group.slots.map((s) => (
+              <p
+                key={s.appointmentId}
+                className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground"
+              >
+                <Clock className="size-3 shrink-0" />
+                {formatTimeRange(s.startsAt, s.endsAt)}
+              </p>
+            ))}
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            {isDone ? (
+              <Badge
+                variant="outline"
+                className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
+              >
+                <CheckCircle2 className="size-3" />
+                Erledigt
+              </Badge>
+            ) : (
+              <>
+                <Badge
+                  variant="outline"
+                  className={
+                    isBesichtigung
+                      ? "border-orange-500/30 bg-orange-500/10 text-orange-900 dark:text-orange-200"
+                      : "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
+                  }
+                >
+                  {isBesichtigung ? "Besichtigung" : "Ausführung"}
+                </Badge>
+                <ProjectStatusBadge status={task.projectStatus} />
+              </>
+            )}
+          </div>
+        </div>
+        <p className={`mt-1.5 line-clamp-2 text-sm font-semibold ${isDone ? "text-muted-foreground line-through" : "text-foreground"}`}>
+          {task.projectTitle}
+        </p>
+        {task.tenantDisplay || task.serviceAddressShort ? (
+          <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <MapPin className="size-3 shrink-0" />
+            <span className="line-clamp-1 flex-1">
+              {[task.tenantDisplay, task.serviceAddressShort].filter(Boolean).join(" · ")}
+            </span>
+            {task.serviceAddressShort ? <MapsNavButton address={task.serviceAddressShort} /> : null}
+          </div>
+        ) : null}
+      </div>
+      <ChevronRight className="size-5 shrink-0 text-muted-foreground/40" />
+    </Link>
+  );
+}
+
+function MonteurUpcomingGroupCard({ group }: { group: WeekTaskProjectDayGroup }) {
+  const task = group.primary;
+  return (
+    <Link
+      href={`/auftrag/${task.projectId}`}
+      className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 shadow-sm transition-transform active:scale-[0.98]"
+    >
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+          <Clock className="size-3 shrink-0" />
+          {new Date(task.startsAt).toLocaleDateString("de-CH", {
+            weekday: "short",
+            day: "2-digit",
+            month: "2-digit",
+            timeZone: "Europe/Zurich",
+          })}
+        </p>
+        <div className="mt-1 space-y-0.5">
+          {group.slots.map((s) => (
+            <p key={s.appointmentId} className="text-[11px] text-muted-foreground">
+              {formatTimeRange(s.startsAt, s.endsAt)}
+            </p>
+          ))}
+        </div>
+        <p className="mt-0.5 line-clamp-2 text-xs font-medium text-foreground">{task.projectTitle}</p>
+      </div>
+      <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
+    </Link>
+  );
+}
+
 export function TechDayView({
   initialTasks,
   referenceIso,
@@ -74,21 +179,27 @@ export function TechDayView({
 
   const { data: tasks = initialTasks, isFetching } = useWeekTasks(referenceIso);
 
-  const { todaysTasks, upcomingTasks, openRapportProjects } = useMemo(() => {
+  const { todayGroups, todayTasks, upcomingGroups, upcomingTasks, openRapportProjects } = useMemo(() => {
     const now = new Date();
     const todayKey = todayKeySwiss(now);
     const taskDateKey = (iso: string) => todayKeySwiss(new Date(iso));
     const visibleTask = (t: WeekTaskItem) =>
       isTechnicianView ? t.assignedTechnicianId === currentUserId : true;
 
-    const todays = tasks
+    const todaysFlat = tasks
       .filter((t) => visibleTask(t) && taskDateKey(t.startsAt) === todayKey)
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
 
-    const upcoming = tasks
+    const upcomingFlat = tasks
       .filter((t) => visibleTask(t) && taskDateKey(t.startsAt) > todayKey)
-      .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
-      .slice(0, 3);
+      .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+
+    const todayGroups = isTechnicianView ? groupWeekTasksByProjectDay(todaysFlat) : null;
+    const todayTasks = !isTechnicianView ? todaysFlat : null;
+    const upcomingGroups = isTechnicianView
+      ? groupWeekTasksByProjectDay(upcomingFlat).slice(0, 3)
+      : null;
+    const upcomingTasks = !isTechnicianView ? upcomingFlat.slice(0, 3) : null;
 
     const openByProject = new Map<
       string,
@@ -113,8 +224,17 @@ export function TechDayView({
       a.projectTitle.localeCompare(b.projectTitle, "de-CH"),
     );
 
-    return { todaysTasks: todays, upcomingTasks: upcoming, openRapportProjects: openList };
+    return {
+      todayGroups,
+      todayTasks,
+      upcomingGroups,
+      upcomingTasks,
+      openRapportProjects: openList,
+    };
   }, [tasks, isTechnicianView, currentUserId]);
+
+  const todayEmpty = isTechnicianView ? !(todayGroups?.length ?? 0) : !(todayTasks?.length ?? 0);
+  const upcomingHas = isTechnicianView ? (upcomingGroups?.length ?? 0) > 0 : (upcomingTasks?.length ?? 0) > 0;
 
   return (
     <section className="flex flex-col gap-5 pb-4">
@@ -156,7 +276,7 @@ export function TechDayView({
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Heutige Einsätze
         </h2>
-        {todaysTasks.length === 0 ? (
+        {todayEmpty ? (
           <div className="space-y-3">
             <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-border bg-card px-4 py-8 text-center">
               <CalendarOff className="size-8 text-muted-foreground/50" />
@@ -167,115 +287,119 @@ export function TechDayView({
                   : "Heute sind keine Termine in der Übersicht. Geniesse den Tag!"}
               </p>
             </div>
-            {upcomingTasks.length > 0 ? (
+            {upcomingHas ? (
               <div className="space-y-2 rounded-2xl border border-border bg-card px-4 py-4 shadow-sm">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                   Nächste Termine
                 </p>
                 <div className="space-y-2">
-                  {upcomingTasks.map((task) => (
-                    <Link
-                      key={task.appointmentId}
-                      href={`/auftrag/${task.projectId}`}
-                      className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 shadow-sm transition-transform active:scale-[0.98]"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-                          <Clock className="size-3" />
-                          {new Date(task.startsAt).toLocaleDateString("de-CH", {
-                            weekday: "short",
-                            day: "2-digit",
-                            month: "2-digit",
-                            timeZone: "Europe/Zurich",
-                          })}{" "}
-                          ·{" "}
-                          {new Date(task.startsAt).toLocaleTimeString("de-CH", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            timeZone: "Europe/Zurich",
-                          })}
-                        </p>
-                        <p className="mt-0.5 line-clamp-2 text-xs font-medium text-foreground">
-                          {task.projectTitle}
-                        </p>
-                      </div>
-                      <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
-                    </Link>
-                  ))}
+                  {isTechnicianView
+                    ? upcomingGroups!.map((group) => <MonteurUpcomingGroupCard key={group.key} group={group} />)
+                    : upcomingTasks!.map((task) => (
+                        <Link
+                          key={task.appointmentId}
+                          href={`/auftrag/${task.projectId}`}
+                          className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 shadow-sm transition-transform active:scale-[0.98]"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                              <Clock className="size-3" />
+                              {new Date(task.startsAt).toLocaleDateString("de-CH", {
+                                weekday: "short",
+                                day: "2-digit",
+                                month: "2-digit",
+                                timeZone: "Europe/Zurich",
+                              })}{" "}
+                              ·{" "}
+                              {new Date(task.startsAt).toLocaleTimeString("de-CH", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                timeZone: "Europe/Zurich",
+                              })}
+                            </p>
+                            <p className="mt-0.5 line-clamp-2 text-xs font-medium text-foreground">
+                              {task.projectTitle}
+                            </p>
+                          </div>
+                          <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
+                        </Link>
+                      ))}
                 </div>
               </div>
             ) : null}
           </div>
         ) : (
           <div className="space-y-3">
-            {todaysTasks.map((task) => {
-              const isBesichtigung = task.kind === "besichtigung";
-              const isDone = task.projectStatus === "abgeschlossen";
-              return (
-                <Link
-                  key={task.appointmentId}
-                  href={`/auftrag/${task.projectId}`}
-                  className={`flex items-center gap-3 rounded-2xl border border-border border-l-4 bg-card px-4 py-4 shadow-sm transition-transform active:scale-[0.98] ${
-                    isDone
-                      ? "border-l-muted-foreground/30 opacity-60"
-                      : isBesichtigung
-                        ? "border-l-orange-500"
-                        : "border-l-emerald-400"
-                  }`}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-                        <Clock className="size-3" />
-                        {formatTimeRange(task.startsAt, task.endsAt)}
-                      </p>
-                      <div className="flex flex-col items-end gap-1">
-                        {isDone ? (
-                          <Badge
-                            variant="outline"
-                            className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
-                          >
-                            <CheckCircle2 className="size-3" />
-                            Erledigt
-                          </Badge>
-                        ) : (
-                          <>
-                            <Badge
-                              variant="outline"
-                              className={
-                                isBesichtigung
-                                  ? "border-orange-500/30 bg-orange-500/10 text-orange-900 dark:text-orange-200"
-                                  : "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
-                              }
-                            >
-                              {isBesichtigung ? "Besichtigung" : "Ausführung"}
-                            </Badge>
-                            <ProjectStatusBadge status={task.projectStatus} />
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <p className={`mt-1.5 line-clamp-2 text-sm font-semibold ${isDone ? "text-muted-foreground line-through" : "text-foreground"}`}>
-                      {task.projectTitle}
-                    </p>
-                    {task.tenantDisplay || task.serviceAddressShort ? (
-                      <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <MapPin className="size-3 shrink-0" />
-                        <span className="line-clamp-1 flex-1">
-                          {[task.tenantDisplay, task.serviceAddressShort]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </span>
-                        {task.serviceAddressShort ? (
-                          <MapsNavButton address={task.serviceAddressShort} />
+            {isTechnicianView
+              ? todayGroups!.map((group) => <MonteurTodayGroupCard key={group.key} group={group} />)
+              : todayTasks!.map((task) => {
+                  const isBesichtigung = task.kind === "besichtigung";
+                  const isDone = task.projectStatus === "abgeschlossen";
+                  return (
+                    <Link
+                      key={task.appointmentId}
+                      href={`/auftrag/${task.projectId}`}
+                      className={`flex items-center gap-3 rounded-2xl border border-border border-l-4 bg-card px-4 py-4 shadow-sm transition-transform active:scale-[0.98] ${
+                        isDone
+                          ? "border-l-muted-foreground/30 opacity-60"
+                          : isBesichtigung
+                            ? "border-l-orange-500"
+                            : "border-l-emerald-400"
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                            <Clock className="size-3" />
+                            {formatTimeRange(task.startsAt, task.endsAt)}
+                          </p>
+                          <div className="flex flex-col items-end gap-1">
+                            {isDone ? (
+                              <Badge
+                                variant="outline"
+                                className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
+                              >
+                                <CheckCircle2 className="size-3" />
+                                Erledigt
+                              </Badge>
+                            ) : (
+                              <>
+                                <Badge
+                                  variant="outline"
+                                  className={
+                                    isBesichtigung
+                                      ? "border-orange-500/30 bg-orange-500/10 text-orange-900 dark:text-orange-200"
+                                      : "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
+                                  }
+                                >
+                                  {isBesichtigung ? "Besichtigung" : "Ausführung"}
+                                </Badge>
+                                <ProjectStatusBadge status={task.projectStatus} />
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <p
+                          className={`mt-1.5 line-clamp-2 text-sm font-semibold ${isDone ? "text-muted-foreground line-through" : "text-foreground"}`}
+                        >
+                          {task.projectTitle}
+                        </p>
+                        {task.tenantDisplay || task.serviceAddressShort ? (
+                          <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <MapPin className="size-3 shrink-0" />
+                            <span className="line-clamp-1 flex-1">
+                              {[task.tenantDisplay, task.serviceAddressShort].filter(Boolean).join(" · ")}
+                            </span>
+                            {task.serviceAddressShort ? (
+                              <MapsNavButton address={task.serviceAddressShort} />
+                            ) : null}
+                          </div>
                         ) : null}
                       </div>
-                    ) : null}
-                  </div>
-                  <ChevronRight className="size-5 shrink-0 text-muted-foreground/40" />
-                </Link>
-              );
-            })}
+                      <ChevronRight className="size-5 shrink-0 text-muted-foreground/40" />
+                    </Link>
+                  );
+                })}
           </div>
         )}
       </section>

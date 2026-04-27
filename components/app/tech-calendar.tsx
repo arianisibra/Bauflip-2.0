@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import type { WeekTaskItem } from "@/lib/domain/types";
+import { groupWeekTasksByProjectDay } from "@/lib/tech/group-week-tasks-by-project-day";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -109,7 +110,8 @@ export function TechCalendar({
         {weekDays.map((dayInfo, i) => {
           const dateKey = dayInfo.key;
           const isToday = dateKey === todayKey;
-          const dayTasks = tasksByDate.get(dateKey) ?? [];
+          const dayTasksRaw = tasksByDate.get(dateKey) ?? [];
+          const dayTaskGroups = groupWeekTasksByProjectDay(dayTasksRaw);
 
           return (
             <div
@@ -135,21 +137,22 @@ export function TechCalendar({
                     {DAY_NAMES_SHORT[i]}
                   </p>
                 </div>
-                {dayTasks.length > 0 ? (
+                {dayTaskGroups.length > 0 ? (
                   <Badge variant="secondary" className="text-[10px]">
-                    {dayTasks.length} {dayTasks.length === 1 ? "Termin" : "Termine"}
+                    {dayTaskGroups.length} {dayTaskGroups.length === 1 ? "Einsatz" : "Einsätze"}
                   </Badge>
                 ) : null}
               </div>
 
-              {dayTasks.length > 0 ? (
+              {dayTaskGroups.length > 0 ? (
                 <div className="space-y-1 border-t border-border/50 px-3 pb-3 pt-2">
-                  {dayTasks.map((task) => {
+                  {dayTaskGroups.map((group) => {
+                    const task = group.primary;
                     const isBesichtigung = task.kind === "besichtigung";
                     const isDone = task.projectStatus === "abgeschlossen";
                     return (
                       <Link
-                        key={task.appointmentId}
+                        key={group.key}
                         href={`/auftrag/${task.projectId}`}
                         className={cn(
                           "flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-transform active:scale-[0.98]",
@@ -161,10 +164,17 @@ export function TechCalendar({
                         )}
                       >
                         <div className="min-w-0 flex-1">
-                          <p className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
-                            <Clock className="size-3" />
-                            {formatTime(task.startsAt)}–{formatTime(task.endsAt)}
-                          </p>
+                          <div className="space-y-0.5">
+                            {group.slots.map((s) => (
+                              <p
+                                key={s.appointmentId}
+                                className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground"
+                              >
+                                <Clock className="size-3 shrink-0" />
+                                {formatTime(s.startsAt)}–{formatTime(s.endsAt)}
+                              </p>
+                            ))}
+                          </div>
                           <p className={cn("mt-0.5 line-clamp-1 text-sm font-semibold", isDone ? "text-muted-foreground line-through" : "text-foreground")}>
                             {task.projectTitle}
                           </p>
