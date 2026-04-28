@@ -74,8 +74,11 @@ export async function updateProjectStammdatenAction(values: unknown): Promise<{ 
 
   const v = parsed.data;
   const syncedTitle = String(v.tenantName ?? "").trim();
+  if (!syncedTitle) {
+    throw new Error("Mieter / Kontakt fehlt.");
+  }
   await updateProject(v.projectId, {
-    title: syncedTitle || v.title,
+    title: syncedTitle,
     status: v.status,
     intakeOriginalText: v.intakeOriginalText,
     tenantName: nz(v.tenantName),

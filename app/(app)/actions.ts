@@ -62,10 +62,10 @@ function isAllowedProjectFileType(file: File): boolean {
 
 function deriveIntakeTitle(rawTenantName: string): string {
   const tenant = rawTenantName.trim();
-  if (tenant.length >= 2) {
+  if (tenant.length >= 1) {
     return tenant;
   }
-  return "Neuer Auftrag";
+  throw new Error("Mieter / Kontakt fehlt.");
 }
 
 export async function createIntakeAction(formData: FormData) {
