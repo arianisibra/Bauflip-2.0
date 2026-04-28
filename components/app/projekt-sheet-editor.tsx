@@ -30,6 +30,10 @@ import {
   Trash2,
 } from "lucide-react";
 import { BauflipLoading, BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
+function getFilledOrderFormFields(of_: TechnicianReport["orderForms"][number]) {
+  return of_.fields.filter((f) => Boolean(of_.values[f.key]?.trim()));
+}
+
 function buildReportText(r: TechnicianReport): string {
   const lines: string[] = [];
   lines.push(`Rapport – ${r.outcome === "schaden_behoben" ? "Schaden behoben" : "Schaden aufgenommen"}`);
@@ -51,6 +55,8 @@ function buildReportText(r: TechnicianReport): string {
     lines.push("");
   }
   r.orderForms.forEach((of_, ofIdx) => {
+    const filledFields = getFilledOrderFormFields(of_);
+    if (filledFields.length === 0) return;
     const sameTplCount = r.orderForms.filter((x) => x.templateId === of_.templateId).length;
     const positionInTpl =
       r.orderForms.slice(0, ofIdx).filter((x) => x.templateId === of_.templateId).length + 1;
@@ -59,8 +65,8 @@ function buildReportText(r: TechnicianReport): string {
         ? `--- ${of_.templateName} (Position ${positionInTpl}) ---`
         : `--- ${of_.templateName} ---`;
     lines.push(head);
-    for (const f of of_.fields) {
-      const val = of_.values[f.key]?.trim() || "—";
+    for (const f of filledFields) {
+      const val = of_.values[f.key]?.trim();
       lines.push(`  ${f.label}: ${val}`);
     }
     lines.push("");
@@ -158,6 +164,8 @@ function ReportCard({
                 Bestellformulare
               </p>
               {r.orderForms.map((of_, ofIdx) => {
+                const filledFields = getFilledOrderFormFields(of_);
+                if (filledFields.length === 0) return null;
                 const sameTplCount = r.orderForms.filter((x) => x.templateId === of_.templateId).length;
                 const positionInTpl =
                   r.orderForms.slice(0, ofIdx).filter((x) => x.templateId === of_.templateId).length + 1;
@@ -173,11 +181,11 @@ function ReportCard({
                     <span className="font-normal text-muted-foreground">{positionLabel}</span>
                   </p>
                   <dl className="mt-1.5 space-y-1">
-                    {of_.fields.map((f) => (
+                    {filledFields.map((f) => (
                       <div key={f.key} className="flex items-baseline gap-2 text-xs">
                         <dt className="shrink-0 text-muted-foreground">{f.label}:</dt>
                         <dd className="font-medium text-foreground">
-                          {of_.values[f.key]?.trim() || "—"}
+                          {of_.values[f.key]?.trim()}
                         </dd>
                       </div>
                     ))}

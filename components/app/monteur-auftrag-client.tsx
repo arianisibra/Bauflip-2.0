@@ -84,6 +84,10 @@ function orderFormsPayloadFromFormData(
     .filter((x): x is { templateId: string; values: Record<string, string> } => x != null);
 }
 
+function getFilledOrderFormFields(of_: { fields: OrderFormTemplate["fields"]; values: Record<string, string> }) {
+  return of_.fields.filter((f) => Boolean(of_.values[f.key]?.trim()));
+}
+
 function InfoRow({
   icon: Icon,
   label,
@@ -243,6 +247,8 @@ function MonteurPriorReportsSection({ reports }: { reports: TechnicianReport[] }
                       Bestellformulare
                     </p>
                     {r.orderForms.map((of_, ofIdx) => {
+                      const filledFields = getFilledOrderFormFields(of_);
+                      if (filledFields.length === 0) return null;
                       const sameTplCount = r.orderForms.filter((x) => x.templateId === of_.templateId).length;
                       const positionInTpl =
                         r.orderForms.slice(0, ofIdx).filter((x) => x.templateId === of_.templateId).length + 1;
@@ -257,11 +263,11 @@ function MonteurPriorReportsSection({ reports }: { reports: TechnicianReport[] }
                             <span className="font-normal text-muted-foreground">{positionLabel}</span>
                           </p>
                           <dl className="mt-1.5 space-y-1">
-                            {of_.fields.map((f) => (
+                            {filledFields.map((f) => (
                               <div key={f.key} className="flex items-baseline gap-2 text-xs">
                                 <dt className="shrink-0 text-muted-foreground">{f.label}:</dt>
                                 <dd className="font-medium text-foreground">
-                                  {of_.values[f.key]?.trim() || "—"}
+                                  {of_.values[f.key]?.trim()}
                                 </dd>
                               </div>
                             ))}
