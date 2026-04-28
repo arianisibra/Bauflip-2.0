@@ -7,6 +7,12 @@ const withBundleAnalyzer = bundleAnalyzer({
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  experimental: {
+    // File uploads via Server Actions exceed the default request payload limit on mobile photos.
+    serverActions: {
+      bodySizeLimit: "20mb",
+    },
+  },
   compiler: {
     removeConsole:
       process.env.NODE_ENV === "production" ? { exclude: ["error", "warn"] } : false,
