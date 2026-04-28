@@ -363,7 +363,7 @@ export function ProjekteListClient({
                 </Table>
               )}
             </div>
-          </div>
+          </>
         )}
       </div>
 
