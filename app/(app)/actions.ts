@@ -42,6 +42,24 @@ function ensureProjectAccessForReportFiles(
   return { ok: false, error: "Keine Berechtigung." };
 }
 
+function isAllowedProjectFileType(file: File): boolean {
+  const rawType = (file.type || "").toLowerCase().trim();
+  if (rawType === "image/jpg") {
+    return true;
+  }
+  if (PROJECT_FILE_MIME.has(rawType)) {
+    return true;
+  }
+  // Some mobile browsers provide an empty MIME type; fall back to extension.
+  if (!rawType) {
+    const lowerName = file.name.toLowerCase();
+    return [".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif", ".pdf", ".doc", ".docx"].some((ext) =>
+      lowerName.endsWith(ext),
+    );
+  }
+  return false;
+}
+
 function deriveIntakeTitle(rawTitle: string, rawDescription: string): string {
   const explicit = rawTitle.trim();
   if (explicit.length >= 2) {
@@ -134,7 +152,7 @@ export async function uploadProjectReportFileAction(
   if (!projectId) return { success: false, error: "Projekt fehlt." };
   if (!file || typeof file !== "object" || file.size === 0) return { success: false, error: "Bitte eine Datei wählen." };
   if (!session.organizationId) return { success: false, error: "Keine Organisation." };
-  if (!PROJECT_FILE_MIME.has(file.type)) return { success: false, error: "Dateityp nicht erlaubt." };
+  if (!isAllowedProjectFileType(file)) return { success: false, error: "Dateityp nicht erlaubt." };
   if (file.size > PROJECT_FILE_MAX_BYTES) return { success: false, error: "Datei darf maximal 15 MB gross sein." };
 
   try {

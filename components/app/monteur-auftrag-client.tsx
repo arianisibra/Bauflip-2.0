@@ -17,11 +17,11 @@ import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/t
 import { cn } from "@/lib/utils";
 import { formatServiceAddress, managementLabel, tenantLabel } from "@/lib/tech/bundle-display";
 import { submitTechnicianReportAction } from "@/app/(tech)/actions";
-import { useAuftragProjectCore } from "@/lib/query/hooks";
+import { useAuftragProjectCore, useUploadAttachment } from "@/lib/query/hooks";
 import { afterProjectCoreChange } from "@/lib/query/invalidations";
 import { getTabId } from "@/lib/query/tab-id";
 import { pickMonteurAppointmentDisplay } from "@/lib/tech/auftrag-appointments";
-import { uploadProjectReportFileAction, updateAttachmentNotesAction, deleteAttachmentAction } from "@/app/(app)/actions";
+import { updateAttachmentNotesAction, deleteAttachmentAction } from "@/app/(app)/actions";
 import { MonteurOrderFormSections } from "@/components/app/monteur-order-form-sections";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -312,6 +312,7 @@ export function MonteurAuftragClient({
   const router = useRouter();
   const qc = useQueryClient();
   const { data: liveCore = core } = useAuftragProjectCore(core.project.id, core);
+  const uploadAttachment = useUploadAttachment();
   const bundle = liveCore;
   const p = bundle.project;
 
@@ -345,20 +346,21 @@ export function MonteurAuftragClient({
       fd.set("projectId", p.id);
       fd.set("file", file);
       try {
-        const result = await uploadProjectReportFileAction(fd, getTabId());
+        const result = await uploadAttachment.mutateAsync({ formData: fd, projectId: p.id });
         if (!result.success) {
           toast.error(result.error);
         } else {
           toast.success("Datei hochgeladen");
-          void afterProjectCoreChange(qc, p.id);
         }
-      } catch {
-        setError("Upload fehlgeschlagen.");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Upload fehlgeschlagen.";
+        setError(message);
+        toast.error(message);
       } finally {
         setUploading(false);
       }
     },
-    [p.id, qc],
+    [p.id, uploadAttachment],
   );
 
   const saveNote = useCallback(
