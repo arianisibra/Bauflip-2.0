@@ -2,11 +2,11 @@ import { z } from "zod";
 import { projectStatuses, projectTypes, RAPPORT_ALL_NEXT_STEPS } from "@/lib/domain/types";
 
 export const intakeSchema = z.object({
-  title: z.string().min(2, "Titel fehlt."),
+  title: z.string(),
   source: z.enum(["whatsapp", "telefon", "email"]),
   type: z.enum(projectTypes),
-  intakeOriginalText: z.string().min(1, "Problembeschreibung fehlt."),
-  tenantName: z.string().min(1, "Mieter / Kontakt fehlt."),
+  intakeOriginalText: z.string(),
+  tenantName: z.string(),
   tenantPhone: z.string().optional(),
   tenantEmail: z.string().email().optional().or(z.literal("")),
   managementName: z.string().optional(),

@@ -405,10 +405,12 @@ export const listWeekTasks = cache(async function listWeekTasks(referenceDate = 
       .map((row) => {
         const raw = row.projects;
         const pr = Array.isArray(raw) ? raw[0] : raw;
-        if (!pr?.title) return null;
+        if (!pr) return null;
         const tid = row.assigned_technician_id;
         const tp = tid ? techMap.get(tid) : undefined;
         const tenantRaw = pr.tenant_name != null ? String(pr.tenant_name).trim() : "";
+        const displayTitle = tenantRaw || String(pr.title ?? "").trim();
+        if (!displayTitle) return null;
         const addrShort = formatServiceAddressFields({
           serviceStreet: pr.service_street,
           servicePostalCode: pr.service_postal_code,
@@ -420,7 +422,7 @@ export const listWeekTasks = cache(async function listWeekTasks(referenceDate = 
           endsAt: row.ends_at,
           kind: row.kind,
           projectId: row.project_id,
-          projectTitle: pr.title,
+          projectTitle: displayTitle,
           projectStatus: pr.status as ProjectStatus,
           assignedTechnicianId: tid,
           technicianName: tp?.display_name ?? null,
@@ -504,10 +506,12 @@ export const listMonthTasks = cache(async function listMonthTasks(year: number, 
     .map((row) => {
       const raw = row.projects;
       const pr = Array.isArray(raw) ? raw[0] : raw;
-      if (!pr?.title) return null;
+      if (!pr) return null;
       const tid = row.assigned_technician_id;
       const tp = tid ? techMap.get(tid) : undefined;
       const tenantRaw = pr.tenant_name != null ? String(pr.tenant_name).trim() : "";
+      const displayTitle = tenantRaw || String(pr.title ?? "").trim();
+      if (!displayTitle) return null;
       const addrShort = formatServiceAddressFields({
         serviceStreet: pr.service_street,
         servicePostalCode: pr.service_postal_code,
@@ -519,7 +523,7 @@ export const listMonthTasks = cache(async function listMonthTasks(year: number, 
         endsAt: row.ends_at,
         kind: row.kind,
         projectId: row.project_id,
-        projectTitle: pr.title,
+        projectTitle: displayTitle,
         projectStatus: pr.status as ProjectStatus,
         assignedTechnicianId: tid,
         technicianName: tp?.display_name ?? null,

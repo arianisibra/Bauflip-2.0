@@ -65,7 +65,7 @@ function deriveIntakeTitle(rawTenantName: string): string {
   if (tenant.length >= 1) {
     return tenant;
   }
-  throw new Error("Mieter / Kontakt fehlt.");
+  return "NEUER AUFTRAG";
 }
 
 export async function createIntakeAction(formData: FormData) {

@@ -32,7 +32,7 @@ export function IntakeForm({ onCreated }: { onCreated?: (projectId: string) => v
 
       <div className="space-y-1">
         <Label htmlFor="tenantName">Mieter / Kontakt</Label>
-        <Input id="tenantName" name="tenantName" required />
+        <Input id="tenantName" name="tenantName" />
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
@@ -76,7 +76,7 @@ export function IntakeForm({ onCreated }: { onCreated?: (projectId: string) => v
 
       <div className="space-y-1">
         <Label htmlFor="intakeOriginalText">Wichtige Informationen</Label>
-        <Textarea id="intakeOriginalText" name="intakeOriginalText" required rows={5} />
+        <Textarea id="intakeOriginalText" name="intakeOriginalText" rows={5} />
       </div>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}

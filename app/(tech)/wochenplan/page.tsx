@@ -21,7 +21,7 @@ export default async function TechKalenderPage() {
           Deine Termine der Woche im Überblick.
         </p>
       </header>
-      <TechCalendar initialTasks={myTasks} userId={session.user.id} />
+      <TechCalendar initialTasks={myTasks} isTechnicianView={session.role === "technician"} />
     </section>
   );
 }

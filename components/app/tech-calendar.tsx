@@ -31,15 +31,17 @@ function formatTime(iso: string): string {
 
 export function TechCalendar({
   initialTasks,
-  userId,
+  isTechnicianView,
 }: {
   initialTasks: WeekTaskItem[];
-  userId: string;
+  isTechnicianView: boolean;
 }) {
   const qc = useQueryClient();
   // UTC-noon of the Swiss Monday — stable across remounts (shared cache
   // with /tag) and TZ-independent.
   const [refDateIso, setRefDateIso] = useState(() => swissWeekReferenceIso());
+  const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>("all");
+  const [sortMode, setSortMode] = useState<"time" | "technician">("time");
 
   // Seed the initial week's cache from SSR so the first render has data without a fetch.
   useMemo(() => {
@@ -49,6 +51,26 @@ export function TechCalendar({
   }, []);
 
   const { data: tasks = [], isFetching: pending } = useWeekTasks(refDateIso);
+
+  const technicianOptions = useMemo(() => {
+    if (isTechnicianView) return [];
+    const map = new Map<string, { id: string; name: string }>();
+    for (const task of tasks) {
+      if (!task.assignedTechnicianId || !task.technicianName) continue;
+      if (!map.has(task.assignedTechnicianId)) {
+        map.set(task.assignedTechnicianId, {
+          id: task.assignedTechnicianId,
+          name: task.technicianName,
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, "de-CH"));
+  }, [isTechnicianView, tasks]);
+
+  const visibleTasks = useMemo(() => {
+    if (isTechnicianView || selectedTechnicianId === "all") return tasks;
+    return tasks.filter((task) => task.assignedTechnicianId === selectedTechnicianId);
+  }, [isTechnicianView, selectedTechnicianId, tasks]);
 
   const todayKey = useMemo(() => toSwissDateKey(new Date()), []);
   const weekDays = useMemo(() => swissWeekDays(refDateIso), [refDateIso]);
@@ -61,14 +83,23 @@ export function TechCalendar({
 
   const tasksByDate = useMemo(() => {
     const map = new Map<string, WeekTaskItem[]>();
-    for (const t of tasks) {
+    for (const t of visibleTasks) {
       const key = toSwissDateKey(new Date(t.startsAt));
       const list = map.get(key) ?? [];
       list.push(t);
       map.set(key, list);
     }
+    for (const list of map.values()) {
+      list.sort((a, b) => {
+        if (sortMode === "technician") {
+          const byName = (a.technicianName ?? "").localeCompare(b.technicianName ?? "", "de-CH");
+          if (byName !== 0) return byName;
+        }
+        return a.startsAt.localeCompare(b.startsAt);
+      });
+    }
     return map;
-  }, [tasks]);
+  }, [sortMode, visibleTasks]);
 
   const navigate = useCallback(
     (dir: -1 | 1) => {
@@ -105,6 +136,33 @@ export function TechCalendar({
           <ChevronRight className="size-4" />
         </Button>
       </div>
+
+      {!isTechnicianView ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Monteur:</span>
+          <select
+            className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+            value={selectedTechnicianId}
+            onChange={(e) => setSelectedTechnicianId(e.target.value)}
+          >
+            <option value="all">Alle</option>
+            {technicianOptions.map((opt) => (
+              <option key={opt.id} value={opt.id}>
+                {opt.name}
+              </option>
+            ))}
+          </select>
+          <span className="ml-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Sortierung:</span>
+          <select
+            className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+            value={sortMode}
+            onChange={(e) => setSortMode(e.target.value as "time" | "technician")}
+          >
+            <option value="time">Uhrzeit</option>
+            <option value="technician">Monteur</option>
+          </select>
+        </div>
+      ) : null}
 
       <div className="space-y-2">
         {weekDays.map((dayInfo, i) => {

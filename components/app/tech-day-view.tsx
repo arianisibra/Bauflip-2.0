@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -178,8 +178,6 @@ export function TechDayView({
   }, []);
 
   const { data: tasks = initialTasks, isFetching } = useWeekTasks(referenceIso);
-  const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>("all");
-  const [sortMode, setSortMode] = useState<"time" | "technician">("time");
 
   const { todayGroups, todayTasks, upcomingGroups, upcomingTasks, openRapportProjects } = useMemo(() => {
     const now = new Date();
@@ -234,42 +232,7 @@ export function TechDayView({
     };
   }, [tasks, isTechnicianView, currentUserId]);
 
-  const technicianOptions = useMemo(() => {
-    if (isTechnicianView || !todayTasks) return [];
-    const map = new Map<string, { id: string; name: string; color: string }>();
-    for (const task of todayTasks) {
-      if (!task.assignedTechnicianId || !task.technicianName) continue;
-      if (!map.has(task.assignedTechnicianId)) {
-        map.set(task.assignedTechnicianId, {
-          id: task.assignedTechnicianId,
-          name: task.technicianName,
-          color: task.calendarColor,
-        });
-      }
-    }
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, "de-CH"));
-  }, [isTechnicianView, todayTasks]);
-
-  const filteredTodayTasks = useMemo(() => {
-    if (isTechnicianView || !todayTasks) return todayTasks;
-    if (selectedTechnicianId === "all") return todayTasks;
-    return todayTasks.filter((task) => task.assignedTechnicianId === selectedTechnicianId);
-  }, [isTechnicianView, selectedTechnicianId, todayTasks]);
-
-  const sortedTodayTasks = useMemo(() => {
-    if (isTechnicianView || !filteredTodayTasks) return filteredTodayTasks;
-    return [...filteredTodayTasks].sort((a, b) => {
-      if (sortMode === "technician") {
-        const nameA = a.technicianName ?? "";
-        const nameB = b.technicianName ?? "";
-        const byName = nameA.localeCompare(nameB, "de-CH");
-        if (byName !== 0) return byName;
-      }
-      return a.startsAt.localeCompare(b.startsAt);
-    });
-  }, [filteredTodayTasks, isTechnicianView, sortMode]);
-
-  const todayEmpty = isTechnicianView ? !(todayGroups?.length ?? 0) : !(sortedTodayTasks?.length ?? 0);
+  const todayEmpty = isTechnicianView ? !(todayGroups?.length ?? 0) : !(todayTasks?.length ?? 0);
   const upcomingHas = isTechnicianView ? (upcomingGroups?.length ?? 0) > 0 : (upcomingTasks?.length ?? 0) > 0;
 
   return (
@@ -312,32 +275,6 @@ export function TechDayView({
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Heutige Einsätze
         </h2>
-        {!isTechnicianView ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Monteur:</span>
-            <select
-              className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-              value={selectedTechnicianId}
-              onChange={(e) => setSelectedTechnicianId(e.target.value)}
-            >
-              <option value="all">Alle</option>
-              {technicianOptions.map((opt) => (
-                <option key={opt.id} value={opt.id}>
-                  {opt.name}
-                </option>
-              ))}
-            </select>
-            <span className="ml-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Sortierung:</span>
-            <select
-              className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-              value={sortMode}
-              onChange={(e) => setSortMode(e.target.value as "time" | "technician")}
-            >
-              <option value="time">Uhrzeit</option>
-              <option value="technician">Monteur</option>
-            </select>
-          </div>
-        ) : null}
         {todayEmpty ? (
           <div className="space-y-3">
             <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-border bg-card px-4 py-8 text-center">
@@ -392,7 +329,7 @@ export function TechDayView({
           <div className="space-y-3">
             {isTechnicianView
               ? todayGroups!.map((group) => <MonteurTodayGroupCard key={group.key} group={group} />)
-              : sortedTodayTasks!.map((task) => {
+              : todayTasks!.map((task) => {
                   const isBesichtigung = task.kind === "besichtigung";
                   const isDone = task.projectStatus === "abgeschlossen";
                   return (
