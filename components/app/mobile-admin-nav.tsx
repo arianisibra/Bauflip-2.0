@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Menu } from "lucide-react";
+import { MobileContextSwitch } from "@/components/app/mobile-context-switch";
 import { SidebarNav } from "@/components/app/sidebar-nav";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
@@ -35,6 +36,9 @@ export function MobileAdminNav({ items }: MobileAdminNavProps) {
         className="w-[85vw] max-w-sm border-r border-l-0 p-0"
       >
         <div className="-mx-5 -my-5 h-full">
+          <div className="border-b border-border/70 bg-card/90 px-3 py-3">
+            <MobileContextSwitch onNavigate={() => setOpen(false)} />
+          </div>
           <SidebarNav items={items} mobile onNavigate={() => setOpen(false)} />
         </div>
       </Sheet>
