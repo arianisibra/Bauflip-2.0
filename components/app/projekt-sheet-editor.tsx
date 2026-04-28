@@ -9,6 +9,7 @@ import {
   useAddAppointment,
   useAssignableProfiles,
   useDeleteAppointment,
+  useDeleteAttachment,
   useDeleteReport,
   useProjectCore,
   useUpdateProjectStatus,
@@ -386,6 +387,7 @@ export function ProjektSheetEditor({
   const updateStammdaten = useUpdateStammdaten();
   const addAppointment = useAddAppointment();
   const deleteAppointment = useDeleteAppointment();
+  const deleteAttachment = useDeleteAttachment();
   const deleteReport = useDeleteReport();
   const uploadAttachment = useUploadAttachment();
   const [error, setError] = useState<string | null>(null);
@@ -414,11 +416,12 @@ export function ProjektSheetEditor({
     updateStammdaten.isPending ||
     addAppointment.isPending ||
     deleteAppointment.isPending ||
+    deleteAttachment.isPending ||
     deleteReport.isPending ||
     uploadAttachment.isPending;
 
   return (
-    <div className="flex max-h-[min(80vh,720px)] flex-col gap-6 overflow-y-auto pr-1">
+    <div className="flex h-full min-h-0 flex-col gap-6 overflow-y-auto pr-1">
       <StatusPipeline
         projectId={projectId}
         currentStatus={p.status}
@@ -708,7 +711,37 @@ export function ProjektSheetEditor({
         </form>
         <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
           {core.attachments.map((a) => (
-            <li key={a.id}>{a.fileName}</li>
+            <li key={a.id} className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-muted/20 px-2.5 py-1.5">
+              <span className="min-w-0 truncate">{a.fileName}</span>
+              {canEdit ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-destructive hover:text-destructive"
+                  disabled={pending}
+                  onClick={async () => {
+                    if (!window.confirm(`Datei "${a.fileName}" wirklich löschen?`)) return;
+                    try {
+                      const result = await deleteAttachment.mutateAsync({
+                        attachmentId: a.id,
+                        filePath: a.filePath,
+                        projectId,
+                      });
+                      if (result.success) {
+                        toast.success("Datei gelöscht");
+                      } else {
+                        toast.error(result.error);
+                      }
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : "Löschen fehlgeschlagen.");
+                    }
+                  }}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              ) : null}
+            </li>
           ))}
         </ul>
       </section>
