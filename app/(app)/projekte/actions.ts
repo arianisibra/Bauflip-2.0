@@ -73,8 +73,9 @@ export async function updateProjectStammdatenAction(values: unknown): Promise<{ 
   }
 
   const v = parsed.data;
+  const syncedTitle = String(v.tenantName ?? "").trim();
   await updateProject(v.projectId, {
-    title: v.title,
+    title: syncedTitle || v.title,
     status: v.status,
     intakeOriginalText: v.intakeOriginalText,
     tenantName: nz(v.tenantName),

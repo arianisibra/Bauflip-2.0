@@ -49,15 +49,9 @@ export function IntakeForm({ onCreated }: { onCreated?: (projectId: string) => v
         <Label htmlFor="managementName">Verwaltung</Label>
         <Input id="managementName" name="managementName" placeholder="Name" />
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1">
-          <Label htmlFor="managementPhone">Telefon Verwaltung</Label>
-          <Input id="managementPhone" name="managementPhone" type="tel" />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="managementEmail">E-Mail Verwaltung</Label>
-          <Input id="managementEmail" name="managementEmail" type="email" />
-        </div>
+      <div className="space-y-1">
+        <Label htmlFor="managementEmail">Zuständige Person</Label>
+        <Input id="managementEmail" name="managementEmail" type="email" />
       </div>
 
       <div className="space-y-1">
@@ -81,13 +75,8 @@ export function IntakeForm({ onCreated }: { onCreated?: (projectId: string) => v
       </div>
 
       <div className="space-y-1">
-        <Label htmlFor="intakeOriginalText">Problembeschreibung</Label>
+        <Label htmlFor="intakeOriginalText">Wichtige Informationen</Label>
         <Textarea id="intakeOriginalText" name="intakeOriginalText" required rows={5} />
-      </div>
-
-      <div className="space-y-1">
-        <Label htmlFor="hintsAndNotes">Hinweise fürs Team (optional)</Label>
-        <Textarea id="hintsAndNotes" name="hintsAndNotes" rows={2} />
       </div>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}

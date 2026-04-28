@@ -60,16 +60,12 @@ function isAllowedProjectFileType(file: File): boolean {
   return false;
 }
 
-function deriveIntakeTitle(rawTitle: string, rawDescription: string): string {
-  const explicit = rawTitle.trim();
-  if (explicit.length >= 2) {
-    return explicit;
+function deriveIntakeTitle(rawTenantName: string): string {
+  const tenant = rawTenantName.trim();
+  if (tenant.length >= 2) {
+    return tenant;
   }
-  const compactDescription = rawDescription.replace(/\s+/g, " ").trim();
-  if (!compactDescription) {
-    return "Neuer Auftrag";
-  }
-  return compactDescription.slice(0, 80);
+  return "Neuer Auftrag";
 }
 
 export async function createIntakeAction(formData: FormData) {
@@ -83,7 +79,7 @@ export async function createIntakeAction(formData: FormData) {
 
   const raw = Object.fromEntries(formData.entries());
   const intakeOriginalText = String(raw.intakeOriginalText ?? "");
-  const title = deriveIntakeTitle(String(raw.title ?? ""), intakeOriginalText);
+  const title = deriveIntakeTitle(String(raw.tenantName ?? ""));
   const parsed = intakeSchema.safeParse({
     title,
     source: raw.source ?? "email",

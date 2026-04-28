@@ -174,7 +174,7 @@ export function AdminCalendar({
             <div
               key={i}
               className={cn(
-                "min-h-[90px] bg-card p-1.5 transition-colors",
+                "min-h-[110px] bg-card p-1.5 transition-colors",
                 !cell.inMonth && "bg-muted/20",
               )}
             >
@@ -196,32 +196,32 @@ export function AdminCalendar({
                 ) : null}
               </div>
 
-              <div className="space-y-0.5">
-                {dayGroups.slice(0, 3).map((group) => {
+              <div className="space-y-1">
+                {dayGroups.map((group) => {
                   const task = group.primary;
                   const timesTitle = group.slots.map((s) => formatTime(s.startsAt)).join(", ");
                   return (
                     <Link
                       key={group.key}
                       href={`/projekte?sheet=${task.projectId}`}
-                      className="block truncate rounded px-1 py-0.5 text-[10px] font-medium leading-tight transition-colors hover:opacity-80"
+                      className="block rounded-md px-1.5 py-1 text-[10px] font-medium leading-tight transition-colors hover:opacity-80"
                       style={{
                         backgroundColor: task.calendarColor + "20",
                         color: task.calendarColor,
-                        borderLeft: `2px solid ${task.calendarColor}`,
+                        borderLeft: `3px solid ${task.calendarColor}`,
                       }}
                       title={`${timesTitle} ${task.projectTitle}${task.technicianName ? ` — ${task.technicianName}` : ""}`}
                     >
-                      {formatTime(task.startsAt)}
-                      {group.slots.length > 1 ? ` (+${group.slots.length - 1})` : ""} {task.projectTitle}
+                      <span className="block font-semibold">{formatTime(task.startsAt)}</span>
+                      <span className="block whitespace-normal break-words">{task.projectTitle}</span>
+                      {group.slots.length > 1 ? (
+                        <span className="block text-[9px] opacity-85">
+                          +{group.slots.length - 1} weitere Termine
+                        </span>
+                      ) : null}
                     </Link>
                   );
                 })}
-                {dayGroups.length > 3 ? (
-                  <p className="px-1 text-[10px] text-muted-foreground">
-                    +{dayGroups.length - 3} weitere
-                  </p>
-                ) : null}
               </div>
             </div>
           );

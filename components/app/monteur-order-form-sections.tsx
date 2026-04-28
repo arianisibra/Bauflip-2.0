@@ -18,6 +18,12 @@ import { ClipboardList, Plus } from "lucide-react";
 
 const ORDER_FORMS_ROOT_ATTR = "data-monteur-order-forms";
 
+function isSinglePositionTemplate(tpl: OrderFormTemplate): boolean {
+  const name = tpl.name.toLowerCase();
+  const slug = tpl.slug.toLowerCase();
+  return name.includes("ersatzteile") || slug.includes("ersatzteile");
+}
+
 /** Nur markierte Felder — vermeidet z. B. «Entfernen» (steht im DOM vor den Inputs). */
 const ORDER_FORM_FIELD_ATTR = "[data-order-form-field]";
 
@@ -186,6 +192,7 @@ export function MonteurOrderFormSections({
         {templates.map((tpl) => {
           const linesForTpl = lines.filter((l) => l.templateId === tpl.id);
           const selected = linesForTpl.length > 0;
+          const singlePositionOnly = isSinglePositionTemplate(tpl);
           return (
             <Card key={tpl.id} size="sm" className="overflow-hidden border-border shadow-sm">
               <label className="flex cursor-pointer items-start gap-3 p-3 transition-colors hover:bg-muted/30">
@@ -243,17 +250,23 @@ export function MonteurOrderFormSections({
                           </div>
                         ))}
                       </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="w-full gap-1.5 text-xs"
-                        data-order-form-field=""
-                        onClick={() => onAddLine(tpl.id)}
-                      >
-                        <Plus className="size-3.5" />
-                        Weitere Position ({tpl.name})
-                      </Button>
+                      {!singlePositionOnly ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="w-full gap-1.5 text-xs"
+                          data-order-form-field=""
+                          onClick={() => onAddLine(tpl.id)}
+                        >
+                          <Plus className="size-3.5" />
+                          Weitere Position ({tpl.name})
+                        </Button>
+                      ) : (
+                        <p className="text-[11px] text-muted-foreground">
+                          Für Ersatzteile ist nur eine Position erlaubt.
+                        </p>
+                      )}
                     </>
                   )}
                 </CardContent>

@@ -35,6 +35,23 @@ function getFilledOrderFormFields(of_: TechnicianReport["orderForms"][number]) {
   return of_.fields.filter((f) => Boolean(of_.values[f.key]?.trim()));
 }
 
+function formatAppointmentRange(startsAtIso: string, endsAtIso: string): string {
+  const startsAt = new Date(startsAtIso);
+  const endsAt = new Date(endsAtIso);
+  const day = startsAt.toLocaleDateString("de-CH", { timeZone: "Europe/Zurich" });
+  const startTime = startsAt.toLocaleTimeString("de-CH", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Zurich",
+  });
+  const endTime = endsAt.toLocaleTimeString("de-CH", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Zurich",
+  });
+  return `${day} ${startTime} – ${endTime}`;
+}
+
 function buildReportText(r: TechnicianReport): string {
   const lines: string[] = [];
   lines.push(`Rapport – ${r.outcome === "schaden_behoben" ? "Schaden behoben" : "Schaden aufgenommen"}`);
@@ -437,21 +454,16 @@ export function ProjektSheetEditor({
           updateStammdaten.mutate(
             {
               projectId,
-              title: String(fd.get("title") ?? ""),
               intakeOriginalText: String(fd.get("intakeOriginalText") ?? ""),
               tenantName: String(fd.get("tenantName") ?? ""),
               tenantPhone: String(fd.get("tenantPhone") ?? ""),
               tenantEmail: String(fd.get("tenantEmail") ?? ""),
               managementName: String(fd.get("managementName") ?? ""),
-              managementPhone: String(fd.get("managementPhone") ?? ""),
               managementEmail: String(fd.get("managementEmail") ?? ""),
               costCeilingText: String(fd.get("costCeilingText") ?? ""),
               serviceStreet: String(fd.get("serviceStreet") ?? ""),
               servicePostalCode: String(fd.get("servicePostalCode") ?? ""),
               serviceCity: String(fd.get("serviceCity") ?? ""),
-              hintsAndNotes: String(fd.get("hintsAndNotes") ?? ""),
-              accessNotes: String(fd.get("accessNotes") ?? ""),
-              nextOwnerUserId: String(fd.get("nextOwnerUserId") ?? ""),
             },
             {
               onSuccess: () => toast.success("Projekt gespeichert"),
@@ -460,10 +472,6 @@ export function ProjektSheetEditor({
           );
         }}
       >
-        <div className="space-y-1 sm:col-span-2">
-          <Label htmlFor="title">Titel</Label>
-          <Input id="title" name="title" defaultValue={p.title} disabled={!canEdit} required />
-        </div>
         <div className="text-xs text-muted-foreground sm:col-span-2">
           {p.referenceCode ? `Auftrag ${p.referenceCode}` : "Ohne Nummer"}
         </div>
@@ -485,12 +493,8 @@ export function ProjektSheetEditor({
           <Label>Verwaltung</Label>
           <Input name="managementName" defaultValue={p.managementName ?? ""} disabled={!canEdit} />
         </div>
-        <div className="space-y-1">
-          <Label>Tel. Verwaltung</Label>
-          <Input name="managementPhone" defaultValue={p.managementPhone ?? ""} disabled={!canEdit} />
-        </div>
-        <div className="space-y-1">
-          <Label>E-Mail Verwaltung</Label>
+        <div className="space-y-1 sm:col-span-2">
+          <Label>Zuständige Person</Label>
           <Input name="managementEmail" type="email" defaultValue={p.managementEmail ?? ""} disabled={!canEdit} />
         </div>
 
@@ -513,33 +517,8 @@ export function ProjektSheetEditor({
         </div>
 
         <div className="space-y-1 sm:col-span-2">
-          <Label>Problembeschreibung</Label>
+          <Label>Wichtige Informationen</Label>
           <Textarea name="intakeOriginalText" rows={4} defaultValue={p.intakeOriginalText} disabled={!canEdit} />
-        </div>
-        <div className="space-y-1 sm:col-span-2">
-          <Label>Hinweise Team</Label>
-          <Textarea name="hintsAndNotes" rows={2} defaultValue={p.hintsAndNotes ?? ""} disabled={!canEdit} />
-        </div>
-        <div className="space-y-1 sm:col-span-2">
-          <Label>Zugang / Schlüssel</Label>
-          <Textarea name="accessNotes" rows={2} defaultValue={p.accessNotes ?? ""} disabled={!canEdit} />
-        </div>
-
-        <div className="space-y-1 sm:col-span-2">
-          <Label>Zuständige Person (Vorschlag)</Label>
-          <select
-            name="nextOwnerUserId"
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-            defaultValue={p.nextOwnerUserId ?? ""}
-            disabled={!canEdit}
-          >
-            <option value="">—</option>
-            {technicians.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.displayName}
-              </option>
-            ))}
-          </select>
         </div>
 
         {canEdit ? (
@@ -582,11 +561,11 @@ export function ProjektSheetEditor({
           >
             <div className="space-y-1">
               <Label>Beginn</Label>
-              <Input name="startsAt" type="datetime-local" required />
+              <Input name="startsAt" type="datetime-local" step={60} required />
             </div>
             <div className="space-y-1">
               <Label>Ende</Label>
-              <Input name="endsAt" type="datetime-local" required />
+              <Input name="endsAt" type="datetime-local" step={60} required />
             </div>
             <div className="space-y-1 sm:col-span-2">
               <Label>Zuständige Person</Label>
@@ -620,9 +599,7 @@ export function ProjektSheetEditor({
                 <li key={a.id} className="rounded-lg border border-border bg-muted/20 px-3 py-2">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 space-y-0.5">
-                      <p className="text-xs font-semibold text-foreground">
-                        {new Date(a.startsAt).toLocaleString("de-CH", { timeZone: "Europe/Zurich" })} – {new Date(a.endsAt).toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Zurich" })}
-                      </p>
+                      <p className="text-xs font-semibold text-foreground">{formatAppointmentRange(a.startsAt, a.endsAt)}</p>
                       <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-muted-foreground">
                         <span>
                           {a.kind === "besichtigung" ? "Besichtigung" : "Ausführung"}
@@ -712,7 +689,19 @@ export function ProjektSheetEditor({
         <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
           {core.attachments.map((a) => (
             <li key={a.id} className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-muted/20 px-2.5 py-1.5">
-              <span className="min-w-0 truncate">{a.fileName}</span>
+              {a.signedUrl ? (
+                <a
+                  href={a.signedUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="min-w-0 truncate text-primary underline-offset-4 hover:underline"
+                  title={a.fileName}
+                >
+                  {a.fileName}
+                </a>
+              ) : (
+                <span className="min-w-0 truncate">{a.fileName}</span>
+              )}
               {canEdit ? (
                 <Button
                   type="button"

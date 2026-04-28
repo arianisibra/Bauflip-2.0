@@ -61,6 +61,23 @@ function buildMapsUrl(p: { serviceStreet: string | null; servicePostalCode: stri
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(parts.join(", "))}`;
 }
 
+function formatAppointmentRange(startsAtIso: string, endsAtIso: string): string {
+  const startsAt = new Date(startsAtIso);
+  const endsAt = new Date(endsAtIso);
+  const day = startsAt.toLocaleDateString("de-CH", { timeZone: "Europe/Zurich" });
+  const startTime = startsAt.toLocaleTimeString("de-CH", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Zurich",
+  });
+  const endTime = endsAt.toLocaleTimeString("de-CH", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Zurich",
+  });
+  return `${day} ${startTime} – ${endTime}`;
+}
+
 function AuftragSectionDivider() {
   return <div className="my-4 h-px w-full bg-border" aria-hidden />;
 }
@@ -82,6 +99,12 @@ function orderFormsPayloadFromFormData(
       return { templateId, values };
     })
     .filter((x): x is { templateId: string; values: Record<string, string> } => x != null);
+}
+
+function isSinglePositionTemplate(tpl: OrderFormTemplate): boolean {
+  const name = tpl.name.toLowerCase();
+  const slug = tpl.slug.toLowerCase();
+  return name.includes("ersatzteile") || slug.includes("ersatzteile");
 }
 
 function getFilledOrderFormFields(of_: { fields: OrderFormTemplate["fields"]; values: Record<string, string> }) {
@@ -402,8 +425,15 @@ export function MonteurAuftragClient({
   }, []);
 
   const addOrderFormLine = useCallback((templateId: string) => {
-    setOrderFormLines((prev) => [...prev, { templateId, lineId: crypto.randomUUID() }]);
-  }, []);
+    const tpl = orderFormTemplates.find((item) => item.id === templateId);
+    const singlePositionOnly = tpl ? isSinglePositionTemplate(tpl) : false;
+    setOrderFormLines((prev) => {
+      if (singlePositionOnly && prev.some((line) => line.templateId === templateId)) {
+        return prev;
+      }
+      return [...prev, { templateId, lineId: crypto.randomUUID() }];
+    });
+  }, [orderFormTemplates]);
 
   const removeOrderFormLine = useCallback((lineId: string) => {
     setOrderFormLines((prev) => prev.filter((l) => l.lineId !== lineId));
@@ -442,7 +472,7 @@ export function MonteurAuftragClient({
           <InfoRow icon={Clock} label={allPast && displayAppt ? "Letzter Termin" : "Nächster Termin"}>
             {displayAppt ? (
               <span className="block">
-                {`${new Date(displayAppt.startsAt).toLocaleString("de-CH", { timeZone: "Europe/Zurich" })} – ${new Date(displayAppt.endsAt).toLocaleTimeString("de-CH", { timeZone: "Europe/Zurich" })}`}
+                {formatAppointmentRange(displayAppt.startsAt, displayAppt.endsAt)}
                 {allPast ? (
                   <span className="mt-0.5 block text-[11px] font-normal text-muted-foreground">
                     Kein weiterer Termin geplant.
@@ -459,8 +489,7 @@ export function MonteurAuftragClient({
               <ul className="mt-1 list-inside list-disc space-y-0.5">
                 {furtherFuture.map((a) => (
                   <li key={a.id}>
-                    {new Date(a.startsAt).toLocaleString("de-CH", { timeZone: "Europe/Zurich" })} –{" "}
-                    {new Date(a.endsAt).toLocaleTimeString("de-CH", { timeZone: "Europe/Zurich" })}
+                    {formatAppointmentRange(a.startsAt, a.endsAt)}
                   </li>
                 ))}
               </ul>
