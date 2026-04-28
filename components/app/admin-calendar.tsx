@@ -74,6 +74,15 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", timeZone: TZ });
 }
 
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("de-CH", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: TZ,
+  });
+}
+
 export function AdminCalendar({
   initialTasks,
   initialYear,
@@ -155,7 +164,55 @@ export function AdminCalendar({
         </Button>
       </div>
 
-      <div className={cn("grid grid-cols-7 gap-px rounded-xl border border-border bg-border overflow-hidden", pending && "opacity-60 transition-opacity")}>
+      <div className="space-y-2 md:hidden">
+        {tasks.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
+            Keine Termine in diesem Monat.
+          </div>
+        ) : (
+          groupWeekTasksByProjectDay(tasks)
+            .sort((a, b) => a.primary.startsAt.localeCompare(b.primary.startsAt))
+            .map((group) => {
+              const task = group.primary;
+              return (
+                <Link
+                  key={group.key}
+                  href={`/projekte?sheet=${task.projectId}`}
+                  className="flex items-start gap-3 rounded-2xl border border-border bg-card px-3 py-3 shadow-sm"
+                >
+                  <div
+                    className="mt-0.5 h-10 w-1 shrink-0 rounded-full"
+                    style={{ backgroundColor: task.calendarColor }}
+                    aria-hidden
+                  />
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {formatDate(task.startsAt)} · {formatTime(task.startsAt)}
+                    </p>
+                    <p className="text-sm font-semibold text-foreground">{task.projectTitle}</p>
+                    {task.technicianName ? (
+                      <span
+                        className="inline-flex rounded-md border px-1.5 py-0 text-[10px] font-medium"
+                        style={{
+                          borderColor: `${task.calendarColor}55`,
+                          backgroundColor: `${task.calendarColor}1f`,
+                          color: task.calendarColor,
+                        }}
+                      >
+                        {task.technicianName}
+                      </span>
+                    ) : null}
+                    {group.slots.length > 1 ? (
+                      <p className="text-[11px] text-muted-foreground">+{group.slots.length - 1} weitere Termine</p>
+                    ) : null}
+                  </div>
+                </Link>
+              );
+            })
+        )}
+      </div>
+
+      <div className={cn("hidden grid-cols-7 gap-px overflow-hidden rounded-xl border border-border bg-border md:grid", pending && "opacity-60 transition-opacity")}>
         {DAY_NAMES.map((name) => (
           <div
             key={name}
