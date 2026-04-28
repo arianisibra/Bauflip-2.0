@@ -20,9 +20,11 @@ const iconByKey: Record<SidebarItem["key"], ComponentType<{ className?: string }
 
 type SidebarNavProps = {
   items: SidebarItem[];
+  mobile?: boolean;
+  onNavigate?: () => void;
 };
 
-export function SidebarNav({ items }: SidebarNavProps) {
+export function SidebarNav({ items, mobile = false, onNavigate }: SidebarNavProps) {
   const pathname = usePathname();
   const grouped = {
     navigation: items.filter((item) => item.section === "navigation"),
@@ -37,8 +39,13 @@ export function SidebarNav({ items }: SidebarNavProps) {
   };
 
   return (
-    <aside className="flex h-full w-72 shrink-0 flex-col border-r bg-gradient-to-b from-sky-950 to-slate-950 px-4 py-5 text-slate-100">
-      <div className="mb-8 flex items-center gap-3 px-2">
+    <aside
+      className={cn(
+        "flex h-full flex-col bg-gradient-to-b from-sky-950 to-slate-950 text-slate-100",
+        mobile ? "w-full px-3 py-4" : "w-72 shrink-0 border-r px-4 py-5",
+      )}
+    >
+      <div className={cn("flex items-center gap-3 px-2", mobile ? "mb-5" : "mb-8")}>
         <Image
           src="/Bauflip_Logo-removebg_white.png"
           alt="Bauflip"
@@ -50,7 +57,7 @@ export function SidebarNav({ items }: SidebarNavProps) {
         />
       </div>
 
-      <nav className="flex flex-col gap-5">
+      <nav className={cn("flex flex-col", mobile ? "gap-4" : "gap-5")}>
         {(Object.keys(grouped) as Array<keyof typeof grouped>).map((section) => {
           const list = grouped[section];
           if (list.length === 0) return null;
@@ -69,11 +76,13 @@ export function SidebarNav({ items }: SidebarNavProps) {
                     target={item.href.startsWith("http") ? "_blank" : undefined}
                     rel={item.href.startsWith("http") ? "noopener noreferrer" : undefined}
                     className={cn(
-                      "flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors",
+                      "flex items-center gap-3 rounded-xl px-3 text-sm transition-colors",
+                      mobile ? "min-h-11 py-2.5" : "py-2",
                       isActive
                         ? "bg-cyan-400/20 text-cyan-100"
                         : "text-slate-200 hover:bg-slate-800/80 hover:text-white",
                     )}
+                    onClick={() => onNavigate?.()}
                   >
                     <Icon className="size-4" />
                     <span>{item.label}</span>

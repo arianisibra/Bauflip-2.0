@@ -223,9 +223,11 @@ export function ProjekteListClient({
     <>
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold">Projekte</h1>
-        <div className="flex items-center gap-2">
-          <ListPageToolbar value={q} onChange={setQ} placeholder="Suche…" />
-          <Button size="sm" onClick={() => setIntakeOpen(true)}>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="w-full sm:w-auto">
+            <ListPageToolbar value={q} onChange={setQ} placeholder="Suche…" />
+          </div>
+          <Button size="sm" className="w-full sm:w-auto" onClick={() => setIntakeOpen(true)}>
             + Neue Anfrage
           </Button>
         </div>
@@ -253,75 +255,115 @@ export function ProjekteListClient({
               </Button>
             </div>
           </div>
-        ) : useVirtualTable ? (
-          <div
-            ref={scrollParentRef}
-            className="relative max-h-[min(70vh,32rem)] w-full overflow-auto rounded-lg border border-border bg-card shadow-sm"
-          >
-            <table className="w-full caption-bottom text-sm">
-              <TableHeader className="sticky top-0 z-10 border-b bg-card shadow-[0_1px_0_0_hsl(var(--border))]">
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Projekt</TableHead>
-                  <TableHead>Mieter / Kontakt</TableHead>
-                  <TableHead>Adresse</TableHead>
-                  <TableHead>Typ</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-[120px] text-right">Aktion</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paddingTop > 0 ? (
-                  <tr aria-hidden>
-                    <td colSpan={6} className="h-0 border-0 p-0" style={{ height: paddingTop }} />
-                  </tr>
-                ) : null}
-                {virtualItems.map((vi) => {
-                  const p = filtered[vi.index];
-                  return (
-                    <ProjectTableRow
-                      key={p.id}
-                      p={p}
-                      deletingId={deletingId}
-                      selectedId={selected?.id ?? null}
-                      onOpen={handleOpenRow}
-                      onDelete={handleDeleteRow}
-                      zebraEven={vi.index % 2 === 1}
-                    />
-                  );
-                })}
-                {paddingBottom > 0 ? (
-                  <tr aria-hidden>
-                    <td colSpan={6} className="h-0 border-0 p-0" style={{ height: paddingBottom }} />
-                  </tr>
-                ) : null}
-              </TableBody>
-            </table>
-          </div>
         ) : (
-          <Table className="[&_tbody_tr:nth-child(even)]:bg-sky-50/40 dark:[&_tbody_tr:nth-child(even)]:bg-muted/25">
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead>Projekt</TableHead>
-                <TableHead>Mieter / Kontakt</TableHead>
-                <TableHead>Adresse</TableHead>
-                <TableHead>Typ</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-[120px] text-right">Aktion</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+          <>
+            <div className="flex flex-col divide-y sm:hidden">
               {filtered.map((p) => (
-                <ProjectTableRow
-                  key={p.id}
-                  p={p}
-                  deletingId={deletingId}
-                  selectedId={selected?.id ?? null}
-                  onOpen={handleOpenRow}
-                  onDelete={handleDeleteRow}
-                />
+                <div key={p.id} className="space-y-3 px-4 py-4">
+                  <button
+                    type="button"
+                    className="w-full space-y-2 text-left"
+                    onClick={() => handleOpenRow(p)}
+                  >
+                    <p className="text-base font-semibold leading-tight">{p.title}</p>
+                    <p className="text-sm text-muted-foreground">{p.displayLabel ?? "—"}</p>
+                    <p className="text-sm text-muted-foreground">{p.serviceAddressShort ?? "—"}</p>
+                    <div>
+                      <StatusBadge status={p.status} />
+                    </div>
+                  </button>
+                  <div className="flex items-center justify-between gap-2">
+                    <Button type="button" size="sm" variant="outline" onClick={() => handleOpenRow(p)}>
+                      Öffnen
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="border-destructive/30 text-destructive hover:bg-destructive/10"
+                      disabled={deletingId === p.id}
+                      onClick={() => void handleDeleteRow(p)}
+                    >
+                      {deletingId === p.id ? "Löschen …" : "Löschen"}
+                    </Button>
+                  </div>
+                </div>
               ))}
-            </TableBody>
-          </Table>
+            </div>
+
+            <div className="hidden sm:block">
+              {useVirtualTable ? (
+                <div
+                  ref={scrollParentRef}
+                  className="relative max-h-[min(70vh,32rem)] w-full overflow-auto rounded-lg border border-border bg-card shadow-sm"
+                >
+                  <table className="w-full caption-bottom text-sm">
+                    <TableHeader className="sticky top-0 z-10 border-b bg-card shadow-[0_1px_0_0_hsl(var(--border))]">
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead>Projekt</TableHead>
+                        <TableHead>Mieter / Kontakt</TableHead>
+                        <TableHead>Adresse</TableHead>
+                        <TableHead>Typ</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="w-[120px] text-right">Aktion</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paddingTop > 0 ? (
+                        <tr aria-hidden>
+                          <td colSpan={6} className="h-0 border-0 p-0" style={{ height: paddingTop }} />
+                        </tr>
+                      ) : null}
+                      {virtualItems.map((vi) => {
+                        const p = filtered[vi.index];
+                        return (
+                          <ProjectTableRow
+                            key={p.id}
+                            p={p}
+                            deletingId={deletingId}
+                            selectedId={selected?.id ?? null}
+                            onOpen={handleOpenRow}
+                            onDelete={handleDeleteRow}
+                            zebraEven={vi.index % 2 === 1}
+                          />
+                        );
+                      })}
+                      {paddingBottom > 0 ? (
+                        <tr aria-hidden>
+                          <td colSpan={6} className="h-0 border-0 p-0" style={{ height: paddingBottom }} />
+                        </tr>
+                      ) : null}
+                    </TableBody>
+                  </table>
+                </div>
+              ) : (
+                <Table className="[&_tbody_tr:nth-child(even)]:bg-sky-50/40 dark:[&_tbody_tr:nth-child(even)]:bg-muted/25">
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead>Projekt</TableHead>
+                      <TableHead>Mieter / Kontakt</TableHead>
+                      <TableHead>Adresse</TableHead>
+                      <TableHead>Typ</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="w-[120px] text-right">Aktion</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((p) => (
+                      <ProjectTableRow
+                        key={p.id}
+                        p={p}
+                        deletingId={deletingId}
+                        selectedId={selected?.id ?? null}
+                        onOpen={handleOpenRow}
+                        onDelete={handleDeleteRow}
+                      />
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+          </div>
         )}
       </div>
 

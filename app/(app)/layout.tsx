@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { MobileAdminNav } from "@/components/app/mobile-admin-nav";
 import { SidebarNav } from "@/components/app/sidebar-nav";
 import { UserAvatarButton } from "@/components/app/user-avatar-button";
 import { getCurrentSession } from "@/lib/auth/session";
@@ -27,15 +28,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="h-screen overflow-hidden bg-muted/40 dark:bg-muted/35">
       <div className="flex h-full">
-        <div className="overflow-hidden">
+        <div className="hidden overflow-hidden md:block">
           <SidebarNav items={items} />
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-16 items-center justify-end border-b border-border bg-card px-6">
+          <header className="flex h-16 items-center justify-between border-b border-border bg-card px-4 sm:px-6">
+            <MobileAdminNav items={items} />
             <UserAvatarButton organizationName={branding.name} organizationLogoUrl={branding.logoUrl} />
           </header>
-          <main className="min-h-0 flex-1 overflow-y-auto px-6 py-6">{children}</main>
+          <main className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-6 sm:py-6">{children}</main>
         </div>
       </div>
     </div>
