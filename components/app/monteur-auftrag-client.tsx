@@ -715,18 +715,7 @@ export function MonteurAuftragClient({
         <>
           <AuftragSectionDivider />
           <Card className="overflow-hidden border-border shadow-sm">
-          <CardHeader className="pb-2">
-            <div className="flex items-center gap-2">
-              <FileText className="size-4 text-muted-foreground" />
-              <div>
-                <CardTitle className="text-sm">Rapport erfassen</CardTitle>
-                <CardDescription className="text-xs">
-                  Notizen zum Einsatz erfassen.
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
+          <CardContent className="pt-4">
             <form
               className="flex flex-col gap-4"
               onSubmit={async (e) => {

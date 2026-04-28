@@ -219,21 +219,21 @@ export type SidebarItem = {
 };
 
 export const projectStatusLabels: Record<ProjectStatus, string> = {
-  offen: "Offen",
-  termin_geplant: "Termin geplant",
-  einsatz_offen: "Einsatz / Rapport",
-  offerte_senden: "Offerte senden",
-  offerte_gesendet: "Offerte gesendet",
-  offerte_genehmigt: "Offerte genehmigt",
-  bestellen: "Bestellen",
-  bestellt: "Bestellt",
-  montagebereit: "Montagebereit",
-  abholbereit: "Abholbereit",
-  werkstatt: "Werkstatt",
-  abklaeren: "Abklären",
-  abrechnen: "Abrechnen",
-  subunternehmer: "Subunternehmer",
-  abgeschlossen: "Abgeschlossen",
+  offen: "OFFEN",
+  termin_geplant: "TERMIN GEPLANT",
+  einsatz_offen: "EINSATZ / RAPPORT",
+  offerte_senden: "OFFERTE SENDEN",
+  offerte_gesendet: "OFFERTE GESENDET",
+  offerte_genehmigt: "OFFERTE GENEHMIGT",
+  bestellen: "BESTELLEN",
+  bestellt: "BESTELLT",
+  montagebereit: "MONTAGEBEREIT",
+  abholbereit: "ABHOLBEREIT",
+  werkstatt: "WERKSTATT",
+  abklaeren: "ABKLÄREN",
+  abrechnen: "ABRECHNEN",
+  subunternehmer: "SUBUNTERNEHMER",
+  abgeschlossen: "ABGESCHLOSSEN",
 };
 
 /** Tailwind-Klassen pro Status — jeder Schritt eigene Farbe (Liste, Sheet, Monteur). */
