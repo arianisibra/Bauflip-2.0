@@ -43,6 +43,15 @@ function projectListMaxRows(): number | undefined {
 
 export { mapUserProfileRow } from "./repository-map";
 
+function sortOfficeProjects(items: OfficeProjectListItem[]): OfficeProjectListItem[] {
+  return [...items].sort((a, b) => {
+    const aDone = a.status === "abgeschlossen";
+    const bDone = b.status === "abgeschlossen";
+    if (aDone === bDone) return 0;
+    return aDone ? 1 : -1;
+  });
+}
+
 /** DB-Spaltenliste — kein select('*') für Projektkern. */
 const PROJECT_DB_COLUMNS =
   "id, organization_id, title, type, status, next_owner_role, next_owner_user_id, source, intake_original_text, access_notes, created_at, updated_at, closed_at, reference_code, hints_and_notes, tenant_name, tenant_phone, tenant_email, management_name, management_phone, management_email, cost_ceiling_text, service_street, service_postal_code, service_city, service_country";
@@ -209,14 +218,14 @@ export const listProjectsForOffice = cache(async function listProjectsForOffice(
   return withSlowLog("listProjectsForOffice", async () => {
     const supabase = await createSupabaseServerClient();
     if (!supabase) {
-      return mockProjects.map((p) => ({
+      return sortOfficeProjects(mockProjects.map((p) => ({
         id: p.id,
         title: p.title,
         type: p.type,
         status: p.status,
         displayLabel: p.tenantName?.trim() || p.title,
         serviceAddressShort: null,
-      }));
+      })));
     }
     const orgId = await getCachedCurrentOrganizationId();
     let q = supabase
@@ -234,7 +243,7 @@ export const listProjectsForOffice = cache(async function listProjectsForOffice(
     if (error || !data) {
       return [];
     }
-    return (data as Record<string, unknown>[]).map((row) => {
+    const mapped = (data as Record<string, unknown>[]).map((row) => {
       const title = String(row.title ?? "");
       const tenant = row.tenant_name != null ? String(row.tenant_name).trim() : "";
       const addrShort = formatServiceAddressFields({
@@ -251,6 +260,7 @@ export const listProjectsForOffice = cache(async function listProjectsForOffice(
         serviceAddressShort: addrShort === "—" ? null : addrShort,
       };
     });
+    return sortOfficeProjects(mapped);
   });
 });
 
