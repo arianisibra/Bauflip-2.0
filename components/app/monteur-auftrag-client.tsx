@@ -145,15 +145,12 @@ type NextStepOption = {
 const RAPPORT_NEXT_STEP_OPTIONS_ERSTBESUCH: NextStepOption[] = [
   { value: "offerte_senden", label: "Offerte senden", description: "Masse aufgenommen, Offerte erstellen", icon: FileText },
   { value: "bestellen", label: "Material bestellen", description: "Direkt bestellen, keine Offerte nötig", icon: ShoppingCart },
-  { value: "abklaeren", label: "Abklärungen nötig", description: "Weitere Informationen erforderlich", icon: HelpCircle },
   { value: "abholbereit", label: "Werkstatt nötig", description: "Gerät muss in die Werkstatt", icon: Truck },
-  { value: "subunternehmer", label: "Subunternehmer", description: "Subunternehmer beauftragen", icon: Users },
 ];
 
 const RAPPORT_NEXT_STEP_OPTIONS_MONTAGE: NextStepOption[] = [
   { value: "einsatz_offen", label: "Weiterer Termin nötig", description: "Montage nicht abgeschlossen, Büro plant neuen Termin", icon: Clock },
   { value: "abholbereit", label: "Werkstatt nötig", description: "Gerät muss in die Werkstatt", icon: Truck },
-  { value: "subunternehmer", label: "Subunternehmer", description: "Subunternehmer beauftragen", icon: Users },
 ];
 
 /** Kontext-Hilfen unter dem Status-Badge (Farben: projectStatusBadgeClassNames in types). */
@@ -724,13 +721,7 @@ export function MonteurAuftragClient({
               <div>
                 <CardTitle className="text-sm">Rapport erfassen</CardTitle>
                 <CardDescription className="text-xs">
-                  {mode === "schaden_behoben"
-                    ? isMontageContext
-                      ? "Kurze Zusammenfassung der Montage."
-                      : "Kurze Zusammenfassung der Reparatur."
-                    : isMontageContext
-                      ? "Was wurde gemacht, was fehlt noch?"
-                      : "Masse und Hinweise für die Offerte."}
+                  Notizen zum Einsatz erfassen.
                 </CardDescription>
               </div>
             </div>
@@ -765,9 +756,9 @@ export function MonteurAuftragClient({
                       projectId: p.id,
                       outcome: mode,
                       nextStatus: mode === "schaden_aufgenommen" ? nextStatus ?? undefined : undefined,
-                      summary: String(fd.get("summary") ?? ""),
-                      measurementsJson: String(fd.get("measurementsJson") ?? "{}"),
-                      workDescription: String(fd.get("workDescription") ?? ""),
+                      summary: String(fd.get("reportNotes") ?? ""),
+                      measurementsJson: "{}",
+                      workDescription: String(fd.get("reportNotes") ?? ""),
                       orderForms: isMontageContext
                         ? []
                         : orderFormsPayloadFromFormData(fd, orderFormTemplates, orderFormLines),
@@ -789,51 +780,6 @@ export function MonteurAuftragClient({
               }}
             >
               <input type="hidden" name="outcome" value={mode} />
-              {mode === "schaden_behoben" ? (
-                <>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="summary" className="text-xs font-medium">
-                      Zusammenfassung
-                    </Label>
-                    <Textarea id="summary" name="summary" rows={3} placeholder={isMontageContext ? "Was wurde montiert / repariert?" : "Kurze Beschreibung der Reparatur"} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="workDescription" className="text-xs font-medium">
-                      Material / verwendete Teile
-                    </Label>
-                    <Textarea id="workDescription" name="workDescription" rows={2} />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="summary" className="text-xs font-medium">
-                      Zusammenfassung
-                    </Label>
-                    <Textarea id="summary" name="summary" rows={3} placeholder={isMontageContext ? "Was wurde gemacht, was fehlt noch?" : "Kurze Beschreibung der Situation"} />
-                  </div>
-                  {!isMontageContext && (
-                    <div className="space-y-1.5">
-                      <Label htmlFor="measurementsJson" className="text-xs font-medium">
-                        Masse und Notizen
-                      </Label>
-                      <Textarea
-                        id="measurementsJson"
-                        name="measurementsJson"
-                        rows={4}
-                        placeholder="Freitext: Masse, Sonderwünsche …"
-                      />
-                    </div>
-                  )}
-                  <div className="space-y-1.5">
-                    <Label htmlFor="workDescription" className="text-xs font-medium">
-                      {isMontageContext ? "Was fehlt noch / Hinweise" : "Hinweis für Bestellung / Offerte"}
-                    </Label>
-                    <Textarea id="workDescription" name="workDescription" rows={3} />
-                  </div>
-                </>
-              )}
-
               {!isMontageContext && orderFormTemplates.length > 0 ? (
                 <MonteurOrderFormSections
                   templates={orderFormTemplates}
@@ -843,6 +789,19 @@ export function MonteurAuftragClient({
                   onRemoveLine={removeOrderFormLine}
                 />
               ) : null}
+
+              <div className="space-y-1.5">
+                <Label htmlFor="reportNotes" className="text-xs font-medium">
+                  Rapport erfassen
+                </Label>
+                <Textarea
+                  id="reportNotes"
+                  name="reportNotes"
+                  rows={6}
+                  required
+                  placeholder="Notizen zum Einsatz erfassen …"
+                />
+              </div>
 
               {/* Photo gallery + upload */}
               <div className="space-y-3">

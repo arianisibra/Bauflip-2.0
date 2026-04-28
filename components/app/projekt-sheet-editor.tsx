@@ -408,6 +408,12 @@ export function ProjektSheetEditor({
   const deleteReport = useDeleteReport();
   const uploadAttachment = useUploadAttachment();
   const [error, setError] = useState<string | null>(null);
+  const [fieldOverlay, setFieldOverlay] = useState<{
+    label: string;
+    value: string;
+    multiline: boolean;
+    target: HTMLInputElement | HTMLTextAreaElement;
+  } | null>(null);
 
   if (!open) {
     return null;
@@ -436,6 +442,19 @@ export function ProjektSheetEditor({
     deleteAttachment.isPending ||
     deleteReport.isPending ||
     uploadAttachment.isPending;
+
+  const openFieldOverlay = (
+    target: HTMLInputElement | HTMLTextAreaElement,
+    label: string,
+    multiline = false,
+  ) => {
+    setFieldOverlay({
+      label,
+      value: target.value,
+      multiline,
+      target,
+    });
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-6 overflow-y-auto pr-1">
@@ -478,47 +497,101 @@ export function ProjektSheetEditor({
 
         <div className="space-y-1">
           <Label>Mieter / Kontakt</Label>
-          <Input name="tenantName" defaultValue={p.tenantName ?? ""} disabled={!canEdit} />
+          <Input
+            name="tenantName"
+            defaultValue={p.tenantName ?? ""}
+            disabled={!canEdit}
+            onClick={(e) => openFieldOverlay(e.currentTarget, "Mieter / Kontakt")}
+          />
         </div>
         <div className="space-y-1">
           <Label>Telefon Mieter</Label>
-          <Input name="tenantPhone" defaultValue={p.tenantPhone ?? ""} disabled={!canEdit} />
+          <Input
+            name="tenantPhone"
+            defaultValue={p.tenantPhone ?? ""}
+            disabled={!canEdit}
+            onClick={(e) => openFieldOverlay(e.currentTarget, "Telefon Mieter")}
+          />
         </div>
         <div className="space-y-1 sm:col-span-2">
           <Label>E-Mail Mieter</Label>
-          <Input name="tenantEmail" type="email" defaultValue={p.tenantEmail ?? ""} disabled={!canEdit} />
+          <Input
+            name="tenantEmail"
+            type="email"
+            defaultValue={p.tenantEmail ?? ""}
+            disabled={!canEdit}
+            onClick={(e) => openFieldOverlay(e.currentTarget, "E-Mail Mieter")}
+          />
         </div>
 
         <div className="space-y-1 sm:col-span-2">
           <Label>Verwaltung</Label>
-          <Input name="managementName" defaultValue={p.managementName ?? ""} disabled={!canEdit} />
+          <Input
+            name="managementName"
+            defaultValue={p.managementName ?? ""}
+            disabled={!canEdit}
+            onClick={(e) => openFieldOverlay(e.currentTarget, "Verwaltung")}
+          />
         </div>
         <div className="space-y-1 sm:col-span-2">
           <Label>Zuständige Person</Label>
-          <Input name="managementEmail" type="email" defaultValue={p.managementEmail ?? ""} disabled={!canEdit} />
+          <Input
+            name="managementEmail"
+            type="email"
+            defaultValue={p.managementEmail ?? ""}
+            disabled={!canEdit}
+            onClick={(e) => openFieldOverlay(e.currentTarget, "Zuständige Person")}
+          />
         </div>
 
         <div className="space-y-1 sm:col-span-2">
           <Label>Kostendach</Label>
-          <Input name="costCeilingText" defaultValue={p.costCeilingText ?? ""} disabled={!canEdit} />
+          <Input
+            name="costCeilingText"
+            defaultValue={p.costCeilingText ?? ""}
+            disabled={!canEdit}
+            onClick={(e) => openFieldOverlay(e.currentTarget, "Kostendach")}
+          />
         </div>
 
         <div className="space-y-1 sm:col-span-2">
           <Label>Adresse Einsatz</Label>
-          <Input name="serviceStreet" placeholder="Strasse" defaultValue={p.serviceStreet ?? ""} disabled={!canEdit} />
+          <Input
+            name="serviceStreet"
+            placeholder="Strasse"
+            defaultValue={p.serviceStreet ?? ""}
+            disabled={!canEdit}
+            onClick={(e) => openFieldOverlay(e.currentTarget, "Adresse Einsatz")}
+          />
         </div>
         <div className="space-y-1">
           <Label>PLZ</Label>
-          <Input name="servicePostalCode" defaultValue={p.servicePostalCode ?? ""} disabled={!canEdit} />
+          <Input
+            name="servicePostalCode"
+            defaultValue={p.servicePostalCode ?? ""}
+            disabled={!canEdit}
+            onClick={(e) => openFieldOverlay(e.currentTarget, "PLZ")}
+          />
         </div>
         <div className="space-y-1">
           <Label>Ort</Label>
-          <Input name="serviceCity" defaultValue={p.serviceCity ?? ""} disabled={!canEdit} />
+          <Input
+            name="serviceCity"
+            defaultValue={p.serviceCity ?? ""}
+            disabled={!canEdit}
+            onClick={(e) => openFieldOverlay(e.currentTarget, "Ort")}
+          />
         </div>
 
         <div className="space-y-1 sm:col-span-2">
           <Label>Wichtige Informationen</Label>
-          <Textarea name="intakeOriginalText" rows={4} defaultValue={p.intakeOriginalText} disabled={!canEdit} />
+          <Textarea
+            name="intakeOriginalText"
+            rows={4}
+            defaultValue={p.intakeOriginalText}
+            disabled={!canEdit}
+            onClick={(e) => openFieldOverlay(e.currentTarget, "Wichtige Informationen", true)}
+          />
         </div>
 
         {canEdit ? (
@@ -761,6 +834,50 @@ export function ProjektSheetEditor({
       )}
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {fieldOverlay ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-2xl rounded-xl border border-border bg-background p-4 shadow-xl">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h4 className="text-sm font-semibold">{fieldOverlay.label}</h4>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setFieldOverlay(null)}>
+                Schliessen
+              </Button>
+            </div>
+            {fieldOverlay.multiline ? (
+              <Textarea
+                rows={12}
+                value={fieldOverlay.value}
+                disabled={!canEdit}
+                onChange={(e) => setFieldOverlay((prev) => (prev ? { ...prev, value: e.target.value } : prev))}
+              />
+            ) : (
+              <Input
+                value={fieldOverlay.value}
+                disabled={!canEdit}
+                onChange={(e) => setFieldOverlay((prev) => (prev ? { ...prev, value: e.target.value } : prev))}
+              />
+            )}
+            {canEdit ? (
+              <div className="mt-3 flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setFieldOverlay(null)}>
+                  Abbrechen
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    const target = fieldOverlay.target;
+                    target.value = fieldOverlay.value;
+                    target.dispatchEvent(new Event("input", { bubbles: true }));
+                    setFieldOverlay(null);
+                  }}
+                >
+                  Übernehmen
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

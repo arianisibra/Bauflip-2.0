@@ -76,7 +76,6 @@ const ProjectTableRow = memo(function ProjectTableRow({
       onClick={() => onOpen(p)}
     >
       <TableCell className="font-medium">{p.title}</TableCell>
-      <TableCell>{p.displayLabel ?? "—"}</TableCell>
       <TableCell className="text-muted-foreground">{p.serviceAddressShort ?? "—"}</TableCell>
       <TableCell className="capitalize">{p.type}</TableCell>
       <TableCell>
@@ -266,7 +265,6 @@ export function ProjekteListClient({
                     onClick={() => handleOpenRow(p)}
                   >
                     <p className="text-base font-semibold leading-tight">{p.title}</p>
-                    <p className="text-sm text-muted-foreground">{p.displayLabel ?? "—"}</p>
                     <p className="text-sm text-muted-foreground">{p.serviceAddressShort ?? "—"}</p>
                     <div>
                       <StatusBadge status={p.status} />
@@ -300,7 +298,6 @@ export function ProjekteListClient({
                   <table className="w-full caption-bottom text-sm">
                     <TableHeader className="sticky top-0 z-10 border-b bg-card shadow-[0_1px_0_0_hsl(var(--border))]">
                       <TableRow className="hover:bg-transparent">
-                        <TableHead>Projekt</TableHead>
                         <TableHead>Mieter / Kontakt</TableHead>
                         <TableHead>Adresse</TableHead>
                         <TableHead>Typ</TableHead>
@@ -311,7 +308,7 @@ export function ProjekteListClient({
                     <TableBody>
                       {paddingTop > 0 ? (
                         <tr aria-hidden>
-                          <td colSpan={6} className="h-0 border-0 p-0" style={{ height: paddingTop }} />
+                          <td colSpan={5} className="h-0 border-0 p-0" style={{ height: paddingTop }} />
                         </tr>
                       ) : null}
                       {virtualItems.map((vi) => {
@@ -330,7 +327,7 @@ export function ProjekteListClient({
                       })}
                       {paddingBottom > 0 ? (
                         <tr aria-hidden>
-                          <td colSpan={6} className="h-0 border-0 p-0" style={{ height: paddingBottom }} />
+                          <td colSpan={5} className="h-0 border-0 p-0" style={{ height: paddingBottom }} />
                         </tr>
                       ) : null}
                     </TableBody>
@@ -340,7 +337,6 @@ export function ProjekteListClient({
                 <Table className="[&_tbody_tr:nth-child(even)]:bg-sky-50/40 dark:[&_tbody_tr:nth-child(even)]:bg-muted/25">
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead>Projekt</TableHead>
                       <TableHead>Mieter / Kontakt</TableHead>
                       <TableHead>Adresse</TableHead>
                       <TableHead>Typ</TableHead>
