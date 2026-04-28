@@ -39,6 +39,7 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock,
+  FileText,
   ImagePlus,
   Loader2,
   MapPin,
