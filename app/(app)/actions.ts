@@ -42,6 +42,18 @@ function ensureProjectAccessForReportFiles(
   return { ok: false, error: "Keine Berechtigung." };
 }
 
+function deriveIntakeTitle(rawTitle: string, rawDescription: string): string {
+  const explicit = rawTitle.trim();
+  if (explicit.length >= 2) {
+    return explicit;
+  }
+  const compactDescription = rawDescription.replace(/\s+/g, " ").trim();
+  if (!compactDescription) {
+    return "Neuer Auftrag";
+  }
+  return compactDescription.slice(0, 80);
+}
+
 export async function createIntakeAction(formData: FormData) {
   const session = await getCurrentSession();
   if (!session || (session.role !== "office" && session.role !== "admin")) {
@@ -52,11 +64,13 @@ export async function createIntakeAction(formData: FormData) {
   }
 
   const raw = Object.fromEntries(formData.entries());
+  const intakeOriginalText = String(raw.intakeOriginalText ?? "");
+  const title = deriveIntakeTitle(String(raw.title ?? ""), intakeOriginalText);
   const parsed = intakeSchema.safeParse({
-    title: String(raw.title ?? ""),
+    title,
     source: raw.source ?? "email",
     type: raw.type ?? "reparatur",
-    intakeOriginalText: String(raw.intakeOriginalText ?? ""),
+    intakeOriginalText,
     tenantName: String(raw.tenantName ?? ""),
     tenantPhone: String(raw.tenantPhone ?? ""),
     tenantEmail: String(raw.tenantEmail ?? ""),

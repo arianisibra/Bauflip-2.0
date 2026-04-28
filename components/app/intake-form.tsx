@@ -31,11 +31,6 @@ export function IntakeForm({ onCreated }: { onCreated?: (projectId: string) => v
       <input type="hidden" name="type" value="reparatur" />
 
       <div className="space-y-1">
-        <Label htmlFor="title">Kurztitel</Label>
-        <Input id="title" name="title" required placeholder="z. B. Storen Balkon 3. OG" />
-      </div>
-
-      <div className="space-y-1">
         <Label htmlFor="tenantName">Mieter / Kontakt</Label>
         <Input id="tenantName" name="tenantName" required />
       </div>
