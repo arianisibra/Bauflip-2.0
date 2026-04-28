@@ -179,6 +179,7 @@ export function TechDayView({
 
   const { data: tasks = initialTasks, isFetching } = useWeekTasks(referenceIso);
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>("all");
+  const [sortMode, setSortMode] = useState<"time" | "technician">("time");
 
   const { todayGroups, todayTasks, upcomingGroups, upcomingTasks, openRapportProjects } = useMemo(() => {
     const now = new Date();
@@ -255,7 +256,20 @@ export function TechDayView({
     return todayTasks.filter((task) => task.assignedTechnicianId === selectedTechnicianId);
   }, [isTechnicianView, selectedTechnicianId, todayTasks]);
 
-  const todayEmpty = isTechnicianView ? !(todayGroups?.length ?? 0) : !(filteredTodayTasks?.length ?? 0);
+  const sortedTodayTasks = useMemo(() => {
+    if (isTechnicianView || !filteredTodayTasks) return filteredTodayTasks;
+    return [...filteredTodayTasks].sort((a, b) => {
+      if (sortMode === "technician") {
+        const nameA = a.technicianName ?? "";
+        const nameB = b.technicianName ?? "";
+        const byName = nameA.localeCompare(nameB, "de-CH");
+        if (byName !== 0) return byName;
+      }
+      return a.startsAt.localeCompare(b.startsAt);
+    });
+  }, [filteredTodayTasks, isTechnicianView, sortMode]);
+
+  const todayEmpty = isTechnicianView ? !(todayGroups?.length ?? 0) : !(sortedTodayTasks?.length ?? 0);
   const upcomingHas = isTechnicianView ? (upcomingGroups?.length ?? 0) > 0 : (upcomingTasks?.length ?? 0) > 0;
 
   return (
@@ -298,8 +312,8 @@ export function TechDayView({
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Heutige Einsätze
         </h2>
-        {!isTechnicianView && technicianOptions.length > 1 ? (
-          <div className="flex items-center gap-2">
+        {!isTechnicianView ? (
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Monteur:</span>
             <select
               className="h-8 rounded-md border border-input bg-background px-2 text-xs"
@@ -312,6 +326,15 @@ export function TechDayView({
                   {opt.name}
                 </option>
               ))}
+            </select>
+            <span className="ml-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Sortierung:</span>
+            <select
+              className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value as "time" | "technician")}
+            >
+              <option value="time">Uhrzeit</option>
+              <option value="technician">Monteur</option>
             </select>
           </div>
         ) : null}
@@ -369,7 +392,7 @@ export function TechDayView({
           <div className="space-y-3">
             {isTechnicianView
               ? todayGroups!.map((group) => <MonteurTodayGroupCard key={group.key} group={group} />)
-              : filteredTodayTasks!.map((task) => {
+              : sortedTodayTasks!.map((task) => {
                   const isBesichtigung = task.kind === "besichtigung";
                   const isDone = task.projectStatus === "abgeschlossen";
                   return (
