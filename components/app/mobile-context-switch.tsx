@@ -25,7 +25,7 @@ export function MobileContextSwitch({ className, onNavigate }: MobileContextSwit
   return (
     <div
       className={cn(
-        "inline-flex items-center gap-1 rounded-xl border border-border bg-muted p-1 md:hidden",
+        "inline-flex items-center gap-1 rounded-xl border border-border/80 bg-muted/70 p-1 md:hidden",
         className,
       )}
       role="tablist"
@@ -36,7 +36,7 @@ export function MobileContextSwitch({ className, onNavigate }: MobileContextSwit
         role="tab"
         aria-selected={!isTagContext}
         className={cn(
-          "min-h-9 rounded-lg px-3 text-xs font-medium transition-colors",
+          "min-h-9 rounded-lg px-3 text-xs font-semibold tracking-tight transition-colors",
           !isTagContext ? "bg-background text-foreground shadow-sm" : "text-muted-foreground",
         )}
         onClick={() => navigateTo("/projekte")}
@@ -48,12 +48,12 @@ export function MobileContextSwitch({ className, onNavigate }: MobileContextSwit
         role="tab"
         aria-selected={isTagContext}
         className={cn(
-          "min-h-9 rounded-lg px-3 text-xs font-medium transition-colors",
+          "min-h-9 rounded-lg px-3 text-xs font-semibold tracking-tight transition-colors",
           isTagContext ? "bg-background text-foreground shadow-sm" : "text-muted-foreground",
         )}
         onClick={() => navigateTo("/tag")}
       >
-        Mein Tag
+        Tag
       </button>
     </div>
   );

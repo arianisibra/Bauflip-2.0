@@ -227,13 +227,13 @@ export function ProjekteListClient({
           <div className="w-full sm:w-auto">
             <ListPageToolbar value={q} onChange={setQ} placeholder="Suche…" />
           </div>
-          <Button size="sm" className="w-full sm:w-auto" onClick={() => setIntakeOpen(true)}>
+          <Button size="sm" className="h-11 w-full rounded-lg sm:h-9 sm:w-auto" onClick={() => setIntakeOpen(true)}>
             + Neue Anfrage
           </Button>
         </div>
       </div>
 
-      <div className="rounded-lg border bg-card shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm">
         {showEmptyState ? (
           <div className="flex flex-col items-start gap-3 px-5 py-8 sm:px-8">
             <h2 className="text-base font-semibold">
@@ -259,7 +259,7 @@ export function ProjekteListClient({
           <>
             <div className="flex flex-col divide-y sm:hidden">
               {filtered.map((p) => (
-                <div key={p.id} className="space-y-3 px-4 py-4">
+                <div key={p.id} className="space-y-3 px-4 py-4 first:pt-5 last:pb-5">
                   <button
                     type="button"
                     className="w-full space-y-2 text-left"
@@ -272,15 +272,15 @@ export function ProjekteListClient({
                       <StatusBadge status={p.status} />
                     </div>
                   </button>
-                  <div className="flex items-center justify-between gap-2">
-                    <Button type="button" size="sm" variant="outline" onClick={() => handleOpenRow(p)}>
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <Button type="button" size="sm" variant="outline" className="rounded-lg" onClick={() => handleOpenRow(p)}>
                       Öffnen
                     </Button>
                     <Button
                       type="button"
                       size="sm"
                       variant="outline"
-                      className="border-destructive/30 text-destructive hover:bg-destructive/10"
+                      className="rounded-lg border-destructive/30 text-destructive hover:bg-destructive/10"
                       disabled={deletingId === p.id}
                       onClick={() => void handleDeleteRow(p)}
                     >

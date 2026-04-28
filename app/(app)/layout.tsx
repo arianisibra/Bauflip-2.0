@@ -34,7 +34,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-16 items-center justify-between border-b border-border bg-card px-4 sm:px-6">
+          <header className="flex h-16 items-center justify-between border-b border-border/80 bg-card px-3 sm:px-6">
             <div className="flex items-center gap-2">
               <MobileAdminNav items={items} />
               <MobileContextSwitch />
