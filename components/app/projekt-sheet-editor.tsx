@@ -287,16 +287,27 @@ function ReportCard({
 type PipelineAction = { label: string; nextStatus: ProjectStatus };
 
 const STATUS_PIPELINE: Partial<Record<ProjectStatus, PipelineAction[]>> = {
-  offerte_senden:    [{ label: "Offerte gesendet", nextStatus: "offerte_gesendet" }],
-  offerte_gesendet:  [{ label: "Offerte genehmigt", nextStatus: "offerte_genehmigt" }],
-  offerte_genehmigt: [{ label: "Material bestellen", nextStatus: "bestellen" }, { label: "Direkt abrechnen", nextStatus: "abrechnen" }],
-  bestellen:         [{ label: "Bestellt", nextStatus: "bestellt" }],
-  bestellt:          [{ label: "Material eingetroffen", nextStatus: "montagebereit" }],
-  abholbereit:       [{ label: "In Werkstatt", nextStatus: "werkstatt" }],
-  werkstatt:         [{ label: "Werkstatt fertig", nextStatus: "montagebereit" }],
-  abklaeren:         [{ label: "Offerte senden", nextStatus: "offerte_senden" }, { label: "Material bestellen", nextStatus: "bestellen" }],
-  subunternehmer:    [{ label: "Abrechnen", nextStatus: "abrechnen" }],
-  abrechnen:         [{ label: "Abgeschlossen", nextStatus: "abgeschlossen" }],
+  offerte_senden:    [{ label: "OFFERTE GESENDET", nextStatus: "offerte_gesendet" }],
+  offerte_gesendet:  [{ label: "OFFERTE GENEHMIGT", nextStatus: "offerte_genehmigt" }],
+  offerte_genehmigt: [{ label: "MATERIAL BESTELLEN", nextStatus: "bestellen" }, { label: "DIREKT ABRECHNEN", nextStatus: "abrechnen" }],
+  bestellen:         [{ label: "BESTELLT", nextStatus: "bestellt" }],
+  bestellt:          [{ label: "MATERIAL EINGETROFFEN", nextStatus: "montagebereit" }],
+  abholbereit:       [{ label: "IN WERKSTATT", nextStatus: "werkstatt" }],
+  werkstatt:         [{ label: "WERKSTATT FERTIG", nextStatus: "montagebereit" }],
+  abklaeren:         [{ label: "OFFERTE SENDEN", nextStatus: "offerte_senden" }, { label: "MATERIAL BESTELLEN", nextStatus: "bestellen" }],
+  subunternehmer:    [{ label: "ABRECHNEN", nextStatus: "abrechnen" }],
+  abrechnen:         [{ label: "ABGESCHLOSSEN", nextStatus: "abgeschlossen" }],
+};
+
+const STATUS_ACTION_TONE: Partial<Record<ProjectStatus, string>> = {
+  offerte_gesendet: "border-violet-500/35 bg-violet-500/10 text-violet-700 dark:text-violet-200",
+  offerte_genehmigt: "border-purple-500/35 bg-purple-500/10 text-purple-700 dark:text-purple-200",
+  bestellen: "border-fuchsia-500/35 bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-200",
+  bestellt: "border-pink-500/35 bg-pink-500/10 text-pink-700 dark:text-pink-200",
+  montagebereit: "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200",
+  werkstatt: "border-orange-500/35 bg-orange-500/10 text-orange-700 dark:text-orange-200",
+  abrechnen: "border-yellow-500/40 bg-yellow-500/15 text-yellow-800 dark:text-yellow-200",
+  abgeschlossen: "border-green-600/40 bg-green-600/15 text-green-800 dark:text-green-200",
 };
 
 function StatusPipeline({
@@ -337,7 +348,10 @@ function StatusPipeline({
                 type="button"
                 disabled={pending}
                 onClick={() => advance(action.nextStatus)}
-                className="flex items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-2 py-0.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
+                className={cn(
+                  "flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium transition-colors disabled:opacity-50",
+                  STATUS_ACTION_TONE[action.nextStatus] ?? "border-primary/30 bg-primary/5 text-primary hover:bg-primary/10",
+                )}
               >
                 {pending ? (
                   <Loader2 className="size-3 shrink-0 animate-spin" aria-hidden />

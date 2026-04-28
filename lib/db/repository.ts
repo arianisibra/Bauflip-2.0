@@ -220,7 +220,7 @@ export const listProjectsForOffice = cache(async function listProjectsForOffice(
     if (!supabase) {
       return sortOfficeProjects(mockProjects.map((p) => ({
         id: p.id,
-        title: p.title,
+        title: p.tenantName?.trim() || p.title,
         type: p.type,
         status: p.status,
         displayLabel: p.tenantName?.trim() || p.title,
@@ -244,8 +244,8 @@ export const listProjectsForOffice = cache(async function listProjectsForOffice(
       return [];
     }
     const mapped = (data as Record<string, unknown>[]).map((row) => {
-      const title = String(row.title ?? "");
       const tenant = row.tenant_name != null ? String(row.tenant_name).trim() : "";
+      const title = tenant || String(row.title ?? "");
       const addrShort = formatServiceAddressFields({
         serviceStreet: row.service_street as string | null,
         servicePostalCode: row.service_postal_code as string | null,

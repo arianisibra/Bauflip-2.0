@@ -39,10 +39,7 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock,
-  FileText,
-  HelpCircle,
   ImagePlus,
-  KeyRound,
   Loader2,
   MapPin,
   Navigation,
@@ -51,7 +48,6 @@ import {
   Trash2,
   Truck,
   User,
-  Users,
   Wrench,
 } from "lucide-react";
 
@@ -139,18 +135,63 @@ type NextStepOption = {
   value: RapportNextStep;
   label: string;
   description: string;
-  icon: typeof FileText;
+  icon: typeof Clock;
+  toneClassName: string;
 };
 
 const RAPPORT_NEXT_STEP_OPTIONS_ERSTBESUCH: NextStepOption[] = [
-  { value: "offerte_senden", label: "Offerte senden", description: "Masse aufgenommen, Offerte erstellen", icon: FileText },
-  { value: "bestellen", label: "Material bestellen", description: "Direkt bestellen, keine Offerte nötig", icon: ShoppingCart },
-  { value: "abholbereit", label: "Werkstatt nötig", description: "Gerät muss in die Werkstatt", icon: Truck },
+  {
+    value: "offerte_senden",
+    label: "OFFERTE SENDEN",
+    description: "Masse aufgenommen, Offerte erstellen",
+    icon: ShoppingCart,
+    toneClassName: "border-indigo-500/40 bg-indigo-500/10 text-indigo-700 dark:text-indigo-200",
+  },
+  {
+    value: "bestellen",
+    label: "MATERIAL BESTELLEN",
+    description: "Direkt bestellen, keine Offerte nötig",
+    icon: ShoppingCart,
+    toneClassName: "border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-200",
+  },
+  {
+    value: "montagebereit",
+    label: "MONTAGEBEREIT",
+    description: "Direkt zur Montage freigeben",
+    icon: CheckCircle2,
+    toneClassName: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200",
+  },
+  {
+    value: "abholbereit",
+    label: "WERKSTATT NÖTIG",
+    description: "Gerät muss in die Werkstatt",
+    icon: Truck,
+    toneClassName: "border-teal-500/40 bg-teal-500/10 text-teal-700 dark:text-teal-200",
+  },
 ];
 
 const RAPPORT_NEXT_STEP_OPTIONS_MONTAGE: NextStepOption[] = [
-  { value: "einsatz_offen", label: "Weiterer Termin nötig", description: "Montage nicht abgeschlossen, Büro plant neuen Termin", icon: Clock },
-  { value: "abholbereit", label: "Werkstatt nötig", description: "Gerät muss in die Werkstatt", icon: Truck },
+  {
+    value: "einsatz_offen",
+    label: "WEITERER TERMIN NÖTIG",
+    description: "Montage nicht abgeschlossen, Büro plant neuen Termin",
+    icon: Clock,
+    toneClassName: "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-200",
+  },
+  {
+    value: "montagebereit",
+    label: "MONTAGEBEREIT",
+    description: "Bereit für nächsten Montageeinsatz",
+    icon: CheckCircle2,
+    toneClassName: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200",
+  },
+  {
+    value: "abholbereit",
+    label: "WERKSTATT NÖTIG",
+    description: "Gerät muss in die Werkstatt",
+    icon: Truck,
+    toneClassName: "border-teal-500/40 bg-teal-500/10 text-teal-700 dark:text-teal-200",
+  },
 ];
 
 /** Kontext-Hilfen unter dem Status-Badge (Farben: projectStatusBadgeClassNames in types). */
@@ -510,19 +551,6 @@ export function MonteurAuftragClient({
             {p.costCeilingText?.trim() || "—"}
           </InfoRow>
 
-          {p.accessNotes?.trim() ? (
-            <div className="flex items-start gap-2.5 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5">
-              <KeyRound className="mt-0.5 size-4 shrink-0 text-primary" />
-              <div className="min-w-0 text-sm">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
-                  Zugang / Schlüssel
-                </p>
-                <p className="mt-0.5 whitespace-pre-wrap text-foreground">
-                  {p.accessNotes.trim()}
-                </p>
-              </div>
-            </div>
-          ) : null}
         </CardContent>
       </Card>
 
@@ -678,39 +706,6 @@ export function MonteurAuftragClient({
         </div>
       </section>
 
-      {mode === "schaden_aufgenommen" ? (
-        <>
-          <AuftragSectionDivider />
-          <section className="space-y-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Nächster Schritt
-          </h2>
-          <div className="grid gap-2 grid-cols-1">
-            {nextStepOptions.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setNextStatus(opt.value)}
-                className={`flex items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left transition-all active:scale-[0.98] ${
-                  nextStatus === opt.value
-                    ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                    : "border-border bg-card hover:bg-muted/30"
-                }`}
-              >
-                <opt.icon
-                  className={`size-5 shrink-0 ${nextStatus === opt.value ? "text-primary" : "text-muted-foreground"}`}
-                />
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-foreground">{opt.label}</p>
-                  <p className="text-[11px] leading-snug text-muted-foreground">{opt.description}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
-        </>
-      ) : null}
-
       {mode ? (
         <>
           <AuftragSectionDivider />
@@ -840,6 +835,36 @@ export function MonteurAuftragClient({
                   }}
                 />
               </div>
+
+              {mode === "schaden_aufgenommen" ? (
+                <section className="space-y-2">
+                  <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    NÄCHSTER SCHRITT
+                  </h2>
+                  <div className="grid gap-2 grid-cols-1">
+                    {nextStepOptions.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setNextStatus(opt.value)}
+                        className={`flex items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left transition-all active:scale-[0.98] ${
+                          nextStatus === opt.value
+                            ? `${opt.toneClassName} ring-2 ring-primary/20`
+                            : "border-border bg-card hover:bg-muted/30"
+                        }`}
+                      >
+                        <opt.icon
+                          className={`size-5 shrink-0 ${nextStatus === opt.value ? "" : "text-muted-foreground"}`}
+                        />
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold">{opt.label}</p>
+                          <p className="text-[11px] leading-snug text-muted-foreground">{opt.description}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
 
               {/* Error */}
               {error ? (

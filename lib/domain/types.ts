@@ -37,17 +37,16 @@ export function nextProjectStatusAfterAppointmentBooked(current: ProjectStatus):
 export const RAPPORT_NEXT_STEPS_AUFGENOMMEN = [
   "offerte_senden",
   "bestellen",
-  "abklaeren",
+  "montagebereit",
   "abholbereit",
-  "subunternehmer",
 ] as const satisfies readonly ProjectStatus[];
 export type RapportNextStepAufgenommen = (typeof RAPPORT_NEXT_STEPS_AUFGENOMMEN)[number];
 
 /** Status-Optionen nach Rapport "Nicht fertig" beim Montage-/Folgebesuch */
 export const RAPPORT_NEXT_STEPS_MONTAGE = [
   "einsatz_offen",   // Weiterer Termin nötig
+  "montagebereit",   // Bereit für nächsten Montageeinsatz
   "abholbereit",     // Werkstatt nötig
-  "subunternehmer",  // Subunternehmer
 ] as const satisfies readonly ProjectStatus[];
 export type RapportNextStepMontage = (typeof RAPPORT_NEXT_STEPS_MONTAGE)[number];
 
