@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import type { Appointment, TechnicianReport, ProjectStatus } from "@/lib/domain/types";
-import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
+import { projectStatusBadgeClassName, projectStatusLabels, projectStatuses } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 import {
   useAddAppointment,
@@ -332,6 +332,42 @@ function StatusPipeline({
           </div>
         )}
       </div>
+      {canEdit ? (
+        <form
+          className="mt-2 flex flex-wrap items-end gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const fd = new FormData(e.currentTarget);
+            const nextStatus = String(fd.get("manualStatus") ?? "") as ProjectStatus;
+            if (!nextStatus || nextStatus === currentStatus) {
+              return;
+            }
+            advance(nextStatus);
+          }}
+        >
+          <div className="min-w-[13rem] flex-1">
+            <Label htmlFor={`manual-status-${projectId}`} className="text-[11px] text-muted-foreground">
+              Status manuell ändern (inkl. rückgängig)
+            </Label>
+            <select
+              id={`manual-status-${projectId}`}
+              name="manualStatus"
+              className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs"
+              defaultValue={currentStatus}
+              disabled={pending}
+            >
+              {projectStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {projectStatusLabels[status]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Button type="submit" size="sm" variant="outline" disabled={pending}>
+            {pending ? <BauflipLoadingButtonLabel variant="onSurface">Ändert …</BauflipLoadingButtonLabel> : "Setzen"}
+          </Button>
+        </form>
+      ) : null}
     </div>
   );
 }
