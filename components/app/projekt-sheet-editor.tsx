@@ -692,11 +692,9 @@ export function ProjektSheetEditor({
                           {a.kind === "besichtigung" ? "Besichtigung" : "Ausführung"}
                           {assignedPerson ? ` · ${assignedPerson.displayName}` : " · Keine Person zugewiesen"}
                         </span>
-                        {appointmentIndex > 0 ? (
-                          <span className="rounded-md bg-primary/10 px-1.5 py-0 text-[10px] font-medium text-primary">
-                            Folgetermin
-                          </span>
-                        ) : null}
+                        <span className="rounded-md bg-primary/10 px-1.5 py-0 text-[10px] font-medium text-primary">
+                          {appointmentIndex + 1}. Termin
+                        </span>
                         {appointmentIndex === 0 && p.status === "montagebereit" ? (
                           <span className="rounded-md bg-emerald-500/10 px-1.5 py-0 text-[10px] font-medium text-emerald-800 dark:text-emerald-200">
                             Montage

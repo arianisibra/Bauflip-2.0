@@ -198,6 +198,9 @@ const RAPPORT_NEXT_STEP_OPTIONS_MONTAGE: NextStepOption[] = [
 /** Kontext-Hilfen unter dem Status-Badge (Farben: projectStatusBadgeClassNames in types). */
 const STATUS_CONFIG: Record<string, { description: string }> = {
   offen: { description: "" },
+  abgemacht: {
+    description: "Unten bei «Einsatz» Rapport ausfüllen oder Abschluss melden.",
+  },
   termin_geplant: {
     description: "Unten bei «Einsatz» Rapport ausfüllen oder Abschluss melden.",
   },

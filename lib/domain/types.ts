@@ -6,6 +6,7 @@ export type ProjectType = (typeof projectTypes)[number];
 /** Vollständiger Auftrags-Lebenszyklus (analog Monday.com Workflow) */
 export const projectStatuses = [
   "offen",
+  "abgemacht",
   "termin_geplant",
   "einsatz_offen",
   "offerte_senden",
@@ -23,12 +24,20 @@ export const projectStatuses = [
 ] as const;
 export type ProjectStatus = (typeof projectStatuses)[number];
 
+export type NextProjectStatusAfterAppointmentContext = {
+  /** Genau ein Termin für diesen Auftrag nach dem Speichern (erster Eintrag). */
+  isFirstAppointmentForProject: boolean;
+};
+
 /**
  * Nach neu gebuchtem Termin: welcher Projektstatus gesetzt werden soll.
- * `null` = Status nicht anfassen (kein pauschales „Termin geplant“).
+ * `null` = Status nicht anfassen.
  */
-export function nextProjectStatusAfterAppointmentBooked(current: ProjectStatus): ProjectStatus | null {
-  if (current === "offen") return "termin_geplant";
+export function nextProjectStatusAfterAppointmentBooked(
+  current: ProjectStatus,
+  ctx: NextProjectStatusAfterAppointmentContext,
+): ProjectStatus | null {
+  if (current === "offen" && ctx.isFirstAppointmentForProject) return "abgemacht";
   if (current === "einsatz_offen") return "montagebereit";
   return null;
 }
@@ -219,6 +228,7 @@ export type SidebarItem = {
 
 export const projectStatusLabels: Record<ProjectStatus, string> = {
   offen: "OFFEN",
+  abgemacht: "ABGEMACHT",
   termin_geplant: "TERMIN GEPLANT",
   einsatz_offen: "EINSATZ / RAPPORT",
   offerte_senden: "OFFERTE SENDEN",
@@ -238,6 +248,8 @@ export const projectStatusLabels: Record<ProjectStatus, string> = {
 /** Tailwind-Klassen pro Status — jeder Schritt eigene Farbe (Liste, Sheet, Monteur). */
 export const projectStatusBadgeClassNames: Record<ProjectStatus, string> = {
   offen: "border-transparent bg-zinc-500/15 text-zinc-900 dark:bg-zinc-500/25 dark:text-zinc-100",
+  abgemacht:
+    "border-transparent bg-cyan-500/15 text-cyan-950 dark:bg-cyan-500/20 dark:text-cyan-100",
   termin_geplant:
     "border-transparent bg-sky-500/15 text-sky-950 dark:bg-sky-500/20 dark:text-sky-100",
   einsatz_offen:

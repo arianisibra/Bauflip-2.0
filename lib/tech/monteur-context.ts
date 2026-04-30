@@ -6,6 +6,7 @@ export function isMonteurMontageContext(status: ProjectStatus, priorReportCount:
     status === "montagebereit" ||
     status === "werkstatt" ||
     status === "bestellt" ||
-    (status === "termin_geplant" && priorReportCount > 0)
+    (status === "termin_geplant" && priorReportCount > 0) ||
+    (status === "abgemacht" && priorReportCount > 0)
   );
 }

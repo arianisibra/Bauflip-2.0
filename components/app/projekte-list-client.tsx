@@ -6,8 +6,9 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import type { OfficeProjectListItem, UserProfile } from "@/lib/domain/types";
-import { projectStatusLabels } from "@/lib/domain/types";
+import type { OfficeProjectListItem, ProjectStatus, UserProfile } from "@/lib/domain/types";
+import { projectStatusLabels, projectStatuses } from "@/lib/domain/types";
+import { cn } from "@/lib/utils";
 import { useDeleteProject, useProjectsList } from "@/lib/query/hooks";
 import { queryKeys } from "@/lib/query/keys";
 import { ListPageToolbar } from "@/components/app/list-page-toolbar";
@@ -46,6 +47,14 @@ const IntakeForm = dynamic(() => import("@/components/app/intake-form").then((m)
 function normalize(s: string) {
   return s.toLowerCase().trim();
 }
+
+/** Reihenfolge wie im Workflow (`projectStatuses`); unbekannte Werte ans Ende. */
+function statusWorkflowIndex(status: ProjectStatus): number {
+  const i = projectStatuses.indexOf(status);
+  return i === -1 ? projectStatuses.length + 1 : i;
+}
+
+type ProjectsListSort = "default" | "status_asc" | "status_desc";
 
 /** Above this row count, tbody uses windowing to limit DOM nodes. */
 const PROJECT_TABLE_VIRTUAL_THRESHOLD = 55;
@@ -128,6 +137,7 @@ export function ProjekteListClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const deleteProject = useDeleteProject();
+  const [listSort, setListSort] = useState<ProjectsListSort>("default");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<OfficeProjectListItem | null>(null);
@@ -169,12 +179,29 @@ export function ProjekteListClient({
       );
     });
   }, [projects, q]);
+
+  const sorted = useMemo(() => {
+    if (listSort === "default") {
+      return filtered;
+    }
+    const copy = [...filtered];
+    copy.sort((a, b) => {
+      const ai = statusWorkflowIndex(a.status);
+      const bi = statusWorkflowIndex(b.status);
+      if (ai !== bi) {
+        return listSort === "status_asc" ? ai - bi : bi - ai;
+      }
+      return a.title.localeCompare(b.title, "de", { sensitivity: "base" });
+    });
+    return copy;
+  }, [filtered, listSort]);
+
   const hasSearch = q.trim().length > 0;
-  const showEmptyState = filtered.length === 0;
-  const useVirtualTable = filtered.length > PROJECT_TABLE_VIRTUAL_THRESHOLD;
+  const showEmptyState = sorted.length === 0;
+  const useVirtualTable = sorted.length > PROJECT_TABLE_VIRTUAL_THRESHOLD;
   const scrollParentRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
-    count: useVirtualTable ? filtered.length : 0,
+    count: useVirtualTable ? sorted.length : 0,
     getScrollElement: () => scrollParentRef.current,
     estimateSize: () => PROJECT_TABLE_ROW_ESTIMATE_PX,
     overscan: 12,
@@ -232,6 +259,54 @@ export function ProjekteListClient({
         </div>
       </div>
 
+      <div className="flex flex-col gap-2 rounded-xl border border-border/70 bg-muted/30 px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+        <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Sortierung
+        </span>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setListSort("default")}
+            className={cn(
+              "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+              listSort === "default"
+                ? "border-zinc-400 bg-zinc-500/15 text-zinc-900 dark:border-zinc-500 dark:bg-zinc-500/25 dark:text-zinc-100"
+                : "border-border bg-background text-muted-foreground hover:bg-muted",
+            )}
+          >
+            Standard
+          </button>
+          <button
+            type="button"
+            onClick={() => setListSort("status_asc")}
+            className={cn(
+              "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+              listSort === "status_asc"
+                ? "border-sky-500/50 bg-sky-500/20 text-sky-950 dark:border-sky-400/40 dark:bg-sky-500/25 dark:text-sky-50"
+                : "border-sky-500/25 bg-sky-500/5 text-sky-900/80 hover:bg-sky-500/10 dark:border-sky-500/30 dark:text-sky-100/90",
+            )}
+          >
+            Status A→Z
+          </button>
+          <button
+            type="button"
+            onClick={() => setListSort("status_desc")}
+            className={cn(
+              "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+              listSort === "status_desc"
+                ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-950 dark:border-emerald-400/40 dark:bg-emerald-500/25 dark:text-emerald-50"
+                : "border-emerald-500/25 bg-emerald-500/5 text-emerald-900/80 hover:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-100/90",
+            )}
+          >
+            Status Z→A
+          </button>
+        </div>
+        <p className="text-[11px] text-muted-foreground sm:ml-auto sm:max-w-[min(100%,20rem)]">
+          Reihenfolge entspricht dem Workflow (von „{projectStatusLabels[projectStatuses[0]]}“ bis „
+          {projectStatusLabels[projectStatuses[projectStatuses.length - 1]]}“).
+        </p>
+      </div>
+
       <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm">
         {showEmptyState ? (
           <div className="flex flex-col items-start gap-3 px-5 py-8 sm:px-8">
@@ -257,7 +332,7 @@ export function ProjekteListClient({
         ) : (
           <>
             <div className="flex flex-col divide-y sm:hidden">
-              {filtered.map((p) => (
+              {sorted.map((p) => (
                 <div key={p.id} className="space-y-3 px-4 py-4 first:pt-5 last:pb-5">
                   <button
                     type="button"
@@ -312,7 +387,7 @@ export function ProjekteListClient({
                         </tr>
                       ) : null}
                       {virtualItems.map((vi) => {
-                        const p = filtered[vi.index];
+                        const p = sorted[vi.index];
                         return (
                           <ProjectTableRow
                             key={p.id}
@@ -345,7 +420,7 @@ export function ProjekteListClient({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filtered.map((p) => (
+                    {sorted.map((p) => (
                       <ProjectTableRow
                         key={p.id}
                         p={p}

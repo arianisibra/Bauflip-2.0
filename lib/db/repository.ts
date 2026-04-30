@@ -750,11 +750,15 @@ export async function deleteProject(projectId: string): Promise<void> {
 export async function addAppointment(input: Omit<Appointment, "id" | "createdAt">): Promise<Appointment> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
+    const isFirstAppointmentForProject =
+      mockAppointments.filter((x) => x.projectId === input.projectId).length === 0;
     const a: Appointment = { ...input, id: id("a"), createdAt: new Date().toISOString() };
     mockAppointments.push(a);
     const mockP = mockProjects.find((p) => p.id === input.projectId);
     if (mockP) {
-      const next = nextProjectStatusAfterAppointmentBooked(mockP.status);
+      const next = nextProjectStatusAfterAppointmentBooked(mockP.status, {
+        isFirstAppointmentForProject,
+      });
       if (next !== null && next !== mockP.status) {
         mockP.status = next;
         mockP.updatedAt = new Date().toISOString();
@@ -762,6 +766,14 @@ export async function addAppointment(input: Omit<Appointment, "id" | "createdAt"
     }
     return a;
   }
+
+  const { count: priorCount, error: countError } = await supabase
+    .from("appointments")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", input.projectId);
+  if (countError) throw new Error(countError.message);
+  const isFirstAppointmentForProject = (priorCount ?? 0) === 0;
+
   const { data, error } = await supabase
     .from("appointments")
     .insert({
@@ -778,7 +790,9 @@ export async function addAppointment(input: Omit<Appointment, "id" | "createdAt"
 
   const { data: statusRow } = await supabase.from("projects").select("status").eq("id", input.projectId).maybeSingle();
   const currentStatus = (statusRow?.status as ProjectStatus | undefined) ?? "offen";
-  const nextStatus = nextProjectStatusAfterAppointmentBooked(currentStatus);
+  const nextStatus = nextProjectStatusAfterAppointmentBooked(currentStatus, {
+    isFirstAppointmentForProject,
+  });
   if (nextStatus !== null && nextStatus !== currentStatus) {
     await updateProject(input.projectId, { status: nextStatus });
   }
