@@ -24,7 +24,6 @@ const MONTH_NAMES = [
 const TZ = "Europe/Zurich";
 
 type CalendarViewMode = "year" | "month" | "week" | "day";
-type CalendarScope = "upcoming" | "all";
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", timeZone: TZ });
@@ -98,6 +97,82 @@ function bucketGroupsByIsoWeek(groups: WeekTaskProjectDayGroup[]): { weekKey: st
   }));
 }
 
+function AppointmentCard({
+  group,
+  dimmed,
+}: {
+  group: WeekTaskProjectDayGroup;
+  dimmed: boolean;
+}) {
+  const task = group.primary;
+  return (
+    <Link
+      href={`/projekte?sheet=${task.projectId}`}
+      className={`flex min-h-0 items-stretch gap-2 rounded-lg border bg-card px-2 py-1.5 text-left shadow-sm outline-none ring-offset-background transition-colors hover:border-border hover:bg-muted/25 focus-visible:ring-2 focus-visible:ring-ring ${
+        dimmed ? "border-border/40 opacity-50" : "border-border/90"
+      }`}
+    >
+      <div
+        className="w-1 shrink-0 self-stretch rounded-full"
+        style={{ backgroundColor: task.calendarColor }}
+        aria-hidden
+      />
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <p className="text-[10px] font-semibold uppercase leading-tight tracking-wide text-muted-foreground">
+          {formatDate(task.startsAt)} · {formatTime(task.startsAt)}
+        </p>
+        <p className="line-clamp-2 text-xs font-semibold leading-snug text-foreground">
+          {task.projectTitle}
+        </p>
+        <div className="flex flex-wrap items-center gap-1">
+          {task.technicianName ? (
+            <span
+              className="inline-flex max-w-full truncate rounded border px-1 py-px text-[9px] font-medium leading-tight"
+              style={{
+                borderColor: `${task.calendarColor}55`,
+                backgroundColor: `${task.calendarColor}1f`,
+                color: task.calendarColor,
+              }}
+            >
+              {task.technicianName}
+            </span>
+          ) : null}
+          {group.slots.length > 1 ? (
+            <span className="text-[9px] text-muted-foreground">+{group.slots.length - 1}</span>
+          ) : null}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function WeekSection({
+  weekKey,
+  groups,
+  dimmed,
+}: {
+  weekKey: string;
+  groups: WeekTaskProjectDayGroup[];
+  dimmed: boolean;
+}) {
+  return (
+    <section aria-label={formatIsoWeekHeading(weekKey)} className="space-y-1.5">
+      <h3
+        className={`border-b pb-1 text-[10px] font-semibold uppercase tracking-wide ${
+          dimmed ? "border-border/40 text-muted-foreground/50" : "border-border/70 text-muted-foreground"
+        }`}
+      >
+        {formatIsoWeekHeading(weekKey)}
+      </h3>
+      <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
+        {groups.map((group) => (
+          <AppointmentCard key={group.key} group={group} dimmed={dimmed} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function AdminCalendar({
   initialTasks,
   initialYear,
@@ -112,7 +187,6 @@ export function AdminCalendar({
   const [year, setYear] = useState(initialYear);
   const [month, setMonth] = useState(initialMonth);
   const [anchorDate, setAnchorDate] = useState(() => new Date(initialYear, initialMonth - 1, 15));
-  const [calendarScope, setCalendarScope] = useState<CalendarScope>("upcoming");
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>("all");
   const [sortMode, setSortMode] = useState<"time" | "technician">("technician");
 
@@ -183,26 +257,30 @@ export function AdminCalendar({
   }, [tasks]);
 
   const visibleTasks = useMemo(() => {
-    const byScope =
-      calendarScope === "all"
-        ? tasks
-        : tasks.filter((task) => new Date(task.endsAt).getTime() >= Date.now());
-    if (selectedTechnicianId === "all") return byScope;
-    return byScope.filter((task) => task.assignedTechnicianId === selectedTechnicianId);
-  }, [selectedTechnicianId, tasks, calendarScope]);
+    if (selectedTechnicianId === "all") return tasks;
+    return tasks.filter((task) => task.assignedTechnicianId === selectedTechnicianId);
+  }, [selectedTechnicianId, tasks]);
 
-  const groupedTasks = useMemo(() => {
-    const groups = groupWeekTasksByProjectDay(visibleTasks);
-    return groups.sort((a, b) => {
-      if (sortMode === "technician") {
-        const byName = (a.primary.technicianName ?? "").localeCompare(b.primary.technicianName ?? "", "de-CH");
-        if (byName !== 0) return byName;
-      }
-      return a.primary.startsAt.localeCompare(b.primary.startsAt);
-    });
+  const { upcomingByWeek, pastByWeek } = useMemo(() => {
+    const now = Date.now();
+    const upcoming = visibleTasks.filter((t) => new Date(t.endsAt).getTime() >= now);
+    const past = visibleTasks.filter((t) => new Date(t.endsAt).getTime() < now);
+
+    const sortGroups = (groups: ReturnType<typeof groupWeekTasksByProjectDay>) =>
+      groups.sort((a, b) => {
+        if (sortMode === "technician") {
+          const byName = (a.primary.technicianName ?? "").localeCompare(b.primary.technicianName ?? "", "de-CH");
+          if (byName !== 0) return byName;
+        }
+        return a.primary.startsAt.localeCompare(b.primary.startsAt);
+      });
+
+    const upcomingWeeks = bucketGroupsByIsoWeek(sortGroups(groupWeekTasksByProjectDay(upcoming)));
+    // Past: most recent week first (reverse) so it sits closest to the divider
+    const pastWeeks = bucketGroupsByIsoWeek(sortGroups(groupWeekTasksByProjectDay(past))).reverse();
+
+    return { upcomingByWeek: upcomingWeeks, pastByWeek: pastWeeks };
   }, [sortMode, visibleTasks]);
-
-  const groupedByWeek = useMemo(() => bucketGroupsByIsoWeek(groupedTasks), [groupedTasks]);
 
   const navigateMonth = useCallback(
     (dir: -1 | 1) => {
@@ -310,30 +388,6 @@ export function AdminCalendar({
 
         {/* Steuerleiste */}
         <div className="flex flex-wrap items-center gap-2 bg-muted/30 px-4 py-2.5">
-
-          {/* Vergangene-Toggle */}
-          <button
-            type="button"
-            onClick={() => setCalendarScope((prev) => (prev === "upcoming" ? "all" : "upcoming"))}
-            aria-pressed={calendarScope === "all"}
-            title={calendarScope === "upcoming" ? "Vergangene Termine einblenden" : "Nur bevorstehende Termine"}
-            className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition-colors ${
-              calendarScope === "all"
-                ? "border-primary/40 bg-primary/10 text-primary"
-                : "border-border/70 bg-background text-muted-foreground hover:bg-muted"
-            }`}
-          >
-            <span
-              className={`flex size-4 items-center justify-center rounded text-[11px] font-bold leading-none ${
-                calendarScope === "all" ? "bg-primary text-primary-foreground" : "bg-muted-foreground/20 text-muted-foreground"
-              }`}
-            >
-              {calendarScope === "all" ? "×" : "○"}
-            </span>
-            Vergangene
-          </button>
-
-          <div className="mx-1 h-5 w-px bg-border/60" aria-hidden />
 
           {/* Zeitraum-Selector */}
           <div className="flex h-8 overflow-hidden rounded-lg border border-border/70 bg-background text-xs font-semibold shadow-sm">
@@ -452,63 +506,37 @@ export function AdminCalendar({
       </div>
 
       <div className="space-y-3">
-        {groupedTasks.length === 0 ? (
+        {upcomingByWeek.length === 0 && pastByWeek.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
             <p className="font-medium text-foreground">Keine Termine in diesem Zeitraum.</p>
           </div>
         ) : (
-          groupedByWeek.map(({ weekKey, groups }) => (
-            <section key={weekKey} aria-label={formatIsoWeekHeading(weekKey)} className="space-y-1.5">
-              <h3 className="border-b border-border/70 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                {formatIsoWeekHeading(weekKey)}
-              </h3>
-              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
-                {groups.map((group) => {
-                  const task = group.primary;
-                  return (
-                    <Link
-                      key={group.key}
-                      href={`/projekte?sheet=${task.projectId}`}
-                      className="flex min-h-0 items-stretch gap-2 rounded-lg border border-border/90 bg-card px-2 py-1.5 text-left shadow-sm outline-none ring-offset-background transition-colors hover:border-border hover:bg-muted/25 focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <div
-                        className="w-1 shrink-0 self-stretch rounded-full"
-                        style={{ backgroundColor: task.calendarColor }}
-                        aria-hidden
-                      />
-                      <div className="min-w-0 flex-1 space-y-0.5">
-                        <p className="text-[10px] font-semibold uppercase leading-tight tracking-wide text-muted-foreground">
-                          {formatDate(task.startsAt)} · {formatTime(task.startsAt)}
-                        </p>
-                        <p className="line-clamp-2 text-xs font-semibold leading-snug text-foreground">
-                          {task.projectTitle}
-                        </p>
-                        <div className="flex flex-wrap items-center gap-1">
-                          {task.technicianName ? (
-                            <span
-                              className="inline-flex max-w-full truncate rounded border px-1 py-px text-[9px] font-medium leading-tight"
-                              style={{
-                                borderColor: `${task.calendarColor}55`,
-                                backgroundColor: `${task.calendarColor}1f`,
-                                color: task.calendarColor,
-                              }}
-                            >
-                              {task.technicianName}
-                            </span>
-                          ) : null}
-                          {group.slots.length > 1 ? (
-                            <span className="text-[9px] text-muted-foreground">
-                              +{group.slots.length - 1}
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
-                    </Link>
-                  );
-                })}
+          <>
+            {/* ── Bevorstehende & aktuelle Termine ── */}
+            {upcomingByWeek.length === 0 ? (
+              <p className="px-1 text-xs text-muted-foreground">Keine bevorstehenden Termine.</p>
+            ) : (
+              upcomingByWeek.map(({ weekKey, groups }) => (
+                <WeekSection key={weekKey} weekKey={weekKey} groups={groups} dimmed={false} />
+              ))
+            )}
+
+            {/* ── Trennlinie vergangene Termine ── */}
+            {pastByWeek.length > 0 ? (
+              <div className="flex items-center gap-3 py-1">
+                <div className="h-px flex-1 bg-border/60" />
+                <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/60">
+                  Vergangene Termine
+                </span>
+                <div className="h-px flex-1 bg-border/60" />
               </div>
-            </section>
-          ))
+            ) : null}
+
+            {/* ── Vergangene Termine (gedimmt) ── */}
+            {pastByWeek.map(({ weekKey, groups }) => (
+              <WeekSection key={weekKey} weekKey={weekKey} groups={groups} dimmed={true} />
+            ))}
+          </>
         )}
       </div>
     </div>
