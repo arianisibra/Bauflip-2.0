@@ -40,6 +40,18 @@ export function appointmentEndsInFutureOrNow(endsAtIso: string): boolean {
 }
 
 /**
+ * Nach Termin-Löschung: auf welchen Status zurückfallen.
+ * `null` = Status nicht anfassen.
+ * Nur angewendet wenn kein bevorstehender Termin mehr für das Projekt existiert.
+ */
+export function projectStatusAfterLastAppointmentDeleted(
+  current: ProjectStatus,
+): ProjectStatus | null {
+  if (current === "abgemacht") return "offen";
+  return null;
+}
+
+/**
  * Nach neu gebuchtem Termin: welcher Projektstatus gesetzt werden soll.
  * `null` = Status nicht anfassen.
  */

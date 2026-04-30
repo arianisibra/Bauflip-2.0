@@ -21,6 +21,7 @@ import {
   RAPPORT_NEXT_STEP_BEHOBEN,
   appointmentEndsInFutureOrNow,
   nextProjectStatusAfterAppointmentBooked,
+  projectStatusAfterLastAppointmentDeleted,
 } from "@/lib/domain/types";
 import { parseOrderFormFieldsJson } from "@/lib/order-forms/schema";
 import { getWeekBounds } from "@/lib/date/week-bounds";
@@ -772,9 +773,60 @@ export async function addAppointment(input: Omit<Appointment, "id" | "createdAt"
 
 export async function deleteAppointment(appointmentId: string): Promise<void> {
   const supabase = await createSupabaseServerClient();
-  if (!supabase) return;
+  if (!supabase) {
+    // Mock: remove appointment, then check if project still has upcoming appointments
+    const idx = mockAppointments.findIndex((a) => a.id === appointmentId);
+    if (idx === -1) return;
+    const projectId = mockAppointments[idx].projectId;
+    mockAppointments.splice(idx, 1);
+    const mockP = mockProjects.find((p) => p.id === projectId);
+    if (mockP) {
+      const now = new Date().toISOString();
+      const hasUpcoming = mockAppointments.some((a) => a.projectId === projectId && a.endsAt >= now);
+      if (!hasUpcoming) {
+        const revert = projectStatusAfterLastAppointmentDeleted(mockP.status);
+        if (revert !== null) {
+          mockP.status = revert;
+          mockP.updatedAt = new Date().toISOString();
+        }
+      }
+    }
+    return;
+  }
+
+  // Fetch project_id before deleting so we can check afterwards
+  const { data: apptRow } = await supabase
+    .from("appointments")
+    .select("project_id")
+    .eq("id", appointmentId)
+    .maybeSingle();
+  const projectId = (apptRow as { project_id?: string } | null)?.project_id;
+
   const { error } = await supabase.from("appointments").delete().eq("id", appointmentId);
   if (error) throw new Error(error.message);
+
+  if (!projectId) return;
+
+  // Check if any upcoming appointments remain for this project
+  const now = new Date().toISOString();
+  const { count } = await supabase
+    .from("appointments")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", projectId)
+    .gte("ends_at", now);
+
+  if ((count ?? 0) === 0) {
+    const { data: statusRow } = await supabase
+      .from("projects")
+      .select("status")
+      .eq("id", projectId)
+      .maybeSingle();
+    const currentStatus = (statusRow?.status as ProjectStatus | undefined) ?? "offen";
+    const revert = projectStatusAfterLastAppointmentDeleted(currentStatus);
+    if (revert !== null && revert !== currentStatus) {
+      await updateProject(projectId, { status: revert });
+    }
+  }
 }
 
 export async function addProjectAttachment(
