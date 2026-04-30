@@ -263,7 +263,7 @@ export const projectStatusLabels: Record<ProjectStatus, string> = {
 export const projectStatusBadgeClassNames: Record<ProjectStatus, string> = {
   offen: "border-zinc-500/45 bg-zinc-500/35 text-zinc-950 dark:border-zinc-400/50 dark:bg-zinc-500/40 dark:text-zinc-50",
   abgemacht:
-    "border-cyan-500/55 bg-cyan-500/35 text-cyan-950 dark:border-cyan-400/55 dark:bg-cyan-500/45 dark:text-cyan-50",
+    "border-lime-500/60 bg-lime-500/40 text-lime-950 dark:border-lime-400/60 dark:bg-lime-500/50 dark:text-lime-50",
   termin_geplant:
     "border-sky-500/55 bg-sky-500/35 text-sky-950 dark:border-sky-400/55 dark:bg-sky-500/45 dark:text-sky-50",
   einsatz_offen:
