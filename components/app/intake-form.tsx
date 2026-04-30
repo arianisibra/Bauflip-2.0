@@ -51,7 +51,7 @@ export function IntakeForm({ onCreated }: { onCreated?: (projectId: string) => v
       </div>
       <div className="space-y-1">
         <Label htmlFor="managementEmail">Zuständige Person</Label>
-        <Input id="managementEmail" name="managementEmail" type="email" />
+        <Input id="managementEmail" name="managementEmail" />
       </div>
 
       <div className="space-y-1">

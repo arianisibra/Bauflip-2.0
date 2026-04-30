@@ -291,12 +291,12 @@ export function ProjekteListClient({
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilterValue)}
-            className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs font-medium sm:max-w-sm"
+            className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs font-bold sm:max-w-sm"
             aria-label="Statusfilter für Projekte"
           >
-            <option value="all">Alle ({filtered.length})</option>
+            <option value="all" className="font-bold">Alle ({filtered.length})</option>
             {projectStatuses.map((s) => (
-              <option key={s} value={s}>
+              <option key={s} value={s} className="font-bold">
                 {projectStatusLabels[s]} ({statusCounts.get(s) ?? 0})
               </option>
             ))}

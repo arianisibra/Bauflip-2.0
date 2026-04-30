@@ -23,7 +23,8 @@ const MONTH_NAMES = [
 
 const TZ = "Europe/Zurich";
 
-type CalendarViewMode = "month" | "week" | "day";
+type CalendarViewMode = "year" | "month" | "week" | "day";
+type CalendarScope = "upcoming" | "all";
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", timeZone: TZ });
@@ -77,6 +78,11 @@ function formatIsoWeekHeading(key: string): string {
   return `KW ${Number(w)} · ${ys}`;
 }
 
+function isoWeekInputValueFromDate(d: Date): string {
+  const { y, m, day } = swissYmdFromDate(d);
+  return isoWeekKeyFromYmd(y, m, day);
+}
+
 function bucketGroupsByIsoWeek(groups: WeekTaskProjectDayGroup[]): { weekKey: string; groups: WeekTaskProjectDayGroup[] }[] {
   const map = new Map<string, WeekTaskProjectDayGroup[]>();
   for (const g of groups) {
@@ -106,10 +112,21 @@ export function AdminCalendar({
   const [year, setYear] = useState(initialYear);
   const [month, setMonth] = useState(initialMonth);
   const [anchorDate, setAnchorDate] = useState(() => new Date(initialYear, initialMonth - 1, 15));
+  const [calendarScope, setCalendarScope] = useState<CalendarScope>("upcoming");
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>("all");
-  const [sortMode, setSortMode] = useState<"time" | "technician">("time");
+  const [sortMode, setSortMode] = useState<"time" | "technician">("technician");
 
   const { startIso, endIso, heading, rangeLabel } = useMemo(() => {
+    if (viewMode === "year") {
+      const start = new Date(year, 0, 1, 0, 0, 0, 0);
+      const end = new Date(year, 11, 31, 23, 59, 59, 999);
+      return {
+        startIso: start.toISOString(),
+        endIso: end.toISOString(),
+        heading: `${year}`,
+        rangeLabel: "Jahr",
+      };
+    }
     if (viewMode === "month") {
       const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
       const end = new Date(year, month, 0, 23, 59, 59, 999);
@@ -166,9 +183,13 @@ export function AdminCalendar({
   }, [tasks]);
 
   const visibleTasks = useMemo(() => {
-    if (selectedTechnicianId === "all") return tasks;
-    return tasks.filter((task) => task.assignedTechnicianId === selectedTechnicianId);
-  }, [selectedTechnicianId, tasks]);
+    const byScope =
+      calendarScope === "all"
+        ? tasks
+        : tasks.filter((task) => new Date(task.endsAt).getTime() >= Date.now());
+    if (selectedTechnicianId === "all") return byScope;
+    return byScope.filter((task) => task.assignedTechnicianId === selectedTechnicianId);
+  }, [selectedTechnicianId, tasks, calendarScope]);
 
   const groupedTasks = useMemo(() => {
     const groups = groupWeekTasksByProjectDay(visibleTasks);
@@ -209,18 +230,28 @@ export function AdminCalendar({
     setAnchorDate((d) => shiftCalendarDays(d, dir));
   }, []);
 
+  const navigateYear = useCallback(
+    (dir: -1 | 1) => {
+      const nextYear = year + dir;
+      setYear(nextYear);
+      setAnchorDate(new Date(nextYear, month - 1, 15));
+    },
+    [year, month],
+  );
+
   const onNavigate = useCallback(
     (dir: -1 | 1) => {
-      if (viewMode === "month") navigateMonth(dir);
+      if (viewMode === "year") navigateYear(dir);
+      else if (viewMode === "month") navigateMonth(dir);
       else if (viewMode === "week") navigateWeek(dir);
       else navigateDay(dir);
     },
-    [viewMode, navigateMonth, navigateWeek, navigateDay],
+    [viewMode, navigateYear, navigateMonth, navigateWeek, navigateDay],
   );
 
   const onViewModeChange = useCallback((next: CalendarViewMode) => {
     setViewMode(next);
-    if (next === "month") {
+    if (next === "year" || next === "month") {
       const { y, m } = swissYmdFromDate(anchorDate);
       setYear(y);
       setMonth(m);
@@ -234,59 +265,154 @@ export function AdminCalendar({
     const { y, m, day } = swissYmdFromDate(anchorDate);
     return `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   }, [anchorDate]);
+  const monthPickerValue = useMemo(() => `${year}-${String(month).padStart(2, "0")}`, [year, month]);
+  const weekPickerValue = useMemo(() => isoWeekInputValueFromDate(anchorDate), [anchorDate]);
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-start">
+      {/* ── Kalender-Header ─────────────────────────────────── */}
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+
+        {/* Datum + Navigation */}
+        <div className="flex items-center gap-0 border-b border-border/50">
           <Button
-            variant="outline"
+            variant="ghost"
             size="icon"
+            className="h-14 w-12 shrink-0 rounded-none rounded-tl-2xl border-r border-border/50 text-muted-foreground hover:bg-muted/60"
             onClick={() => onNavigate(-1)}
             disabled={pending}
-            aria-label={
-              viewMode === "month"
-                ? "Vorheriger Monat"
-                : viewMode === "week"
-                  ? "Vorherige Woche"
-                  : "Vorheriger Tag"
-            }
+            aria-label={viewMode === "year" ? "Vorheriges Jahr" : viewMode === "month" ? "Vorheriger Monat" : viewMode === "week" ? "Vorherige Woche" : "Vorheriger Tag"}
           >
-            <ChevronLeft className="size-4" />
+            <ChevronLeft className="size-5" />
           </Button>
-          <div className="flex min-h-9 min-w-0 flex-1 flex-col items-center justify-center gap-1 text-center sm:flex-initial">
-            <h2 className="text-base font-semibold tracking-tight sm:text-lg">{heading}</h2>
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{rangeLabel}</p>
-            {pending ? <BauflipLoadingInline label="Wird geladen …" /> : null}
+
+          <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0 py-3 text-center">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">{rangeLabel}</span>
+            <h2 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">{heading}</h2>
+            {pending ? (
+              <span className="mt-0.5">
+                <BauflipLoadingInline label="Wird geladen …" />
+              </span>
+            ) : null}
           </div>
+
           <Button
-            variant="outline"
+            variant="ghost"
             size="icon"
+            className="h-14 w-12 shrink-0 rounded-none rounded-tr-2xl border-l border-border/50 text-muted-foreground hover:bg-muted/60"
             onClick={() => onNavigate(1)}
             disabled={pending}
-            aria-label={
-              viewMode === "month" ? "Nächster Monat" : viewMode === "week" ? "Nächste Woche" : "Nächster Tag"
-            }
+            aria-label={viewMode === "year" ? "Nächstes Jahr" : viewMode === "month" ? "Nächster Monat" : viewMode === "week" ? "Nächste Woche" : "Nächster Tag"}
           >
-            <ChevronRight className="size-4" />
+            <ChevronRight className="size-5" />
           </Button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Zeitraum:</span>
-          <select
-            className="h-9 min-w-[7rem] rounded-md border border-input bg-background px-2 text-xs font-medium"
-            value={viewMode}
-            onChange={(e) => onViewModeChange(e.target.value as CalendarViewMode)}
+        {/* Steuerleiste */}
+        <div className="flex flex-wrap items-center gap-2 bg-muted/30 px-4 py-2.5">
+
+          {/* Vergangene-Toggle */}
+          <button
+            type="button"
+            onClick={() => setCalendarScope((prev) => (prev === "upcoming" ? "all" : "upcoming"))}
+            aria-pressed={calendarScope === "all"}
+            title={calendarScope === "upcoming" ? "Vergangene Termine einblenden" : "Nur bevorstehende Termine"}
+            className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition-colors ${
+              calendarScope === "all"
+                ? "border-primary/40 bg-primary/10 text-primary"
+                : "border-border/70 bg-background text-muted-foreground hover:bg-muted"
+            }`}
           >
-            <option value="month">Monat</option>
-            <option value="week">Woche</option>
-            <option value="day">Tag</option>
-          </select>
-          {viewMode === "day" ? (
+            <span
+              className={`flex size-4 items-center justify-center rounded text-[11px] font-bold leading-none ${
+                calendarScope === "all" ? "bg-primary text-primary-foreground" : "bg-muted-foreground/20 text-muted-foreground"
+              }`}
+            >
+              {calendarScope === "all" ? "×" : "○"}
+            </span>
+            Vergangene
+          </button>
+
+          <div className="mx-1 h-5 w-px bg-border/60" aria-hidden />
+
+          {/* Zeitraum-Selector */}
+          <div className="flex h-8 overflow-hidden rounded-lg border border-border/70 bg-background text-xs font-semibold shadow-sm">
+            {(["year", "month", "week", "day"] as CalendarViewMode[]).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => onViewModeChange(m)}
+                className={`px-3 transition-colors ${
+                  viewMode === m
+                    ? "bg-foreground text-background"
+                    : "text-muted-foreground hover:bg-muted/60"
+                }`}
+              >
+                {m === "year" ? "Jahr" : m === "month" ? "Monat" : m === "week" ? "Woche" : "Tag"}
+              </button>
+            ))}
+          </div>
+
+          {/* Datums-Picker je nach Modus */}
+          {viewMode === "year" ? (
+            <input
+              type="number"
+              min={2000}
+              max={2100}
+              className="h-8 w-[5.5rem] rounded-lg border border-border/70 bg-background px-2.5 text-xs font-semibold shadow-sm"
+              value={year}
+              onChange={(e) => {
+                const y = Number(e.target.value);
+                if (!Number.isFinite(y)) return;
+                const clamped = Math.min(2100, Math.max(2000, y));
+                setYear(clamped);
+                setAnchorDate(new Date(clamped, month - 1, 15));
+              }}
+            />
+          ) : viewMode === "month" ? (
+            <input
+              type="month"
+              className="h-8 rounded-lg border border-border/70 bg-background px-2.5 text-xs font-semibold shadow-sm"
+              value={monthPickerValue}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (!v) return;
+                const [y, mo] = v.split("-").map(Number);
+                if (!y || !mo) return;
+                setYear(y);
+                setMonth(mo);
+                setAnchorDate(new Date(y, mo - 1, 15));
+              }}
+            />
+          ) : viewMode === "week" ? (
+            <input
+              type="week"
+              className="h-8 rounded-lg border border-border/70 bg-background px-2.5 text-xs font-semibold shadow-sm"
+              value={weekPickerValue}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (!v) return;
+                const m = /^(\d{4})-W(\d{2})$/.exec(v);
+                if (!m) return;
+                const y = Number(m[1]);
+                const w = Number(m[2]);
+                if (!y || !w) return;
+                const jan4 = new Date(Date.UTC(y, 0, 4));
+                const jan4Day = jan4.getUTCDay() || 7;
+                const mondayWeek1 = new Date(jan4);
+                mondayWeek1.setUTCDate(jan4.getUTCDate() - (jan4Day - 1));
+                const targetMonday = new Date(mondayWeek1);
+                targetMonday.setUTCDate(mondayWeek1.getUTCDate() + (w - 1) * 7);
+                setAnchorDate(targetMonday);
+                const sm = swissYmdFromDate(targetMonday);
+                setYear(sm.y);
+                setMonth(sm.m);
+              }}
+            />
+          ) : (
             <input
               type="date"
-              className="h-9 rounded-md border border-input bg-background px-2 text-xs"
+              className="h-8 rounded-lg border border-border/70 bg-background px-2.5 text-xs font-semibold shadow-sm"
               value={dayPickerValue}
               onChange={(e) => {
                 const v = e.target.value;
@@ -296,7 +422,7 @@ export function AdminCalendar({
                 setAnchorDate(new Date(y, mo - 1, d));
               }}
             />
-          ) : null}
+          )}
         </div>
       </div>
 
@@ -320,8 +446,8 @@ export function AdminCalendar({
           value={sortMode}
           onChange={(e) => setSortMode(e.target.value as "time" | "technician")}
         >
+          <option value="technician">Zugehörige Person</option>
           <option value="time">Uhrzeit</option>
-          <option value="technician">Monteur</option>
         </select>
       </div>
 

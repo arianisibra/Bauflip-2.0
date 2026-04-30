@@ -11,7 +11,7 @@ export const intakeSchema = z.object({
   tenantEmail: z.string().email().optional().or(z.literal("")),
   managementName: z.string().optional(),
   managementPhone: z.string().optional(),
-  managementEmail: z.string().email().optional().or(z.literal("")),
+  managementEmail: z.string().optional(),
   costCeilingText: z.string().optional(),
   serviceStreet: z.string().optional(),
   servicePostalCode: z.string().optional(),
