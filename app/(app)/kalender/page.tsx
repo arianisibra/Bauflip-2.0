@@ -29,7 +29,7 @@ export default async function KalenderPage() {
           Kalender
         </h1>
         <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          Monatsübersicht aller Termine.
+          Termine nach Monat, Kalenderwoche oder einzelnem Tag (Europe/Zurich).
         </p>
       </div>
       <AdminCalendar

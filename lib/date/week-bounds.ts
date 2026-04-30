@@ -22,3 +22,19 @@ export function formatWeekRangeDe(start: Date, end: Date): string {
   const fmt = new Intl.DateTimeFormat("de-CH", { day: "numeric", month: "short", year: "numeric" });
   return `${fmt.format(start)} – ${fmt.format(end)}`;
 }
+
+/** Kalendertag Europe/Zurich, der `reference` enthält — [00:00, 23:59:59.999] (gleiche lokale Datumsidee wie getWeekBounds). */
+export function getSwissDayBounds(reference: Date): { start: Date; end: Date } {
+  const ymd = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Zurich",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(reference);
+  const mid = new Date(`${ymd}T12:00:00`);
+  const start = new Date(mid);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(mid);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}

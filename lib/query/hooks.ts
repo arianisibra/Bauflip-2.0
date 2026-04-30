@@ -37,7 +37,7 @@ import {
   updateAttachmentNotesAction,
   uploadProjectReportFileAction,
 } from "@/app/(app)/actions";
-import { fetchMonthTasksAction } from "@/app/(app)/kalender/actions";
+import { fetchCalendarRangeTasksAction, fetchMonthTasksAction } from "@/app/(app)/kalender/actions";
 import { fetchAuftragProjectCoreAction } from "@/app/(tech)/auftrag-data-actions";
 import { fetchWeekTasksAction } from "@/app/(tech)/wochenplan/actions";
 import {
@@ -119,6 +119,19 @@ export function useMonthTasks(year: number, month: number) {
   return useQuery<WeekTaskItem[]>({
     queryKey: queryKeys.monthTasks.byYearMonth(year, month),
     queryFn: () => fetchMonthTasksAction(year, month),
+  });
+}
+
+/** Büro-Kalender: Termine im Zeitraum [rangeStartIso, rangeEndIso] (starts_at). */
+export function useCalendarRangeTasks(rangeStartIso: string | null, rangeEndIso: string | null) {
+  const enabled = Boolean(rangeStartIso && rangeEndIso);
+  return useQuery<WeekTaskItem[]>({
+    queryKey:
+      enabled && rangeStartIso && rangeEndIso
+        ? queryKeys.calendarRange.byStartEnd(rangeStartIso, rangeEndIso)
+        : ["admin-calendar-range", "__disabled"],
+    queryFn: () => fetchCalendarRangeTasksAction(rangeStartIso!, rangeEndIso!),
+    enabled,
   });
 }
 

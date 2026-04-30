@@ -27,7 +27,17 @@ export type ProjectStatus = (typeof projectStatuses)[number];
 export type NextProjectStatusAfterAppointmentContext = {
   /** Genau ein Termin für diesen Auftrag nach dem Speichern (erster Eintrag). */
   isFirstAppointmentForProject: boolean;
+  /**
+   * Termin ist noch nicht beendet (`endsAt >= jetzt`) — laufend oder zukünftig.
+   * Nur dann wird auf „abgemacht“ / Montage-Sprung automatisiert.
+   */
+  appointmentIsUpcoming: boolean;
 };
+
+/** Termin-Slot noch nicht vorbei (heute/laufend oder später). */
+export function appointmentEndsInFutureOrNow(endsAtIso: string): boolean {
+  return new Date(endsAtIso).getTime() >= Date.now();
+}
 
 /**
  * Nach neu gebuchtem Termin: welcher Projektstatus gesetzt werden soll.
@@ -37,7 +47,11 @@ export function nextProjectStatusAfterAppointmentBooked(
   current: ProjectStatus,
   ctx: NextProjectStatusAfterAppointmentContext,
 ): ProjectStatus | null {
+  if (!ctx.appointmentIsUpcoming) {
+    return null;
+  }
   if (current === "offen" && ctx.isFirstAppointmentForProject) return "abgemacht";
+  if (current === "termin_geplant") return "abgemacht";
   if (current === "einsatz_offen") return "montagebereit";
   return null;
 }

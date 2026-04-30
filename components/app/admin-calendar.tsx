@@ -9,10 +9,11 @@ import {
   swissDayKeyFromTaskStart,
   type WeekTaskProjectDayGroup,
 } from "@/lib/tech/group-week-tasks-by-project-day";
+import { formatWeekRangeDe, getSwissDayBounds, getWeekBounds } from "@/lib/date/week-bounds";
 import { Button } from "@/components/ui/button";
 import { BauflipLoadingInline } from "@/components/ui/bauflip-loading";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useMonthTasks } from "@/lib/query/hooks";
+import { useCalendarRangeTasks } from "@/lib/query/hooks";
 import { queryKeys } from "@/lib/query/keys";
 
 const MONTH_NAMES = [
@@ -21,6 +22,8 @@ const MONTH_NAMES = [
 ];
 
 const TZ = "Europe/Zurich";
+
+type CalendarViewMode = "month" | "week" | "day";
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", timeZone: TZ });
@@ -33,6 +36,23 @@ function formatDate(iso: string): string {
     month: "2-digit",
     timeZone: TZ,
   });
+}
+
+function swissYmdFromDate(d: Date): { y: number; m: number; day: number } {
+  const s = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Zurich",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+  const [y, m, day] = s.split("-").map(Number);
+  return { y, m, day };
+}
+
+function shiftCalendarDays(d: Date, deltaDays: number): Date {
+  const n = new Date(d);
+  n.setDate(n.getDate() + deltaDays);
+  return n;
 }
 
 /** ISO-Woche (Jahr laut ISO) aus Kalendertag Y-M-D (Schweizer Tag des Termins). */
@@ -82,29 +102,57 @@ export function AdminCalendar({
   initialMonth: number;
 }) {
   const qc = useQueryClient();
+  const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
   const [year, setYear] = useState(initialYear);
   const [month, setMonth] = useState(initialMonth);
+  const [anchorDate, setAnchorDate] = useState(() => new Date(initialYear, initialMonth - 1, 15));
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>("all");
   const [sortMode, setSortMode] = useState<"time" | "technician">("time");
-  /** Nur Desktop (md+): vergangene Termine standardmäßig ausblenden; mobil immer alle. */
-  const [isMdUp, setIsMdUp] = useState(false);
-  const [showPastAppointments, setShowPastAppointments] = useState(false);
+
+  const { startIso, endIso, heading, rangeLabel } = useMemo(() => {
+    if (viewMode === "month") {
+      const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
+      const end = new Date(year, month, 0, 23, 59, 59, 999);
+      return {
+        startIso: start.toISOString(),
+        endIso: end.toISOString(),
+        heading: `${MONTH_NAMES[month - 1]} ${year}`,
+        rangeLabel: "Monat",
+      };
+    }
+    if (viewMode === "week") {
+      const { start, end } = getWeekBounds(anchorDate);
+      return {
+        startIso: start.toISOString(),
+        endIso: end.toISOString(),
+        heading: formatWeekRangeDe(start, end),
+        rangeLabel: "Kalenderwoche",
+      };
+    }
+    const { start, end } = getSwissDayBounds(anchorDate);
+    const headingLong = new Intl.DateTimeFormat("de-CH", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: TZ,
+    }).format(anchorDate);
+    return {
+      startIso: start.toISOString(),
+      endIso: end.toISOString(),
+      heading: headingLong,
+      rangeLabel: "Tag",
+    };
+  }, [viewMode, year, month, anchorDate]);
 
   useEffect(() => {
-    const mq = globalThis.matchMedia("(min-width: 768px)");
-    const sync = () => setIsMdUp(mq.matches);
-    sync();
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, []);
-
-  // Seed initial month cache from SSR once — subsequent nav fetches via the hook.
-  useMemo(() => {
+    const start = new Date(initialYear, initialMonth - 1, 1, 0, 0, 0, 0);
+    const end = new Date(initialYear, initialMonth, 0, 23, 59, 59, 999);
+    qc.setQueryData(queryKeys.calendarRange.byStartEnd(start.toISOString(), end.toISOString()), initialTasks);
     qc.setQueryData(queryKeys.monthTasks.byYearMonth(initialYear, initialMonth), initialTasks);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [qc, initialYear, initialMonth, initialTasks]);
 
-  const { data: tasks = [], isFetching: pending } = useMonthTasks(year, month);
+  const { data: tasks = [], isFetching: pending } = useCalendarRangeTasks(startIso, endIso);
 
   const technicianOptions = useMemo(() => {
     const map = new Map<string, { id: string; name: string }>();
@@ -122,16 +170,8 @@ export function AdminCalendar({
     return tasks.filter((task) => task.assignedTechnicianId === selectedTechnicianId);
   }, [selectedTechnicianId, tasks]);
 
-  const hidePastByDefault = isMdUp && !showPastAppointments;
-
-  const timeFilteredTasks = useMemo(() => {
-    if (!hidePastByDefault) return visibleTasks;
-    const now = Date.now();
-    return visibleTasks.filter((t) => new Date(t.endsAt).getTime() >= now);
-  }, [visibleTasks, hidePastByDefault]);
-
   const groupedTasks = useMemo(() => {
-    const groups = groupWeekTasksByProjectDay(timeFilteredTasks);
+    const groups = groupWeekTasksByProjectDay(visibleTasks);
     return groups.sort((a, b) => {
       if (sortMode === "technician") {
         const byName = (a.primary.technicianName ?? "").localeCompare(b.primary.technicianName ?? "", "de-CH");
@@ -139,14 +179,11 @@ export function AdminCalendar({
       }
       return a.primary.startsAt.localeCompare(b.primary.startsAt);
     });
-  }, [sortMode, timeFilteredTasks]);
-
-  const hasOnlyHiddenPast =
-    hidePastByDefault && visibleTasks.length > 0 && timeFilteredTasks.length === 0;
+  }, [sortMode, visibleTasks]);
 
   const groupedByWeek = useMemo(() => bucketGroupsByIsoWeek(groupedTasks), [groupedTasks]);
 
-  const navigate = useCallback(
+  const navigateMonth = useCallback(
     (dir: -1 | 1) => {
       let newMonth = month + dir;
       let newYear = year;
@@ -159,37 +196,108 @@ export function AdminCalendar({
       }
       setYear(newYear);
       setMonth(newMonth);
+      setAnchorDate(new Date(newYear, newMonth - 1, 15));
     },
     [year, month],
   );
 
+  const navigateWeek = useCallback((dir: -1 | 1) => {
+    setAnchorDate((d) => shiftCalendarDays(d, dir * 7));
+  }, []);
+
+  const navigateDay = useCallback((dir: -1 | 1) => {
+    setAnchorDate((d) => shiftCalendarDays(d, dir));
+  }, []);
+
+  const onNavigate = useCallback(
+    (dir: -1 | 1) => {
+      if (viewMode === "month") navigateMonth(dir);
+      else if (viewMode === "week") navigateWeek(dir);
+      else navigateDay(dir);
+    },
+    [viewMode, navigateMonth, navigateWeek, navigateDay],
+  );
+
+  const onViewModeChange = useCallback((next: CalendarViewMode) => {
+    setViewMode(next);
+    if (next === "month") {
+      const { y, m } = swissYmdFromDate(anchorDate);
+      setYear(y);
+      setMonth(m);
+    }
+    if (next === "week" || next === "day") {
+      setAnchorDate(new Date(year, month - 1, 15));
+    }
+  }, [anchorDate, year, month]);
+
+  const dayPickerValue = useMemo(() => {
+    const { y, m, day } = swissYmdFromDate(anchorDate);
+    return `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }, [anchorDate]);
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => navigate(-1)}
-          disabled={pending}
-          aria-label="Vorheriger Monat"
-        >
-          <ChevronLeft className="size-4" />
-        </Button>
-        <div className="flex min-h-9 flex-col items-center justify-center gap-1 text-center">
-          <h2 className="text-lg font-semibold tracking-tight">
-            {MONTH_NAMES[month - 1]} {year}
-          </h2>
-          {pending ? <BauflipLoadingInline label="Wird geladen …" /> : null}
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-start">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => onNavigate(-1)}
+            disabled={pending}
+            aria-label={
+              viewMode === "month"
+                ? "Vorheriger Monat"
+                : viewMode === "week"
+                  ? "Vorherige Woche"
+                  : "Vorheriger Tag"
+            }
+          >
+            <ChevronLeft className="size-4" />
+          </Button>
+          <div className="flex min-h-9 min-w-0 flex-1 flex-col items-center justify-center gap-1 text-center sm:flex-initial">
+            <h2 className="text-base font-semibold tracking-tight sm:text-lg">{heading}</h2>
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{rangeLabel}</p>
+            {pending ? <BauflipLoadingInline label="Wird geladen …" /> : null}
+          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => onNavigate(1)}
+            disabled={pending}
+            aria-label={
+              viewMode === "month" ? "Nächster Monat" : viewMode === "week" ? "Nächste Woche" : "Nächster Tag"
+            }
+          >
+            <ChevronRight className="size-4" />
+          </Button>
         </div>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => navigate(1)}
-          disabled={pending}
-          aria-label="Nächster Monat"
-        >
-          <ChevronRight className="size-4" />
-        </Button>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Zeitraum:</span>
+          <select
+            className="h-9 min-w-[7rem] rounded-md border border-input bg-background px-2 text-xs font-medium"
+            value={viewMode}
+            onChange={(e) => onViewModeChange(e.target.value as CalendarViewMode)}
+          >
+            <option value="month">Monat</option>
+            <option value="week">Woche</option>
+            <option value="day">Tag</option>
+          </select>
+          {viewMode === "day" ? (
+            <input
+              type="date"
+              className="h-9 rounded-md border border-input bg-background px-2 text-xs"
+              value={dayPickerValue}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (!v) return;
+                const [y, mo, d] = v.split("-").map(Number);
+                if (!y || !mo || !d) return;
+                setAnchorDate(new Date(y, mo - 1, d));
+              }}
+            />
+          ) : null}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -215,35 +323,12 @@ export function AdminCalendar({
           <option value="time">Uhrzeit</option>
           <option value="technician">Monteur</option>
         </select>
-        <label
-          htmlFor="admin-kalender-vergangene"
-          className="hidden cursor-pointer items-center gap-2 rounded-md border border-border/80 bg-muted/40 px-2.5 py-1 md:inline-flex"
-        >
-          <input
-            id="admin-kalender-vergangene"
-            type="checkbox"
-            checked={showPastAppointments}
-            onChange={(e) => setShowPastAppointments(e.target.checked)}
-            className="size-3.5 shrink-0 rounded border-input accent-primary"
-          />
-          <span className="text-xs font-medium leading-none text-foreground">Vergangene Termine</span>
-        </label>
       </div>
 
       <div className="space-y-3">
         {groupedTasks.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">
-              {hasOnlyHiddenPast
-                ? "Keine anstehenden Termine in diesem Monat."
-                : "Keine Termine in diesem Monat."}
-            </p>
-            {hasOnlyHiddenPast ? (
-              <p className="mt-2 hidden text-xs md:block">
-                Vergangene Termine sind ausgeblendet. Aktivieren Sie oben „Vergangene Termine“, um sie
-                anzuzeigen.
-              </p>
-            ) : null}
+            <p className="font-medium text-foreground">Keine Termine in diesem Zeitraum.</p>
           </div>
         ) : (
           groupedByWeek.map(({ weekKey, groups }) => (

@@ -22,6 +22,12 @@ export const queryKeys = {
     all: () => ["month-tasks"] as const,
     byYearMonth: (year: number, month: number) => ["month-tasks", year, month] as const,
   },
+  /** Büro-Kalender: beliebiger Zeitraum (Monat / KW / Tag) über starts_at-Bounds. */
+  calendarRange: {
+    all: () => ["admin-calendar-range"] as const,
+    byStartEnd: (rangeStartIso: string, rangeEndIso: string) =>
+      ["admin-calendar-range", rangeStartIso, rangeEndIso] as const,
+  },
   assignableProfiles: () => ["assignable-profiles"] as const,
   orderFormTemplates: {
     all: () => ["order-form-templates"] as const,

@@ -7,7 +7,11 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import type { OfficeProjectListItem, ProjectStatus, UserProfile } from "@/lib/domain/types";
-import { projectStatusLabels, projectStatuses } from "@/lib/domain/types";
+import {
+  projectStatusBadgeClassNames,
+  projectStatusLabels,
+  projectStatuses,
+} from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 import { useDeleteProject, useProjectsList } from "@/lib/query/hooks";
 import { queryKeys } from "@/lib/query/keys";
@@ -55,6 +59,8 @@ function statusWorkflowIndex(status: ProjectStatus): number {
 }
 
 type ProjectsListSort = "default" | "status_asc" | "status_desc";
+
+type StatusFilterValue = ProjectStatus | "all";
 
 /** Above this row count, tbody uses windowing to limit DOM nodes. */
 const PROJECT_TABLE_VIRTUAL_THRESHOLD = 55;
@@ -137,6 +143,7 @@ export function ProjekteListClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const deleteProject = useDeleteProject();
+  const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("all");
   const [listSort, setListSort] = useState<ProjectsListSort>("default");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -180,11 +187,27 @@ export function ProjekteListClient({
     });
   }, [projects, q]);
 
+  const statusCounts = useMemo(() => {
+    const m = new Map<ProjectStatus, number>();
+    for (const s of projectStatuses) {
+      m.set(s, 0);
+    }
+    for (const p of filtered) {
+      m.set(p.status, (m.get(p.status) ?? 0) + 1);
+    }
+    return m;
+  }, [filtered]);
+
+  const statusFiltered = useMemo(() => {
+    if (statusFilter === "all") return filtered;
+    return filtered.filter((p) => p.status === statusFilter);
+  }, [filtered, statusFilter]);
+
   const sorted = useMemo(() => {
     if (listSort === "default") {
-      return filtered;
+      return statusFiltered;
     }
-    const copy = [...filtered];
+    const copy = [...statusFiltered];
     copy.sort((a, b) => {
       const ai = statusWorkflowIndex(a.status);
       const bi = statusWorkflowIndex(b.status);
@@ -194,9 +217,11 @@ export function ProjekteListClient({
       return a.title.localeCompare(b.title, "de", { sensitivity: "base" });
     });
     return copy;
-  }, [filtered, listSort]);
+  }, [statusFiltered, listSort]);
 
   const hasSearch = q.trim().length > 0;
+  const hasNoMatchesForStatus =
+    statusFilter !== "all" && filtered.length > 0 && statusFiltered.length === 0;
   const showEmptyState = sorted.length === 0;
   const useVirtualTable = sorted.length > PROJECT_TABLE_VIRTUAL_THRESHOLD;
   const scrollParentRef = useRef<HTMLDivElement>(null);
@@ -259,74 +284,127 @@ export function ProjekteListClient({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 rounded-xl border border-border/70 bg-muted/30 px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-        <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Sortierung
-        </span>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setListSort("default")}
-            className={cn(
-              "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
-              listSort === "default"
-                ? "border-zinc-400 bg-zinc-500/15 text-zinc-900 dark:border-zinc-500 dark:bg-zinc-500/25 dark:text-zinc-100"
-                : "border-border bg-background text-muted-foreground hover:bg-muted",
-            )}
-          >
-            Standard
-          </button>
-          <button
-            type="button"
-            onClick={() => setListSort("status_asc")}
-            className={cn(
-              "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
-              listSort === "status_asc"
-                ? "border-sky-500/50 bg-sky-500/20 text-sky-950 dark:border-sky-400/40 dark:bg-sky-500/25 dark:text-sky-50"
-                : "border-sky-500/25 bg-sky-500/5 text-sky-900/80 hover:bg-sky-500/10 dark:border-sky-500/30 dark:text-sky-100/90",
-            )}
-          >
-            Status A→Z
-          </button>
-          <button
-            type="button"
-            onClick={() => setListSort("status_desc")}
-            className={cn(
-              "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
-              listSort === "status_desc"
-                ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-950 dark:border-emerald-400/40 dark:bg-emerald-500/25 dark:text-emerald-50"
-                : "border-emerald-500/25 bg-emerald-500/5 text-emerald-900/80 hover:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-100/90",
-            )}
-          >
-            Status Z→A
-          </button>
+      <div className="space-y-3 rounded-xl border border-border/70 bg-muted/30 px-3 py-2.5">
+        <div className="space-y-2">
+          <span className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Nach Status anzeigen
+          </span>
+          <div className="flex max-h-[min(40vh,14rem)] flex-wrap gap-1.5 overflow-y-auto pr-0.5 sm:max-h-none sm:overflow-visible">
+            <button
+              type="button"
+              onClick={() => setStatusFilter("all")}
+              className={cn(
+                "rounded-lg border px-2.5 py-1 text-[10px] font-semibold uppercase leading-tight tracking-wide transition-colors sm:text-[11px]",
+                statusFilter === "all"
+                  ? "border-zinc-500 bg-zinc-500/20 text-zinc-950 ring-2 ring-ring ring-offset-2 ring-offset-background dark:border-zinc-400 dark:bg-zinc-500/30 dark:text-zinc-50"
+                  : "border-border bg-background text-muted-foreground hover:bg-muted",
+              )}
+            >
+              Alle ({filtered.length})
+            </button>
+            {projectStatuses.map((s) => {
+              const count = statusCounts.get(s) ?? 0;
+              const active = statusFilter === s;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setStatusFilter(s)}
+                  title={projectStatusLabels[s]}
+                  className={cn(
+                    "max-w-full truncate rounded-lg border px-2.5 py-1 text-[10px] font-semibold uppercase leading-tight tracking-wide transition-[opacity,box-shadow] sm:text-[11px]",
+                    projectStatusBadgeClassNames[s],
+                    active ? "ring-2 ring-ring ring-offset-2 ring-offset-background" : "opacity-85 hover:opacity-100",
+                    count === 0 && !active ? "opacity-45 hover:opacity-70" : null,
+                  )}
+                >
+                  {projectStatusLabels[s]} ({count})
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Es werden nur Projekte mit dem gewählten Status gelistet (zusätzlich zur Suche). „Alle“ hebt den Filter auf.
+          </p>
         </div>
-        <p className="text-[11px] text-muted-foreground sm:ml-auto sm:max-w-[min(100%,20rem)]">
-          Reihenfolge entspricht dem Workflow (von „{projectStatusLabels[projectStatuses[0]]}“ bis „
-          {projectStatusLabels[projectStatuses[projectStatuses.length - 1]]}“).
-        </p>
+        <div className="flex flex-col gap-2 border-t border-border/60 pt-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+          <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Sortierung
+          </span>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setListSort("default")}
+              className={cn(
+                "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                listSort === "default"
+                  ? "border-zinc-400 bg-zinc-500/15 text-zinc-900 dark:border-zinc-500 dark:bg-zinc-500/25 dark:text-zinc-100"
+                  : "border-border bg-background text-muted-foreground hover:bg-muted",
+              )}
+            >
+              Standard
+            </button>
+            <button
+              type="button"
+              onClick={() => setListSort("status_asc")}
+              className={cn(
+                "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                listSort === "status_asc"
+                  ? "border-sky-500/50 bg-sky-500/20 text-sky-950 dark:border-sky-400/40 dark:bg-sky-500/25 dark:text-sky-50"
+                  : "border-sky-500/25 bg-sky-500/5 text-sky-900/80 hover:bg-sky-500/10 dark:border-sky-500/30 dark:text-sky-100/90",
+              )}
+            >
+              Status A→Z
+            </button>
+            <button
+              type="button"
+              onClick={() => setListSort("status_desc")}
+              className={cn(
+                "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                listSort === "status_desc"
+                  ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-950 dark:border-emerald-400/40 dark:bg-emerald-500/25 dark:text-emerald-50"
+                  : "border-emerald-500/25 bg-emerald-500/5 text-emerald-900/80 hover:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-100/90",
+              )}
+            >
+              Status Z→A
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm">
         {showEmptyState ? (
           <div className="flex flex-col items-start gap-3 px-5 py-8 sm:px-8">
             <h2 className="text-base font-semibold">
-              {hasSearch ? "Keine passenden Projekte gefunden" : "Noch keine Projekte vorhanden"}
+              {hasNoMatchesForStatus
+                ? `Keine Projekte mit Status „${projectStatusLabels[statusFilter]}“`
+                : hasSearch
+                  ? "Keine passenden Projekte gefunden"
+                  : "Noch keine Projekte vorhanden"}
             </h2>
             <p className="max-w-2xl text-sm text-muted-foreground">
-              {hasSearch
-                ? "Passen Sie die Suche an."
-                : "Erfassen Sie die erste Anfrage, damit sie hier erscheint."}
+              {hasNoMatchesForStatus
+                ? "Wählen Sie einen anderen Status oder setzen Sie den Filter auf „Alle“."
+                : hasSearch
+                  ? "Passen Sie die Suche oder den Status-Filter an."
+                  : "Erfassen Sie die erste Anfrage, damit sie hier erscheint."}
             </p>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              {hasNoMatchesForStatus ? (
+                <Button size="sm" variant="outline" onClick={() => setStatusFilter("all")}>
+                  Alle Status anzeigen
+                </Button>
+              ) : null}
               {hasSearch ? (
                 <Button size="sm" variant="outline" onClick={() => setQ("")}>
                   Suche zurücksetzen
                 </Button>
               ) : null}
-              <Button size="sm" onClick={() => setIntakeOpen(true)}>
-                + Erste Anfrage erfassen
-              </Button>
+              {!hasSearch && !hasNoMatchesForStatus ? (
+                <Button size="sm" onClick={() => setIntakeOpen(true)}>
+                  + Erste Anfrage erfassen
+                </Button>
+              ) : null}
             </div>
           </div>
         ) : (

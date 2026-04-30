@@ -17,7 +17,11 @@ import type {
   UserProfile,
   WeekTaskItem,
 } from "@/lib/domain/types";
-import { RAPPORT_NEXT_STEP_BEHOBEN, nextProjectStatusAfterAppointmentBooked } from "@/lib/domain/types";
+import {
+  RAPPORT_NEXT_STEP_BEHOBEN,
+  appointmentEndsInFutureOrNow,
+  nextProjectStatusAfterAppointmentBooked,
+} from "@/lib/domain/types";
 import { parseOrderFormFieldsJson } from "@/lib/order-forms/schema";
 import { getWeekBounds } from "@/lib/date/week-bounds";
 import { resolveCalendarColor } from "@/lib/calendar/team-colors";
@@ -260,6 +264,32 @@ export const listProjectsForOffice = cache(async function listProjectsForOffice(
         serviceAddressShort: addrShort === "—" ? null : addrShort,
       };
     });
+
+    const terminGeplantIds = mapped.filter((p) => p.status === "termin_geplant").map((p) => p.id);
+    if (terminGeplantIds.length > 0) {
+      const nowIso = new Date().toISOString();
+      const { data: apptHits } = await supabase
+        .from("appointments")
+        .select("project_id")
+        .in("project_id", terminGeplantIds)
+        .gte("ends_at", nowIso);
+      const upgradeIds = [...new Set((apptHits ?? []).map((r) => String((r as { project_id: string }).project_id)))];
+      if (upgradeIds.length > 0) {
+        const { error: upErr } = await supabase
+          .from("projects")
+          .update({ status: "abgemacht" })
+          .in("id", upgradeIds)
+          .eq("status", "termin_geplant");
+        if (!upErr) {
+          for (const p of mapped) {
+            if (upgradeIds.includes(p.id)) {
+              p.status = "abgemacht";
+            }
+          }
+        }
+      }
+    }
+
     return sortOfficeProjects(mapped);
   });
 });
@@ -270,9 +300,17 @@ export const getProjectCore = cache(async function getProjectCore(projectId: str
     if (!supabase) {
       const project = mockProjects.find((x) => x.id === projectId);
       if (!project) return null;
+      const appts = mockAppointments.filter((a) => a.projectId === projectId);
+      if (
+        project.status === "termin_geplant" &&
+        appts.some((a) => appointmentEndsInFutureOrNow(a.endsAt))
+      ) {
+        project.status = "abgemacht";
+        project.updatedAt = new Date().toISOString();
+      }
       return {
         project,
-        appointments: mockAppointments.filter((a) => a.projectId === projectId),
+        appointments: appts,
         attachments: mockProjectAttachments.filter((a) => a.projectId === projectId),
         reports: mockReports.filter((r) => r.projectId === projectId),
       };
@@ -290,6 +328,15 @@ export const getProjectCore = cache(async function getProjectCore(projectId: str
     ]);
 
     if (!project) return null;
+
+    let projectModel = mapProjectRow(project as Record<string, unknown>);
+    const apptModels = ((appointments as Record<string, unknown>[]) ?? []).map(mapAppointmentRow);
+    if (
+      projectModel.status === "termin_geplant" &&
+      apptModels.some((a) => appointmentEndsInFutureOrNow(a.endsAt))
+    ) {
+      projectModel = await updateProject(projectId, { status: "abgemacht" });
+    }
 
     const reportRows = ((reports as Record<string, unknown>[]) ?? []).map(mapTechnicianReportRow);
 
@@ -322,21 +369,41 @@ export const getProjectCore = cache(async function getProjectCore(projectId: str
     }
 
     return {
-      project: mapProjectRow(project as Record<string, unknown>),
-      appointments: ((appointments as Record<string, unknown>[]) ?? []).map(mapAppointmentRow),
+      project: projectModel,
+      appointments: apptModels,
       attachments: ((attachments as Record<string, unknown>[]) ?? []).map(mapProjectAttachmentRow),
       reports: mergedReports,
     };
   });
 });
 
-export const listWeekTasks = cache(async function listWeekTasks(referenceDate = new Date()): Promise<WeekTaskItem[]> {
-  return withSlowLog("listWeekTasks", async () => {
-    const { start, end } = getWeekBounds(referenceDate);
+type OfficeCalendarNestedProject = {
+  title: string;
+  status: string;
+  tenant_name?: string | null;
+  service_street?: string | null;
+  service_postal_code?: string | null;
+  service_city?: string | null;
+  service_country?: string | null;
+};
+
+type OfficeCalendarAppointmentRow = {
+  id: string;
+  project_id: string;
+  kind: WeekTaskItem["kind"];
+  starts_at: string;
+  ends_at: string;
+  assigned_technician_id: string | null;
+  projects: OfficeCalendarNestedProject | OfficeCalendarNestedProject[] | null;
+};
+
+async function weekTasksFromAppointmentRange(
+  rangeStartIso: string,
+  rangeEndIso: string,
+): Promise<WeekTaskItem[]> {
+  return withSlowLog("weekTasksFromAppointmentRange", async () => {
     const supabase = await createSupabaseServerClient();
-    if (!supabase) {
-      return [];
-    }
+    if (!supabase) return [];
 
     const { data, error } = await supabase
       .from("appointments")
@@ -360,33 +427,13 @@ export const listWeekTasks = cache(async function listWeekTasks(referenceDate = 
       )
     `,
       )
-      .gte("starts_at", start.toISOString())
-      .lte("starts_at", end.toISOString())
+      .gte("starts_at", rangeStartIso)
+      .lte("starts_at", rangeEndIso)
       .order("starts_at", { ascending: true });
 
-    if (error || !data?.length) {
-      return [];
-    }
+    if (error || !data?.length) return [];
 
-    type NestedProject = {
-      title: string;
-      status: string;
-      tenant_name?: string | null;
-      service_street?: string | null;
-      service_postal_code?: string | null;
-      service_city?: string | null;
-      service_country?: string | null;
-    };
-
-    const rows = data as {
-      id: string;
-      project_id: string;
-      kind: WeekTaskItem["kind"];
-      starts_at: string;
-      ends_at: string;
-      assigned_technician_id: string | null;
-      projects: NestedProject | NestedProject[] | null;
-    }[];
+    const rows = data as OfficeCalendarAppointmentRow[];
 
     const techIds = [...new Set(rows.map((r) => r.assigned_technician_id).filter(Boolean))] as string[];
     const techMap = new Map<string, { display_name: string | null; calendar_color: string | null }>();
@@ -433,106 +480,25 @@ export const listWeekTasks = cache(async function listWeekTasks(referenceDate = 
       })
       .filter((x): x is WeekTaskItem => x !== null);
   });
+}
+
+/** Büro-Kalender: Termine mit `starts_at` im halboffenen Bereich (über ISO-Strings, inkl. Enden). */
+export const listCalendarRangeTasks = cache(async function listCalendarRangeTasks(
+  rangeStartIso: string,
+  rangeEndIso: string,
+): Promise<WeekTaskItem[]> {
+  return weekTasksFromAppointmentRange(rangeStartIso, rangeEndIso);
+});
+
+export const listWeekTasks = cache(async function listWeekTasks(referenceDate = new Date()): Promise<WeekTaskItem[]> {
+  const { start, end } = getWeekBounds(referenceDate);
+  return listCalendarRangeTasks(start.toISOString(), end.toISOString());
 });
 
 export const listMonthTasks = cache(async function listMonthTasks(year: number, month: number): Promise<WeekTaskItem[]> {
   const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
   const end = new Date(year, month, 0, 23, 59, 59, 999);
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) return [];
-
-  const { data, error } = await supabase
-    .from("appointments")
-    .select(
-      `
-      id,
-      project_id,
-      kind,
-      starts_at,
-      ends_at,
-      assigned_technician_id,
-      projects (
-        id,
-        title,
-        status,
-        tenant_name,
-        service_street,
-        service_postal_code,
-        service_city,
-        service_country
-      )
-    `,
-    )
-    .gte("starts_at", start.toISOString())
-    .lte("starts_at", end.toISOString())
-    .order("starts_at", { ascending: true });
-
-  if (error || !data?.length) return [];
-
-  type NestedProject = {
-    title: string;
-    status: string;
-    tenant_name?: string | null;
-    service_street?: string | null;
-    service_postal_code?: string | null;
-    service_city?: string | null;
-    service_country?: string | null;
-  };
-
-  const rows = data as {
-    id: string;
-    project_id: string;
-    kind: WeekTaskItem["kind"];
-    starts_at: string;
-    ends_at: string;
-    assigned_technician_id: string | null;
-    projects: NestedProject | NestedProject[] | null;
-  }[];
-
-  const techIds = [...new Set(rows.map((r) => r.assigned_technician_id).filter(Boolean))] as string[];
-  const techMap = new Map<string, { display_name: string | null; calendar_color: string | null }>();
-  if (techIds.length > 0) {
-    const { data: profs } = await supabase
-      .from("profiles")
-      .select("id, display_name, calendar_color")
-      .in("id", techIds);
-    for (const p of profs ?? []) {
-      const r = p as { id: string; display_name: string | null; calendar_color: string | null };
-      techMap.set(r.id, { display_name: r.display_name, calendar_color: r.calendar_color });
-    }
-  }
-
-  return rows
-    .map((row) => {
-      const raw = row.projects;
-      const pr = Array.isArray(raw) ? raw[0] : raw;
-      if (!pr) return null;
-      const tid = row.assigned_technician_id;
-      const tp = tid ? techMap.get(tid) : undefined;
-      const tenantRaw = pr.tenant_name != null ? String(pr.tenant_name).trim() : "";
-      const displayTitle = tenantRaw || String(pr.title ?? "").trim();
-      if (!displayTitle) return null;
-      const addrShort = formatServiceAddressFields({
-        serviceStreet: pr.service_street,
-        servicePostalCode: pr.service_postal_code,
-        serviceCity: pr.service_city,
-      });
-      return {
-        appointmentId: row.id,
-        startsAt: row.starts_at,
-        endsAt: row.ends_at,
-        kind: row.kind,
-        projectId: row.project_id,
-        projectTitle: displayTitle,
-        projectStatus: pr.status as ProjectStatus,
-        assignedTechnicianId: tid,
-        technicianName: tp?.display_name ?? null,
-        calendarColor: resolveCalendarColor(tp?.calendar_color ?? null, tid),
-        tenantDisplay: tenantRaw || null,
-        serviceAddressShort: addrShort === "—" ? null : addrShort,
-      };
-    })
-    .filter((x): x is WeekTaskItem => x !== null);
+  return listCalendarRangeTasks(start.toISOString(), end.toISOString());
 });
 
 export const listAssignableProfiles = cache(async function listAssignableProfiles(): Promise<UserProfile[]> {
@@ -752,12 +718,14 @@ export async function addAppointment(input: Omit<Appointment, "id" | "createdAt"
   if (!supabase) {
     const isFirstAppointmentForProject =
       mockAppointments.filter((x) => x.projectId === input.projectId).length === 0;
+    const appointmentIsUpcoming = appointmentEndsInFutureOrNow(input.endsAt);
     const a: Appointment = { ...input, id: id("a"), createdAt: new Date().toISOString() };
     mockAppointments.push(a);
     const mockP = mockProjects.find((p) => p.id === input.projectId);
     if (mockP) {
       const next = nextProjectStatusAfterAppointmentBooked(mockP.status, {
         isFirstAppointmentForProject,
+        appointmentIsUpcoming,
       });
       if (next !== null && next !== mockP.status) {
         mockP.status = next;
@@ -773,6 +741,7 @@ export async function addAppointment(input: Omit<Appointment, "id" | "createdAt"
     .eq("project_id", input.projectId);
   if (countError) throw new Error(countError.message);
   const isFirstAppointmentForProject = (priorCount ?? 0) === 0;
+  const appointmentIsUpcoming = appointmentEndsInFutureOrNow(input.endsAt);
 
   const { data, error } = await supabase
     .from("appointments")
@@ -792,6 +761,7 @@ export async function addAppointment(input: Omit<Appointment, "id" | "createdAt"
   const currentStatus = (statusRow?.status as ProjectStatus | undefined) ?? "offen";
   const nextStatus = nextProjectStatusAfterAppointmentBooked(currentStatus, {
     isFirstAppointmentForProject,
+    appointmentIsUpcoming,
   });
   if (nextStatus !== null && nextStatus !== currentStatus) {
     await updateProject(input.projectId, { status: nextStatus });
