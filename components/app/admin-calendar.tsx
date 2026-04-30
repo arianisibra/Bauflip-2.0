@@ -23,7 +23,7 @@ const MONTH_NAMES = [
 
 const TZ = "Europe/Zurich";
 
-type CalendarViewMode = "month" | "week" | "day";
+type CalendarViewMode = "upcoming" | "month" | "week" | "day";
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", timeZone: TZ });
@@ -102,21 +102,33 @@ export function AdminCalendar({
   initialMonth: number;
 }) {
   const qc = useQueryClient();
-  const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
-  const [year, setYear] = useState(initialYear);
-  const [month, setMonth] = useState(initialMonth);
+  const [viewMode, setViewMode] = useState<CalendarViewMode>("upcoming");
   const [anchorDate, setAnchorDate] = useState(() => new Date(initialYear, initialMonth - 1, 15));
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>("all");
   const [sortMode, setSortMode] = useState<"time" | "technician">("time");
 
   const { startIso, endIso, heading, rangeLabel } = useMemo(() => {
-    if (viewMode === "month") {
-      const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
-      const end = new Date(year, month, 0, 23, 59, 59, 999);
+    if (viewMode === "upcoming") {
+      const now = new Date();
+      const start = new Date(now);
+      start.setDate(start.getDate() - 30);
+      const end = new Date(now);
+      end.setFullYear(end.getFullYear() + 3);
       return {
         startIso: start.toISOString(),
         endIso: end.toISOString(),
-        heading: `${MONTH_NAMES[month - 1]} ${year}`,
+        heading: "Aktuelle & bevorstehende Termine",
+        rangeLabel: "Standard",
+      };
+    }
+    if (viewMode === "month") {
+      const { y, m } = swissYmdFromDate(anchorDate);
+      const start = new Date(y, m - 1, 1, 0, 0, 0, 0);
+      const end = new Date(y, m, 0, 23, 59, 59, 999);
+      return {
+        startIso: start.toISOString(),
+        endIso: end.toISOString(),
+        heading: `${MONTH_NAMES[m - 1]} ${y}`,
         rangeLabel: "Monat",
       };
     }
@@ -143,7 +155,7 @@ export function AdminCalendar({
       heading: headingLong,
       rangeLabel: "Tag",
     };
-  }, [viewMode, year, month, anchorDate]);
+  }, [viewMode, anchorDate]);
 
   useEffect(() => {
     const start = new Date(initialYear, initialMonth - 1, 1, 0, 0, 0, 0);
@@ -165,13 +177,19 @@ export function AdminCalendar({
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, "de-CH"));
   }, [tasks]);
 
-  const visibleTasks = useMemo(() => {
-    if (selectedTechnicianId === "all") return tasks;
-    return tasks.filter((task) => task.assignedTechnicianId === selectedTechnicianId);
-  }, [selectedTechnicianId, tasks]);
+  const baseTasks = useMemo(() => {
+    if (viewMode !== "upcoming") return tasks;
+    const now = Date.now();
+    return tasks.filter((t) => new Date(t.endsAt).getTime() >= now);
+  }, [tasks, viewMode]);
+
+  const filteredByTech = useMemo(() => {
+    if (selectedTechnicianId === "all") return baseTasks;
+    return baseTasks.filter((task) => task.assignedTechnicianId === selectedTechnicianId);
+  }, [selectedTechnicianId, baseTasks]);
 
   const groupedTasks = useMemo(() => {
-    const groups = groupWeekTasksByProjectDay(visibleTasks);
+    const groups = groupWeekTasksByProjectDay(filteredByTech);
     return groups.sort((a, b) => {
       if (sortMode === "technician") {
         const byName = (a.primary.technicianName ?? "").localeCompare(b.primary.technicianName ?? "", "de-CH");
@@ -179,27 +197,17 @@ export function AdminCalendar({
       }
       return a.primary.startsAt.localeCompare(b.primary.startsAt);
     });
-  }, [sortMode, visibleTasks]);
+  }, [sortMode, filteredByTech]);
 
   const groupedByWeek = useMemo(() => bucketGroupsByIsoWeek(groupedTasks), [groupedTasks]);
 
-  const navigateMonth = useCallback(
-    (dir: -1 | 1) => {
-      let newMonth = month + dir;
-      let newYear = year;
-      if (newMonth < 1) {
-        newMonth = 12;
-        newYear -= 1;
-      } else if (newMonth > 12) {
-        newMonth = 1;
-        newYear += 1;
-      }
-      setYear(newYear);
-      setMonth(newMonth);
-      setAnchorDate(new Date(newYear, newMonth - 1, 15));
-    },
-    [year, month],
-  );
+  const navigateMonth = useCallback((dir: -1 | 1) => {
+    setAnchorDate((d) => {
+      const next = new Date(d);
+      next.setMonth(next.getMonth() + dir);
+      return next;
+    });
+  }, []);
 
   const navigateWeek = useCallback((dir: -1 | 1) => {
     setAnchorDate((d) => shiftCalendarDays(d, dir * 7));
@@ -211,6 +219,7 @@ export function AdminCalendar({
 
   const onNavigate = useCallback(
     (dir: -1 | 1) => {
+      if (viewMode === "upcoming") return;
       if (viewMode === "month") navigateMonth(dir);
       else if (viewMode === "week") navigateWeek(dir);
       else navigateDay(dir);
@@ -220,15 +229,10 @@ export function AdminCalendar({
 
   const onViewModeChange = useCallback((next: CalendarViewMode) => {
     setViewMode(next);
-    if (next === "month") {
-      const { y, m } = swissYmdFromDate(anchorDate);
-      setYear(y);
-      setMonth(m);
+    if (next !== "upcoming") {
+      setAnchorDate(new Date());
     }
-    if (next === "week" || next === "day") {
-      setAnchorDate(new Date(year, month - 1, 15));
-    }
-  }, [anchorDate, year, month]);
+  }, []);
 
   const dayPickerValue = useMemo(() => {
     const { y, m, day } = swissYmdFromDate(anchorDate);
@@ -239,49 +243,58 @@ export function AdminCalendar({
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-start">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => onNavigate(-1)}
-            disabled={pending}
-            aria-label={
-              viewMode === "month"
-                ? "Vorheriger Monat"
-                : viewMode === "week"
-                  ? "Vorherige Woche"
-                  : "Vorheriger Tag"
-            }
-          >
-            <ChevronLeft className="size-4" />
-          </Button>
+          {viewMode !== "upcoming" ? (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => onNavigate(-1)}
+              disabled={pending}
+              aria-label={
+                viewMode === "month"
+                  ? "Vorheriger Monat"
+                  : viewMode === "week"
+                    ? "Vorherige Woche"
+                    : "Vorheriger Tag"
+              }
+            >
+              <ChevronLeft className="size-4" />
+            </Button>
+          ) : (
+            <div className="size-9" aria-hidden />
+          )}
           <div className="flex min-h-9 min-w-0 flex-1 flex-col items-center justify-center gap-1 text-center sm:flex-initial">
             <h2 className="text-base font-semibold tracking-tight sm:text-lg">{heading}</h2>
             <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{rangeLabel}</p>
             {pending ? <BauflipLoadingInline label="Wird geladen …" /> : null}
           </div>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => onNavigate(1)}
-            disabled={pending}
-            aria-label={
-              viewMode === "month" ? "Nächster Monat" : viewMode === "week" ? "Nächste Woche" : "Nächster Tag"
-            }
-          >
-            <ChevronRight className="size-4" />
-          </Button>
+          {viewMode !== "upcoming" ? (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => onNavigate(1)}
+              disabled={pending}
+              aria-label={
+                viewMode === "month" ? "Nächster Monat" : viewMode === "week" ? "Nächste Woche" : "Nächster Tag"
+              }
+            >
+              <ChevronRight className="size-4" />
+            </Button>
+          ) : (
+            <div className="size-9" aria-hidden />
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Zeitraum:</span>
+          <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Suche:</span>
           <select
             className="h-9 min-w-[7rem] rounded-md border border-input bg-background px-2 text-xs font-medium"
             value={viewMode}
             onChange={(e) => onViewModeChange(e.target.value as CalendarViewMode)}
           >
-            <option value="month">Monat</option>
-            <option value="week">Woche</option>
-            <option value="day">Tag</option>
+            <option value="upcoming">Standard (bevorstehend)</option>
+            <option value="month">Monat suchen</option>
+            <option value="week">Woche suchen</option>
+            <option value="day">Tag suchen</option>
           </select>
           {viewMode === "day" ? (
             <input
@@ -328,7 +341,9 @@ export function AdminCalendar({
       <div className="space-y-3">
         {groupedTasks.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">Keine Termine in diesem Zeitraum.</p>
+            <p className="font-medium text-foreground">
+              {viewMode === "upcoming" ? "Keine aktuellen oder bevorstehenden Termine." : "Keine Termine in diesem Zeitraum."}
+            </p>
           </div>
         ) : (
           groupedByWeek.map(({ weekKey, groups }) => (

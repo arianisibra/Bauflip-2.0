@@ -261,37 +261,37 @@ export const projectStatusLabels: Record<ProjectStatus, string> = {
 
 /** Tailwind-Klassen pro Status — jeder Schritt eigene Farbe (Liste, Sheet, Monteur). */
 export const projectStatusBadgeClassNames: Record<ProjectStatus, string> = {
-  offen: "border-transparent bg-zinc-500/15 text-zinc-900 dark:bg-zinc-500/25 dark:text-zinc-100",
+  offen: "border-zinc-500/45 bg-zinc-500/35 text-zinc-950 dark:border-zinc-400/50 dark:bg-zinc-500/40 dark:text-zinc-50",
   abgemacht:
-    "border-transparent bg-cyan-500/15 text-cyan-950 dark:bg-cyan-500/20 dark:text-cyan-100",
+    "border-cyan-500/55 bg-cyan-500/35 text-cyan-950 dark:border-cyan-400/55 dark:bg-cyan-500/45 dark:text-cyan-50",
   termin_geplant:
-    "border-transparent bg-sky-500/15 text-sky-950 dark:bg-sky-500/20 dark:text-sky-100",
+    "border-sky-500/55 bg-sky-500/35 text-sky-950 dark:border-sky-400/55 dark:bg-sky-500/45 dark:text-sky-50",
   einsatz_offen:
-    "border-transparent bg-blue-500/15 text-blue-950 dark:bg-blue-500/20 dark:text-blue-100",
+    "border-blue-500/55 bg-blue-500/35 text-blue-950 dark:border-blue-400/55 dark:bg-blue-500/45 dark:text-blue-50",
   offerte_senden:
-    "border-transparent bg-indigo-500/15 text-indigo-950 dark:bg-indigo-500/20 dark:text-indigo-100",
+    "border-indigo-500/55 bg-indigo-500/35 text-indigo-950 dark:border-indigo-400/55 dark:bg-indigo-500/45 dark:text-indigo-50",
   offerte_gesendet:
-    "border-transparent bg-violet-500/15 text-violet-950 dark:bg-violet-500/20 dark:text-violet-100",
+    "border-violet-500/55 bg-violet-500/35 text-violet-950 dark:border-violet-400/55 dark:bg-violet-500/45 dark:text-violet-50",
   offerte_genehmigt:
-    "border-transparent bg-purple-500/15 text-purple-950 dark:bg-purple-500/20 dark:text-purple-100",
+    "border-purple-500/55 bg-purple-500/35 text-purple-950 dark:border-purple-400/55 dark:bg-purple-500/45 dark:text-purple-50",
   bestellen:
-    "border-transparent bg-fuchsia-500/15 text-fuchsia-950 dark:bg-fuchsia-500/20 dark:text-fuchsia-100",
+    "border-fuchsia-500/55 bg-fuchsia-500/35 text-fuchsia-950 dark:border-fuchsia-400/55 dark:bg-fuchsia-500/45 dark:text-fuchsia-50",
   bestellt:
-    "border-transparent bg-pink-500/15 text-pink-950 dark:bg-pink-500/20 dark:text-pink-100",
+    "border-pink-500/55 bg-pink-500/35 text-pink-950 dark:border-pink-400/55 dark:bg-pink-500/45 dark:text-pink-50",
   montagebereit:
-    "border-transparent bg-emerald-500/15 text-emerald-950 dark:bg-emerald-500/20 dark:text-emerald-100",
+    "border-emerald-500/55 bg-emerald-500/35 text-emerald-950 dark:border-emerald-400/55 dark:bg-emerald-500/45 dark:text-emerald-50",
   abholbereit:
-    "border-transparent bg-teal-500/15 text-teal-950 dark:bg-teal-500/20 dark:text-teal-100",
+    "border-teal-500/55 bg-teal-500/35 text-teal-950 dark:border-teal-400/55 dark:bg-teal-500/45 dark:text-teal-50",
   werkstatt:
-    "border-transparent bg-orange-500/15 text-orange-950 dark:bg-orange-500/20 dark:text-orange-100",
+    "border-orange-500/55 bg-orange-500/35 text-orange-950 dark:border-orange-400/55 dark:bg-orange-500/45 dark:text-orange-50",
   abklaeren:
-    "border-transparent bg-amber-500/15 text-amber-950 dark:bg-amber-500/20 dark:text-amber-100",
+    "border-amber-500/55 bg-amber-500/35 text-amber-950 dark:border-amber-400/55 dark:bg-amber-500/45 dark:text-amber-50",
   abrechnen:
-    "border-transparent bg-yellow-500/20 text-yellow-950 dark:bg-yellow-500/25 dark:text-yellow-50",
+    "border-yellow-500/60 bg-yellow-500/45 text-yellow-950 dark:border-yellow-300/60 dark:bg-yellow-500/55 dark:text-yellow-50",
   subunternehmer:
-    "border-transparent bg-stone-500/15 text-stone-900 dark:bg-stone-500/25 dark:text-stone-100",
+    "border-stone-500/55 bg-stone-500/35 text-stone-950 dark:border-stone-400/55 dark:bg-stone-500/45 dark:text-stone-50",
   abgeschlossen:
-    "border-transparent bg-green-600/15 text-green-900 dark:bg-green-600/25 dark:text-green-100",
+    "border-green-600/60 bg-green-600/40 text-green-950 dark:border-green-400/60 dark:bg-green-600/50 dark:text-green-50",
 };
 
 export function projectStatusBadgeClassName(status: string): string {

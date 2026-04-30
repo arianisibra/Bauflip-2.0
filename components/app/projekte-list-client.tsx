@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import type { OfficeProjectListItem, ProjectStatus, UserProfile } from "@/lib/domain/types";
 import {
-  projectStatusBadgeClassNames,
   projectStatusLabels,
   projectStatuses,
 } from "@/lib/domain/types";
@@ -289,40 +288,19 @@ export function ProjekteListClient({
           <span className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Nach Status anzeigen
           </span>
-          <div className="flex max-h-[min(40vh,14rem)] flex-wrap gap-1.5 overflow-y-auto pr-0.5 sm:max-h-none sm:overflow-visible">
-            <button
-              type="button"
-              onClick={() => setStatusFilter("all")}
-              className={cn(
-                "rounded-lg border px-2.5 py-1 text-[10px] font-semibold uppercase leading-tight tracking-wide transition-colors sm:text-[11px]",
-                statusFilter === "all"
-                  ? "border-zinc-500 bg-zinc-500/20 text-zinc-950 ring-2 ring-ring ring-offset-2 ring-offset-background dark:border-zinc-400 dark:bg-zinc-500/30 dark:text-zinc-50"
-                  : "border-border bg-background text-muted-foreground hover:bg-muted",
-              )}
-            >
-              Alle ({filtered.length})
-            </button>
-            {projectStatuses.map((s) => {
-              const count = statusCounts.get(s) ?? 0;
-              const active = statusFilter === s;
-              return (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setStatusFilter(s)}
-                  title={projectStatusLabels[s]}
-                  className={cn(
-                    "max-w-full truncate rounded-lg border px-2.5 py-1 text-[10px] font-semibold uppercase leading-tight tracking-wide transition-[opacity,box-shadow] sm:text-[11px]",
-                    projectStatusBadgeClassNames[s],
-                    active ? "ring-2 ring-ring ring-offset-2 ring-offset-background" : "opacity-85 hover:opacity-100",
-                    count === 0 && !active ? "opacity-45 hover:opacity-70" : null,
-                  )}
-                >
-                  {projectStatusLabels[s]} ({count})
-                </button>
-              );
-            })}
-          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilterValue)}
+            className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs font-medium sm:max-w-sm"
+            aria-label="Statusfilter für Projekte"
+          >
+            <option value="all">Alle ({filtered.length})</option>
+            {projectStatuses.map((s) => (
+              <option key={s} value={s}>
+                {projectStatusLabels[s]} ({statusCounts.get(s) ?? 0})
+              </option>
+            ))}
+          </select>
           <p className="text-[11px] text-muted-foreground">
             Es werden nur Projekte mit dem gewählten Status gelistet (zusätzlich zur Suche). „Alle“ hebt den Filter auf.
           </p>
