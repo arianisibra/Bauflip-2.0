@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import type { Appointment, OrderFormTemplate, TechnicianReport, ProjectStatus } from "@/lib/domain/types";
+import type { Appointment, TechnicianReport, ProjectStatus } from "@/lib/domain/types";
 import { projectStatusBadgeClassName, projectStatusLabels, projectStatuses } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 import { telHref } from "@/lib/phone";
@@ -36,7 +36,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { BauflipLoading, BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
-import { computeOrderFormVisibilityMask, isOrderFormFieldEffectivelyRequired } from "@/lib/order-forms/field-runtime";
+import { TechnicianReportEditOverlay } from "@/components/app/technician-report-edit-overlay";
 function getFilledOrderFormFields(of_: TechnicianReport["orderForms"][number]) {
   return of_.fields.filter((f) => Boolean(of_.values[f.key]?.trim()));
 }
@@ -62,6 +62,9 @@ function buildReportText(r: TechnicianReport): string {
   const lines: string[] = [];
   lines.push(`Rapport – ${r.outcome === "schaden_behoben" ? "Schaden behoben" : "Schaden aufgenommen"}`);
   lines.push(`Datum: ${new Date(r.createdAt).toLocaleString("de-CH", { timeZone: "Europe/Zurich" })}`);
+  if (r.createdByDisplayName?.trim()) {
+    lines.push(`Erfasst von: ${r.createdByDisplayName.trim()}`);
+  }
   lines.push("");
   if (r.summary?.trim()) {
     lines.push("Zusammenfassung:");
@@ -109,246 +112,6 @@ function downloadReport(r: TechnicianReport) {
   URL.revokeObjectURL(url);
 }
 
-type ReportEditPayload = {
-  reportId: string;
-  projectId: string;
-  outcome: "schaden_behoben" | "schaden_aufgenommen";
-  summary?: string;
-  measurementsJson?: string;
-  workDescription?: string;
-  orderForms?: { templateId: string; values: Record<string, string> }[];
-};
-
-function ReportEditOverlay({
-  report,
-  projectId,
-  templates,
-  onClose,
-  onSubmit,
-  pending,
-}: {
-  report: TechnicianReport;
-  projectId: string;
-  templates: OrderFormTemplate[];
-  onClose: () => void;
-  onSubmit: (v: ReportEditPayload) => Promise<void>;
-  pending: boolean;
-}) {
-  const [outcome, setOutcome] = useState<"schaden_behoben" | "schaden_aufgenommen">(report.outcome);
-  const [summary, setSummary] = useState(report.summary);
-  const [workDescription, setWorkDescription] = useState(report.workDescription);
-  const [measurementsJson, setMeasurementsJson] = useState(
-    report.measurementsJson && report.measurementsJson !== "{}" ? report.measurementsJson : "",
-  );
-  const [ofValues, setOfValues] = useState<Record<number, Record<string, string>>>(() => {
-    const o: Record<number, Record<string, string>> = {};
-    report.orderForms.forEach((of_, i) => {
-      o[i] = { ...of_.values };
-    });
-    return o;
-  });
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const meas =
-      measurementsJson.trim() === "" ? "{}" : measurementsJson.trim();
-    const payload: ReportEditPayload = {
-      reportId: report.id,
-      projectId,
-      outcome,
-      summary: summary.trim(),
-      workDescription: workDescription.trim(),
-      measurementsJson: meas,
-      orderForms:
-        report.orderForms.length > 0
-          ? report.orderForms.map((of_, idx) => ({
-              templateId: of_.templateId,
-              values: ofValues[idx] ?? of_.values,
-            }))
-          : undefined,
-    };
-    await onSubmit(payload);
-  };
-
-  return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/40 p-4 sm:items-center" role="dialog" aria-modal>
-      <div className="max-h-[min(90vh,720px)] w-full max-w-xl overflow-y-auto rounded-xl border border-border bg-background shadow-xl">
-        <div className="sticky top-0 z-[1] flex items-center justify-between gap-2 border-b border-border bg-background px-4 py-3">
-          <h4 className="text-sm font-semibold">Rapport bearbeiten</h4>
-          <Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={pending}>
-            Schliessen
-          </Button>
-        </div>
-        <form onSubmit={handleSubmit} className="space-y-4 p-4">
-          <p className="text-xs text-muted-foreground">
-            Der Projekt-Status bleibt dabei unverändert. Anpassungen sind z. B. für Tippfehler oder nachträgliche
-            Präzisierungen nach Abrechnung oder Abschluss.
-          </p>
-          <div className="space-y-1.5">
-            <Label htmlFor="edit-outcome" className="text-xs">
-              Ergebnis
-            </Label>
-            <select
-              id="edit-outcome"
-              className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm"
-              value={outcome}
-              onChange={(e) =>
-                setOutcome(e.target.value as "schaden_behoben" | "schaden_aufgenommen")
-              }
-              disabled={pending}
-            >
-              <option value="schaden_behoben">Behoben / Fertig</option>
-              <option value="schaden_aufgenommen">Aufgenommen / Nicht fertig</option>
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="edit-summary" className="text-xs">
-              Kurztext
-            </Label>
-            <Textarea
-              id="edit-summary"
-              value={summary}
-              onChange={(e) => setSummary(e.target.value)}
-              rows={2}
-              disabled={pending}
-              className="text-sm"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="edit-work" className="text-xs">
-              Arbeit / Material
-            </Label>
-            <Textarea
-              id="edit-work"
-              value={workDescription}
-              onChange={(e) => setWorkDescription(e.target.value)}
-              rows={4}
-              disabled={pending}
-              className="text-sm"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="edit-meas" className="text-xs">
-              Masse / Notizen
-            </Label>
-            <Textarea
-              id="edit-meas"
-              value={measurementsJson}
-              onChange={(e) => setMeasurementsJson(e.target.value)}
-              rows={3}
-              disabled={pending}
-              placeholder="JSON oder Freitext"
-              className="font-mono text-xs"
-            />
-          </div>
-
-          {report.orderForms.length > 0 ? (
-            <div className="space-y-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Bestellformulare
-              </p>
-              {report.orderForms.map((of_, ofIdx) => {
-                const tpl = templates.find((t) => t.id === of_.templateId);
-                const fields = tpl?.fields ?? of_.fields;
-                const name = tpl?.name ?? of_.templateName;
-                const vals = ofValues[ofIdx] ?? of_.values;
-                const visibility = computeOrderFormVisibilityMask(fields, vals);
-                if (!tpl) {
-                  return (
-                    <div
-                      key={`${report.id}-of-${ofIdx}`}
-                      className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5 text-xs text-amber-800 dark:text-amber-200"
-                    >
-                      <p className="font-medium">{name}</p>
-                      <p className="mt-1">
-                        Diese Bestellformular-Vorlage ist inaktiv oder fehlt. Bitte Vorlage reaktivieren, sonst kann
-                        der Rapport nicht gespeichert werden.
-                      </p>
-                    </div>
-                  );
-                }
-                return (
-                  <div key={`${report.id}-of-${ofIdx}`} className="space-y-2 rounded-lg border border-border/80 p-3">
-                    <p className="text-xs font-semibold text-foreground">{name}</p>
-                    {fields.map((f, fieldIndex) => {
-                      if (!visibility[fieldIndex]) return null;
-                      const effReq = isOrderFormFieldEffectivelyRequired(f, fieldIndex, fields, visibility, vals);
-                      const v = vals[f.key] ?? "";
-                      const id = `edit-of-${ofIdx}-${f.key}`;
-                      const setVal = (next: string) => {
-                        setOfValues((prev) => ({
-                          ...prev,
-                          [ofIdx]: { ...(prev[ofIdx] ?? {}), [f.key]: next },
-                        }));
-                      };
-                      return (
-                        <div key={f.key} className="space-y-1">
-                          <Label htmlFor={id} className="flex items-center gap-1.5 text-xs font-medium">
-                            {f.label}
-                            {effReq ? (
-                              <Badge variant="destructive" className="px-1 py-0 text-[10px]">
-                                Pflicht
-                              </Badge>
-                            ) : null}
-                          </Label>
-                          {f.type === "textarea" ? (
-                            <Textarea
-                              id={id}
-                              rows={3}
-                              value={v}
-                              onChange={(e) => setVal(e.target.value)}
-                              disabled={pending}
-                              className="text-xs"
-                            />
-                          ) : f.type === "select" && f.options?.length ? (
-                            <select
-                              id={id}
-                              className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
-                              value={v}
-                              onChange={(e) => setVal(e.target.value)}
-                              disabled={pending}
-                            >
-                              <option value="">—</option>
-                              {f.options.map((opt) => (
-                                <option key={opt} value={opt}>
-                                  {opt}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            <Input
-                              id={id}
-                              type={f.type === "number" ? "text" : "text"}
-                              inputMode={f.type === "number" ? "decimal" : undefined}
-                              value={v}
-                              onChange={(e) => setVal(e.target.value)}
-                              disabled={pending}
-                              className="text-xs"
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-          ) : null}
-
-          <div className="flex justify-end gap-2 border-t border-border pt-3">
-            <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
-              Abbrechen
-            </Button>
-            <Button type="submit" disabled={pending}>
-              {pending ? <BauflipLoadingButtonLabel variant="onPrimary">Speichern …</BauflipLoadingButtonLabel> : "Speichern"}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
 function ReportCard({
   report: r,
   canEdit,
@@ -393,6 +156,9 @@ function ReportCard({
           <p className="text-[11px] text-muted-foreground">
             {new Date(r.createdAt).toLocaleString("de-CH", { timeZone: "Europe/Zurich" })}
           </p>
+          {r.createdByDisplayName?.trim() ? (
+            <p className="text-[11px] text-muted-foreground">Erfasst von {r.createdByDisplayName.trim()}</p>
+          ) : null}
         </div>
         <ChevronDown
           className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
@@ -1129,7 +895,7 @@ export function ProjektSheetEditor({
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       {editReport ? (
-        <ReportEditOverlay
+        <TechnicianReportEditOverlay
           key={editReport.id}
           report={editReport}
           projectId={projectId}

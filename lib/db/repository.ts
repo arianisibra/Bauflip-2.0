@@ -70,7 +70,7 @@ const ATTACHMENT_DB_COLUMNS =
   "id, project_id, file_path, file_name, mime_type, size_bytes, uploaded_by, notes, created_at";
 
 const TECH_REPORT_DB_COLUMNS =
-  "id, project_id, outcome, summary, measurements_json, work_description, time_spent_minutes, created_at";
+  "id, project_id, outcome, summary, measurements_json, work_description, time_spent_minutes, created_at, created_by, created_by_display_name";
 
 /** Ein `current_organization_id`-RPC pro Request — mehrere Repo-Aufrufe teilen sich das Ergebnis. */
 export const getCachedCurrentOrganizationId = cache(async function getCachedCurrentOrganizationId(): Promise<string | null> {
@@ -163,6 +163,9 @@ function mapTechnicianReportRow(row: Record<string, unknown>): TechnicianReport 
   const rawMeas = row.measurements_json;
   const measurementsJson =
     typeof rawMeas === "string" ? rawMeas : rawMeas != null ? JSON.stringify(rawMeas) : "{}";
+  const dn = row.created_by_display_name;
+  const createdByDisplayName =
+    dn != null && String(dn).trim() ? String(dn).trim() : null;
   return {
     id: String(row.id),
     projectId: String(row.project_id ?? ""),
@@ -173,6 +176,8 @@ function mapTechnicianReportRow(row: Record<string, unknown>): TechnicianReport 
     timeSpentMinutes:
       row.time_spent_minutes != null ? Number(row.time_spent_minutes) : null,
     createdAt: String(row.created_at ?? new Date().toISOString()),
+    createdByProfileId: row.created_by != null ? String(row.created_by) : null,
+    createdByDisplayName,
     orderForms: [],
   };
 }
@@ -853,7 +858,7 @@ export async function signAttachmentUrls(attachments: ProjectAttachment[]): Prom
 }
 
 export async function addTechnicianReport(
-  input: Omit<TechnicianReport, "id" | "createdAt" | "orderForms">,
+  input: Omit<TechnicianReport, "id" | "createdAt" | "orderForms" | "createdByProfileId" | "createdByDisplayName">,
   options?: {
     createdByProfileId: string | null;
     orderFormSubmissions?: { templateId: string; valuesJson: Record<string, string> }[];
@@ -862,12 +867,19 @@ export async function addTechnicianReport(
   },
 ): Promise<TechnicianReport> {
   const supabase = await createSupabaseServerClient();
+  const authorId = options?.createdByProfileId ?? null;
   if (!supabase) {
+    const authorName =
+      authorId != null
+        ? mockProfiles.find((p) => p.id === authorId)?.displayName?.trim() || null
+        : null;
     const r: TechnicianReport = {
       ...input,
       id: id("r"),
       createdAt: new Date().toISOString(),
       orderForms: [],
+      createdByProfileId: authorId,
+      createdByDisplayName: authorName,
     };
     mockReports.push(r);
     return r;
@@ -877,6 +889,18 @@ export async function addTechnicianReport(
     parsedMeasurements = JSON.parse(input.measurementsJson || "{}");
   } catch {
     parsedMeasurements = {};
+  }
+
+  let createdByDisplayName: string | null = null;
+  if (authorId) {
+    const { data: authorProfile } = await supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("id", authorId)
+      .maybeSingle();
+    const rawName = (authorProfile as { display_name?: string | null } | null)?.display_name;
+    createdByDisplayName =
+      typeof rawName === "string" && rawName.trim() ? rawName.trim() : null;
   }
 
   const reportId = crypto.randomUUID();
@@ -892,7 +916,8 @@ export async function addTechnicianReport(
       measurements_json: parsedMeasurements,
       work_description: input.workDescription,
       time_spent_minutes: input.timeSpentMinutes,
-      created_by: options?.createdByProfileId ?? null,
+      created_by: authorId,
+      created_by_display_name: createdByDisplayName,
     });
   if (error) throw new Error(error.message);
 
@@ -923,6 +948,8 @@ export async function addTechnicianReport(
     id: reportId,
     createdAt: now,
     orderForms: [],
+    createdByProfileId: authorId,
+    createdByDisplayName,
   };
 }
 

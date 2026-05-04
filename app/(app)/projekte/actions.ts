@@ -212,7 +212,12 @@ export async function updateTechnicianReportAction(
   tabId?: string,
 ): Promise<{ core: ProjectCore }> {
   const session = await getCurrentSession();
-  if (!session || (session.role !== "office" && session.role !== "admin")) {
+  if (!session) {
+    throw new Error("Keine Berechtigung.");
+  }
+  const isOffice = session.role === "office" || session.role === "admin";
+  const isTechnician = session.role === "technician";
+  if (!isOffice && !isTechnician) {
     throw new Error("Keine Berechtigung.");
   }
 
@@ -225,6 +230,22 @@ export async function updateTechnicianReportAction(
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
     throw new Error("Supabase nicht konfiguriert.");
+  }
+
+  if (isTechnician) {
+    const { data: rep, error: repErr } = await supabase
+      .from("technician_reports")
+      .select("created_by")
+      .eq("id", v.reportId)
+      .eq("project_id", v.projectId)
+      .maybeSingle();
+    if (repErr) {
+      throw new Error(repErr.message);
+    }
+    const author = (rep as { created_by?: string | null } | null)?.created_by;
+    if (!author || author !== session.user.id) {
+      throw new Error("Sie können nur eigene Rapporte bearbeiten.");
+    }
   }
 
   const { data: proj, error: projErr } = await supabase
@@ -271,12 +292,10 @@ export async function updateTechnicianReportAction(
   });
 
   const core = await coreOrThrow(v.projectId);
-  if (session.organizationId) {
-    publish(session.organizationId, {
-      type: "project.core_changed",
-      projectId: v.projectId,
-      originTabId: tabId,
-    });
-  }
+  publish(organizationId, {
+    type: "project.core_changed",
+    projectId: v.projectId,
+    originTabId: tabId,
+  });
   return { core };
 }

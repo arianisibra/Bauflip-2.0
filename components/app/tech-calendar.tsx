@@ -226,10 +226,7 @@ export function TechCalendar({
                             {group.slots.map((s) => (
                               <p
                                 key={s.appointmentId}
-                                className={cn(
-                                  "flex items-center gap-1 text-[11px] text-muted-foreground",
-                                  isTechnicianView ? "font-bold" : "font-medium",
-                                )}
+                                className="flex items-center gap-1 text-[11px] font-bold text-muted-foreground"
                               >
                                 <Clock className="size-3 shrink-0" />
                                 {formatTime(s.startsAt)}–{formatTime(s.endsAt)}

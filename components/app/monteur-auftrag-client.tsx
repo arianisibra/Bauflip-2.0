@@ -10,6 +10,7 @@ import type {
   ProjectAttachment,
   ProjectStatus,
   RapportNextStep,
+  RoleType,
   TechnicianReport,
 } from "@/lib/domain/types";
 import { isMonteurMontageContext } from "@/lib/tech/monteur-context";
@@ -18,12 +19,13 @@ import { cn } from "@/lib/utils";
 import { telHref } from "@/lib/phone";
 import { formatServiceAddress, managementLabel, tenantLabel } from "@/lib/tech/bundle-display";
 import { submitTechnicianReportAction } from "@/app/(tech)/actions";
-import { useAuftragProjectCore, useUploadAttachment } from "@/lib/query/hooks";
+import { useAuftragProjectCore, useUpdateTechnicianReport, useUploadAttachment } from "@/lib/query/hooks";
 import { afterProjectCoreChange } from "@/lib/query/invalidations";
 import { getTabId } from "@/lib/query/tab-id";
 import { pickMonteurAppointmentDisplay } from "@/lib/tech/auftrag-appointments";
 import { updateAttachmentNotesAction, deleteAttachmentAction } from "@/app/(app)/actions";
 import { MonteurOrderFormSections } from "@/components/app/monteur-order-form-sections";
+import { TechnicianReportEditOverlay } from "@/components/app/technician-report-edit-overlay";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,6 +45,7 @@ import {
   FileText,
   ImagePlus,
   Loader2,
+  Pencil,
   MapPin,
   Navigation,
   Paperclip,
@@ -253,7 +256,27 @@ function statusStandBannerVisible(status: string): boolean {
   return Boolean(cfg?.description);
 }
 
-function MonteurPriorReportsSection({ reports }: { reports: TechnicianReport[] }) {
+function canEditMonteurPriorReport(
+  r: TechnicianReport,
+  viewerRole: RoleType,
+  currentUserId: string,
+): boolean {
+  if (viewerRole === "office" || viewerRole === "admin") return true;
+  if (viewerRole === "technician") return r.createdByProfileId === currentUserId;
+  return false;
+}
+
+function MonteurPriorReportsSection({
+  reports,
+  viewerRole,
+  currentUserId,
+  onEditReport,
+}: {
+  reports: TechnicianReport[];
+  viewerRole: RoleType;
+  currentUserId: string;
+  onEditReport: (r: TechnicianReport) => void;
+}) {
   const sorted = useMemo(
     () => [...reports].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
     [reports],
@@ -307,12 +330,29 @@ function MonteurPriorReportsSection({ reports }: { reports: TechnicianReport[] }
                     ) : null}
                   </p>
                   <p className="text-[11px] text-muted-foreground">
+                    {r.createdByDisplayName?.trim() ? (
+                      <>Von {r.createdByDisplayName.trim()} · </>
+                    ) : null}
                     {createdDate}{" "}
                     <span className="font-bold">{createdTime}</span>
                   </p>
                 </div>
               </summary>
               <div className="space-y-3 border-t border-border/60 px-3 py-3 text-sm">
+                {canEditMonteurPriorReport(r, viewerRole, currentUserId) ? (
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1.5 text-xs"
+                      onClick={() => onEditReport(r)}
+                    >
+                      <Pencil className="size-3.5" />
+                      Bearbeiten
+                    </Button>
+                  </div>
+                ) : null}
                 {r.workDescription?.trim() ? (
                   <div>
                     <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -393,14 +433,20 @@ function StatusContextBanner({ status }: { status: string }) {
 export function MonteurAuftragClient({
   core,
   orderFormTemplates = [],
+  viewerRole,
+  currentUserId,
 }: {
   core: ProjectCore;
   orderFormTemplates?: OrderFormTemplate[];
+  viewerRole: RoleType;
+  currentUserId: string;
 }) {
   const router = useRouter();
   const qc = useQueryClient();
   const { data: liveCore = core } = useAuftragProjectCore(core.project.id, core);
   const uploadAttachment = useUploadAttachment();
+  const updateReport = useUpdateTechnicianReport();
+  const [editReport, setEditReport] = useState<TechnicianReport | null>(null);
   const bundle = liveCore;
   const p = bundle.project;
   const tenantTelHref = telHref(p.tenantPhone);
@@ -675,7 +721,12 @@ export function MonteurAuftragClient({
 
       {bundle.reports.length > 0 ? (
         <>
-          <MonteurPriorReportsSection reports={bundle.reports} />
+          <MonteurPriorReportsSection
+            reports={bundle.reports}
+            viewerRole={viewerRole}
+            currentUserId={currentUserId}
+            onEditReport={(r) => setEditReport(r)}
+          />
           <AuftragSectionDivider />
         </>
       ) : null}
@@ -916,6 +967,26 @@ export function MonteurAuftragClient({
           </CardContent>
         </Card>
         </>
+      ) : null}
+
+      {editReport ? (
+        <TechnicianReportEditOverlay
+          key={editReport.id}
+          report={editReport}
+          projectId={p.id}
+          templates={orderFormTemplates}
+          onClose={() => setEditReport(null)}
+          pending={updateReport.isPending}
+          onSubmit={async (payload) => {
+            try {
+              await updateReport.mutateAsync(payload);
+              toast.success("Rapport aktualisiert");
+              setEditReport(null);
+            } catch (e) {
+              toast.error(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
+            }
+          }}
+        />
       ) : null}
     </section>
   );

@@ -227,6 +227,10 @@ export type TechnicianReport = {
   workDescription: string;
   timeSpentMinutes: number | null;
   createdAt: string;
+  /** Profil-UUID des Erfaassers; Anzeigename siehe `createdByDisplayName`. */
+  createdByProfileId: string | null;
+  /** Snapshot von `profiles.display_name` bei Erfassung (für alle sichtbar). */
+  createdByDisplayName: string | null;
   orderForms: TechnicianReportOrderFormEntry[];
 };
 

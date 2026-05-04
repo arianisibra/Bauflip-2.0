@@ -299,7 +299,7 @@ export function TechDayView({
                           className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 shadow-sm transition-transform active:scale-[0.98]"
                         >
                           <div className="min-w-0 flex-1">
-                            <p className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                            <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                               <Clock className="size-3" />
                               {new Date(task.startsAt).toLocaleDateString("de-CH", {
                                 weekday: "short",
@@ -308,11 +308,13 @@ export function TechDayView({
                                 timeZone: "Europe/Zurich",
                               })}{" "}
                               ·{" "}
-                              {new Date(task.startsAt).toLocaleTimeString("de-CH", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                                timeZone: "Europe/Zurich",
-                              })}
+                              <span className="font-bold">
+                                {new Date(task.startsAt).toLocaleTimeString("de-CH", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  timeZone: "Europe/Zurich",
+                                })}
+                              </span>
                             </p>
                             <p className="mt-0.5 line-clamp-2 text-xs font-medium text-foreground">
                               {task.projectTitle}
@@ -346,7 +348,7 @@ export function TechDayView({
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
-                          <p className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                          <p className="flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground">
                             <Clock className="size-3" />
                             {formatTimeRange(task.startsAt, task.endsAt)}
                           </p>

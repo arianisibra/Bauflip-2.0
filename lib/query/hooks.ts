@@ -216,6 +216,8 @@ export function useUpdateTechnicianReport() {
     mutationFn: (values) => updateTechnicianReportAction(values, getTabId()),
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
+      qc.setQueryData(queryKeys.projects.auftragCore(core.project.id), core);
+      invalidateProjectAdjacencies(qc, core.project.id);
       invalidateReportAdjacencies(qc, core.project.id);
     },
   });

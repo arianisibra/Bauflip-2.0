@@ -60,5 +60,12 @@ export default async function MonteurAuftragPage({ params }: Params) {
 
   const coreWithSignedUrls = { ...core, attachments: signedAttachments };
 
-  return <MonteurAuftragClient core={coreWithSignedUrls} orderFormTemplates={orderFormTemplates} />;
+  return (
+    <MonteurAuftragClient
+      core={coreWithSignedUrls}
+      orderFormTemplates={orderFormTemplates}
+      viewerRole={session.role}
+      currentUserId={session.user.id}
+    />
+  );
 }
