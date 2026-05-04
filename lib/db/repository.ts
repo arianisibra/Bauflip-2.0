@@ -266,31 +266,6 @@ export const listProjectsForOffice = cache(async function listProjectsForOffice(
       };
     });
 
-    const terminGeplantIds = mapped.filter((p) => p.status === "termin_geplant").map((p) => p.id);
-    if (terminGeplantIds.length > 0) {
-      const nowIso = new Date().toISOString();
-      const { data: apptHits } = await supabase
-        .from("appointments")
-        .select("project_id")
-        .in("project_id", terminGeplantIds)
-        .gte("ends_at", nowIso);
-      const upgradeIds = [...new Set((apptHits ?? []).map((r) => String((r as { project_id: string }).project_id)))];
-      if (upgradeIds.length > 0) {
-        const { error: upErr } = await supabase
-          .from("projects")
-          .update({ status: "abgemacht" })
-          .in("id", upgradeIds)
-          .eq("status", "termin_geplant");
-        if (!upErr) {
-          for (const p of mapped) {
-            if (upgradeIds.includes(p.id)) {
-              p.status = "abgemacht";
-            }
-          }
-        }
-      }
-    }
-
     return sortOfficeProjects(mapped);
   });
 });
@@ -302,13 +277,6 @@ export const getProjectCore = cache(async function getProjectCore(projectId: str
       const project = mockProjects.find((x) => x.id === projectId);
       if (!project) return null;
       const appts = mockAppointments.filter((a) => a.projectId === projectId);
-      if (
-        project.status === "termin_geplant" &&
-        appts.some((a) => appointmentEndsInFutureOrNow(a.endsAt))
-      ) {
-        project.status = "abgemacht";
-        project.updatedAt = new Date().toISOString();
-      }
       return {
         project,
         appointments: appts,
@@ -330,14 +298,8 @@ export const getProjectCore = cache(async function getProjectCore(projectId: str
 
     if (!project) return null;
 
-    let projectModel = mapProjectRow(project as Record<string, unknown>);
+    const projectModel = mapProjectRow(project as Record<string, unknown>);
     const apptModels = ((appointments as Record<string, unknown>[]) ?? []).map(mapAppointmentRow);
-    if (
-      projectModel.status === "termin_geplant" &&
-      apptModels.some((a) => appointmentEndsInFutureOrNow(a.endsAt))
-    ) {
-      projectModel = await updateProject(projectId, { status: "abgemacht" });
-    }
 
     const reportRows = ((reports as Record<string, unknown>[]) ?? []).map(mapTechnicianReportRow);
 

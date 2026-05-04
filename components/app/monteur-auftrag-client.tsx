@@ -202,9 +202,6 @@ const STATUS_CONFIG: Record<string, { description: string }> = {
   abgemacht: {
     description: "Unten bei «Einsatz» Rapport ausfüllen oder Abschluss melden.",
   },
-  termin_geplant: {
-    description: "Unten bei «Einsatz» Rapport ausfüllen oder Abschluss melden.",
-  },
   einsatz_offen: { description: "Bestandesaufnahme oder Reparatur durchführen" },
   offerte_senden: { description: "Büro erstellt Offerte" },
   offerte_gesendet: { description: "Warte auf Kundenentscheid" },

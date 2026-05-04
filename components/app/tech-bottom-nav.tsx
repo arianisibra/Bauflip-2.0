@@ -15,7 +15,7 @@ export function TechBottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="sticky bottom-0 z-40 w-full border-t border-border bg-card/95 pb-safe shadow-[0_-1px_3px_rgba(0,0,0,0.06)] backdrop-blur-md">
+    <nav className="fixed inset-x-0 bottom-0 z-50 w-full border-t border-border bg-card/95 pb-safe shadow-[0_-1px_3px_rgba(0,0,0,0.06)] backdrop-blur-md">
       <div className="mx-auto flex max-w-md items-center justify-around px-4 py-2">
         {tabs.map((tab) => {
           const active =

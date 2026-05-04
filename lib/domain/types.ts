@@ -7,7 +7,6 @@ export type ProjectType = (typeof projectTypes)[number];
 export const projectStatuses = [
   "offen",
   "abgemacht",
-  "termin_geplant",
   "einsatz_offen",
   "offerte_senden",
   "offerte_gesendet",
@@ -63,7 +62,6 @@ export function nextProjectStatusAfterAppointmentBooked(
     return null;
   }
   if (current === "offen" && ctx.isFirstAppointmentForProject) return "abgemacht";
-  if (current === "termin_geplant") return "abgemacht";
   if (current === "einsatz_offen") return "montagebereit";
   return null;
 }
@@ -253,9 +251,8 @@ export type SidebarItem = {
 };
 
 export const projectStatusLabels: Record<ProjectStatus, string> = {
-  offen: "ABMACHEN",
+  offen: "OFFEN",
   abgemacht: "ABGEMACHT",
-  termin_geplant: "TERMIN GEPLANT",
   einsatz_offen: "EINSATZ / RAPPORT",
   offerte_senden: "OFFERTE SENDEN",
   offerte_gesendet: "OFFERTE GESENDET",
@@ -276,8 +273,6 @@ export const projectStatusBadgeClassNames: Record<ProjectStatus, string> = {
   offen: "border-zinc-500/45 bg-zinc-500/35 text-zinc-950 dark:border-zinc-400/50 dark:bg-zinc-500/40 dark:text-zinc-50",
   abgemacht:
     "border-lime-500/60 bg-lime-500/40 text-lime-950 dark:border-lime-400/60 dark:bg-lime-500/50 dark:text-lime-50",
-  termin_geplant:
-    "border-sky-500/55 bg-sky-500/35 text-sky-950 dark:border-sky-400/55 dark:bg-sky-500/45 dark:text-sky-50",
   einsatz_offen:
     "border-blue-500/55 bg-blue-500/35 text-blue-950 dark:border-blue-400/55 dark:bg-blue-500/45 dark:text-blue-50",
   offerte_senden:
