@@ -546,7 +546,7 @@ export function ProjektSheetEditor({
             name="tenantName"
             defaultValue={p.tenantName ?? ""}
             disabled={!canEdit}
-            onClick={(e) => openFieldOverlay(e.currentTarget, "Mieter / Kontakt")}
+            onDoubleClick={(e) => openFieldOverlay(e.currentTarget, "Mieter / Kontakt")}
           />
         </div>
         <div className="space-y-1">
@@ -560,7 +560,7 @@ export function ProjektSheetEditor({
               autoComplete="tel"
               defaultValue={p.tenantPhone ?? ""}
               disabled={!canEdit}
-              onClick={(e) => openFieldOverlay(e.currentTarget, "Telefon Mieter")}
+              onDoubleClick={(e) => openFieldOverlay(e.currentTarget, "Telefon Mieter")}
             />
             {tenantTelHref ? (
               <a
@@ -581,7 +581,7 @@ export function ProjektSheetEditor({
             type="email"
             defaultValue={p.tenantEmail ?? ""}
             disabled={!canEdit}
-            onClick={(e) => openFieldOverlay(e.currentTarget, "E-Mail Mieter")}
+            onDoubleClick={(e) => openFieldOverlay(e.currentTarget, "E-Mail Mieter")}
           />
         </div>
 
@@ -591,7 +591,7 @@ export function ProjektSheetEditor({
             name="managementName"
             defaultValue={p.managementName ?? ""}
             disabled={!canEdit}
-            onClick={(e) => openFieldOverlay(e.currentTarget, "Verwaltung")}
+            onDoubleClick={(e) => openFieldOverlay(e.currentTarget, "Verwaltung")}
           />
         </div>
         <div className="space-y-1 sm:col-span-2">
@@ -601,7 +601,7 @@ export function ProjektSheetEditor({
             type="email"
             defaultValue={p.managementEmail ?? ""}
             disabled={!canEdit}
-            onClick={(e) => openFieldOverlay(e.currentTarget, "Zuständige Person")}
+            onDoubleClick={(e) => openFieldOverlay(e.currentTarget, "Zuständige Person")}
           />
         </div>
 
@@ -611,7 +611,7 @@ export function ProjektSheetEditor({
             name="costCeilingText"
             defaultValue={p.costCeilingText ?? ""}
             disabled={!canEdit}
-            onClick={(e) => openFieldOverlay(e.currentTarget, "Kostendach")}
+            onDoubleClick={(e) => openFieldOverlay(e.currentTarget, "Kostendach")}
           />
         </div>
 
@@ -622,7 +622,7 @@ export function ProjektSheetEditor({
             placeholder="Strasse"
             defaultValue={p.serviceStreet ?? ""}
             disabled={!canEdit}
-            onClick={(e) => openFieldOverlay(e.currentTarget, "Adresse Einsatz")}
+            onDoubleClick={(e) => openFieldOverlay(e.currentTarget, "Adresse Einsatz")}
           />
         </div>
         <div className="space-y-1">
@@ -631,7 +631,7 @@ export function ProjektSheetEditor({
             name="servicePostalCode"
             defaultValue={p.servicePostalCode ?? ""}
             disabled={!canEdit}
-            onClick={(e) => openFieldOverlay(e.currentTarget, "PLZ")}
+            onDoubleClick={(e) => openFieldOverlay(e.currentTarget, "PLZ")}
           />
         </div>
         <div className="space-y-1">
@@ -640,7 +640,7 @@ export function ProjektSheetEditor({
             name="serviceCity"
             defaultValue={p.serviceCity ?? ""}
             disabled={!canEdit}
-            onClick={(e) => openFieldOverlay(e.currentTarget, "Ort")}
+            onDoubleClick={(e) => openFieldOverlay(e.currentTarget, "Ort")}
           />
         </div>
 
@@ -651,7 +651,7 @@ export function ProjektSheetEditor({
             rows={4}
             defaultValue={p.intakeOriginalText}
             disabled={!canEdit}
-            onClick={(e) => openFieldOverlay(e.currentTarget, "Wichtige Informationen", true)}
+            onDoubleClick={(e) => openFieldOverlay(e.currentTarget, "Wichtige Informationen", true)}
           />
         </div>
 
