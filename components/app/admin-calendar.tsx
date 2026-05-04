@@ -10,6 +10,7 @@ import {
   type WeekTaskProjectDayGroup,
 } from "@/lib/tech/group-week-tasks-by-project-day";
 import { formatWeekRangeDe, getSwissDayBounds, getWeekBounds } from "@/lib/date/week-bounds";
+import { swissYmdParts } from "@/lib/date/swiss";
 import { Button } from "@/components/ui/button";
 import { BauflipLoadingInline } from "@/components/ui/bauflip-loading";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -38,15 +39,15 @@ function formatDate(iso: string): string {
   });
 }
 
-function swissYmdFromDate(d: Date): { y: number; m: number; day: number } {
-  const s = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Zurich",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(d);
-  const [y, m, day] = s.split("-").map(Number);
-  return { y, m, day };
+/** Today's Swiss calendar day when `(y,m)` is the current month; otherwise 15 for browsing other months. */
+function defaultDayInVisibleMonth(y: number, m: number, now = new Date()): number {
+  const { y: cy, m: cm, day: cd } = swissYmdParts(now);
+  if (y === cy && m === cm) return cd;
+  return 15;
+}
+
+function anchorDateForYearMonth(y: number, m: number, now = new Date()): Date {
+  return new Date(y, m - 1, defaultDayInVisibleMonth(y, m, now));
 }
 
 function shiftCalendarDays(d: Date, deltaDays: number): Date {
@@ -78,7 +79,7 @@ function formatIsoWeekHeading(key: string): string {
 }
 
 function isoWeekInputValueFromDate(d: Date): string {
-  const { y, m, day } = swissYmdFromDate(d);
+  const { y, m, day } = swissYmdParts(d);
   return isoWeekKeyFromYmd(y, m, day);
 }
 
@@ -186,7 +187,7 @@ export function AdminCalendar({
   const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
   const [year, setYear] = useState(initialYear);
   const [month, setMonth] = useState(initialMonth);
-  const [anchorDate, setAnchorDate] = useState(() => new Date(initialYear, initialMonth - 1, 15));
+  const [anchorDate, setAnchorDate] = useState(() => anchorDateForYearMonth(initialYear, initialMonth));
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>("all");
   const [sortMode, setSortMode] = useState<"time" | "technician">("technician");
 
@@ -295,7 +296,7 @@ export function AdminCalendar({
       }
       setYear(newYear);
       setMonth(newMonth);
-      setAnchorDate(new Date(newYear, newMonth - 1, 15));
+      setAnchorDate(anchorDateForYearMonth(newYear, newMonth));
     },
     [year, month],
   );
@@ -312,7 +313,7 @@ export function AdminCalendar({
     (dir: -1 | 1) => {
       const nextYear = year + dir;
       setYear(nextYear);
-      setAnchorDate(new Date(nextYear, month - 1, 15));
+      setAnchorDate(anchorDateForYearMonth(nextYear, month));
     },
     [year, month],
   );
@@ -330,17 +331,17 @@ export function AdminCalendar({
   const onViewModeChange = useCallback((next: CalendarViewMode) => {
     setViewMode(next);
     if (next === "year" || next === "month") {
-      const { y, m } = swissYmdFromDate(anchorDate);
+      const { y, m } = swissYmdParts(anchorDate);
       setYear(y);
       setMonth(m);
     }
     if (next === "week" || next === "day") {
-      setAnchorDate(new Date(year, month - 1, 15));
+      setAnchorDate(anchorDateForYearMonth(year, month));
     }
   }, [anchorDate, year, month]);
 
   const dayPickerValue = useMemo(() => {
-    const { y, m, day } = swissYmdFromDate(anchorDate);
+    const { y, m, day } = swissYmdParts(anchorDate);
     return `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   }, [anchorDate]);
   const monthPickerValue = useMemo(() => `${year}-${String(month).padStart(2, "0")}`, [year, month]);
@@ -420,7 +421,7 @@ export function AdminCalendar({
                 if (!Number.isFinite(y)) return;
                 const clamped = Math.min(2100, Math.max(2000, y));
                 setYear(clamped);
-                setAnchorDate(new Date(clamped, month - 1, 15));
+                setAnchorDate(anchorDateForYearMonth(clamped, month));
               }}
             />
           ) : viewMode === "month" ? (
@@ -435,7 +436,7 @@ export function AdminCalendar({
                 if (!y || !mo) return;
                 setYear(y);
                 setMonth(mo);
-                setAnchorDate(new Date(y, mo - 1, 15));
+                setAnchorDate(anchorDateForYearMonth(y, mo));
               }}
             />
           ) : viewMode === "week" ? (
@@ -458,7 +459,7 @@ export function AdminCalendar({
                 const targetMonday = new Date(mondayWeek1);
                 targetMonday.setUTCDate(mondayWeek1.getUTCDate() + (w - 1) * 7);
                 setAnchorDate(targetMonday);
-                const sm = swissYmdFromDate(targetMonday);
+                const sm = swissYmdParts(targetMonday);
                 setYear(sm.y);
                 setMonth(sm.m);
               }}

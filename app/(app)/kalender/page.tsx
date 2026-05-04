@@ -2,6 +2,7 @@ import dynamic from "next/dynamic";
 import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
 import { listMonthTasks } from "@/lib/db/repository";
+import { swissYmdParts } from "@/lib/date/swiss";
 import { BauflipLoading } from "@/components/ui/bauflip-loading";
 
 const AdminCalendar = dynamic(
@@ -19,8 +20,8 @@ export default async function KalenderPage() {
   const session = await getCurrentSession();
   if (!session) redirect("/anmeldung");
 
-  const now = new Date();
-  const tasks = await listMonthTasks(now.getFullYear(), now.getMonth() + 1);
+  const { y, m } = swissYmdParts(new Date());
+  const tasks = await listMonthTasks(y, m);
 
   return (
     <section className="flex flex-col gap-6">
@@ -34,8 +35,8 @@ export default async function KalenderPage() {
       </div>
       <AdminCalendar
         initialTasks={tasks}
-        initialYear={now.getFullYear()}
-        initialMonth={now.getMonth() + 1}
+        initialYear={y}
+        initialMonth={m}
       />
     </section>
   );

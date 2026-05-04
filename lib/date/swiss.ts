@@ -1,5 +1,17 @@
 const TZ = "Europe/Zurich";
 
+/** Calendar year / month / day in Europe/Zurich for `now`. */
+export function swissYmdParts(now = new Date()): { y: number; m: number; day: number } {
+  const s = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  const [y, m, day] = s.split("-").map(Number);
+  return { y, m, day };
+}
+
 /** Current date string in Europe/Zurich as YYYY-MM-DD. */
 export function todayKeySwiss(now = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(now);
