@@ -15,6 +15,7 @@ import type {
 import { isMonteurMontageContext } from "@/lib/tech/monteur-context";
 import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
+import { telHref } from "@/lib/phone";
 import { formatServiceAddress, managementLabel, tenantLabel } from "@/lib/tech/bundle-display";
 import { submitTechnicianReportAction } from "@/app/(tech)/actions";
 import { useAuftragProjectCore, useUploadAttachment } from "@/lib/query/hooks";
@@ -380,6 +381,7 @@ export function MonteurAuftragClient({
   const uploadAttachment = useUploadAttachment();
   const bundle = liveCore;
   const p = bundle.project;
+  const tenantTelHref = telHref(p.tenantPhone);
 
   // Montage-Kontext: Material bestellt / montagebereit / Nachtermin — kein neues Bestellformular.
   const isMontageContext = isMonteurMontageContext(p.status as ProjectStatus, bundle.reports.length);
@@ -539,9 +541,9 @@ export function MonteurAuftragClient({
           ) : null}
           <InfoRow icon={User} label="Mieter">
             <span>{tenantLabel(p)}</span>
-            {p.tenantPhone?.trim() ? (
+            {tenantTelHref && p.tenantPhone?.trim() ? (
               <a
-                href={`tel:${p.tenantPhone.trim()}`}
+                href={tenantTelHref}
                 className="ml-2 text-xs font-medium text-primary underline-offset-4 hover:underline"
               >
                 {p.tenantPhone.trim()}

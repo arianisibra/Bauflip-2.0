@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import type { Appointment, TechnicianReport, ProjectStatus } from "@/lib/domain/types";
 import { projectStatusBadgeClassName, projectStatusLabels, projectStatuses } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
+import { telHref } from "@/lib/phone";
 import {
   useAddAppointment,
   useAssignableProfiles,
@@ -28,6 +29,7 @@ import {
   ClipboardList,
   Download,
   Loader2,
+  Phone,
   Trash2,
 } from "lucide-react";
 import { BauflipLoading, BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
@@ -456,6 +458,7 @@ export function ProjektSheetEditor({
     deleteAttachment.isPending ||
     deleteReport.isPending ||
     uploadAttachment.isPending;
+  const tenantTelHref = telHref(p.tenantPhone);
 
   const openFieldOverlay = (
     target: HTMLInputElement | HTMLTextAreaElement,
@@ -520,12 +523,28 @@ export function ProjektSheetEditor({
         </div>
         <div className="space-y-1">
           <Label>Telefon Mieter</Label>
-          <Input
-            name="tenantPhone"
-            defaultValue={p.tenantPhone ?? ""}
-            disabled={!canEdit}
-            onClick={(e) => openFieldOverlay(e.currentTarget, "Telefon Mieter")}
-          />
+          <div className="flex gap-2">
+            <Input
+              className="min-w-0 flex-1"
+              name="tenantPhone"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              defaultValue={p.tenantPhone ?? ""}
+              disabled={!canEdit}
+              onClick={(e) => openFieldOverlay(e.currentTarget, "Telefon Mieter")}
+            />
+            {tenantTelHref ? (
+              <a
+                href={tenantTelHref}
+                className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-md border border-primary/30 bg-primary/5 px-3 text-sm font-medium text-primary transition-colors hover:bg-primary/10 active:scale-[0.98]"
+                aria-label="Mieter anrufen"
+              >
+                <Phone className="size-4 shrink-0" aria-hidden />
+                <span className="hidden sm:inline">Anrufen</span>
+              </a>
+            ) : null}
+          </div>
         </div>
         <div className="space-y-1 sm:col-span-2">
           <Label>E-Mail Mieter</Label>
