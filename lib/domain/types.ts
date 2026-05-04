@@ -255,7 +255,7 @@ export type SidebarItem = {
 };
 
 export const projectStatusLabels: Record<ProjectStatus, string> = {
-  offen: "OFFEN",
+  offen: "ABMACHEN",
   abgemacht: "ABGEMACHT",
   einsatz_offen: "EINSATZ / RAPPORT",
   offerte_senden: "OFFERTE SENDEN",
