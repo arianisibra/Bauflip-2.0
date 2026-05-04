@@ -72,6 +72,7 @@ export function useProjectCore(projectId: string | null, enabled = true) {
       const { bundle } = await getProjectSheetDataAction(projectId);
       return bundle;
     },
+    staleTime: 60_000,
   });
 }
 
@@ -87,6 +88,7 @@ export function useAuftragProjectCore(projectId: string, initialCore: ProjectCor
     queryKey: queryKeys.projects.auftragCore(projectId),
     queryFn: () => fetchAuftragProjectCoreAction(projectId),
     initialData: initialCore,
+    staleTime: 60_000,
   });
 }
 
@@ -95,6 +97,7 @@ export function useProjectsList(initialData?: OfficeProjectListItem[]) {
     queryKey: queryKeys.projects.list(),
     queryFn: () => listProjectsForOfficeAction(),
     initialData,
+    staleTime: 45_000,
   });
 }
 
@@ -113,6 +116,7 @@ export function useWeekTasks(isoDate: string) {
   return useQuery<WeekTaskItem[]>({
     queryKey: queryKeys.weekTasks.byDate(isoDate),
     queryFn: () => fetchWeekTasksAction(isoDate),
+    staleTime: 90_000,
   });
 }
 

@@ -25,6 +25,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   themeColor: "#0f172a",
   viewportFit: "cover",
+  // Reduziert Scroll-/Zoom-Zwang, wenn die Tastatur den sichtbaren Bereich verkleinert (v. a. Android Chrome).
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({

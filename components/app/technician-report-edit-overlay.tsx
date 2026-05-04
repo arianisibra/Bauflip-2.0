@@ -71,8 +71,13 @@ export function TechnicianReportEditOverlay({
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/40 p-4 sm:items-center" role="dialog" aria-modal>
-      <div className="max-h-[min(90vh,720px)] w-full max-w-xl overflow-y-auto rounded-xl border border-border bg-background shadow-xl">
+    <div
+      className="fixed inset-0 z-[80] overflow-y-auto overflow-x-hidden overscroll-contain bg-black/40"
+      role="dialog"
+      aria-modal
+    >
+      <div className="flex min-h-dvh items-end justify-center p-4 pb-8 sm:items-center">
+        <div className="max-h-[min(90dvh,720px)] w-full max-w-xl overflow-y-auto rounded-xl border border-border bg-background shadow-xl">
         <div className="sticky top-0 z-[1] flex items-center justify-between gap-2 border-b border-border bg-background px-4 py-3">
           <h4 className="text-sm font-semibold">Rapport bearbeiten</h4>
           <Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={pending}>
@@ -95,7 +100,7 @@ export function TechnicianReportEditOverlay({
             </Label>
             <select
               id="edit-outcome"
-              className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm"
+              className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-2.5 text-base"
               value={outcome}
               onChange={(e) =>
                 setOutcome(e.target.value as "schaden_behoben" | "schaden_aufgenommen")
@@ -116,7 +121,6 @@ export function TechnicianReportEditOverlay({
               onChange={(e) => setSummary(e.target.value)}
               rows={2}
               disabled={pending}
-              className="text-sm"
             />
           </div>
           <div className="space-y-1.5">
@@ -129,7 +133,6 @@ export function TechnicianReportEditOverlay({
               onChange={(e) => setWorkDescription(e.target.value)}
               rows={4}
               disabled={pending}
-              className="text-sm"
             />
           </div>
           <div className="space-y-1.5">
@@ -143,7 +146,7 @@ export function TechnicianReportEditOverlay({
               rows={3}
               disabled={pending}
               placeholder="JSON oder Freitext"
-              className="font-mono text-xs"
+              className="font-mono"
             />
           </div>
 
@@ -203,12 +206,11 @@ export function TechnicianReportEditOverlay({
                               value={v}
                               onChange={(e) => setVal(e.target.value)}
                               disabled={pending}
-                              className="text-xs"
                             />
                           ) : f.type === "select" && f.options?.length ? (
                             <select
                               id={id}
-                              className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
+                              className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-base"
                               value={v}
                               onChange={(e) => setVal(e.target.value)}
                               disabled={pending}
@@ -228,7 +230,6 @@ export function TechnicianReportEditOverlay({
                               value={v}
                               onChange={(e) => setVal(e.target.value)}
                               disabled={pending}
-                              className="text-xs"
                             />
                           )}
                         </div>
@@ -249,6 +250,7 @@ export function TechnicianReportEditOverlay({
             </Button>
           </div>
         </form>
+        </div>
       </div>
     </div>
   );

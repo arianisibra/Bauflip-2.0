@@ -502,7 +502,7 @@ export function ProjektSheetEditor({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-6 overflow-y-auto pr-1">
+    <div className="flex flex-col gap-6 pr-1">
       <StatusPipeline
         projectId={projectId}
         currentStatus={p.status}
@@ -914,8 +914,9 @@ export function ProjektSheetEditor({
         />
       ) : null}
       {fieldOverlay ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-2xl rounded-xl border border-border bg-background p-4 shadow-xl">
+        <div className="fixed inset-0 z-[70] overflow-y-auto overflow-x-hidden overscroll-contain bg-black/40">
+          <div className="flex min-h-dvh items-center justify-center px-4 py-8">
+            <div className="my-auto w-full max-w-2xl rounded-xl border border-border bg-background p-4 shadow-xl">
             <div className="mb-3 flex items-center justify-between gap-3">
               <h4 className="text-sm font-semibold">{fieldOverlay.label}</h4>
               <Button type="button" variant="ghost" size="sm" onClick={() => setFieldOverlay(null)}>
@@ -954,6 +955,7 @@ export function ProjektSheetEditor({
                 </Button>
               </div>
             ) : null}
+            </div>
           </div>
         </div>
       ) : null}

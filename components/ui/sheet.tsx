@@ -59,7 +59,7 @@ export function Sheet({ open, onOpenChange, title, description, children, footer
         <div className="pointer-events-auto fixed inset-0 z-50 bg-black/40" aria-hidden />
         <Dialog.Content
           className={cn(
-            "fixed top-0 z-50 flex h-full w-full max-w-lg flex-col border bg-background shadow-xl outline-none",
+            "fixed top-0 z-50 flex h-[100dvh] max-h-[100dvh] min-h-0 w-full max-w-lg flex-col border bg-background shadow-xl outline-none",
             side === "left" ? "left-0 border-r" : "right-0 border-l",
             className,
           )}
@@ -98,7 +98,9 @@ export function Sheet({ open, onOpenChange, title, description, children, footer
               <X className="size-4" />
             </Dialog.Close>
           </div>
-          <div className="flex-1 overflow-y-auto px-5 py-5 [scrollbar-gutter:stable]">{children}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 py-5 [scrollbar-gutter:stable]">
+            {children}
+          </div>
           {footer ? <div className="border-t border-border/80 bg-muted/20 px-5 py-4">{footer}</div> : null}
         </Dialog.Content>
       </Dialog.Portal>

@@ -368,12 +368,14 @@ type OfficeCalendarAppointmentRow = {
 async function weekTasksFromAppointmentRange(
   rangeStartIso: string,
   rangeEndIso: string,
+  /** Nur gesetzt für Monteur-Pfade: weniger Zeilen aus der DB statt Filter nach dem Laden. */
+  assignedTechnicianId?: string | null,
 ): Promise<WeekTaskItem[]> {
   return withSlowLog("weekTasksFromAppointmentRange", async () => {
     const supabase = await createSupabaseServerClient();
     if (!supabase) return [];
 
-    const { data, error } = await supabase
+    let q = supabase
       .from("appointments")
       .select(
         `
@@ -396,8 +398,11 @@ async function weekTasksFromAppointmentRange(
     `,
       )
       .gte("starts_at", rangeStartIso)
-      .lte("starts_at", rangeEndIso)
-      .order("starts_at", { ascending: true });
+      .lte("starts_at", rangeEndIso);
+    if (assignedTechnicianId) {
+      q = q.eq("assigned_technician_id", assignedTechnicianId);
+    }
+    const { data, error } = await q.order("starts_at", { ascending: true });
 
     if (error || !data?.length) return [];
 
@@ -454,13 +459,18 @@ async function weekTasksFromAppointmentRange(
 export const listCalendarRangeTasks = cache(async function listCalendarRangeTasks(
   rangeStartIso: string,
   rangeEndIso: string,
+  assignedTechnicianId?: string | null,
 ): Promise<WeekTaskItem[]> {
-  return weekTasksFromAppointmentRange(rangeStartIso, rangeEndIso);
+  return weekTasksFromAppointmentRange(rangeStartIso, rangeEndIso, assignedTechnicianId);
 });
 
-export const listWeekTasks = cache(async function listWeekTasks(referenceDate = new Date()): Promise<WeekTaskItem[]> {
+export const listWeekTasks = cache(async function listWeekTasks(
+  referenceDate = new Date(),
+  /** Monteur: nur eigene Termine schon in SQL filtern (primitiv für `cache`-Tupel). */
+  assignedTechnicianId?: string,
+): Promise<WeekTaskItem[]> {
   const { start, end } = getWeekBounds(referenceDate);
-  return listCalendarRangeTasks(start.toISOString(), end.toISOString());
+  return listCalendarRangeTasks(start.toISOString(), end.toISOString(), assignedTechnicianId);
 });
 
 export const listMonthTasks = cache(async function listMonthTasks(year: number, month: number): Promise<WeekTaskItem[]> {

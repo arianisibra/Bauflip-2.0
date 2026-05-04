@@ -1,6 +1,7 @@
 import bundleAnalyzer from "@next/bundle-analyzer";
 import type { NextConfig } from "next";
 
+// Bundle-Grössen: `npm run analyze` setzt ANALYZE=true und öffnet den Analyzer nach dem Build.
 const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === "true",
 });

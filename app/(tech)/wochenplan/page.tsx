@@ -7,11 +7,10 @@ export default async function TechKalenderPage() {
   const session = await getCurrentSession();
   if (!session || !canAccessTechFieldRoutes(session.role)) return null;
 
-  const tasks = await listWeekTasks();
-  const myTasks =
-    session.role === "technician"
-      ? tasks.filter((t) => t.assignedTechnicianId === session.user.id)
-      : tasks;
+  const tasks = await listWeekTasks(
+    new Date(),
+    session.role === "technician" ? session.user.id : undefined,
+  );
 
   return (
     <section className="flex flex-col gap-5 pb-4">
@@ -21,7 +20,7 @@ export default async function TechKalenderPage() {
           Deine Termine der Woche im Überblick.
         </p>
       </header>
-      <TechCalendar initialTasks={myTasks} isTechnicianView={session.role === "technician"} />
+      <TechCalendar initialTasks={tasks} isTechnicianView={session.role === "technician"} />
     </section>
   );
 }

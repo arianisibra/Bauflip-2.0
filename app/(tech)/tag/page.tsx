@@ -19,7 +19,10 @@ export default async function TodayPage() {
   // UTC-noon of the Swiss Monday — stable reference for the whole week,
   // TZ-independent, shared with /wochenplan so both use the same cache entry.
   const referenceIso = swissWeekReferenceIso();
-  const tasks = await listWeekTasks(new Date(referenceIso));
+  const tasks = await listWeekTasks(
+    new Date(referenceIso),
+    session.role === "technician" ? session.user.id : undefined,
+  );
 
   return (
     <TechDayView
