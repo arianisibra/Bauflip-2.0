@@ -68,7 +68,7 @@ function MonteurTodayGroupCard({ group }: { group: WeekTaskProjectDayGroup }) {
             {group.slots.map((s) => (
               <p
                 key={s.appointmentId}
-                className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground"
+                className="flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground"
               >
                 <Clock className="size-3 shrink-0" />
                 {formatTimeRange(s.startsAt, s.endsAt)}
@@ -138,7 +138,7 @@ function MonteurUpcomingGroupCard({ group }: { group: WeekTaskProjectDayGroup })
         </p>
         <div className="mt-1 space-y-0.5">
           {group.slots.map((s) => (
-            <p key={s.appointmentId} className="text-[11px] text-muted-foreground">
+            <p key={s.appointmentId} className="text-[11px] font-bold text-muted-foreground">
               {formatTimeRange(s.startsAt, s.endsAt)}
             </p>
           ))}

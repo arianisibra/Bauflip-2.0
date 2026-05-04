@@ -24,7 +24,7 @@ export default async function TechLayout({ children }: { children: React.ReactNo
       <TechThemeScope />
       <div className="flex h-dvh max-h-dvh min-h-0 flex-col overflow-hidden bg-muted/30 dark:bg-muted/35">
         {session.role !== "technician" ? (
-          <header className="sticky top-0 z-50 mx-auto w-full max-w-md shrink-0 bg-muted/95 px-4 pt-3 backdrop-blur-md supports-[backdrop-filter]:bg-muted/90 md:hidden">
+          <header className="sticky top-0 z-50 mx-auto w-full max-w-md shrink-0 bg-muted/95 px-4 pb-3 pt-[calc(env(safe-area-inset-top,0px)+1rem)] backdrop-blur-md supports-[backdrop-filter]:bg-muted/90 md:hidden">
             <MobileContextSwitch />
           </header>
         ) : null}

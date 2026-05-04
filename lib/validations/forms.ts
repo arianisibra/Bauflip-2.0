@@ -46,6 +46,24 @@ export const technicianReportSchema = z.object({
     .optional(),
 });
 
+/** Nachträgliche Rapport-Korrektur (Büro) — ändert keinen Projekt-Status. */
+export const technicianReportUpdateSchema = z.object({
+  reportId: z.string().uuid(),
+  projectId: z.string().uuid(),
+  outcome: z.enum(["schaden_behoben", "schaden_aufgenommen"]),
+  summary: z.string().optional(),
+  measurementsJson: z.string().optional(),
+  workDescription: z.string().optional(),
+  orderForms: z
+    .array(
+      z.object({
+        templateId: z.string().uuid(),
+        values: z.record(z.string(), z.string()),
+      }),
+    )
+    .optional(),
+});
+
 export const profileSettingsSchema = z.object({
   displayName: z.string().min(2, "Name zu kurz."),
   calendarPosition: z.coerce.number().int().min(0).max(999),

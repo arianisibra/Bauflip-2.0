@@ -30,6 +30,7 @@ import {
   listProjectsForOfficeAction,
   updateProjectStammdatenAction,
   updateProjectStatusAction,
+  updateTechnicianReportAction,
 } from "@/app/(app)/projekte/actions";
 import {
   createIntakeAction,
@@ -202,6 +203,17 @@ export function useDeleteReport() {
   const qc = useQueryClient();
   return useMutation<{ core: ProjectCore }, Error, { reportId: string; projectId: string }>({
     mutationFn: ({ reportId, projectId }) => deleteReportAction(reportId, projectId),
+    onSuccess: ({ core }) => {
+      primeCore(qc, core.project.id, core);
+      invalidateReportAdjacencies(qc, core.project.id);
+    },
+  });
+}
+
+export function useUpdateTechnicianReport() {
+  const qc = useQueryClient();
+  return useMutation<{ core: ProjectCore }, Error, Parameters<typeof updateTechnicianReportAction>[0]>({
+    mutationFn: (values) => updateTechnicianReportAction(values, getTabId()),
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
       invalidateReportAdjacencies(qc, core.project.id);

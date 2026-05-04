@@ -367,14 +367,23 @@ function OrderFormCmsFieldCard({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Wert (exakt)</Label>
-                <Input
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label className="text-xs font-medium">
+                  Wert(e) — exakt wie in der Referenz-Auswahl
+                </Label>
+                <Textarea
+                  rows={3}
                   className="font-mono text-xs"
                   value={f.showWhenValue}
                   onChange={(e) => onPatch(f.localId, { showWhenValue: e.target.value })}
-                  placeholder="z. B. Ja"
+                  placeholder={
+                    "Eine Option pro Zeile, oder durch Komma trennen.\n\nGetriebe Links\nGetriebe Rechts\nMotor"
+                  }
                 />
+                <p className="text-[11px] text-muted-foreground">
+                  Sichtbar, wenn das Referenzfeld <strong>einer</strong> dieser Angaben entspricht (nach Leerzeichen
+                  am Rand).
+                </p>
               </div>
             </div>
           ) : null}

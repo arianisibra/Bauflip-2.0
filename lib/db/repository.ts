@@ -926,6 +926,88 @@ export async function addTechnicianReport(
   };
 }
 
+/**
+ * Rapport nachträglich anpassen (Büro) — Projekt-Status bleibt unverändert.
+ * Ersetzt alle Bestellformular-Zeilen, wenn `orderFormSubmissions` gesetzt ist.
+ */
+export async function updateTechnicianReport(
+  reportId: string,
+  input: {
+    projectId: string;
+    outcome: TechnicianReportOutcome;
+    summary: string;
+    measurementsJson: string;
+    workDescription: string;
+    orderFormSubmissions?: { templateId: string; valuesJson: Record<string, string> }[];
+  },
+): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const idx = mockReports.findIndex((r) => r.id === reportId && r.projectId === input.projectId);
+    if (idx === -1) throw new Error("Rapport nicht gefunden.");
+    const prev = mockReports[idx]!;
+    mockReports[idx] = {
+      ...prev,
+      outcome: input.outcome,
+      summary: input.summary,
+      measurementsJson: input.measurementsJson,
+      workDescription: input.workDescription,
+    };
+    return;
+  }
+
+  let parsedMeasurements: unknown = {};
+  try {
+    parsedMeasurements = JSON.parse(input.measurementsJson || "{}");
+  } catch {
+    parsedMeasurements = {};
+  }
+
+  const { data: existing, error: findErr } = await supabase
+    .from("technician_reports")
+    .select("id")
+    .eq("id", reportId)
+    .eq("project_id", input.projectId)
+    .maybeSingle();
+  if (findErr) throw new Error(findErr.message);
+  if (!existing) throw new Error("Rapport nicht gefunden.");
+
+  const { error: upErr } = await supabase
+    .from("technician_reports")
+    .update({
+      outcome: input.outcome,
+      summary: input.summary,
+      measurements_json: parsedMeasurements,
+      work_description: input.workDescription,
+    })
+    .eq("id", reportId)
+    .eq("project_id", input.projectId);
+  if (upErr) throw new Error(upErr.message);
+
+  if (input.orderFormSubmissions === undefined) {
+    return;
+  }
+
+  const { error: delErr } = await supabase
+    .from("technician_report_order_forms")
+    .delete()
+    .eq("technician_report_id", reportId);
+  if (delErr) throw new Error(delErr.message);
+
+  const submissions = input.orderFormSubmissions.filter((s) => Object.keys(s.valuesJson).length > 0);
+  if (submissions.length === 0) {
+    return;
+  }
+  const { error: ofError } = await supabase.from("technician_report_order_forms").insert(
+    submissions.map((s) => ({
+      technician_report_id: reportId,
+      template_id: s.templateId,
+      values_json: s.valuesJson,
+    })),
+  );
+  if (ofError) throw new Error(ofError.message ?? "Bestellformular konnte nicht gespeichert werden.");
+}
+
 export async function deleteTechnicianReport(reportId: string): Promise<void> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {

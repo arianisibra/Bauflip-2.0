@@ -8,6 +8,18 @@ export function fieldRequireWhen(f: OrderFormFieldDef): "when_marked_required" |
   return f.requireWhen ?? "when_marked_required";
 }
 
+/**
+ * Ein oder mehrere erwartete Werte aus `showWhenValue`: durch Komma, Semikolon oder
+ * Zeilenumbruch getrennt; je Token trimmen. Leere Tokens ignorieren.
+ */
+export function parseShowWhenExpectedTokens(showWhenValue: string | undefined): string[] {
+  const raw = showWhenValue ?? "";
+  return raw
+    .split(/[,;\n]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
 /** Sichtbarkeit relativ zu aktuellen Formularwerten (nur vorherige Felder als Referenz empfohlen). */
 export function isOrderFormFieldVisible(
   field: OrderFormFieldDef,
@@ -19,9 +31,9 @@ export function isOrderFormFieldVisible(
   if (!refKey) return true;
   const raw = values[refKey] ?? "";
   const trimmed = raw.trim();
-  const expected = (field.showWhenValue ?? "").trim();
-  if (expected.length > 0) {
-    return trimmed === expected;
+  const tokens = parseShowWhenExpectedTokens(field.showWhenValue);
+  if (tokens.length > 0) {
+    return tokens.includes(trimmed);
   }
   return trimmed.length > 0;
 }

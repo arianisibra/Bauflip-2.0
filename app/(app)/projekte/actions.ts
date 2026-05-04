@@ -8,13 +8,17 @@ import {
   deleteTechnicianReport,
   getProjectCore,
   listAssignableProfiles,
+  listActiveOrderFormTemplatesForOrg,
   updateProject,
+  updateTechnicianReport,
 } from "@/lib/db/repository";
 import type { ProjectCore } from "@/lib/db/repository";
 import { listProjectsForOffice } from "@/lib/db/repository";
 import type { OfficeProjectListItem, ProjectStatus, UserProfile } from "@/lib/domain/types";
 import { publish } from "@/lib/sse/hub";
-import { projectStammdatenUpdateSchema, appointmentSchema } from "@/lib/validations/forms";
+import { projectStammdatenUpdateSchema, appointmentSchema, technicianReportUpdateSchema } from "@/lib/validations/forms";
+import { validateOrderFormValues } from "@/lib/order-forms/validate-submission";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 // Note: mutation actions used to call `revalidatePath("/projekte")` via
 // `after()`. That's been removed — client cache is owned by TanStack Query,
@@ -200,5 +204,79 @@ export async function deleteReportAction(
   }
   await deleteTechnicianReport(reportId);
   const core = await coreOrThrow(projectId);
+  return { core };
+}
+
+export async function updateTechnicianReportAction(
+  values: unknown,
+  tabId?: string,
+): Promise<{ core: ProjectCore }> {
+  const session = await getCurrentSession();
+  if (!session || (session.role !== "office" && session.role !== "admin")) {
+    throw new Error("Keine Berechtigung.");
+  }
+
+  const parsed = technicianReportUpdateSchema.safeParse(values);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Ungültige Eingabe.");
+  }
+  const v = parsed.data;
+
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    throw new Error("Supabase nicht konfiguriert.");
+  }
+
+  const { data: proj, error: projErr } = await supabase
+    .from("projects")
+    .select("organization_id")
+    .eq("id", v.projectId)
+    .maybeSingle();
+
+  if (projErr || !proj?.organization_id) {
+    throw new Error("Projekt nicht gefunden.");
+  }
+
+  const organizationId = String(proj.organization_id);
+  const activeTemplates = await listActiveOrderFormTemplatesForOrg(organizationId);
+  const templateById = new Map(activeTemplates.map((t) => [t.id, t]));
+
+  const orderFormSubmissions: { templateId: string; valuesJson: Record<string, string> }[] = [];
+
+  for (const entry of v.orderForms ?? []) {
+    const tpl = templateById.get(entry.templateId);
+    if (!tpl) {
+      throw new Error("Unbekannte oder inaktive Bestellformular-Vorlage.");
+    }
+    const rawValues = entry.values ?? {};
+    try {
+      const validated = validateOrderFormValues(tpl.id, tpl.fields, rawValues);
+      if (Object.keys(validated).length > 0) {
+        orderFormSubmissions.push({ templateId: tpl.id, valuesJson: validated });
+      } else if (tpl.fields.some((f) => f.required)) {
+        throw new Error(`Bestellformular „${tpl.name}“ ist unvollständig.`);
+      }
+    } catch (validationErr) {
+      throw new Error(validationErr instanceof Error ? validationErr.message : "Validierung fehlgeschlagen.");
+    }
+  }
+
+  await updateTechnicianReport(v.reportId, {
+    projectId: v.projectId,
+    outcome: v.outcome,
+    summary: v.summary?.trim() ?? "",
+    measurementsJson: (v.measurementsJson?.trim() || "{}") as string,
+    workDescription: v.workDescription?.trim() ?? "",
+    orderFormSubmissions: v.orderForms !== undefined ? orderFormSubmissions : undefined,
+  });
+
+  const core = await coreOrThrow(v.projectId);
+  if (session.organizationId) {
+    publish(session.organizationId, {
+      type: "project.core_changed",
+      projectId: v.projectId,
+      originTabId: tabId,
+    });
+  }
   return { core };
 }

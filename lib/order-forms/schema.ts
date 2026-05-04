@@ -13,6 +13,7 @@ export const orderFormFieldDefSchema = z
     options: z.array(z.string().min(1)).optional(),
     showWhen: z.enum(["always", "when_field_equals"]).optional(),
     showWhenFieldKey: z.string().optional(),
+    /** Ein Wert oder mehrere (Komma, Semikolon oder Zeile); jeweils exakter Vergleich mit dem Referenzfeld. */
     showWhenValue: z.string().optional(),
     requireWhen: z.enum(["when_marked_required", "after_base_required"]).optional(),
   })

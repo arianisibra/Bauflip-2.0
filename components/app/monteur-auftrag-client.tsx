@@ -59,21 +59,38 @@ function buildMapsUrl(p: { serviceStreet: string | null; servicePostalCode: stri
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(parts.join(", "))}`;
 }
 
-function formatAppointmentRange(startsAtIso: string, endsAtIso: string): string {
+const TZ_CH = "Europe/Zurich";
+
+function AppointmentRangeDisplay({
+  startsAtIso,
+  endsAtIso,
+  className,
+}: {
+  startsAtIso: string;
+  endsAtIso: string;
+  className?: string;
+}) {
   const startsAt = new Date(startsAtIso);
   const endsAt = new Date(endsAtIso);
-  const day = startsAt.toLocaleDateString("de-CH", { timeZone: "Europe/Zurich" });
+  const day = startsAt.toLocaleDateString("de-CH", { timeZone: TZ_CH });
   const startTime = startsAt.toLocaleTimeString("de-CH", {
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "Europe/Zurich",
+    timeZone: TZ_CH,
   });
   const endTime = endsAt.toLocaleTimeString("de-CH", {
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "Europe/Zurich",
+    timeZone: TZ_CH,
   });
-  return `${day} ${startTime} – ${endTime}`;
+  return (
+    <span className={className}>
+      {day}{" "}
+      <span className="font-bold">{startTime}</span>
+      {" – "}
+      <span className="font-bold">{endTime}</span>
+    </span>
+  );
 }
 
 function AuftragSectionDivider() {
@@ -259,6 +276,13 @@ function MonteurPriorReportsSection({ reports }: { reports: TechnicianReport[] }
       <CardContent className="space-y-2 pt-0">
         {sorted.map((r, idx) => {
           const isBehoben = r.outcome === "schaden_behoben";
+          const created = new Date(r.createdAt);
+          const createdDate = created.toLocaleDateString("de-CH", { timeZone: TZ_CH });
+          const createdTime = created.toLocaleTimeString("de-CH", {
+            hour: "2-digit",
+            minute: "2-digit",
+            timeZone: TZ_CH,
+          });
           return (
             <details
               key={r.id}
@@ -283,7 +307,8 @@ function MonteurPriorReportsSection({ reports }: { reports: TechnicianReport[] }
                     ) : null}
                   </p>
                   <p className="text-[11px] text-muted-foreground">
-                    {new Date(r.createdAt).toLocaleString("de-CH", { timeZone: "Europe/Zurich" })}
+                    {createdDate}{" "}
+                    <span className="font-bold">{createdTime}</span>
                   </p>
                 </div>
               </summary>
@@ -513,7 +538,7 @@ export function MonteurAuftragClient({
           <InfoRow icon={Clock} label={allPast && displayAppt ? "Letzter Termin" : "Nächster Termin"}>
             {displayAppt ? (
               <span className="block">
-                {formatAppointmentRange(displayAppt.startsAt, displayAppt.endsAt)}
+                <AppointmentRangeDisplay startsAtIso={displayAppt.startsAt} endsAtIso={displayAppt.endsAt} />
                 {allPast ? (
                   <span className="mt-0.5 block text-[11px] font-normal text-muted-foreground">
                     Kein weiterer Termin geplant.
@@ -530,7 +555,7 @@ export function MonteurAuftragClient({
               <ul className="mt-1 list-inside list-disc space-y-0.5">
                 {furtherFuture.map((a) => (
                   <li key={a.id}>
-                    {formatAppointmentRange(a.startsAt, a.endsAt)}
+                    <AppointmentRangeDisplay startsAtIso={a.startsAt} endsAtIso={a.endsAt} />
                   </li>
                 ))}
               </ul>
