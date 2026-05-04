@@ -184,7 +184,7 @@ export function AdminCalendar({
   initialMonth: number;
 }) {
   const qc = useQueryClient();
-  const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
+  const [viewMode, setViewMode] = useState<CalendarViewMode>("day");
   const [year, setYear] = useState(initialYear);
   const [month, setMonth] = useState(initialMonth);
   const [anchorDate, setAnchorDate] = useState(() => anchorDateForYearMonth(initialYear, initialMonth));
@@ -392,7 +392,7 @@ export function AdminCalendar({
 
           {/* Zeitraum-Selector */}
           <div className="flex h-8 overflow-hidden rounded-lg border border-border/70 bg-background text-xs font-semibold shadow-sm">
-            {(["year", "month", "week", "day"] as CalendarViewMode[]).map((m) => (
+            {(["day", "week", "month", "year"] as CalendarViewMode[]).map((m) => (
               <button
                 key={m}
                 type="button"
