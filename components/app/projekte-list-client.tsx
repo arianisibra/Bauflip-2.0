@@ -2,6 +2,7 @@
 
 import { useVirtualizer } from "@tanstack/react-virtual";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -126,12 +127,15 @@ export function ProjekteListClient({
   technicians: initialTechnicians,
   canEditProjectSheet,
   initialOpenProjectId,
+  initialOpenSource,
 }: {
   projects: OfficeProjectListItem[];
   technicians: UserProfile[];
   canEditProjectSheet: boolean;
   initialOpenProjectId?: string;
+  initialOpenSource?: "kalender";
 }) {
+  const router = useRouter();
   const qc = useQueryClient();
   const { data: projects = initialProjects } = useProjectsList(initialProjects);
   // Seed the assignable-profiles cache WITHOUT subscribing — the sheet editor
@@ -149,12 +153,14 @@ export function ProjekteListClient({
   const [selected, setSelected] = useState<OfficeProjectListItem | null>(null);
   const [intakeOpen, setIntakeOpen] = useState(false);
   const [pendingOpenProjectId, setPendingOpenProjectId] = useState(initialOpenProjectId ?? "");
+  const [openSource, setOpenSource] = useState<"kalender" | null>(initialOpenSource ?? null);
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
 
   useEffect(() => {
     setPendingOpenProjectId(initialOpenProjectId ?? "");
-  }, [initialOpenProjectId]);
+    setOpenSource(initialOpenSource ?? null);
+  }, [initialOpenProjectId, initialOpenSource]);
 
   useEffect(() => {
     if (!pendingOpenProjectId) {
@@ -241,9 +247,11 @@ export function ProjekteListClient({
     (p: OfficeProjectListItem) => {
       setSelected(p);
       setOpen(true);
+      setOpenSource(null);
       // Sync URL for deep-linking WITHOUT triggering an RSC refetch of the list.
       const params = new URLSearchParams(globalThis.location.search);
       params.delete("sheet");
+      params.delete("from");
       params.set("openProjectId", p.id);
       globalThis.history.replaceState(null, "", `/projekte?${params.toString()}`);
     },
@@ -499,7 +507,17 @@ export function ProjekteListClient({
         onOpenChange={(next) => {
           setOpen(next);
           if (!next) {
+            const returnToCalendar = openSource === "kalender";
             setSelected(null);
+            setOpenSource(null);
+            if (returnToCalendar) {
+              if (globalThis.history.length > 1) {
+                globalThis.history.back();
+              } else {
+                router.push("/kalender");
+              }
+              return;
+            }
             // Strip ?openProjectId without triggering an RSC refetch.
             const params = new URLSearchParams(globalThis.location.search);
             let changed = false;
@@ -509,6 +527,10 @@ export function ProjekteListClient({
             }
             if (params.has("sheet")) {
               params.delete("sheet");
+              changed = true;
+            }
+            if (params.has("from")) {
+              params.delete("from");
               changed = true;
             }
             if (changed) {

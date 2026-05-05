@@ -9,6 +9,7 @@ import type {
   Project,
   ProjectAttachment,
   ProjectStatus,
+  ProjectStatusUpdateSource,
   RapportNextStep,
   RoleType,
   TechnicianAbsence,
@@ -61,7 +62,7 @@ function sortOfficeProjects(items: OfficeProjectListItem[]): OfficeProjectListIt
 
 /** DB-Spaltenliste — kein select('*') für Projektkern. */
 const PROJECT_DB_COLUMNS =
-  "id, organization_id, title, type, status, next_owner_role, next_owner_user_id, source, intake_original_text, access_notes, created_at, updated_at, closed_at, reference_code, hints_and_notes, tenant_name, tenant_phone, tenant_email, management_name, management_phone, management_email, cost_ceiling_text, service_street, service_postal_code, service_city, service_country";
+  "id, organization_id, title, type, status, status_updated_source, next_owner_role, next_owner_user_id, source, intake_original_text, access_notes, created_at, updated_at, closed_at, reference_code, hints_and_notes, tenant_name, tenant_phone, tenant_email, management_name, management_phone, management_email, cost_ceiling_text, service_street, service_postal_code, service_city, service_country";
 
 const APPOINTMENT_DB_COLUMNS =
   "id, project_id, kind, starts_at, ends_at, assigned_technician_id, planning_notes, created_at";
@@ -91,6 +92,11 @@ function isRoleType(v: unknown): v is RoleType {
 }
 
 function mapProjectRow(row: Record<string, unknown>): Project {
+  const rawStatusUpdateSource = row.status_updated_source;
+  const statusUpdateSource: ProjectStatusUpdateSource | null =
+    rawStatusUpdateSource === "manual" || rawStatusUpdateSource === "appointment_automation"
+      ? rawStatusUpdateSource
+      : null;
   return {
     id: String(row.id),
     organizationId: row.organization_id ? String(row.organization_id) : null,
@@ -118,6 +124,7 @@ function mapProjectRow(row: Record<string, unknown>): Project {
     servicePostalCode: row.service_postal_code != null ? String(row.service_postal_code) : null,
     serviceCity: row.service_city != null ? String(row.service_city) : null,
     serviceCountry: String(row.service_country ?? "CH"),
+    statusUpdateSource,
   };
 }
 
@@ -736,7 +743,7 @@ export const listProfilesByRole = cache(async function listProfilesByRole(role: 
 
 export type ProjectCreateInput = Omit<
   Project,
-  "id" | "createdAt" | "updatedAt" | "closedAt" | "referenceCode"
+  "id" | "createdAt" | "updatedAt" | "closedAt" | "referenceCode" | "statusUpdateSource"
 > & { referenceCode?: string | null };
 
 export async function createProject(input: ProjectCreateInput): Promise<Project> {
@@ -750,6 +757,7 @@ export async function createProject(input: ProjectCreateInput): Promise<Project>
       createdAt: now,
       updatedAt: now,
       closedAt: null,
+      statusUpdateSource: null,
     };
     mockProjects.push(p);
     return p;
@@ -785,6 +793,7 @@ export async function createProject(input: ProjectCreateInput): Promise<Project>
       service_city: input.serviceCity,
       service_country: input.serviceCountry ?? "CH",
       reference_code: input.referenceCode?.trim() || null,
+      status_updated_source: null,
     })
     .select(PROJECT_DB_COLUMNS)
     .single();
@@ -815,6 +824,7 @@ export type ProjectPatch = Partial<
     | "servicePostalCode"
     | "serviceCity"
     | "serviceCountry"
+    | "statusUpdateSource"
   >
 >;
 
@@ -845,6 +855,7 @@ export async function updateProject(projectId: string, patch: ProjectPatch): Pro
   if (patch.servicePostalCode !== undefined) row.service_postal_code = patch.servicePostalCode;
   if (patch.serviceCity !== undefined) row.service_city = patch.serviceCity;
   if (patch.serviceCountry !== undefined) row.service_country = patch.serviceCountry;
+  if (patch.statusUpdateSource !== undefined) row.status_updated_source = patch.statusUpdateSource;
   if (patch.status === "abgeschlossen") {
     row.closed_at = new Date().toISOString();
   }
@@ -863,7 +874,7 @@ export async function updateProject(projectId: string, patch: ProjectPatch): Pro
 }
 
 export async function updateProjectStatus(projectId: string, status: ProjectStatus): Promise<Project> {
-  return updateProject(projectId, { status });
+  return updateProject(projectId, { status, statusUpdateSource: "manual" });
 }
 
 export async function deleteProject(projectId: string): Promise<void> {
@@ -893,6 +904,7 @@ export async function addAppointment(input: Omit<Appointment, "id" | "createdAt"
       });
       if (next !== null && next !== mockP.status) {
         mockP.status = next;
+        mockP.statusUpdateSource = "appointment_automation";
         mockP.updatedAt = new Date().toISOString();
       }
     }
@@ -928,7 +940,10 @@ export async function addAppointment(input: Omit<Appointment, "id" | "createdAt"
     appointmentIsUpcoming,
   });
   if (nextStatus !== null && nextStatus !== currentStatus) {
-    await updateProject(input.projectId, { status: nextStatus });
+    await updateProject(input.projectId, {
+      status: nextStatus,
+      statusUpdateSource: "appointment_automation",
+    });
   }
 
   return mapAppointmentRow(data as Record<string, unknown>);
@@ -948,8 +963,10 @@ export async function deleteAppointment(appointmentId: string): Promise<void> {
       const hasUpcoming = mockAppointments.some((a) => a.projectId === projectId && a.endsAt >= now);
       if (!hasUpcoming) {
         const revert = projectStatusAfterLastAppointmentDeleted(mockP.status);
-        if (revert !== null) {
+        const canRevert = mockP.statusUpdateSource === "appointment_automation";
+        if (revert !== null && canRevert) {
           mockP.status = revert;
+          mockP.statusUpdateSource = "appointment_automation";
           mockP.updatedAt = new Date().toISOString();
         }
       }
@@ -981,13 +998,18 @@ export async function deleteAppointment(appointmentId: string): Promise<void> {
   if ((count ?? 0) === 0) {
     const { data: statusRow } = await supabase
       .from("projects")
-      .select("status")
+      .select("status, status_updated_source")
       .eq("id", projectId)
       .maybeSingle();
     const currentStatus = (statusRow?.status as ProjectStatus | undefined) ?? "offen";
+    const statusUpdatedSource = (statusRow?.status_updated_source as ProjectStatusUpdateSource | undefined) ?? null;
     const revert = projectStatusAfterLastAppointmentDeleted(currentStatus);
-    if (revert !== null && revert !== currentStatus) {
-      await updateProject(projectId, { status: revert });
+    const canRevert = statusUpdatedSource === "appointment_automation";
+    if (revert !== null && revert !== currentStatus && canRevert) {
+      await updateProject(projectId, {
+        status: revert,
+        statusUpdateSource: "appointment_automation",
+      });
     }
   }
 }
@@ -1137,7 +1159,7 @@ export async function addTechnicianReport(
   } else {
     status = "einsatz_offen"; // Fallback für Rückwärtskompatibilität
   }
-  await updateProject(input.projectId, { status });
+  await updateProject(input.projectId, { status, statusUpdateSource: "manual" });
 
   return {
     ...input,

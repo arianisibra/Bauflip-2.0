@@ -6,7 +6,7 @@ import { ProjekteListClient } from "@/components/app/projekte-list-client";
 
 type Props = {
   /** `sheet` wird vom Kalender verwendet — gleiche Bedeutung wie `openProjectId`. */
-  searchParams: Promise<{ openProjectId?: string; sheet?: string }>;
+  searchParams: Promise<{ openProjectId?: string; sheet?: string; from?: string }>;
 };
 
 export default async function ProjektePage(props: Props) {
@@ -19,6 +19,7 @@ export default async function ProjektePage(props: Props) {
   const rawOpen =
     typeof searchParams.openProjectId === "string" ? searchParams.openProjectId.trim() : "";
   const rawSheet = typeof searchParams.sheet === "string" ? searchParams.sheet.trim() : "";
+  const openSource = searchParams.from === "kalender" ? "kalender" : undefined;
   const openProjectId = rawOpen || rawSheet || undefined;
   const canEditProjectSheet = session?.role === "office" || session?.role === "admin";
   const supabaseConfigured = hasSupabaseConfig();
@@ -38,6 +39,7 @@ export default async function ProjektePage(props: Props) {
         technicians={technicians}
         canEditProjectSheet={canEditProjectSheet}
         initialOpenProjectId={openProjectId}
+        initialOpenSource={openSource}
       />
     </section>
   );

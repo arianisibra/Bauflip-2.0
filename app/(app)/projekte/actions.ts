@@ -9,6 +9,7 @@ import {
   getProjectCore,
   listAssignableProfiles,
   listActiveOrderFormTemplatesForOrg,
+  signAttachmentUrls,
   updateProject,
   updateTechnicianReport,
 } from "@/lib/db/repository";
@@ -28,7 +29,8 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 async function coreOrThrow(projectId: string): Promise<ProjectCore> {
   const bundle = await getProjectCore(projectId);
   if (!bundle) throw new Error("Projekt nicht gefunden.");
-  return bundle;
+  const signedAttachments = await signAttachmentUrls(bundle.attachments);
+  return { ...bundle, attachments: signedAttachments };
 }
 
 function nz(s: string | undefined | null): string | null {
@@ -96,6 +98,7 @@ export async function updateProjectStammdatenAction(values: unknown): Promise<{ 
     hintsAndNotes: nz(v.hintsAndNotes),
     accessNotes: nz(v.accessNotes),
     nextOwnerUserId: v.nextOwnerUserId && v.nextOwnerUserId !== "" ? v.nextOwnerUserId : null,
+    statusUpdateSource: v.status !== undefined ? "manual" : undefined,
   });
 
   const core = await coreOrThrow(v.projectId);
@@ -182,7 +185,7 @@ export async function updateProjectStatusAction(
   if (!session || (session.role !== "office" && session.role !== "admin")) {
     throw new Error("Keine Berechtigung.");
   }
-  await updateProject(projectId, { status });
+  await updateProject(projectId, { status, statusUpdateSource: "manual" });
   const core = await coreOrThrow(projectId);
   if (session.organizationId) {
     publish(session.organizationId, {

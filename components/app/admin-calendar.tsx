@@ -123,7 +123,7 @@ function AppointmentCard({
   const task = group.primary;
   return (
     <Link
-      href={`/projekte?sheet=${task.projectId}`}
+      href={`/projekte?sheet=${task.projectId}&from=kalender`}
       className={`flex min-h-0 items-stretch gap-2 rounded-lg border bg-card px-2 py-1.5 text-left shadow-sm outline-none ring-offset-background transition-colors hover:border-border hover:bg-muted/25 focus-visible:ring-2 focus-visible:ring-ring ${
         dimmed ? "border-border/40 opacity-50" : "border-border/90"
       }`}
@@ -256,6 +256,7 @@ export function AdminCalendar({
   const [year, setYear] = useState(initialYear);
   const [month, setMonth] = useState(initialMonth);
   const [anchorDate, setAnchorDate] = useState(() => anchorDateForYearMonth(initialYear, initialMonth));
+  const [calendarNowTs] = useState(() => Date.now());
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>("all");
   const [sortMode, setSortMode] = useState<"time" | "technician">("technician");
 
@@ -347,9 +348,8 @@ export function AdminCalendar({
   }, [selectedTechnicianId, tasks]);
 
   const { upcomingByWeek, pastByWeek } = useMemo(() => {
-    const now = Date.now();
-    const upcoming = visibleTasks.filter((t) => new Date(t.endsAt).getTime() >= now);
-    const past = visibleTasks.filter((t) => new Date(t.endsAt).getTime() < now);
+    const upcoming = visibleTasks.filter((t) => new Date(t.endsAt).getTime() >= calendarNowTs);
+    const past = visibleTasks.filter((t) => new Date(t.endsAt).getTime() < calendarNowTs);
 
     const sortGroups = (groups: ReturnType<typeof groupWeekTasksByProjectDay>) =>
       groups.sort((a, b) => {
@@ -365,7 +365,7 @@ export function AdminCalendar({
     const pastWeeks = bucketGroupsByIsoWeek(sortGroups(groupWeekTasksByProjectDay(past))).reverse();
 
     return { upcomingByWeek: upcomingWeeks, pastByWeek: pastWeeks };
-  }, [sortMode, visibleTasks]);
+  }, [calendarNowTs, sortMode, visibleTasks]);
 
   const navigateMonth = useCallback(
     (dir: -1 | 1) => {

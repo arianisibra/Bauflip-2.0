@@ -49,6 +49,7 @@ export const mockProjects: Project[] = [
     servicePostalCode: "8000",
     serviceCity: "Zürich",
     serviceCountry: "CH",
+    statusUpdateSource: null,
   },
 ];
 

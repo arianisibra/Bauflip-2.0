@@ -33,6 +33,9 @@ export type NextProjectStatusAfterAppointmentContext = {
   appointmentIsUpcoming: boolean;
 };
 
+export const projectStatusUpdateSources = ["manual", "appointment_automation"] as const;
+export type ProjectStatusUpdateSource = (typeof projectStatusUpdateSources)[number];
+
 /** Termin-Slot noch nicht vorbei (heute/laufend oder später). */
 export function appointmentEndsInFutureOrNow(endsAtIso: string): boolean {
   return new Date(endsAtIso).getTime() >= Date.now();
@@ -154,6 +157,7 @@ export type Project = {
   servicePostalCode: string | null;
   serviceCity: string | null;
   serviceCountry: string;
+  statusUpdateSource: ProjectStatusUpdateSource | null;
 };
 
 export type Appointment = {

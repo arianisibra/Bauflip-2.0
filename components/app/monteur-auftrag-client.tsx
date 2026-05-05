@@ -904,7 +904,6 @@ export function MonteurAuftragClient({
                   ref={fileInputRef}
                   type="file"
                   accept="image/*"
-                  capture="environment"
                   className="hidden"
                   onChange={async (ev) => {
                     const file = ev.target.files?.[0];
