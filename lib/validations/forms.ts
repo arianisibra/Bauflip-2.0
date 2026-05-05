@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { projectStatuses, projectTypes, RAPPORT_ALL_NEXT_STEPS } from "@/lib/domain/types";
+import {
+  projectStatuses,
+  projectTypes,
+  RAPPORT_ALL_NEXT_STEPS,
+  technicianAbsenceKinds,
+} from "@/lib/domain/types";
 
 export const intakeSchema = z.object({
   title: z.string(),
@@ -63,6 +68,23 @@ export const technicianReportUpdateSchema = z.object({
     )
     .optional(),
 });
+
+export const technicianAbsenceCreateSchema = z
+  .object({
+    technicianId: z.string().uuid(),
+    startsAt: z.string().min(1),
+    endsAt: z.string().min(1),
+    kind: z.enum(technicianAbsenceKinds),
+    note: z.string().optional().nullable(),
+  })
+  .refine(
+    (v) => {
+      const s = Date.parse(v.startsAt);
+      const e = Date.parse(v.endsAt);
+      return Number.isFinite(s) && Number.isFinite(e) && e > s;
+    },
+    { message: "Endzeit muss nach Beginn liegen." },
+  );
 
 export const profileSettingsSchema = z.object({
   displayName: z.string().min(2, "Name zu kurz."),

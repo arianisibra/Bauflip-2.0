@@ -16,6 +16,8 @@ import { BauflipLoadingInline } from "@/components/ui/bauflip-loading";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCalendarRangeTasks } from "@/lib/query/hooks";
 import { queryKeys } from "@/lib/query/keys";
+import { CalendarAvailabilityRail } from "@/components/app/calendar-availability-rail";
+import { cn } from "@/lib/utils";
 
 const MONTH_NAMES = [
   "Januar", "Februar", "März", "April", "Mai", "Juni",
@@ -24,7 +26,7 @@ const MONTH_NAMES = [
 
 const TZ = "Europe/Zurich";
 
-type CalendarViewMode = "year" | "month" | "week" | "day";
+type CalendarViewMode = "year" | "month" | "week" | "day" | "availability";
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", timeZone: TZ });
@@ -76,6 +78,19 @@ function isoWeekKeyFromTaskStart(iso: string): string {
 function formatIsoWeekHeading(key: string): string {
   const [ys, w] = key.split("-W");
   return `KW ${Number(w)} · ${ys}`;
+}
+
+/** Kalendertag YYYY-MM-DD (Schweiz) als lesbare Überschrift für Wochen-Gruppierung. */
+function formatSwissDayHeading(dayKey: string): string {
+  const [y, m, d] = dayKey.split("-").map(Number);
+  if (!y || !m || !d) return dayKey;
+  const ref = new Date(y, m - 1, d, 12, 0, 0, 0);
+  return new Intl.DateTimeFormat("de-CH", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: TZ,
+  }).format(ref);
 }
 
 function isoWeekInputValueFromDate(d: Date): string {
@@ -151,25 +166,78 @@ function WeekSection({
   weekKey,
   groups,
   dimmed,
+  subdivideByWeekDays = false,
 }: {
   weekKey: string;
   groups: WeekTaskProjectDayGroup[];
   dimmed: boolean;
+  /** In der Wochenansicht: Termine nach Kalendertag in eigene Karten-Blöcke mit Titel trennen. */
+  subdivideByWeekDays?: boolean;
 }) {
+  const dayChunks = useMemo(() => {
+    if (!subdivideByWeekDays || groups.length === 0) return null;
+    const map = new Map<string, WeekTaskProjectDayGroup[]>();
+    for (const g of groups) {
+      const dk = g.dayKey || swissDayKeyFromTaskStart(g.primary.startsAt);
+      const list = map.get(dk) ?? [];
+      list.push(g);
+      map.set(dk, list);
+    }
+    return [...map.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([dayKey, dayGroups]) => ({
+        dayKey,
+        groups: [...dayGroups].sort((x, y) => x.primary.startsAt.localeCompare(y.primary.startsAt)),
+      }));
+  }, [groups, subdivideByWeekDays]);
+
+  const cardGrid = (chunk: WeekTaskProjectDayGroup[]) => (
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+      {chunk.map((group) => (
+        <AppointmentCard key={group.key} group={group} dimmed={dimmed} />
+      ))}
+    </div>
+  );
+
   return (
-    <section aria-label={formatIsoWeekHeading(weekKey)} className="space-y-1.5">
+    <section aria-label={formatIsoWeekHeading(weekKey)} className="space-y-2">
       <h3
-        className={`border-b pb-1 text-[10px] font-semibold uppercase tracking-wide ${
-          dimmed ? "border-border/40 text-muted-foreground/50" : "border-border/70 text-muted-foreground"
-        }`}
+        className={cn(
+          "border-b pb-1 text-[10px] font-semibold uppercase tracking-wide",
+          dimmed ? "border-border/40 text-muted-foreground/50" : "border-border/70 text-muted-foreground",
+        )}
       >
         {formatIsoWeekHeading(weekKey)}
       </h3>
-      <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
-        {groups.map((group) => (
-          <AppointmentCard key={group.key} group={group} dimmed={dimmed} />
-        ))}
-      </div>
+      {dayChunks ? (
+        <div className="flex flex-col gap-4">
+          {dayChunks.map(({ dayKey, groups: dayGroups }) => (
+            <div
+              key={dayKey}
+              className={cn(
+                "rounded-xl border border-border/60 bg-muted/15 p-3 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.05]",
+                dimmed && "border-border/40 bg-muted/10 opacity-55",
+              )}
+            >
+              <h4
+                className={cn(
+                  "mb-2.5 border-b border-border/50 pb-2 text-xs font-semibold tracking-tight text-foreground sm:text-sm",
+                  dimmed && "text-muted-foreground",
+                )}
+              >
+                {formatSwissDayHeading(dayKey)}
+              </h4>
+              {cardGrid(dayGroups)}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
+          {groups.map((group) => (
+            <AppointmentCard key={group.key} group={group} dimmed={dimmed} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -192,6 +260,22 @@ export function AdminCalendar({
   const [sortMode, setSortMode] = useState<"time" | "technician">("technician");
 
   const { startIso, endIso, heading, rangeLabel } = useMemo(() => {
+    if (viewMode === "availability") {
+      const { start, end } = getSwissDayBounds(anchorDate);
+      const headingLong = new Intl.DateTimeFormat("de-CH", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        timeZone: TZ,
+      }).format(anchorDate);
+      return {
+        startIso: start.toISOString(),
+        endIso: end.toISOString(),
+        heading: headingLong,
+        rangeLabel: "Verfügbarkeit",
+      };
+    }
     if (viewMode === "year") {
       const start = new Date(year, 0, 1, 0, 0, 0, 0);
       const end = new Date(year, 11, 31, 23, 59, 59, 999);
@@ -335,7 +419,7 @@ export function AdminCalendar({
       setYear(y);
       setMonth(m);
     }
-    if (next === "week" || next === "day") {
+    if (next === "week" || next === "day" || next === "availability") {
       setAnchorDate(anchorDateForYearMonth(year, month));
     }
   }, [anchorDate, year, month]);
@@ -360,7 +444,7 @@ export function AdminCalendar({
             className="h-14 w-12 shrink-0 rounded-none rounded-tl-2xl border-r border-border/50 text-muted-foreground hover:bg-muted/60"
             onClick={() => onNavigate(-1)}
             disabled={pending}
-            aria-label={viewMode === "year" ? "Vorheriges Jahr" : viewMode === "month" ? "Vorheriger Monat" : viewMode === "week" ? "Vorherige Woche" : "Vorheriger Tag"}
+            aria-label={viewMode === "year" ? "Vorheriges Jahr" : viewMode === "month" ? "Vorheriger Monat" : viewMode === "week" ? "Vorherige Woche" : viewMode === "availability" ? "Vorheriger Tag" : "Vorheriger Tag"}
           >
             <ChevronLeft className="size-5" />
           </Button>
@@ -381,7 +465,7 @@ export function AdminCalendar({
             className="h-14 w-12 shrink-0 rounded-none rounded-tr-2xl border-l border-border/50 text-muted-foreground hover:bg-muted/60"
             onClick={() => onNavigate(1)}
             disabled={pending}
-            aria-label={viewMode === "year" ? "Nächstes Jahr" : viewMode === "month" ? "Nächster Monat" : viewMode === "week" ? "Nächste Woche" : "Nächster Tag"}
+            aria-label={viewMode === "year" ? "Nächstes Jahr" : viewMode === "month" ? "Nächster Monat" : viewMode === "week" ? "Nächste Woche" : viewMode === "availability" ? "Nächster Tag" : "Nächster Tag"}
           >
             <ChevronRight className="size-5" />
           </Button>
@@ -392,7 +476,7 @@ export function AdminCalendar({
 
           {/* Zeitraum-Selector */}
           <div className="flex h-8 overflow-hidden rounded-lg border border-border/70 bg-background text-xs font-semibold shadow-sm">
-            {(["day", "week", "month", "year"] as CalendarViewMode[]).map((m) => (
+            {(["day", "week", "month", "year", "availability"] as CalendarViewMode[]).map((m) => (
               <button
                 key={m}
                 type="button"
@@ -403,7 +487,15 @@ export function AdminCalendar({
                     : "text-muted-foreground hover:bg-muted/60"
                 }`}
               >
-                {m === "year" ? "Jahr" : m === "month" ? "Monat" : m === "week" ? "Woche" : "Tag"}
+                {m === "year"
+                  ? "Jahr"
+                  : m === "month"
+                    ? "Monat"
+                    : m === "week"
+                      ? "Woche"
+                      : m === "day"
+                        ? "Tag"
+                        : "Verfügbarkeit"}
               </button>
             ))}
           </div>
@@ -437,6 +529,19 @@ export function AdminCalendar({
                 setYear(y);
                 setMonth(mo);
                 setAnchorDate(anchorDateForYearMonth(y, mo));
+              }}
+            />
+          ) : viewMode === "availability" ? (
+            <input
+              type="date"
+              className="h-8 rounded-lg border border-border/70 bg-background px-2.5 text-xs font-semibold shadow-sm"
+              value={dayPickerValue}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (!v) return;
+                const [y, mo, d] = v.split("-").map(Number);
+                if (!y || !mo || !d) return;
+                setAnchorDate(new Date(y, mo - 1, d));
               }}
             />
           ) : viewMode === "week" ? (
@@ -481,6 +586,15 @@ export function AdminCalendar({
         </div>
       </div>
 
+      {viewMode === "availability" ? (
+        <CalendarAvailabilityRail
+          year={swissYmdParts(anchorDate).y}
+          month={swissYmdParts(anchorDate).m}
+          day={swissYmdParts(anchorDate).day}
+        />
+      ) : null}
+
+      {viewMode === "availability" ? null : (
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Monteur:</span>
         <select
@@ -505,7 +619,9 @@ export function AdminCalendar({
           <option value="time">Uhrzeit</option>
         </select>
       </div>
+      )}
 
+      {viewMode === "availability" ? null : (
       <div className="space-y-3">
         {upcomingByWeek.length === 0 && pastByWeek.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
@@ -518,7 +634,13 @@ export function AdminCalendar({
               <p className="px-1 text-xs text-muted-foreground">Keine bevorstehenden Termine.</p>
             ) : (
               upcomingByWeek.map(({ weekKey, groups }) => (
-                <WeekSection key={weekKey} weekKey={weekKey} groups={groups} dimmed={false} />
+                <WeekSection
+                  key={weekKey}
+                  weekKey={weekKey}
+                  groups={groups}
+                  dimmed={false}
+                  subdivideByWeekDays={viewMode === "week"}
+                />
               ))
             )}
 
@@ -535,11 +657,18 @@ export function AdminCalendar({
 
             {/* ── Vergangene Termine (gedimmt) ── */}
             {pastByWeek.map(({ weekKey, groups }) => (
-              <WeekSection key={weekKey} weekKey={weekKey} groups={groups} dimmed={true} />
+              <WeekSection
+                key={weekKey}
+                weekKey={weekKey}
+                groups={groups}
+                dimmed={true}
+                subdivideByWeekDays={viewMode === "week"}
+              />
             ))}
           </>
         )}
       </div>
+      )}
     </div>
   );
 }

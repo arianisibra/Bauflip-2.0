@@ -11,6 +11,8 @@ import type {
   ProjectStatus,
   RapportNextStep,
   RoleType,
+  TechnicianAbsence,
+  TechnicianAbsenceKind,
   TechnicianReport,
   TechnicianReportOrderFormEntry,
   TechnicianReportOutcome,
@@ -477,6 +479,190 @@ export const listMonthTasks = cache(async function listMonthTasks(year: number, 
   const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
   const end = new Date(year, month, 0, 23, 59, 59, 999);
   return listCalendarRangeTasks(start.toISOString(), end.toISOString());
+});
+
+const ABSENCE_DB_COLUMNS =
+  "id, organization_id, technician_id, starts_at, ends_at, kind, note, created_at";
+
+function isAbsenceKind(v: unknown): v is TechnicianAbsenceKind {
+  return v === "ferien" || v === "krank" || v === "blocker";
+}
+
+function mapAbsenceRow(
+  row: Record<string, unknown>,
+  techNameById: Map<string, string | null>,
+): TechnicianAbsence | null {
+  const kind = row.kind;
+  if (!isAbsenceKind(kind)) return null;
+  const tid = String(row.technician_id);
+  return {
+    id: String(row.id),
+    technicianId: tid,
+    technicianName: techNameById.get(tid) ?? null,
+    startsAt: String(row.starts_at),
+    endsAt: String(row.ends_at),
+    kind,
+    note: row.note != null ? String(row.note) : null,
+    createdAt: String(row.created_at ?? new Date().toISOString()),
+  };
+}
+
+/** Abwesenheiten, die mit dem Bereich [rangeStartIso, rangeEndIso] überlappen. */
+export const listTechnicianAbsencesInRange = cache(async function listTechnicianAbsencesInRange(
+  rangeStartIso: string,
+  rangeEndIso: string,
+  technicianId?: string | null,
+): Promise<TechnicianAbsence[]> {
+  return withSlowLog("listTechnicianAbsencesInRange", async () => {
+    const supabase = await createSupabaseServerClient();
+    if (!supabase) return [];
+    const orgId = await getCachedCurrentOrganizationId();
+    if (!orgId) return [];
+
+    let q = supabase
+      .from("technician_absences")
+      .select(ABSENCE_DB_COLUMNS)
+      .eq("organization_id", orgId)
+      .lt("starts_at", rangeEndIso)
+      .gt("ends_at", rangeStartIso);
+    if (technicianId) q = q.eq("technician_id", technicianId);
+
+    const { data, error } = await q.order("starts_at", { ascending: true });
+    if (error || !data) return [];
+
+    const rows = data as Record<string, unknown>[];
+    const techIds = [...new Set(rows.map((r) => String(r.technician_id)).filter(Boolean))];
+    const nameMap = new Map<string, string | null>();
+    if (techIds.length > 0) {
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("id, display_name")
+        .in("id", techIds);
+      for (const p of profs ?? []) {
+        const r = p as { id: string; display_name: string | null };
+        nameMap.set(r.id, r.display_name ?? null);
+      }
+    }
+
+    return rows
+      .map((r) => mapAbsenceRow(r, nameMap))
+      .filter((x): x is TechnicianAbsence => x !== null);
+  });
+});
+
+/** Alle Abwesenheiten der Organisation (alle Zeiträume). */
+export const listAllTechnicianAbsences = cache(async function listAllTechnicianAbsences(
+  technicianId?: string | null,
+): Promise<TechnicianAbsence[]> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return [];
+  const orgId = await getCachedCurrentOrganizationId();
+  if (!orgId) return [];
+
+  let q = supabase
+    .from("technician_absences")
+    .select(ABSENCE_DB_COLUMNS)
+    .eq("organization_id", orgId);
+  if (technicianId) q = q.eq("technician_id", technicianId);
+
+  const { data, error } = await q.order("starts_at", { ascending: false });
+  if (error || !data) return [];
+
+  const rows = data as Record<string, unknown>[];
+  const techIds = [...new Set(rows.map((r) => String(r.technician_id)).filter(Boolean))];
+  const nameMap = new Map<string, string | null>();
+  if (techIds.length > 0) {
+    const { data: profs } = await supabase
+      .from("profiles")
+      .select("id, display_name")
+      .in("id", techIds);
+    for (const p of profs ?? []) {
+      const r = p as { id: string; display_name: string | null };
+      nameMap.set(r.id, r.display_name ?? null);
+    }
+  }
+
+  return rows
+    .map((r) => mapAbsenceRow(r, nameMap))
+    .filter((x): x is TechnicianAbsence => x !== null);
+});
+
+export type TechnicianAbsenceCreateInput = {
+  technicianId: string;
+  startsAt: string;
+  endsAt: string;
+  kind: TechnicianAbsenceKind;
+  note: string | null;
+};
+
+export async function createTechnicianAbsence(
+  input: TechnicianAbsenceCreateInput,
+  createdByProfileId: string | null,
+): Promise<TechnicianAbsence> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    throw new Error("Supabase nicht verfügbar.");
+  }
+  const orgId = await getCachedCurrentOrganizationId();
+  if (!orgId) throw new Error("Keine Organisation.");
+
+  const { data, error } = await supabase
+    .from("technician_absences")
+    .insert({
+      organization_id: orgId,
+      technician_id: input.technicianId,
+      starts_at: input.startsAt,
+      ends_at: input.endsAt,
+      kind: input.kind,
+      note: input.note ?? null,
+      created_by: createdByProfileId,
+    })
+    .select(ABSENCE_DB_COLUMNS)
+    .single();
+  if (error || !data) {
+    throw new Error(error?.message ?? "Abwesenheit konnte nicht gespeichert werden.");
+  }
+
+  const techNameMap = new Map<string, string | null>();
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("id, display_name")
+    .eq("id", input.technicianId)
+    .maybeSingle();
+  if (prof) {
+    const r = prof as { id: string; display_name: string | null };
+    techNameMap.set(r.id, r.display_name ?? null);
+  }
+  const mapped = mapAbsenceRow(data as Record<string, unknown>, techNameMap);
+  if (!mapped) throw new Error("Unerwartetes Format.");
+  return mapped;
+}
+
+export async function deleteTechnicianAbsence(absenceId: string): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return;
+  const { error } = await supabase
+    .from("technician_absences")
+    .delete()
+    .eq("id", absenceId);
+  if (error) throw new Error(error.message);
+}
+
+/** Verfügbarkeits-Ansicht: Termine + Abwesenheiten + Monteur-Stammdaten in einem Roundtrip-Bündel. */
+export const listAvailabilityForRange = cache(async function listAvailabilityForRange(
+  rangeStartIso: string,
+  rangeEndIso: string,
+): Promise<{
+  technicians: UserProfile[];
+  appointments: WeekTaskItem[];
+  absences: TechnicianAbsence[];
+}> {
+  const [technicians, appointments, absences] = await Promise.all([
+    listAssignableProfiles(),
+    listCalendarRangeTasks(rangeStartIso, rangeEndIso),
+    listTechnicianAbsencesInRange(rangeStartIso, rangeEndIso),
+  ]);
+  return { technicians, appointments, absences };
 });
 
 export const listAssignableProfiles = cache(async function listAssignableProfiles(): Promise<UserProfile[]> {

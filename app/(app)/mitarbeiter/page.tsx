@@ -2,8 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
 import { inviteEmployeeAction, listTeamMembersAction, type TeamMemberListItem } from "@/app/(app)/einstellungen/actions";
+import { listAbsencesAction } from "@/app/(app)/mitarbeiter/absence-actions";
+import { listAssignableProfiles } from "@/lib/db/repository";
 import { InviteEmployeeSubmitButton } from "@/components/app/invite-employee-submit-button";
 import { InviteRoleSelect } from "@/components/app/invite-role-select";
+import { AbsencesManager } from "@/components/app/absences-manager";
 import { TurnstileField } from "@/components/auth/turnstile-field";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -125,12 +128,19 @@ export default async function MitarbeiterPage() {
   }
   const role = session.role;
   const isAdmin = true;
-  const teamMembers = await listTeamMembersAction();
+  const [teamMembers, absencesInitial, assignableProfiles] = await Promise.all([
+    listTeamMembersAction(),
+    listAbsencesAction(),
+    listAssignableProfiles(),
+  ]);
 
   const activeCount = teamMembers.filter((m) => m.status === "aktiv").length;
   const pendingCount = teamMembers.filter((m) => m.status === "eingeladen").length;
   const currentUserId = session?.user.id;
   const turnstileConfigured = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
+
+  // Nur Personen, die Termine zugewiesen bekommen können (Monteure + Office + Admin).
+  const absenceTechnicians = assignableProfiles;
 
   return (
     <section className="flex flex-col gap-6">
@@ -172,10 +182,18 @@ export default async function MitarbeiterPage() {
 
             <Card size="sm" className="overflow-hidden border-border/60 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.06]">
               <CardHeader className="border-b border-border/50 bg-muted/25 pb-3">
-                <CardTitle className="text-sm font-semibold tracking-tight">Team in Ihrer Organisation</CardTitle>
-                <CardDescription className="text-xs leading-relaxed">
-                  Aktive Mitglieder und ausstehende Einladungen.
-                </CardDescription>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="space-y-0.5">
+                    <CardTitle className="text-sm font-semibold tracking-tight">Team in Ihrer Organisation</CardTitle>
+                    <CardDescription className="text-xs leading-relaxed">
+                      Aktive Mitglieder und ausstehende Einladungen.
+                    </CardDescription>
+                  </div>
+                  <AbsencesManager
+                    technicians={absenceTechnicians}
+                    initialAbsences={absencesInitial}
+                  />
+                </div>
               </CardHeader>
               <CardContent className="px-0 pb-0 pt-0">
                 <Table>

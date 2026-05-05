@@ -9,17 +9,22 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { BauflipLoadingInline } from "@/components/ui/bauflip-loading";
-import { CheckCircle2, ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Clock, MapPin, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import {
-  shiftSwissWeekReference,
+  shiftSwissDayKey,
+  shiftSwissMonthInDayKey,
   swissWeekDays,
-  swissWeekReferenceIso,
+  swissWeekReferenceIsoFromDayKey,
 } from "@/lib/date/swiss-week";
-import { useWeekTasks } from "@/lib/query/hooks";
+import { todayKeySwiss } from "@/lib/date/swiss";
+import { useTechMonthTasks, useWeekTasks } from "@/lib/query/hooks";
 import { queryKeys } from "@/lib/query/keys";
 
 const DAY_NAMES_SHORT = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const TZ = "Europe/Zurich";
+
+type TechCalView = "day" | "week" | "month";
 
 function toSwissDateKey(d: Date): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(d);
@@ -27,6 +32,35 @@ function toSwissDateKey(d: Date): string {
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", timeZone: TZ });
+}
+
+function weekdayMon0FromDayKey(dayKey: string): number {
+  const iso = swissWeekReferenceIsoFromDayKey(dayKey);
+  const days = swissWeekDays(iso);
+  const i = days.findIndex((x) => x.key === dayKey);
+  return i >= 0 ? i : 0;
+}
+
+function taskMatchesSearch(task: WeekTaskItem, raw: string): boolean {
+  const q = raw.trim().toLowerCase();
+  if (!q) return true;
+  const hay = [task.projectTitle, task.technicianName, task.serviceAddressShort, task.tenantDisplay]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return hay.includes(q);
+}
+
+/** `type="week"` value `YYYY-Www` for the ISO week of a Swiss calendar day `YYYY-MM-DD`. */
+function isoWeekInputValueFromDayKey(dayKey: string): string {
+  const [y, m, d] = dayKey.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const isoYear = date.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(isoYear, 0, 1));
+  const weekNo = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${isoYear}-W${String(weekNo).padStart(2, "0")}`;
 }
 
 export function TechCalendar({
@@ -37,20 +71,26 @@ export function TechCalendar({
   isTechnicianView: boolean;
 }) {
   const qc = useQueryClient();
-  // UTC-noon of the Swiss Monday — stable across remounts (shared cache
-  // with /tag) and TZ-independent.
-  const [refDateIso, setRefDateIso] = useState(() => swissWeekReferenceIso());
+  const [viewMode, setViewMode] = useState<TechCalView>("day");
+  const [focusDayKey, setFocusDayKey] = useState(() => todayKeySwiss());
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>("all");
-  const [sortMode, setSortMode] = useState<"time" | "technician">("time");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const refDateIso = useMemo(() => swissWeekReferenceIsoFromDayKey(focusDayKey), [focusDayKey]);
+  const monthY = Number(focusDayKey.slice(0, 4));
+  const monthM = Number(focusDayKey.slice(5, 7));
 
   // Seed the initial week's cache from SSR so the first render has data without a fetch.
   useMemo(() => {
     qc.setQueryData(queryKeys.weekTasks.byDate(refDateIso), initialTasks);
-    // Run once on mount for the initial date — subsequent dates fetch via the hook.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { data: tasks = [], isFetching: pending } = useWeekTasks(refDateIso);
+  const { data: weekTasks = [], isFetching: weekPending } = useWeekTasks(refDateIso, viewMode !== "month");
+  const { data: monthTasks = [], isFetching: monthPending } = useTechMonthTasks(monthY, monthM, viewMode === "month");
+
+  const tasks = viewMode === "month" ? monthTasks : weekTasks;
+  const pending = viewMode === "month" ? monthPending : weekPending;
 
   const technicianOptions = useMemo(() => {
     if (isTechnicianView) return [];
@@ -72,100 +112,253 @@ export function TechCalendar({
     return tasks.filter((task) => task.assignedTechnicianId === selectedTechnicianId);
   }, [isTechnicianView, selectedTechnicianId, tasks]);
 
-  const todayKey = useMemo(() => toSwissDateKey(new Date()), []);
-  const weekDays = useMemo(() => swissWeekDays(refDateIso), [refDateIso]);
-  const headerRange = useMemo(() => {
-    if (weekDays.length < 2) return "";
-    const first = weekDays[0];
-    const last = weekDays[weekDays.length - 1];
-    return `${first.day}. ${first.monthShort} – ${last.day}. ${last.monthShort}`;
-  }, [weekDays]);
+  const searchFilteredTasks = useMemo(
+    () => visibleTasks.filter((t) => taskMatchesSearch(t, searchQuery)),
+    [visibleTasks, searchQuery],
+  );
+
+  const todayKey = useMemo(() => todayKeySwiss(), []);
+
+  const daysToRender = useMemo(() => {
+    if (viewMode === "week") {
+      return swissWeekDays(refDateIso).map((x, i) => ({
+        key: x.key,
+        day: x.day,
+        monthShort: x.monthShort,
+        weekdayShort: DAY_NAMES_SHORT[i],
+      }));
+    }
+    if (viewMode === "day") {
+      const days = swissWeekDays(refDateIso);
+      const one = days.find((x) => x.key === focusDayKey);
+      if (!one) return [];
+      const i = days.indexOf(one);
+      return [
+        {
+          key: one.key,
+          day: one.day,
+          monthShort: one.monthShort,
+          weekdayShort: DAY_NAMES_SHORT[i],
+        },
+      ];
+    }
+    const dim = new Date(monthY, monthM, 0).getDate();
+    const monthShortLabel = new Intl.DateTimeFormat("de-CH", { month: "short", timeZone: TZ }).format(
+      new Date(Date.UTC(monthY, monthM - 1, 15, 12, 0, 0)),
+    );
+    const rows: { key: string; day: number; monthShort: string; weekdayShort: string }[] = [];
+    for (let d = 1; d <= dim; d++) {
+      const key = `${monthY}-${String(monthM).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      rows.push({
+        key,
+        day: d,
+        monthShort: monthShortLabel,
+        weekdayShort: DAY_NAMES_SHORT[weekdayMon0FromDayKey(key)],
+      });
+    }
+    return rows;
+  }, [viewMode, refDateIso, focusDayKey, monthY, monthM]);
+
+  const headerLabel = useMemo(() => {
+    if (viewMode === "day") {
+      const [y, m, d] = focusDayKey.split("-").map(Number);
+      return new Intl.DateTimeFormat("de-CH", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        timeZone: TZ,
+      }).format(new Date(Date.UTC(y, m - 1, d, 12, 0, 0)));
+    }
+    if (viewMode === "week") {
+      const days = swissWeekDays(refDateIso);
+      if (days.length < 2) return "";
+      const first = days[0];
+      const last = days[days.length - 1];
+      return `${first.day}. ${first.monthShort} – ${last.day}. ${last.monthShort}`;
+    }
+    return new Intl.DateTimeFormat("de-CH", { month: "long", year: "numeric", timeZone: TZ }).format(
+      new Date(Date.UTC(monthY, monthM - 1, 15, 12, 0, 0)),
+    );
+  }, [viewMode, focusDayKey, refDateIso, monthY, monthM]);
 
   const tasksByDate = useMemo(() => {
     const map = new Map<string, WeekTaskItem[]>();
-    for (const t of visibleTasks) {
+    for (const t of searchFilteredTasks) {
       const key = toSwissDateKey(new Date(t.startsAt));
       const list = map.get(key) ?? [];
       list.push(t);
       map.set(key, list);
     }
     for (const list of map.values()) {
-      list.sort((a, b) => {
-        if (sortMode === "technician") {
-          const byName = (a.technicianName ?? "").localeCompare(b.technicianName ?? "", "de-CH");
-          if (byName !== 0) return byName;
-        }
-        return a.startsAt.localeCompare(b.startsAt);
-      });
+      list.sort((a, b) => a.startsAt.localeCompare(b.startsAt));
     }
     return map;
-  }, [sortMode, visibleTasks]);
+  }, [searchFilteredTasks]);
 
   const navigate = useCallback(
     (dir: -1 | 1) => {
-      setRefDateIso((current) => shiftSwissWeekReference(current, dir));
+      if (viewMode === "day") setFocusDayKey((k) => shiftSwissDayKey(k, dir));
+      else if (viewMode === "week") setFocusDayKey((k) => shiftSwissDayKey(k, dir * 7));
+      else setFocusDayKey((k) => shiftSwissMonthInDayKey(k, dir));
     },
-    [],
+    [viewMode],
   );
+
+  const navAria =
+    viewMode === "day" ? { prev: "Vorheriger Tag", next: "Nächster Tag" } :
+    viewMode === "week" ? { prev: "Vorherige Woche", next: "Nächste Woche" } :
+    { prev: "Vorheriger Monat", next: "Nächster Monat" };
+
+  const monthPickerValue = `${monthY}-${String(monthM).padStart(2, "0")}`;
+  const weekPickerValue = useMemo(() => isoWeekInputValueFromDayKey(focusDayKey), [focusDayKey]);
 
   return (
     <div className={cn("space-y-4", pending && "opacity-60 transition-opacity")}>
-      <div className="flex items-center justify-between">
+      <div className="relative w-full">
+        <Search className="pointer-events-none absolute left-2 top-1/2 z-10 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+        <Input
+          type="search"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Suchen …"
+          aria-label="Termine durchsuchen"
+          className="h-7 pl-8 text-xs"
+        />
+      </div>
+
+      <div className="flex items-center justify-between gap-2">
         <Button
           variant="outline"
           size="icon"
-          className="size-9"
+          className="size-9 shrink-0"
           onClick={() => navigate(-1)}
           disabled={pending}
-          aria-label="Vorherige Woche"
+          aria-label={navAria.prev}
         >
           <ChevronLeft className="size-4" />
         </Button>
-        <div className="flex min-h-9 flex-col items-center justify-center gap-1 text-center">
-          <p className="text-sm font-semibold text-foreground">{headerRange}</p>
+        <div className="flex min-h-9 min-w-0 flex-1 flex-col items-center justify-center gap-1 text-center">
+          <p className="text-sm font-semibold leading-snug text-foreground">{headerLabel}</p>
           {pending ? <BauflipLoadingInline label="Wird geladen …" /> : null}
         </div>
         <Button
           variant="outline"
           size="icon"
-          className="size-9"
+          className="size-9 shrink-0"
           onClick={() => navigate(1)}
           disabled={pending}
-          aria-label="Nächste Woche"
+          aria-label={navAria.next}
         >
           <ChevronRight className="size-4" />
         </Button>
       </div>
 
-      {!isTechnicianView ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Monteur:</span>
-          <select
-            className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-            value={selectedTechnicianId}
-            onChange={(e) => setSelectedTechnicianId(e.target.value)}
-          >
-            <option value="all">Alle</option>
-            {technicianOptions.map((opt) => (
-              <option key={opt.id} value={opt.id}>
-                {opt.name}
-              </option>
-            ))}
-          </select>
-          <span className="ml-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Sortierung:</span>
-          <select
-            className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-            value={sortMode}
-            onChange={(e) => setSortMode(e.target.value as "time" | "technician")}
-          >
-            <option value="time">Uhrzeit</option>
-            <option value="technician">Monteur</option>
-          </select>
-        </div>
+      {viewMode === "day" ? (
+        <input
+          type="date"
+          className="h-9 w-full rounded-lg border border-border/70 bg-background px-2 text-sm font-medium shadow-sm sm:max-w-[11rem]"
+          value={focusDayKey}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v) setFocusDayKey(v);
+          }}
+          aria-label="Datum wählen"
+        />
+      ) : null}
+      {viewMode === "week" ? (
+        <input
+          type="week"
+          className="h-9 w-full rounded-lg border border-border/70 bg-background px-2 text-sm font-medium shadow-sm sm:max-w-[12.5rem]"
+          value={weekPickerValue}
+          aria-label="Kalenderwoche wählen"
+          onChange={(e) => {
+            const v = e.target.value;
+            if (!v) return;
+            const parsed = /^(\d{4})-W(\d{2})$/.exec(v);
+            if (!parsed) return;
+            const y = Number(parsed[1]);
+            const w = Number(parsed[2]);
+            if (!y || !w) return;
+            const jan4 = new Date(Date.UTC(y, 0, 4));
+            const jan4Day = jan4.getUTCDay() || 7;
+            const mondayWeek1 = new Date(jan4);
+            mondayWeek1.setUTCDate(jan4.getUTCDate() - (jan4Day - 1));
+            const targetMonday = new Date(mondayWeek1);
+            targetMonday.setUTCDate(mondayWeek1.getUTCDate() + (w - 1) * 7);
+            setFocusDayKey(toSwissDateKey(targetMonday));
+          }}
+        />
+      ) : null}
+      {viewMode === "month" ? (
+        <input
+          type="month"
+          className="h-9 w-full rounded-lg border border-border/70 bg-background px-2 text-sm font-medium shadow-sm sm:max-w-[11rem]"
+          value={monthPickerValue}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (!v) return;
+            const [y, mo] = v.split("-").map(Number);
+            if (!y || !mo) return;
+            setFocusDayKey((prev) => {
+              const d0 = Number(prev.slice(8, 10));
+              const dim = new Date(y, mo, 0).getDate();
+              const d = Math.min(d0, dim);
+              return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+            });
+          }}
+          aria-label="Monat wählen"
+        />
       ) : null}
 
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+        {!isTechnicianView ? (
+          <>
+            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Monteur:</span>
+            <select
+              className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+              value={selectedTechnicianId}
+              onChange={(e) => setSelectedTechnicianId(e.target.value)}
+            >
+              <option value="all">Alle</option>
+              {technicianOptions.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.name}
+                </option>
+              ))}
+            </select>
+          </>
+        ) : null}
+        <div
+          className={cn(
+            "inline-flex h-8 items-stretch rounded-lg border border-border/60 bg-muted/45 p-0.5 text-[11px] font-semibold",
+            !isTechnicianView && "sm:ml-1",
+          )}
+          role="tablist"
+          aria-label="Zeitraum"
+        >
+          {(["day", "week", "month"] as TechCalView[]).map((m) => (
+            <button
+              key={m}
+              type="button"
+              role="tab"
+              aria-selected={viewMode === m}
+              onClick={() => setViewMode(m)}
+              className={cn(
+                "min-w-[3.25rem] rounded-md px-2.5 transition-[color,background-color,box-shadow]",
+                viewMode === m
+                  ? "bg-background text-foreground shadow-sm"
+                  : "bg-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {m === "day" ? "Tag" : m === "week" ? "Woche" : "Monat"}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="space-y-2">
-        {weekDays.map((dayInfo, i) => {
+        {daysToRender.map((dayInfo) => {
           const dateKey = dayInfo.key;
           const isToday = dateKey === todayKey;
           const dayTasksRaw = tasksByDate.get(dateKey) ?? [];
@@ -183,16 +376,14 @@ export function TechCalendar({
                 <span
                   className={cn(
                     "flex size-8 items-center justify-center rounded-full text-sm font-semibold",
-                    isToday
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted/50 text-foreground",
+                    isToday ? "bg-primary text-primary-foreground" : "bg-muted/50 text-foreground",
                   )}
                 >
                   {dayInfo.day}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className={cn("text-sm font-medium", isToday ? "text-primary" : "text-foreground")}>
-                    {DAY_NAMES_SHORT[i]}
+                    {viewMode === "month" ? `${dayInfo.weekdayShort} · ${dayInfo.monthShort}` : dayInfo.weekdayShort}
                   </p>
                 </div>
                 {dayTaskGroups.length > 0 ? (
@@ -233,7 +424,12 @@ export function TechCalendar({
                               </p>
                             ))}
                           </div>
-                          <p className={cn("mt-0.5 line-clamp-1 text-sm font-semibold", isDone ? "text-muted-foreground line-through" : "text-foreground")}>
+                          <p
+                            className={cn(
+                              "mt-0.5 line-clamp-1 text-sm font-semibold",
+                              isDone ? "text-muted-foreground line-through" : "text-foreground",
+                            )}
+                          >
                             {task.projectTitle}
                           </p>
                           {task.serviceAddressShort ? (

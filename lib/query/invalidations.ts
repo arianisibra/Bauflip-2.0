@@ -35,7 +35,9 @@ export function invalidateProjectAdjacencies(
   inv(qc, queryKeys.projects.list(), opts);
   inv(qc, queryKeys.weekTasks.all(), opts);
   inv(qc, queryKeys.monthTasks.all(), opts);
+  inv(qc, queryKeys.techMonthTasks.all(), opts);
   inv(qc, queryKeys.calendarRange.all(), opts);
+  inv(qc, queryKeys.availabilityRange.all(), opts);
 }
 
 export function invalidateReportAdjacencies(
@@ -103,7 +105,14 @@ export function afterProjectDeleted(
   inv(qc, queryKeys.projects.list(), opts);
   inv(qc, queryKeys.weekTasks.all(), opts);
   inv(qc, queryKeys.monthTasks.all(), opts);
+  inv(qc, queryKeys.techMonthTasks.all(), opts);
   inv(qc, queryKeys.calendarRange.all(), opts);
+  inv(qc, queryKeys.availabilityRange.all(), opts);
+}
+
+export function afterAbsenceChange(qc: QueryClient, opts?: InvalidateOpts): void {
+  inv(qc, queryKeys.absences.all(), opts);
+  inv(qc, queryKeys.availabilityRange.all(), opts);
 }
 
 export function afterMembershipChange(qc: QueryClient, opts?: InvalidateOpts): void {

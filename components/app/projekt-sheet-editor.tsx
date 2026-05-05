@@ -7,7 +7,6 @@ import { projectStatusBadgeClassName, projectStatusLabels, projectStatuses } fro
 import { cn } from "@/lib/utils";
 import { telHref } from "@/lib/phone";
 import {
-  useAddAppointment,
   useAssignableProfiles,
   useDeleteAppointment,
   useDeleteAttachment,
@@ -37,6 +36,7 @@ import {
 } from "lucide-react";
 import { BauflipLoading, BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
 import { TechnicianReportEditOverlay } from "@/components/app/technician-report-edit-overlay";
+import { AppointmentBookingForm } from "@/components/app/appointment-booking-form";
 function getFilledOrderFormFields(of_: TechnicianReport["orderForms"][number]) {
   return of_.fields.filter((f) => Boolean(of_.values[f.key]?.trim()));
 }
@@ -442,7 +442,6 @@ export function ProjektSheetEditor({
   const coreQuery = useProjectCore(projectId, open);
   const { data: technicians = [] } = useAssignableProfiles();
   const updateStammdaten = useUpdateStammdaten();
-  const addAppointment = useAddAppointment();
   const deleteAppointment = useDeleteAppointment();
   const deleteAttachment = useDeleteAttachment();
   const deleteReport = useDeleteReport();
@@ -480,7 +479,6 @@ export function ProjektSheetEditor({
   const p = core.project;
   const pending =
     updateStammdaten.isPending ||
-    addAppointment.isPending ||
     deleteAppointment.isPending ||
     deleteAttachment.isPending ||
     deleteReport.isPending ||
@@ -671,58 +669,7 @@ export function ProjektSheetEditor({
       {canEdit ? (
         <section className="border-t pt-4">
           <h3 className="mb-2 text-sm font-semibold">Termin planen</h3>
-          <form
-            className="grid gap-2 sm:grid-cols-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const fd = new FormData(e.currentTarget);
-              const starts = String(fd.get("startsAt") ?? "");
-              const ends = String(fd.get("endsAt") ?? "");
-              addAppointment.mutate(
-                {
-                  projectId,
-                  kind: "ausfuehrung",
-                  startsAt: new Date(starts).toISOString(),
-                  endsAt: new Date(ends).toISOString(),
-                  assignedTechnicianId: String(fd.get("assignedTechnicianId") ?? "") || null,
-                },
-                {
-                  onError: (err) =>
-                    setError(err instanceof Error ? err.message : "Termin fehlgeschlagen."),
-                },
-              );
-            }}
-          >
-            <div className="space-y-1">
-              <Label>Beginn</Label>
-              <Input name="startsAt" type="datetime-local" step={60} required />
-            </div>
-            <div className="space-y-1">
-              <Label>Ende</Label>
-              <Input name="endsAt" type="datetime-local" step={60} required />
-            </div>
-            <div className="space-y-1 sm:col-span-2">
-              <Label>Zuständige Person</Label>
-              <select
-                name="assignedTechnicianId"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="">—</option>
-                {technicians.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.displayName}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <Button type="submit" size="sm" disabled={addAppointment.isPending}>
-              {addAppointment.isPending ? (
-                <BauflipLoadingButtonLabel variant="onPrimary">Speichern …</BauflipLoadingButtonLabel>
-              ) : (
-                "Termin speichern"
-              )}
-            </Button>
-          </form>
+          <AppointmentBookingForm projectId={projectId} technicians={technicians} />
 
           <ul className="mt-3 space-y-2 text-sm">
             {core.appointments.map((a: Appointment, appointmentIndex: number) => {

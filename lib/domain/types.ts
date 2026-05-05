@@ -167,6 +167,27 @@ export type Appointment = {
   createdAt: string;
 };
 
+export const technicianAbsenceKinds = ["ferien", "krank", "blocker"] as const;
+export type TechnicianAbsenceKind = (typeof technicianAbsenceKinds)[number];
+
+export const technicianAbsenceKindLabels: Record<TechnicianAbsenceKind, string> = {
+  ferien: "Ferien",
+  krank: "Krank",
+  blocker: "Blocker",
+};
+
+/** Eintrag in `technician_absences`: belegt eine Zeit pro Monteur ohne Projektbezug. */
+export type TechnicianAbsence = {
+  id: string;
+  technicianId: string;
+  technicianName: string | null;
+  startsAt: string;
+  endsAt: string;
+  kind: TechnicianAbsenceKind;
+  note: string | null;
+  createdAt: string;
+};
+
 /** Nur Felder für die Büro-Liste; Stammdaten-Detail lädt das Sheet separat. */
 export type OfficeProjectListItem = {
   id: string;

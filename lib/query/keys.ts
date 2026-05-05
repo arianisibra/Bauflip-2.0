@@ -22,11 +22,26 @@ export const queryKeys = {
     all: () => ["month-tasks"] as const,
     byYearMonth: (year: number, month: number) => ["month-tasks", year, month] as const,
   },
+  /** Monteur-/Feld-Kalender: ganzer Monat (inkl. Monteur-SQL-Filter). */
+  techMonthTasks: {
+    all: () => ["tech-month-tasks"] as const,
+    byYearMonth: (year: number, month: number) => ["tech-month-tasks", year, month] as const,
+  },
   /** Büro-Kalender: beliebiger Zeitraum (Monat / KW / Tag) über starts_at-Bounds. */
   calendarRange: {
     all: () => ["admin-calendar-range"] as const,
     byStartEnd: (rangeStartIso: string, rangeEndIso: string) =>
       ["admin-calendar-range", rangeStartIso, rangeEndIso] as const,
+  },
+  /** Verfügbarkeit: Termine + Abwesenheiten + Monteure für einen Bereich. */
+  availabilityRange: {
+    all: () => ["availability-range"] as const,
+    byStartEnd: (rangeStartIso: string, rangeEndIso: string) =>
+      ["availability-range", rangeStartIso, rangeEndIso] as const,
+  },
+  /** Abwesenheiten (alle, Mitarbeiter-Drawer). */
+  absences: {
+    all: () => ["technician-absences"] as const,
   },
   assignableProfiles: () => ["assignable-profiles"] as const,
   orderFormTemplates: {

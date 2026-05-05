@@ -43,6 +43,35 @@ export function shiftSwissWeekReference(referenceIso: string, weeks: number): st
   return new Date(base + weeks * 7 * MS_PER_DAY).toISOString();
 }
 
+/** Swiss Monday reference ISO for the week that contains `dayKey` (`YYYY-MM-DD`). */
+export function swissWeekReferenceIsoFromDayKey(dayKey: string): string {
+  const [y, m, d] = dayKey.split("-").map(Number);
+  return swissWeekReferenceIso(new Date(Date.UTC(y, m - 1, d, 12, 0, 0)));
+}
+
+/** Add calendar days in Europe/Zurich; `dayKey` is `YYYY-MM-DD`. */
+export function shiftSwissDayKey(dayKey: string, deltaDays: number): string {
+  const [y, m, d] = dayKey.split("-").map(Number);
+  const utc = Date.UTC(y, m - 1, d, 12, 0, 0) + deltaDays * MS_PER_DAY;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: SWISS_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(utc));
+}
+
+/** Move `dayKey` by calendar months, clamping the day to the target month's length. */
+export function shiftSwissMonthInDayKey(dayKey: string, deltaMonths: number): string {
+  const [y0, m0, d0] = dayKey.split("-").map(Number);
+  const idx = y0 * 12 + (m0 - 1) + deltaMonths;
+  const y = Math.floor(idx / 12);
+  const m = (idx % 12) + 1;
+  const dim = new Date(y, m, 0).getDate();
+  const d = Math.min(d0, dim);
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
 const DAY_KEY_FORMATTER = new Intl.DateTimeFormat("en-CA", {
   timeZone: SWISS_TZ,
   year: "numeric",

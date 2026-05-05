@@ -17,6 +17,7 @@ import type {
   OfficeProjectListItem,
   OrderFormTemplate,
   ProjectStatus,
+  TechnicianAbsence,
   UserProfile,
   WeekTaskItem,
 } from "@/lib/domain/types";
@@ -39,8 +40,17 @@ import {
   uploadProjectReportFileAction,
 } from "@/app/(app)/actions";
 import { fetchCalendarRangeTasksAction, fetchMonthTasksAction } from "@/app/(app)/kalender/actions";
+import {
+  fetchAvailabilityRangeAction,
+  type AvailabilityBundle,
+} from "@/app/(app)/kalender/availability-actions";
+import {
+  createAbsenceAction,
+  deleteAbsenceAction,
+  listAbsencesAction,
+} from "@/app/(app)/mitarbeiter/absence-actions";
 import { fetchAuftragProjectCoreAction } from "@/app/(tech)/auftrag-data-actions";
-import { fetchWeekTasksAction } from "@/app/(tech)/wochenplan/actions";
+import { fetchTechMonthTasksAction, fetchWeekTasksAction } from "@/app/(tech)/wochenplan/actions";
 import {
   createOrderFormCmsAction,
   updateOrderFormCmsAction,
@@ -50,6 +60,7 @@ import {
   listOrderFormTemplatesForOrgAction,
 } from "@/app/(app)/order-form-template-actions";
 import {
+  afterAbsenceChange,
   afterOrderFormTemplateChange,
   afterProjectCoreChange,
   afterProjectDeleted,
@@ -112,10 +123,20 @@ export function useAssignableProfiles(initialData?: UserProfile[]) {
   });
 }
 
-export function useWeekTasks(isoDate: string) {
+export function useWeekTasks(isoDate: string, enabled = true) {
   return useQuery<WeekTaskItem[]>({
     queryKey: queryKeys.weekTasks.byDate(isoDate),
     queryFn: () => fetchWeekTasksAction(isoDate),
+    enabled,
+    staleTime: 90_000,
+  });
+}
+
+export function useTechMonthTasks(year: number, month: number, enabled = true) {
+  return useQuery<WeekTaskItem[]>({
+    queryKey: queryKeys.techMonthTasks.byYearMonth(year, month),
+    queryFn: () => fetchTechMonthTasksAction(year, month),
+    enabled,
     staleTime: 90_000,
   });
 }
@@ -137,6 +158,58 @@ export function useCalendarRangeTasks(rangeStartIso: string | null, rangeEndIso:
         : ["admin-calendar-range", "__disabled"],
     queryFn: () => fetchCalendarRangeTasksAction(rangeStartIso!, rangeEndIso!),
     enabled,
+  });
+}
+
+/** Verfügbarkeit (Termine + Abwesenheiten + Monteure) für einen Bereich. */
+export function useAvailabilityRange(
+  rangeStartIso: string | null,
+  rangeEndIso: string | null,
+  /** Zusätzlich zu Start/Ende gesetzt — z. B. nur laden wenn Monteur gewählt. */
+  queryEnabled = true,
+) {
+  const enabled = Boolean(rangeStartIso && rangeEndIso) && queryEnabled;
+  return useQuery<AvailabilityBundle>({
+    queryKey:
+      enabled && rangeStartIso && rangeEndIso
+        ? queryKeys.availabilityRange.byStartEnd(rangeStartIso, rangeEndIso)
+        : ["availability-range", "__disabled"],
+    queryFn: () => fetchAvailabilityRangeAction(rangeStartIso!, rangeEndIso!),
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+export function useAbsences(initialData?: TechnicianAbsence[]) {
+  return useQuery<TechnicianAbsence[]>({
+    queryKey: queryKeys.absences.all(),
+    queryFn: () => listAbsencesAction(),
+    initialData,
+    staleTime: 60_000,
+  });
+}
+
+export function useCreateAbsence() {
+  const qc = useQueryClient();
+  return useMutation<
+    TechnicianAbsence,
+    Error,
+    { technicianId: string; startsAt: string; endsAt: string; kind: TechnicianAbsence["kind"]; note?: string | null }
+  >({
+    mutationFn: (input) => createAbsenceAction(input),
+    onSuccess: () => {
+      afterAbsenceChange(qc);
+    },
+  });
+}
+
+export function useDeleteAbsence() {
+  const qc = useQueryClient();
+  return useMutation<{ ok: true }, Error, { absenceId: string }>({
+    mutationFn: ({ absenceId }) => deleteAbsenceAction(absenceId),
+    onSuccess: () => {
+      afterAbsenceChange(qc);
+    },
   });
 }
 
