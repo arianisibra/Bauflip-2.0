@@ -321,8 +321,10 @@ function MonteurPriorReportsSection({
                 <div className="min-w-0 flex-1 text-left">
                   <p className="text-sm font-medium text-foreground">
                     {isBehoben ? "Behoben" : "Aufgenommen"}
-                    {r.summary?.trim() ? (
-                      <span className="ml-1.5 font-normal text-muted-foreground">— {r.summary}</span>
+                    {r.workDescription?.trim() ? (
+                      <span className="ml-1.5 line-clamp-2 min-w-0 break-words font-normal text-muted-foreground">
+                        — {r.workDescription.trim()}
+                      </span>
                     ) : null}
                   </p>
                   <p className="text-[11px] text-muted-foreground">
@@ -355,14 +357,6 @@ function MonteurPriorReportsSection({
                       Arbeit / Material
                     </p>
                     <p className="whitespace-pre-wrap text-xs text-foreground">{r.workDescription}</p>
-                  </div>
-                ) : null}
-                {r.measurementsJson && r.measurementsJson !== "{}" ? (
-                  <div>
-                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Masse / Notizen
-                    </p>
-                    <p className="whitespace-pre-wrap text-xs text-foreground">{r.measurementsJson}</p>
                   </div>
                 ) : null}
                 {r.orderForms.length > 0 ? (
@@ -816,9 +810,9 @@ export function MonteurAuftragClient({
                       projectId: p.id,
                       outcome: mode,
                       nextStatus: mode === "schaden_aufgenommen" ? nextStatus ?? undefined : undefined,
-                      summary: String(fd.get("reportNotes") ?? ""),
+                      summary: String(fd.get("reportNotes") ?? "").trim(),
                       measurementsJson: "{}",
-                      workDescription: String(fd.get("reportNotes") ?? ""),
+                      workDescription: String(fd.get("reportNotes") ?? "").trim(),
                       orderForms: isMontageContext
                         ? []
                         : orderFormsPayloadFromFormData(fd, orderFormTemplates, orderFormLines),

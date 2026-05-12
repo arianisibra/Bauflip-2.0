@@ -68,19 +68,9 @@ function buildReportText(r: TechnicianReport): string {
     lines.push(`Erfasst von: ${r.createdByDisplayName.trim()}`);
   }
   lines.push("");
-  if (r.summary?.trim()) {
-    lines.push("Zusammenfassung:");
-    lines.push(r.summary.trim());
-    lines.push("");
-  }
   if (r.workDescription?.trim()) {
     lines.push("Arbeit / Material:");
     lines.push(r.workDescription.trim());
-    lines.push("");
-  }
-  if (r.measurementsJson && r.measurementsJson !== "{}" && r.measurementsJson !== "{}") {
-    lines.push("Masse / Notizen:");
-    lines.push(r.measurementsJson);
     lines.push("");
   }
   r.orderForms.forEach((of_, ofIdx) => {
@@ -151,8 +141,10 @@ function ReportCard({
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-foreground">
             {isBehoben ? "Behoben" : "Aufgenommen"}
-            {r.summary?.trim() ? (
-              <span className="ml-1.5 font-normal text-muted-foreground">— {r.summary}</span>
+            {r.workDescription?.trim() ? (
+              <span className="ml-1.5 line-clamp-2 min-w-0 break-words font-normal text-muted-foreground">
+                — {r.workDescription.trim()}
+              </span>
             ) : null}
           </p>
           <p className="text-[11px] text-muted-foreground">
@@ -177,17 +169,6 @@ function ReportCard({
               </p>
               <p className="whitespace-pre-wrap text-xs text-foreground">
                 {r.workDescription}
-              </p>
-            </div>
-          ) : null}
-
-          {r.measurementsJson && r.measurementsJson !== "{}" ? (
-            <div className="mb-3">
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Masse / Notizen
-              </p>
-              <p className="whitespace-pre-wrap text-xs text-foreground">
-                {r.measurementsJson}
               </p>
             </div>
           ) : null}

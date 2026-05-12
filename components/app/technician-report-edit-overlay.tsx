@@ -20,6 +20,7 @@ export type TechnicianReportEditPayload = {
   reportId: string;
   projectId: string;
   outcome: "schaden_behoben" | "schaden_aufgenommen";
+  /** Entspricht `workDescription` (Kurztext/Masse werden nicht mehr gepflegt). */
   summary?: string;
   measurementsJson?: string;
   workDescription?: string;
@@ -104,11 +105,7 @@ export function TechnicianReportEditOverlay({
   pending: boolean;
 }) {
   const [outcome, setOutcome] = useState<"schaden_behoben" | "schaden_aufgenommen">(report.outcome);
-  const [summary, setSummary] = useState(report.summary);
   const [workDescription, setWorkDescription] = useState(report.workDescription);
-  const [measurementsJson, setMeasurementsJson] = useState(
-    report.measurementsJson && report.measurementsJson !== "{}" ? report.measurementsJson : "",
-  );
   const [timeSpentMinutesStr, setTimeSpentMinutesStr] = useState(
     report.timeSpentMinutes != null && Number.isFinite(report.timeSpentMinutes)
       ? String(report.timeSpentMinutes)
@@ -155,7 +152,7 @@ export function TechnicianReportEditOverlay({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const meas = measurementsJson.trim() === "" ? "{}" : measurementsJson.trim();
+    const wd = workDescription.trim();
     const tStr = timeSpentMinutesStr.trim();
     let timeSpentMinutes: number | null = null;
     if (tStr !== "") {
@@ -175,9 +172,9 @@ export function TechnicianReportEditOverlay({
       reportId: report.id,
       projectId,
       outcome,
-      summary: summary.trim(),
-      workDescription: workDescription.trim(),
-      measurementsJson: meas,
+      summary: wd,
+      workDescription: wd,
+      measurementsJson: "{}",
       timeSpentMinutes,
       orderForms: includeOrderForms
         ? orderFormLines.map(({ templateId, values }) => ({
@@ -232,18 +229,6 @@ export function TechnicianReportEditOverlay({
               </select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="edit-summary" className="text-xs">
-                Kurztext
-              </Label>
-              <Textarea
-                id="edit-summary"
-                value={summary}
-                onChange={(e) => setSummary(e.target.value)}
-                rows={2}
-                disabled={pending}
-              />
-            </div>
-            <div className="space-y-1.5">
               <Label htmlFor="edit-work" className="text-xs">
                 Arbeit / Material
               </Label>
@@ -253,20 +238,6 @@ export function TechnicianReportEditOverlay({
                 onChange={(e) => setWorkDescription(e.target.value)}
                 rows={4}
                 disabled={pending}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-meas" className="text-xs">
-                Masse / Notizen
-              </Label>
-              <Textarea
-                id="edit-meas"
-                value={measurementsJson}
-                onChange={(e) => setMeasurementsJson(e.target.value)}
-                rows={3}
-                disabled={pending}
-                placeholder="JSON oder Freitext"
-                className="font-mono"
               />
             </div>
             <div className="space-y-1.5">
