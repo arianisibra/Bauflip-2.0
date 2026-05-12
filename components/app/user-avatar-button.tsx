@@ -50,7 +50,7 @@ export function UserAvatarButton({ organizationName, organizationLogoUrl }: User
               </span>
             )}
           </span>
-          <span className="min-w-0 flex-1 truncate">{organizationName}</span>
+          <span className="min-w-0 flex-1 truncate font-bold">{organizationName}</span>
           <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         </button>
       </DropdownMenuTrigger>

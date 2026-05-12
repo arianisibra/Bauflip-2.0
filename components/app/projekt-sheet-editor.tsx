@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { Appointment, TechnicianReport, ProjectStatus } from "@/lib/domain/types";
 import { projectStatusBadgeClassName, projectStatusLabels, projectStatuses } from "@/lib/domain/types";
@@ -30,6 +30,7 @@ import {
   ChevronDown,
   ClipboardList,
   Download,
+  FileText,
   Loader2,
   Pencil,
   Phone,
@@ -458,6 +459,18 @@ export function ProjektSheetEditor({
     target: HTMLInputElement | HTMLTextAreaElement;
   } | null>(null);
 
+  const imageAttachments = useMemo(() => {
+    const c = coreQuery.data;
+    if (!c) return [];
+    return c.attachments.filter((a) => isLikelyProjectImage(a.fileType, a.fileName));
+  }, [coreQuery.data]);
+
+  const documentAttachments = useMemo(() => {
+    const c = coreQuery.data;
+    if (!c) return [];
+    return c.attachments.filter((a) => !isLikelyProjectImage(a.fileType, a.fileName));
+  }, [coreQuery.data]);
+
   if (!open) {
     return null;
   }
@@ -736,7 +749,7 @@ export function ProjektSheetEditor({
       <section className="border-t pt-4">
         <h3 className="mb-2 text-sm font-semibold">Anhänge</h3>
         <form
-          className="flex flex-wrap items-end gap-2"
+          className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end"
           onSubmit={async (e) => {
             e.preventDefault();
             const fd = new FormData();
@@ -757,8 +770,19 @@ export function ProjektSheetEditor({
             }
           }}
         >
-          <Input name="file" type="file" accept="image/*,application/pdf" />
-          <Button type="submit" size="sm" variant="outline" disabled={uploadAttachment.isPending}>
+          <Input
+            name="file"
+            type="file"
+            accept="image/*,application/pdf"
+            className="min-h-11 w-full cursor-pointer text-sm sm:max-w-xs"
+          />
+          <Button
+            type="submit"
+            size="sm"
+            variant="outline"
+            disabled={uploadAttachment.isPending}
+            className="h-11 w-full shrink-0 touch-manipulation sm:h-9 sm:w-auto"
+          >
             {uploadAttachment.isPending ? (
               <BauflipLoadingButtonLabel variant="onSurface">Wird hochgeladen …</BauflipLoadingButtonLabel>
             ) : (
@@ -766,72 +790,125 @@ export function ProjektSheetEditor({
             )}
           </Button>
         </form>
-        {core.attachments.some((a) => isLikelyProjectImage(a.fileType, a.fileName) && a.signedUrl) ? (
-          <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
-            {core.attachments
-              .filter((a) => isLikelyProjectImage(a.fileType, a.fileName) && a.signedUrl)
-              .map((a) => (
-                <a
-                  key={a.id}
-                  href={a.signedUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="relative aspect-square overflow-hidden rounded-lg border border-border bg-muted hover:opacity-95"
-                  title={a.fileName}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={a.signedUrl} alt={a.fileName} className="size-full object-cover" />
-                </a>
-              ))}
+
+        {imageAttachments.length > 0 ? (
+          <div
+            className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3"
+            role="list"
+            aria-label="Bild-Anhänge"
+          >
+            {imageAttachments.map((a) => (
+              <div
+                key={a.id}
+                role="listitem"
+                className="group relative aspect-square overflow-hidden rounded-xl border border-border bg-muted shadow-sm"
+              >
+                {a.signedUrl ? (
+                  <a
+                    href={a.signedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="absolute inset-0 z-0 block outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
+                    title={a.fileName}
+                    aria-label={`${a.fileName} in neuem Tab öffnen`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={a.signedUrl} alt={a.fileName} className="size-full object-cover" />
+                  </a>
+                ) : (
+                  <div className="flex size-full items-center justify-center bg-muted/80 p-2 text-center text-[10px] text-muted-foreground">
+                    Vorschau nicht verfügbar
+                  </div>
+                )}
+                {canEdit ? (
+                  <button
+                    type="button"
+                    className="absolute right-1 top-1 z-10 flex size-10 touch-manipulation items-center justify-center rounded-full bg-black/55 text-white shadow-md backdrop-blur-sm transition-opacity hover:bg-black/70 active:scale-95"
+                    aria-label={`${a.fileName} löschen`}
+                    disabled={pending}
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (!window.confirm(`„${a.fileName}“ wirklich löschen?`)) return;
+                      try {
+                        const result = await deleteAttachment.mutateAsync({
+                          attachmentId: a.id,
+                          filePath: a.filePath,
+                          projectId,
+                        });
+                        if (result.success) {
+                          toast.success("Datei gelöscht");
+                        } else {
+                          toast.error(result.error);
+                        }
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : "Löschen fehlgeschlagen.");
+                      }
+                    }}
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                ) : null}
+              </div>
+            ))}
           </div>
         ) : null}
-        <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-          {core.attachments.map((a) => (
-            <li key={a.id} className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-muted/20 px-2.5 py-1.5">
-              {a.signedUrl ? (
-                <a
-                  href={a.signedUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="min-w-0 truncate text-primary underline-offset-4 hover:underline"
-                  title={a.fileName}
-                >
-                  {a.fileName}
-                </a>
-              ) : (
-                <span className="min-w-0 truncate">{a.fileName}</span>
-              )}
-              {canEdit ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 px-2 text-destructive hover:text-destructive"
-                  disabled={pending}
-                  onClick={async () => {
-                    if (!window.confirm(`Datei "${a.fileName}" wirklich löschen?`)) return;
-                    try {
-                      const result = await deleteAttachment.mutateAsync({
-                        attachmentId: a.id,
-                        filePath: a.filePath,
-                        projectId,
-                      });
-                      if (result.success) {
-                        toast.success("Datei gelöscht");
-                      } else {
-                        toast.error(result.error);
+
+        {documentAttachments.length > 0 ? (
+          <ul className="mt-3 space-y-2" aria-label="Dokument-Anhänge">
+            {documentAttachments.map((a) => (
+              <li
+                key={a.id}
+                className="flex min-h-11 flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2"
+              >
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  {a.signedUrl ? (
+                    <a
+                      href={a.signedUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="min-w-0 truncate text-sm font-medium text-primary underline-offset-4 hover:underline"
+                      title={a.fileName}
+                    >
+                      {a.fileName}
+                    </a>
+                  ) : (
+                    <span className="min-w-0 truncate text-sm text-muted-foreground">{a.fileName}</span>
+                  )}
+                </div>
+                {canEdit ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-10 shrink-0 touch-manipulation px-3 text-destructive hover:text-destructive"
+                    disabled={pending}
+                    onClick={async () => {
+                      if (!window.confirm(`„${a.fileName}“ wirklich löschen?`)) return;
+                      try {
+                        const result = await deleteAttachment.mutateAsync({
+                          attachmentId: a.id,
+                          filePath: a.filePath,
+                          projectId,
+                        });
+                        if (result.success) {
+                          toast.success("Datei gelöscht");
+                        } else {
+                          toast.error(result.error);
+                        }
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : "Löschen fehlgeschlagen.");
                       }
-                    } catch (err) {
-                      toast.error(err instanceof Error ? err.message : "Löschen fehlgeschlagen.");
-                    }
-                  }}
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+                    }}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </section>
 
       {core.reports.length > 0 && (

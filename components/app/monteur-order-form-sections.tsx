@@ -180,11 +180,6 @@ export function MonteurOrderFormSections({
         <ClipboardList className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         <div>
           <h3 className="text-sm font-semibold text-foreground">Bestellformulare</h3>
-          <p className="text-[11px] leading-relaxed text-muted-foreground">
-            Vorlage auswählen; bei mehreren gleichen Produkten (z. B. zwei Rolläden) «Weitere Position»
-            nutzen. «Pflicht» gilt pro ausgewählter Position (Prüfung beim Speichern).             Einzeilige Felder: <span className="font-medium text-foreground">Enter</span> springt zum nächsten Feld;
-            mehrzeilige Texte und Auswahllisten: <span className="font-medium text-foreground">Tab</span>.
-          </p>
         </div>
       </div>
 

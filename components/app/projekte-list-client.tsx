@@ -61,11 +61,30 @@ function statusWorkflowIndex(status: ProjectStatus): number {
 
 type ProjectsListSort = "default" | "status_asc" | "status_desc";
 
-/** Abgeschlossen zuletzt; bei Status-Sortierung zuerst Workflow-Index; dann neueste Projekte, dann frühester offener Termin. */
+type StatusFilterValue = ProjectStatus | "all";
+
+/** Für Filter «ABGEMACHT»: nächster Termin am nächsten zu «jetzt» zuerst (früheres `starts_at` zuerst); ohne offenen Termin ans Ende. */
+function compareAbgemachtListOrder(a: OfficeProjectListItem, b: OfficeProjectListItem): number {
+  const ta = a.nextAppointmentStartsAt;
+  const tb = b.nextAppointmentStartsAt;
+  if (ta && tb) {
+    const byAppt = ta.localeCompare(tb);
+    if (byAppt !== 0) return byAppt;
+  } else if (ta && !tb) return -1;
+  else if (!ta && tb) return 1;
+
+  const byCreated = b.createdAt.localeCompare(a.createdAt);
+  if (byCreated !== 0) return byCreated;
+
+  return a.title.localeCompare(b.title, "de", { sensitivity: "base" });
+}
+
+/** Abgeschlossen zuletzt; bei Status-Sortierung zuerst Workflow-Index; bei Filter ABGEMACHT: nächster Termin zuerst, sonst neu → Termin → Titel. */
 function compareOfficeListRows(
   a: OfficeProjectListItem,
   b: OfficeProjectListItem,
   listSort: ProjectsListSort,
+  statusFilter: StatusFilterValue,
 ): number {
   const aDone = a.status === "abgeschlossen";
   const bDone = b.status === "abgeschlossen";
@@ -75,6 +94,10 @@ function compareOfficeListRows(
     const ai = statusWorkflowIndex(a.status);
     const bi = statusWorkflowIndex(b.status);
     if (ai !== bi) return listSort === "status_asc" ? ai - bi : bi - ai;
+  }
+
+  if (statusFilter === "abgemacht") {
+    return compareAbgemachtListOrder(a, b);
   }
 
   const byCreated = b.createdAt.localeCompare(a.createdAt);
@@ -90,8 +113,6 @@ function compareOfficeListRows(
 
   return a.title.localeCompare(b.title, "de", { sensitivity: "base" });
 }
-
-type StatusFilterValue = ProjectStatus | "all";
 
 /** Above this row count, tbody uses windowing to limit DOM nodes. */
 const PROJECT_TABLE_VIRTUAL_THRESHOLD = 55;
@@ -241,9 +262,9 @@ export function ProjekteListClient({
 
   const sorted = useMemo(() => {
     const copy = [...statusFiltered];
-    copy.sort((a, b) => compareOfficeListRows(a, b, listSort));
+    copy.sort((a, b) => compareOfficeListRows(a, b, listSort, statusFilter));
     return copy;
-  }, [statusFiltered, listSort]);
+  }, [statusFiltered, listSort, statusFilter]);
 
   const hasSearch = q.trim().length > 0;
   const hasNoMatchesForStatus =
@@ -378,7 +399,8 @@ export function ProjekteListClient({
           </div>
           <p className="text-[11px] leading-snug text-muted-foreground">
             Bei gleichem Status: zuerst neuere Projekte (Erstellungsdatum), danach der früheste noch nicht beendete
-            Termin.
+            Termin. Ausnahme: Filter «ABGEMACHT» — dort zuerst der nächste Termin (am nächsten zu jetzt), ohne Termin
+            ans Ende, dann Erstellungsdatum.
           </p>
         </div>
       </div>
