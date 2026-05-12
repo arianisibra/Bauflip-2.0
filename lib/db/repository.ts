@@ -1215,6 +1215,7 @@ export async function updateTechnicianReport(
     summary: string;
     measurementsJson: string;
     workDescription: string;
+    timeSpentMinutes?: number | null;
     orderFormSubmissions?: { templateId: string; valuesJson: Record<string, string> }[];
   },
 ): Promise<void> {
@@ -1229,6 +1230,9 @@ export async function updateTechnicianReport(
       summary: input.summary,
       measurementsJson: input.measurementsJson,
       workDescription: input.workDescription,
+      ...(input.timeSpentMinutes !== undefined
+        ? { timeSpentMinutes: input.timeSpentMinutes }
+        : {}),
     };
     return;
   }
@@ -1249,14 +1253,19 @@ export async function updateTechnicianReport(
   if (findErr) throw new Error(findErr.message);
   if (!existing) throw new Error("Rapport nicht gefunden.");
 
+  const rowPatch: Record<string, unknown> = {
+    outcome: input.outcome,
+    summary: input.summary,
+    measurements_json: parsedMeasurements,
+    work_description: input.workDescription,
+  };
+  if (input.timeSpentMinutes !== undefined) {
+    rowPatch.time_spent_minutes = input.timeSpentMinutes;
+  }
+
   const { error: upErr } = await supabase
     .from("technician_reports")
-    .update({
-      outcome: input.outcome,
-      summary: input.summary,
-      measurements_json: parsedMeasurements,
-      work_description: input.workDescription,
-    })
+    .update(rowPatch)
     .eq("id", reportId)
     .eq("project_id", input.projectId);
   if (upErr) throw new Error(upErr.message);

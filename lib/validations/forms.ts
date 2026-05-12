@@ -59,6 +59,8 @@ export const technicianReportUpdateSchema = z.object({
   summary: z.string().optional(),
   measurementsJson: z.string().optional(),
   workDescription: z.string().optional(),
+  /** Gesamtarbeitszeit am Rapport (Minuten); `null` = keine Angabe. */
+  timeSpentMinutes: z.number().int().min(0).max(20000).nullable().optional(),
   orderForms: z
     .array(
       z.object({

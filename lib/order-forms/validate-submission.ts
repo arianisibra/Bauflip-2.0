@@ -6,6 +6,11 @@ import {
 
 export type ValidatedOrderFormRow = { templateId: string; valuesJson: Record<string, string> };
 
+export type ValidateOrderFormValuesOptions = {
+  /** Rapport nachträglich: alle Vorlagenfelder prüfen/persistieren (unabhängig von showWhen). */
+  allFieldsVisible?: boolean;
+};
+
 /**
  * Prüft Rohwerte gegen die Vorlagen-Felder; wirft bei Pflicht- oder Typfehlern.
  * Berücksichtigt Sichtbarkeit (showWhen) und Pflicht-Modus (requireWhen).
@@ -14,9 +19,12 @@ export function validateOrderFormValues(
   templateId: string,
   fields: OrderFormFieldDef[],
   values: Record<string, string>,
+  options?: ValidateOrderFormValuesOptions,
 ): Record<string, string> {
   const keys = new Set(fields.map((f) => f.key));
-  const visibility = computeOrderFormVisibilityMask(fields, values);
+  const visibility = options?.allFieldsVisible
+    ? fields.map(() => true)
+    : computeOrderFormVisibilityMask(fields, values);
   const out: Record<string, string> = {};
 
   for (let i = 0; i < fields.length; i++) {

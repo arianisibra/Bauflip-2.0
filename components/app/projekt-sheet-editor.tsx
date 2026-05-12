@@ -342,10 +342,13 @@ function StatusPipeline({
   projectId,
   currentStatus,
   canEdit,
+  statusCounts,
 }: {
   projectId: string;
   currentStatus: ProjectStatus;
   canEdit: boolean;
+  /** Optional: gleiche Logik wie Listenfilter (z. B. Suche) — Anzeige „Status (n)“ im manuellen Dropdown. */
+  statusCounts?: ReadonlyMap<ProjectStatus, number>;
 }) {
   const updateStatus = useUpdateProjectStatus();
   const actions = STATUS_PIPELINE[currentStatus] ?? [];
@@ -416,11 +419,15 @@ function StatusPipeline({
               defaultValue={currentStatus}
               disabled={pending}
             >
-              {projectStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {projectStatusLabels[status]}
-                </option>
-              ))}
+              {projectStatuses.map((status) => {
+                const label = projectStatusLabels[status];
+                const n = statusCounts?.get(status);
+                return (
+                  <option key={status} value={status}>
+                    {n !== undefined ? `${label} (${n})` : label}
+                  </option>
+                );
+              })}
             </select>
           </div>
           <Button type="submit" size="sm" variant="outline" disabled={pending}>
@@ -436,10 +443,12 @@ export function ProjektSheetEditor({
   projectId,
   open,
   canEdit,
+  statusCounts,
 }: {
   projectId: string;
   open: boolean;
   canEdit: boolean;
+  statusCounts?: ReadonlyMap<ProjectStatus, number>;
 }) {
   const coreQuery = useProjectCore(projectId, open);
   const { data: technicians = [] } = useAssignableProfiles();
@@ -519,6 +528,7 @@ export function ProjektSheetEditor({
         projectId={projectId}
         currentStatus={p.status}
         canEdit={canEdit}
+        statusCounts={statusCounts}
       />
       <form
         className="grid gap-3 sm:grid-cols-2"

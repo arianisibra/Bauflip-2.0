@@ -7,6 +7,7 @@ import {
   computeOrderFormVisibilityMask,
   isOrderFormFieldEffectivelyRequired,
 } from "@/lib/order-forms/field-runtime";
+import { isSinglePositionOrderFormTemplate } from "@/lib/order-forms/template-utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,12 +18,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { ClipboardList, Plus } from "lucide-react";
 
 const ORDER_FORMS_ROOT_ATTR = "data-monteur-order-forms";
-
-function isSinglePositionTemplate(tpl: OrderFormTemplate): boolean {
-  const name = tpl.name.toLowerCase();
-  const slug = tpl.slug.toLowerCase();
-  return name.includes("ersatzteile") || slug.includes("ersatzteile");
-}
 
 /** Nur markierte Felder — vermeidet z. B. «Entfernen» (steht im DOM vor den Inputs). */
 const ORDER_FORM_FIELD_ATTR = "[data-order-form-field]";
@@ -187,7 +182,7 @@ export function MonteurOrderFormSections({
         {templates.map((tpl) => {
           const linesForTpl = lines.filter((l) => l.templateId === tpl.id);
           const selected = linesForTpl.length > 0;
-          const singlePositionOnly = isSinglePositionTemplate(tpl);
+          const singlePositionOnly = isSinglePositionOrderFormTemplate(tpl);
           return (
             <Card key={tpl.id} size="sm" className="overflow-hidden border-border shadow-sm">
               <label className="flex cursor-pointer items-start gap-3 p-3 transition-colors hover:bg-muted/30">

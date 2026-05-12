@@ -13,6 +13,7 @@ import type {
   RoleType,
   TechnicianReport,
 } from "@/lib/domain/types";
+import { isSinglePositionOrderFormTemplate } from "@/lib/order-forms/template-utils";
 import { isMonteurMontageContext } from "@/lib/tech/monteur-context";
 import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
@@ -118,12 +119,6 @@ function orderFormsPayloadFromFormData(
       return { templateId, values };
     })
     .filter((x): x is { templateId: string; values: Record<string, string> } => x != null);
-}
-
-function isSinglePositionTemplate(tpl: OrderFormTemplate): boolean {
-  const name = tpl.name.toLowerCase();
-  const slug = tpl.slug.toLowerCase();
-  return name.includes("ersatzteile") || slug.includes("ersatzteile");
 }
 
 function getFilledOrderFormFields(of_: { fields: OrderFormTemplate["fields"]; values: Record<string, string> }) {
@@ -539,7 +534,7 @@ export function MonteurAuftragClient({
 
   const addOrderFormLine = useCallback((templateId: string) => {
     const tpl = orderFormTemplates.find((item) => item.id === templateId);
-    const singlePositionOnly = tpl ? isSinglePositionTemplate(tpl) : false;
+    const singlePositionOnly = tpl ? isSinglePositionOrderFormTemplate(tpl) : false;
     setOrderFormLines((prev) => {
       if (singlePositionOnly && prev.some((line) => line.templateId === templateId)) {
         return prev;

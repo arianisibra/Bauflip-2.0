@@ -595,6 +595,7 @@ export function ProjekteListClient({
             projectId={selected.id}
             open={open}
             canEdit={canEditProjectSheet}
+            statusCounts={statusCounts}
           />
         ) : null}
       </Sheet>

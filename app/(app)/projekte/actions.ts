@@ -275,7 +275,9 @@ export async function updateTechnicianReportAction(
     }
     const rawValues = entry.values ?? {};
     try {
-      const validated = validateOrderFormValues(tpl.id, tpl.fields, rawValues);
+      const validated = validateOrderFormValues(tpl.id, tpl.fields, rawValues, {
+        allFieldsVisible: true,
+      });
       if (Object.keys(validated).length > 0) {
         orderFormSubmissions.push({ templateId: tpl.id, valuesJson: validated });
       } else if (tpl.fields.some((f) => f.required)) {
@@ -292,6 +294,7 @@ export async function updateTechnicianReportAction(
     summary: v.summary?.trim() ?? "",
     measurementsJson: (v.measurementsJson?.trim() || "{}") as string,
     workDescription: v.workDescription?.trim() ?? "",
+    timeSpentMinutes: v.timeSpentMinutes,
     orderFormSubmissions: v.orderForms !== undefined ? orderFormSubmissions : undefined,
   });
 
