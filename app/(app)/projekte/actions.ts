@@ -48,7 +48,8 @@ export async function getProjectSheetDataAction(projectId: string) {
   if (!bundle) {
     throw new Error("Projekt nicht gefunden.");
   }
-  return { bundle };
+  const signedAttachments = await signAttachmentUrls(bundle.attachments);
+  return { bundle: { ...bundle, attachments: signedAttachments } };
 }
 
 export async function listProjectsForOfficeAction(): Promise<OfficeProjectListItem[]> {

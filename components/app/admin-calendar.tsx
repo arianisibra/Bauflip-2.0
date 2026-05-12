@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import type { WeekTaskItem } from "@/lib/domain/types";
+import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
 import {
   groupWeekTasksByProjectDay,
   swissDayKeyFromTaskStart,
@@ -12,6 +13,7 @@ import {
 import { formatWeekRangeDe, getSwissDayBounds, getWeekBounds } from "@/lib/date/week-bounds";
 import { swissYmdParts } from "@/lib/date/swiss";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { BauflipLoadingInline } from "@/components/ui/bauflip-loading";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCalendarRangeTasks } from "@/lib/query/hooks";
@@ -141,6 +143,15 @@ function AppointmentCard({
           {task.projectTitle}
         </p>
         <div className="flex flex-wrap items-center gap-1">
+          <Badge
+            variant="outline"
+            className={cn(
+              "max-w-full truncate px-1 py-px text-[9px] font-semibold leading-tight",
+              projectStatusBadgeClassName(task.projectStatus),
+            )}
+          >
+            {projectStatusLabels[task.projectStatus] ?? task.projectStatus}
+          </Badge>
           {task.technicianName ? (
             <span
               className="inline-flex max-w-full truncate rounded border px-1 py-px text-[9px] font-medium leading-tight"

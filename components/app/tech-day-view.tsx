@@ -85,20 +85,18 @@ function MonteurTodayGroupCard({ group }: { group: WeekTaskProjectDayGroup }) {
                 Erledigt
               </Badge>
             ) : (
-              <>
-                <Badge
-                  variant="outline"
-                  className={
-                    isBesichtigung
-                      ? "border-orange-500/30 bg-orange-500/10 text-orange-900 dark:text-orange-200"
-                      : "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
-                  }
-                >
-                  {isBesichtigung ? "Besichtigung" : "Ausführung"}
-                </Badge>
-                <ProjectStatusBadge status={task.projectStatus} />
-              </>
+              <Badge
+                variant="outline"
+                className={
+                  isBesichtigung
+                    ? "border-orange-500/30 bg-orange-500/10 text-orange-900 dark:text-orange-200"
+                    : "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
+                }
+              >
+                {isBesichtigung ? "Besichtigung" : "Ausführung"}
+              </Badge>
             )}
+            <ProjectStatusBadge status={task.projectStatus} />
           </div>
         </div>
         <p className={`mt-1.5 line-clamp-2 text-sm font-semibold ${isDone ? "text-muted-foreground line-through" : "text-foreground"}`}>
@@ -144,6 +142,9 @@ function MonteurUpcomingGroupCard({ group }: { group: WeekTaskProjectDayGroup })
           ))}
         </div>
         <p className="mt-0.5 line-clamp-2 text-xs font-medium text-foreground">{task.projectTitle}</p>
+        <div className="mt-1">
+          <ProjectStatusBadge status={task.projectStatus} />
+        </div>
       </div>
       <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
     </Link>

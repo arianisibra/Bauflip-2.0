@@ -4,12 +4,13 @@ import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import type { WeekTaskItem } from "@/lib/domain/types";
+import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
 import { groupWeekTasksByProjectDay } from "@/lib/tech/group-week-tasks-by-project-day";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { BauflipLoadingInline } from "@/components/ui/bauflip-loading";
-import { CheckCircle2, ChevronLeft, ChevronRight, Clock, MapPin, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, MapPin, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   shiftSwissDayKey,
@@ -48,7 +49,8 @@ function taskMatchesSearch(task: WeekTaskItem, raw: string): boolean {
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
-  return hay.includes(q);
+  const statusLabel = (projectStatusLabels[task.projectStatus] ?? task.projectStatus).toLowerCase();
+  return hay.includes(q) || statusLabel.includes(q);
 }
 
 /** `type="week"` value `YYYY-Www` for the ISO week of a Swiss calendar day `YYYY-MM-DD`. */
@@ -432,6 +434,17 @@ export function TechCalendar({
                           >
                             {task.projectTitle}
                           </p>
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "max-w-full truncate px-1.5 py-px text-[9px] font-semibold leading-tight",
+                                projectStatusBadgeClassName(task.projectStatus),
+                              )}
+                            >
+                              {projectStatusLabels[task.projectStatus] ?? task.projectStatus}
+                            </Badge>
+                          </div>
                           {task.serviceAddressShort ? (
                             <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
                               <MapPin className="size-3 shrink-0" />
@@ -439,19 +452,11 @@ export function TechCalendar({
                             </p>
                           ) : null}
                         </div>
-                        {isDone ? (
-                          <Badge
-                            variant="outline"
-                            className="shrink-0 gap-1 border-emerald-500/30 bg-emerald-500/10 text-[10px] text-emerald-800 dark:text-emerald-200"
-                          >
-                            <CheckCircle2 className="size-3" />
-                            Erledigt
-                          </Badge>
-                        ) : (
+                        {!isDone ? (
                           <Badge
                             variant="outline"
                             className={cn(
-                              "shrink-0 text-[10px]",
+                              "shrink-0 max-w-[10rem] truncate text-[9px] font-semibold",
                               isBesichtigung
                                 ? "border-orange-500/30 bg-orange-500/10 text-orange-900 dark:text-orange-200"
                                 : "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200",
@@ -459,7 +464,7 @@ export function TechCalendar({
                           >
                             {isBesichtigung ? "Besichtigung" : "Ausführung"}
                           </Badge>
-                        )}
+                        ) : null}
                       </Link>
                     );
                   })}

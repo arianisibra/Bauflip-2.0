@@ -244,6 +244,8 @@ export const listProjectsForOffice = cache(async function listProjectsForOffice(
         status: p.status,
         displayLabel: p.tenantName?.trim() || p.title,
         serviceAddressShort: null,
+        createdAt: p.createdAt,
+        nextAppointmentStartsAt: null,
       })));
     }
     const orgId = await getCachedCurrentOrganizationId();
@@ -277,8 +279,36 @@ export const listProjectsForOffice = cache(async function listProjectsForOffice(
         status: row.status as ProjectStatus,
         displayLabel: tenant || title,
         serviceAddressShort: addrShort === "—" ? null : addrShort,
+        createdAt: String(row.created_at ?? new Date(0).toISOString()),
+        nextAppointmentStartsAt: null as string | null,
       };
     });
+
+    const ids = mapped.map((p) => p.id);
+    if (ids.length > 0) {
+      const nowIso = new Date().toISOString();
+      const nextByProject = new Map<string, string>();
+      const chunkSize = 150;
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        const chunk = ids.slice(i, i + chunkSize);
+        const { data: apRows, error: apErr } = await supabase
+          .from("appointments")
+          .select("project_id, starts_at, ends_at")
+          .in("project_id", chunk)
+          .gte("ends_at", nowIso);
+        if (apErr || !apRows?.length) continue;
+        for (const raw of apRows as { project_id?: string; starts_at?: string }[]) {
+          const pid = String(raw.project_id ?? "");
+          const st = String(raw.starts_at ?? "");
+          if (!pid || !st) continue;
+          const prev = nextByProject.get(pid);
+          if (!prev || st < prev) nextByProject.set(pid, st);
+        }
+      }
+      for (const p of mapped) {
+        p.nextAppointmentStartsAt = nextByProject.get(p.id) ?? null;
+      }
+    }
 
     return sortOfficeProjects(mapped);
   });
@@ -1067,12 +1097,14 @@ export async function signAttachmentUrls(attachments: ProjectAttachment[]): Prom
   const supabase = await createSupabaseServerClient();
   if (!supabase || attachments.length === 0) return attachments;
   const paths = attachments.map((a) => a.filePath);
-  const { data } = await supabase.storage.from("project-files").createSignedUrls(paths, 3600);
-  if (!data) return attachments;
-  return attachments.map((a, i) => ({
-    ...a,
-    signedUrl: data[i]?.signedUrl ?? undefined,
-  }));
+  const { data, error } = await supabase.storage.from("project-files").createSignedUrls(paths, 3600);
+  if (error || !data) return attachments;
+  return attachments.map((a, i) => {
+    const row = data[i];
+    const signedUrl =
+      row && !row.error && typeof row.signedUrl === "string" && row.signedUrl.length > 0 ? row.signedUrl : undefined;
+    return { ...a, signedUrl };
+  });
 }
 
 export async function addTechnicianReport(

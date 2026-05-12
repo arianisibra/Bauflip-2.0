@@ -10,7 +10,12 @@ import {
   type ProjectCore,
 } from "@/lib/db/repository";
 import { intakeSchema } from "@/lib/validations/forms";
-import { PROJECT_FILE_MAX_BYTES, PROJECT_FILE_MIME, sanitizeFileBaseName } from "@/lib/storage/mime";
+import {
+  inferStoredProjectFileMime,
+  PROJECT_FILE_MAX_BYTES,
+  PROJECT_FILE_MIME,
+  sanitizeFileBaseName,
+} from "@/lib/storage/mime";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { RoleType } from "@/lib/domain/types";
 import { publish } from "@/lib/sse/hub";
@@ -160,8 +165,9 @@ export async function uploadProjectReportFileAction(
     const safe = sanitizeFileBaseName(file.name) || "datei";
     const storagePath = `${session.organizationId}/${projectId}/reports/${Date.now()}-${safe}`;
     const buf = Buffer.from(arrayBuf);
+    const storedMime = inferStoredProjectFileMime(file);
     const { error: uploadError } = await supabase.storage.from("project-files").upload(storagePath, buf, {
-      contentType: file.type,
+      contentType: storedMime,
       upsert: false,
     });
     if (uploadError) return { success: false, error: uploadError.message };
@@ -171,7 +177,7 @@ export async function uploadProjectReportFileAction(
       projectId,
       filePath: storagePath,
       fileName: file.name,
-      fileType: file.type,
+      fileType: storedMime,
       sizeBytes: file.size,
       uploadedBy: session.profile.id,
       notes,

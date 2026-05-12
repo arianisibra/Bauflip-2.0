@@ -11,6 +11,7 @@ import type { OfficeProjectListItem, ProjectStatus, UserProfile } from "@/lib/do
 import {
   projectStatusLabels,
   projectStatuses,
+  projectStatusesOfficeListFilter,
 } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 import { useDeleteProject, useProjectsList } from "@/lib/query/hooks";
@@ -59,6 +60,36 @@ function statusWorkflowIndex(status: ProjectStatus): number {
 }
 
 type ProjectsListSort = "default" | "status_asc" | "status_desc";
+
+/** Abgeschlossen zuletzt; bei Status-Sortierung zuerst Workflow-Index; dann neueste Projekte, dann frühester offener Termin. */
+function compareOfficeListRows(
+  a: OfficeProjectListItem,
+  b: OfficeProjectListItem,
+  listSort: ProjectsListSort,
+): number {
+  const aDone = a.status === "abgeschlossen";
+  const bDone = b.status === "abgeschlossen";
+  if (aDone !== bDone) return aDone ? 1 : -1;
+
+  if (listSort === "status_asc" || listSort === "status_desc") {
+    const ai = statusWorkflowIndex(a.status);
+    const bi = statusWorkflowIndex(b.status);
+    if (ai !== bi) return listSort === "status_asc" ? ai - bi : bi - ai;
+  }
+
+  const byCreated = b.createdAt.localeCompare(a.createdAt);
+  if (byCreated !== 0) return byCreated;
+
+  const ta = a.nextAppointmentStartsAt;
+  const tb = b.nextAppointmentStartsAt;
+  if (ta && tb) {
+    const byAppt = ta.localeCompare(tb);
+    if (byAppt !== 0) return byAppt;
+  } else if (ta && !tb) return -1;
+  else if (!ta && tb) return 1;
+
+  return a.title.localeCompare(b.title, "de", { sensitivity: "base" });
+}
 
 type StatusFilterValue = ProjectStatus | "all";
 
@@ -209,18 +240,8 @@ export function ProjekteListClient({
   }, [filtered, statusFilter]);
 
   const sorted = useMemo(() => {
-    if (listSort === "default") {
-      return statusFiltered;
-    }
     const copy = [...statusFiltered];
-    copy.sort((a, b) => {
-      const ai = statusWorkflowIndex(a.status);
-      const bi = statusWorkflowIndex(b.status);
-      if (ai !== bi) {
-        return listSort === "status_asc" ? ai - bi : bi - ai;
-      }
-      return a.title.localeCompare(b.title, "de", { sensitivity: "base" });
-    });
+    copy.sort((a, b) => compareOfficeListRows(a, b, listSort));
     return copy;
   }, [statusFiltered, listSort]);
 
@@ -303,7 +324,7 @@ export function ProjekteListClient({
             aria-label="Statusfilter für Projekte"
           >
             <option value="all" className="font-bold">Alle ({filtered.length})</option>
-            {projectStatuses.map((s) => (
+            {projectStatusesOfficeListFilter.map((s) => (
               <option key={s} value={s} className="font-bold">
                 {projectStatusLabels[s]} ({statusCounts.get(s) ?? 0})
               </option>
@@ -355,6 +376,10 @@ export function ProjekteListClient({
               Status Z→A
             </button>
           </div>
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            Bei gleichem Status: zuerst neuere Projekte (Erstellungsdatum), danach der früheste noch nicht beendete
+            Termin.
+          </p>
         </div>
       </div>
 

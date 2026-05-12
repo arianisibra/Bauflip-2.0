@@ -24,6 +24,7 @@ import { afterProjectCoreChange } from "@/lib/query/invalidations";
 import { getTabId } from "@/lib/query/tab-id";
 import { pickMonteurAppointmentDisplay } from "@/lib/tech/auftrag-appointments";
 import { updateAttachmentNotesAction, deleteAttachmentAction } from "@/app/(app)/actions";
+import { isLikelyProjectImage } from "@/lib/storage/mime";
 import { MonteurOrderFormSections } from "@/components/app/monteur-order-form-sections";
 import { TechnicianReportEditOverlay } from "@/components/app/technician-report-edit-overlay";
 import { Badge } from "@/components/ui/badge";
@@ -469,7 +470,7 @@ export function MonteurAuftragClient({
   const rapportSubmitLockRef = useRef(false);
 
   const imageAttachments = useMemo(
-    () => bundle.attachments.filter((a) => a.fileType.startsWith("image/")),
+    () => bundle.attachments.filter((a) => isLikelyProjectImage(a.fileType, a.fileName)),
     [bundle.attachments],
   );
 
@@ -662,10 +663,11 @@ export function MonteurAuftragClient({
                 Anhänge ({bundle.attachments.length})
               </p>
               {/* Image attachments as thumbnails */}
-              {bundle.attachments.filter((a) => a.fileType.startsWith("image/") && a.signedUrl).length > 0 && (
+              {bundle.attachments.filter((a) => isLikelyProjectImage(a.fileType, a.fileName) && a.signedUrl).length >
+                0 && (
                 <div className="grid grid-cols-3 gap-1.5">
                   {bundle.attachments
-                    .filter((a) => a.fileType.startsWith("image/") && a.signedUrl)
+                    .filter((a) => isLikelyProjectImage(a.fileType, a.fileName) && a.signedUrl)
                     .map((a) => (
                       <a
                         key={a.id}
@@ -686,10 +688,10 @@ export function MonteurAuftragClient({
                 </div>
               )}
               {/* Non-image attachments as links */}
-              {bundle.attachments.filter((a) => !a.fileType.startsWith("image/")).length > 0 && (
+              {bundle.attachments.filter((a) => !isLikelyProjectImage(a.fileType, a.fileName)).length > 0 && (
                 <ul className="space-y-1.5">
                   {bundle.attachments
-                    .filter((a) => !a.fileType.startsWith("image/"))
+                    .filter((a) => !isLikelyProjectImage(a.fileType, a.fileName))
                     .map((a) => (
                       <li key={a.id}>
                         {a.signedUrl ? (

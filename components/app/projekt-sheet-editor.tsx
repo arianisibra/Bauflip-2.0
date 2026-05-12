@@ -18,6 +18,7 @@ import {
   useUpdateTechnicianReport,
   useUploadAttachment,
 } from "@/lib/query/hooks";
+import { isLikelyProjectImage } from "@/lib/storage/mime";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -765,6 +766,25 @@ export function ProjektSheetEditor({
             )}
           </Button>
         </form>
+        {core.attachments.some((a) => isLikelyProjectImage(a.fileType, a.fileName) && a.signedUrl) ? (
+          <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+            {core.attachments
+              .filter((a) => isLikelyProjectImage(a.fileType, a.fileName) && a.signedUrl)
+              .map((a) => (
+                <a
+                  key={a.id}
+                  href={a.signedUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="relative aspect-square overflow-hidden rounded-lg border border-border bg-muted hover:opacity-95"
+                  title={a.fileName}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={a.signedUrl} alt={a.fileName} className="size-full object-cover" />
+                </a>
+              ))}
+          </div>
+        ) : null}
         <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
           {core.attachments.map((a) => (
             <li key={a.id} className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-muted/20 px-2.5 py-1.5">

@@ -23,6 +23,9 @@ export const projectStatuses = [
 ] as const;
 export type ProjectStatus = (typeof projectStatuses)[number];
 
+/** Status-Optionen im Büro-Listenfilter (`/projekte`) ohne `einsatz_offen` — oft unbenutzt; Projekte mit diesem Wert bleiben unter „Alle“ sichtbar. */
+export const projectStatusesOfficeListFilter = projectStatuses.filter((s) => s !== "einsatz_offen");
+
 export type NextProjectStatusAfterAppointmentContext = {
   /** Genau ein Termin für diesen Auftrag nach dem Speichern (erster Eintrag). */
   isFirstAppointmentForProject: boolean;
@@ -66,6 +69,8 @@ export function nextProjectStatusAfterAppointmentBooked(
   }
   if (current === "offen" && ctx.isFirstAppointmentForProject) return "abgemacht";
   if (current === "einsatz_offen") return "montagebereit";
+  /** Werkstatt: Folgetermin (Rückgabe/Montage) fest → wie bei Ersttermin fachlich «abgemacht». */
+  if (current === "werkstatt") return "abgemacht";
   return null;
 }
 
@@ -200,6 +205,13 @@ export type OfficeProjectListItem = {
   status: ProjectStatus;
   displayLabel: string | null;
   serviceAddressShort: string | null;
+  /** ISO: Erstellung des Projekts (Sortierung „neueste zuerst“ innerhalb eines Status). */
+  createdAt: string;
+  /**
+   * ISO `starts_at` des frühesten Termins mit `ends_at >= jetzt` (noch nicht beendet);
+   * `null` wenn kein solcher Termin existiert.
+   */
+  nextAppointmentStartsAt: string | null;
 };
 
 export type WeekTaskItem = {
