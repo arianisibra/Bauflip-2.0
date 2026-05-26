@@ -27,11 +27,9 @@ export type ProjectStatus = (typeof projectStatuses)[number];
 export const projectStatusesOfficeListFilter = projectStatuses.filter((s) => s !== "einsatz_offen");
 
 export type NextProjectStatusAfterAppointmentContext = {
-  /** Genau ein Termin für diesen Auftrag nach dem Speichern (erster Eintrag). */
-  isFirstAppointmentForProject: boolean;
   /**
    * Termin ist noch nicht beendet (`endsAt >= jetzt`) — laufend oder zukünftig.
-   * Nur dann wird auf „abgemacht“ / Montage-Sprung automatisiert.
+   * Nur dann wird auf „abgemacht“ automatisiert.
    */
   appointmentIsUpcoming: boolean;
 };
@@ -51,10 +49,22 @@ export function appointmentEndsInFutureOrNow(endsAtIso: string): boolean {
  */
 export function projectStatusAfterLastAppointmentDeleted(
   current: ProjectStatus,
+  revertStatus: ProjectStatus | null | undefined,
 ): ProjectStatus | null {
-  if (current === "abgemacht") return "offen";
-  return null;
+  if (current !== "abgemacht") return null;
+  if (revertStatus && revertStatus !== "abgemacht") return revertStatus;
+  return "offen";
 }
+
+/** Büro-Liste «ABGEMACHT»: bei neuem (Folge‑)Termin von diesen Status aus automatisch «abgemacht». */
+export const projectStatusesToAbgemachtOnAppointmentBooked = [
+  "offen",
+  "montagebereit",
+  "einsatz_offen",
+  "bestellt",
+  "abholbereit",
+  "werkstatt",
+] as const satisfies readonly ProjectStatus[];
 
 /**
  * Nach neu gebuchtem Termin: welcher Projektstatus gesetzt werden soll.
@@ -67,10 +77,13 @@ export function nextProjectStatusAfterAppointmentBooked(
   if (!ctx.appointmentIsUpcoming) {
     return null;
   }
-  if (current === "offen" && ctx.isFirstAppointmentForProject) return "abgemacht";
-  if (current === "einsatz_offen") return "montagebereit";
-  /** Werkstatt: Folgetermin (Rückgabe/Montage) fest → wie bei Ersttermin fachlich «abgemacht». */
-  if (current === "werkstatt") return "abgemacht";
+  if (
+    (projectStatusesToAbgemachtOnAppointmentBooked as readonly ProjectStatus[]).includes(
+      current,
+    )
+  ) {
+    return "abgemacht";
+  }
   return null;
 }
 
@@ -163,6 +176,8 @@ export type Project = {
   serviceCity: string | null;
   serviceCountry: string;
   statusUpdateSource: ProjectStatusUpdateSource | null;
+  /** Vorheriger Status vor automatischem Sprung auf «abgemacht» (Termin-Löschung). */
+  statusRevertOnAppointmentClear: ProjectStatus | null;
 };
 
 export type Appointment = {

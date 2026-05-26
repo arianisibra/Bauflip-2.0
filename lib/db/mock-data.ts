@@ -50,6 +50,7 @@ export const mockProjects: Project[] = [
     serviceCity: "Zürich",
     serviceCountry: "CH",
     statusUpdateSource: null,
+    statusRevertOnAppointmentClear: null,
   },
 ];
 

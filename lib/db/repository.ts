@@ -25,6 +25,7 @@ import {
   appointmentEndsInFutureOrNow,
   nextProjectStatusAfterAppointmentBooked,
   projectStatusAfterLastAppointmentDeleted,
+  projectStatuses,
 } from "@/lib/domain/types";
 import { parseOrderFormFieldsJson } from "@/lib/order-forms/schema";
 import { getWeekBounds } from "@/lib/date/week-bounds";
@@ -62,7 +63,7 @@ function sortOfficeProjects(items: OfficeProjectListItem[]): OfficeProjectListIt
 
 /** DB-Spaltenliste — kein select('*') für Projektkern. */
 const PROJECT_DB_COLUMNS =
-  "id, organization_id, title, type, status, status_updated_source, next_owner_role, next_owner_user_id, source, intake_original_text, access_notes, created_at, updated_at, closed_at, reference_code, hints_and_notes, tenant_name, tenant_phone, tenant_email, management_name, management_phone, management_email, cost_ceiling_text, service_street, service_postal_code, service_city, service_country";
+  "id, organization_id, title, type, status, status_updated_source, status_revert_on_appointment_clear, next_owner_role, next_owner_user_id, source, intake_original_text, access_notes, created_at, updated_at, closed_at, reference_code, hints_and_notes, tenant_name, tenant_phone, tenant_email, management_name, management_phone, management_email, cost_ceiling_text, service_street, service_postal_code, service_city, service_country";
 
 const APPOINTMENT_DB_COLUMNS =
   "id, project_id, kind, starts_at, ends_at, assigned_technician_id, planning_notes, created_at";
@@ -125,6 +126,11 @@ function mapProjectRow(row: Record<string, unknown>): Project {
     serviceCity: row.service_city != null ? String(row.service_city) : null,
     serviceCountry: String(row.service_country ?? "CH"),
     statusUpdateSource,
+    statusRevertOnAppointmentClear:
+      row.status_revert_on_appointment_clear != null &&
+      projectStatuses.includes(row.status_revert_on_appointment_clear as ProjectStatus)
+        ? (row.status_revert_on_appointment_clear as ProjectStatus)
+        : null,
   };
 }
 
@@ -773,7 +779,13 @@ export const listProfilesByRole = cache(async function listProfilesByRole(role: 
 
 export type ProjectCreateInput = Omit<
   Project,
-  "id" | "createdAt" | "updatedAt" | "closedAt" | "referenceCode" | "statusUpdateSource"
+  | "id"
+  | "createdAt"
+  | "updatedAt"
+  | "closedAt"
+  | "referenceCode"
+  | "statusUpdateSource"
+  | "statusRevertOnAppointmentClear"
 > & { referenceCode?: string | null };
 
 export async function createProject(input: ProjectCreateInput): Promise<Project> {
@@ -788,6 +800,7 @@ export async function createProject(input: ProjectCreateInput): Promise<Project>
       updatedAt: now,
       closedAt: null,
       statusUpdateSource: null,
+      statusRevertOnAppointmentClear: null,
     };
     mockProjects.push(p);
     return p;
@@ -855,6 +868,7 @@ export type ProjectPatch = Partial<
     | "serviceCity"
     | "serviceCountry"
     | "statusUpdateSource"
+    | "statusRevertOnAppointmentClear"
   >
 >;
 
@@ -886,6 +900,12 @@ export async function updateProject(projectId: string, patch: ProjectPatch): Pro
   if (patch.serviceCity !== undefined) row.service_city = patch.serviceCity;
   if (patch.serviceCountry !== undefined) row.service_country = patch.serviceCountry;
   if (patch.statusUpdateSource !== undefined) row.status_updated_source = patch.statusUpdateSource;
+  if (patch.statusRevertOnAppointmentClear !== undefined) {
+    row.status_revert_on_appointment_clear = patch.statusRevertOnAppointmentClear;
+  }
+  if (patch.statusUpdateSource === "manual") {
+    row.status_revert_on_appointment_clear = null;
+  }
   if (patch.status === "abgeschlossen") {
     row.closed_at = new Date().toISOString();
   }
@@ -921,18 +941,16 @@ export async function deleteProject(projectId: string): Promise<void> {
 export async function addAppointment(input: Omit<Appointment, "id" | "createdAt">): Promise<Appointment> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
-    const isFirstAppointmentForProject =
-      mockAppointments.filter((x) => x.projectId === input.projectId).length === 0;
     const appointmentIsUpcoming = appointmentEndsInFutureOrNow(input.endsAt);
     const a: Appointment = { ...input, id: id("a"), createdAt: new Date().toISOString() };
     mockAppointments.push(a);
     const mockP = mockProjects.find((p) => p.id === input.projectId);
     if (mockP) {
       const next = nextProjectStatusAfterAppointmentBooked(mockP.status, {
-        isFirstAppointmentForProject,
         appointmentIsUpcoming,
       });
       if (next !== null && next !== mockP.status) {
+        mockP.statusRevertOnAppointmentClear = mockP.status;
         mockP.status = next;
         mockP.statusUpdateSource = "appointment_automation";
         mockP.updatedAt = new Date().toISOString();
@@ -941,12 +959,6 @@ export async function addAppointment(input: Omit<Appointment, "id" | "createdAt"
     return a;
   }
 
-  const { count: priorCount, error: countError } = await supabase
-    .from("appointments")
-    .select("id", { count: "exact", head: true })
-    .eq("project_id", input.projectId);
-  if (countError) throw new Error(countError.message);
-  const isFirstAppointmentForProject = (priorCount ?? 0) === 0;
   const appointmentIsUpcoming = appointmentEndsInFutureOrNow(input.endsAt);
 
   const { data, error } = await supabase
@@ -966,13 +978,13 @@ export async function addAppointment(input: Omit<Appointment, "id" | "createdAt"
   const { data: statusRow } = await supabase.from("projects").select("status").eq("id", input.projectId).maybeSingle();
   const currentStatus = (statusRow?.status as ProjectStatus | undefined) ?? "offen";
   const nextStatus = nextProjectStatusAfterAppointmentBooked(currentStatus, {
-    isFirstAppointmentForProject,
     appointmentIsUpcoming,
   });
   if (nextStatus !== null && nextStatus !== currentStatus) {
     await updateProject(input.projectId, {
       status: nextStatus,
       statusUpdateSource: "appointment_automation",
+      statusRevertOnAppointmentClear: currentStatus,
     });
   }
 
@@ -992,10 +1004,14 @@ export async function deleteAppointment(appointmentId: string): Promise<void> {
       const now = new Date().toISOString();
       const hasUpcoming = mockAppointments.some((a) => a.projectId === projectId && a.endsAt >= now);
       if (!hasUpcoming) {
-        const revert = projectStatusAfterLastAppointmentDeleted(mockP.status);
+        const revert = projectStatusAfterLastAppointmentDeleted(
+          mockP.status,
+          mockP.statusRevertOnAppointmentClear,
+        );
         const canRevert = mockP.statusUpdateSource === "appointment_automation";
         if (revert !== null && canRevert) {
           mockP.status = revert;
+          mockP.statusRevertOnAppointmentClear = null;
           mockP.statusUpdateSource = "appointment_automation";
           mockP.updatedAt = new Date().toISOString();
         }
@@ -1028,17 +1044,23 @@ export async function deleteAppointment(appointmentId: string): Promise<void> {
   if ((count ?? 0) === 0) {
     const { data: statusRow } = await supabase
       .from("projects")
-      .select("status, status_updated_source")
+      .select("status, status_updated_source, status_revert_on_appointment_clear")
       .eq("id", projectId)
       .maybeSingle();
     const currentStatus = (statusRow?.status as ProjectStatus | undefined) ?? "offen";
     const statusUpdatedSource = (statusRow?.status_updated_source as ProjectStatusUpdateSource | undefined) ?? null;
-    const revert = projectStatusAfterLastAppointmentDeleted(currentStatus);
+    const rawRevert = statusRow?.status_revert_on_appointment_clear;
+    const revertStatus =
+      rawRevert != null && projectStatuses.includes(rawRevert as ProjectStatus)
+        ? (rawRevert as ProjectStatus)
+        : null;
+    const revert = projectStatusAfterLastAppointmentDeleted(currentStatus, revertStatus);
     const canRevert = statusUpdatedSource === "appointment_automation";
     if (revert !== null && revert !== currentStatus && canRevert) {
       await updateProject(projectId, {
         status: revert,
         statusUpdateSource: "appointment_automation",
+        statusRevertOnAppointmentClear: null,
       });
     }
   }
