@@ -26,7 +26,9 @@ import { getTabId } from "@/lib/query/tab-id";
 import { pickMonteurAppointmentDisplay } from "@/lib/tech/auftrag-appointments";
 import { updateAttachmentNotesAction, deleteAttachmentAction } from "@/app/(app)/actions";
 import { isLikelyProjectImage } from "@/lib/storage/mime";
+import { TechMobileBackBar } from "@/components/app/tech-mobile-back-bar";
 import { MonteurOrderFormSections } from "@/components/app/monteur-order-form-sections";
+import { sanitizeTechReturnTo } from "@/lib/navigation/tech-field-navigation";
 import { TechnicianReportEditOverlay } from "@/components/app/technician-report-edit-overlay";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -425,13 +427,16 @@ export function MonteurAuftragClient({
   orderFormTemplates = [],
   viewerRole,
   currentUserId,
+  returnTo = null,
 }: {
   core: ProjectCore;
   orderFormTemplates?: OrderFormTemplate[];
   viewerRole: RoleType;
   currentUserId: string;
+  returnTo?: string | null;
 }) {
   const router = useRouter();
+  const backHref = sanitizeTechReturnTo(returnTo);
   const qc = useQueryClient();
   const { data: liveCore = core } = useAuftragProjectCore(core.project.id, core);
   const uploadAttachment = useUploadAttachment();
@@ -543,6 +548,7 @@ export function MonteurAuftragClient({
 
   return (
     <section className="flex flex-col pb-8">
+      <TechMobileBackBar returnTo={backHref} />
       <Card className="overflow-hidden border-border shadow-sm">
         <CardHeader className="pb-2">
           <div className="flex items-center gap-2 flex-wrap">
@@ -824,7 +830,7 @@ export function MonteurAuftragClient({
                     return;
                   }
                   toast.success("Rapport gespeichert");
-                  router.push("/tag");
+                  router.push(backHref ?? "/tag");
                 } catch {
                   setError("Speichern fehlgeschlagen.");
                 } finally {

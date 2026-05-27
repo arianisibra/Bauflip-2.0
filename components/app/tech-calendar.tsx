@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import type { WeekTaskItem } from "@/lib/domain/types";
 import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
@@ -21,11 +22,15 @@ import {
 import { todayKeySwiss } from "@/lib/date/swiss";
 import { useTechMonthTasks, useWeekTasks } from "@/lib/query/hooks";
 import { queryKeys } from "@/lib/query/keys";
+import {
+  buildAuftragHref,
+  buildTechCalendarHref,
+  parseTechCalendarUrlState,
+  type TechCalendarView,
+} from "@/lib/navigation/tech-field-navigation";
 
 const DAY_NAMES_SHORT = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const TZ = "Europe/Zurich";
-
-type TechCalView = "day" | "week" | "month";
 
 function toSwissDateKey(d: Date): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(d);
@@ -73,10 +78,57 @@ export function TechCalendar({
   isTechnicianView: boolean;
 }) {
   const qc = useQueryClient();
-  const [viewMode, setViewMode] = useState<TechCalView>("day");
-  const [focusDayKey, setFocusDayKey] = useState(() => todayKeySwiss());
-  const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>("all");
-  const [searchQuery, setSearchQuery] = useState("");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const todayKey = useMemo(() => todayKeySwiss(), []);
+
+  const urlState = useMemo(
+    () => parseTechCalendarUrlState(searchParams, todayKey),
+    [searchParams, todayKey],
+  );
+
+  const [viewMode, setViewMode] = useState<TechCalendarView>(urlState.viewMode);
+  const [focusDayKey, setFocusDayKey] = useState(urlState.focusDayKey);
+  const [selectedTechnicianId, setSelectedTechnicianId] = useState(urlState.selectedTechnicianId);
+  const [searchQuery, setSearchQuery] = useState(urlState.searchQuery);
+
+  useEffect(() => {
+    setViewMode(urlState.viewMode);
+    setFocusDayKey(urlState.focusDayKey);
+    setSelectedTechnicianId(urlState.selectedTechnicianId);
+    setSearchQuery(urlState.searchQuery);
+  }, [urlState]);
+
+  const calendarReturnHref = useMemo(
+    () =>
+      buildTechCalendarHref({
+        viewMode,
+        focusDayKey,
+        selectedTechnicianId,
+        searchQuery,
+      }),
+    [viewMode, focusDayKey, selectedTechnicianId, searchQuery],
+  );
+
+  const pushCalendarUrl = useCallback(
+    (state: {
+      viewMode: TechCalendarView;
+      focusDayKey: string;
+      selectedTechnicianId: string;
+      searchQuery: string;
+    }) => {
+      if (pathname !== "/wochenplan") return;
+      const next = buildTechCalendarHref(state);
+      const current = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
+      if (current !== next) router.replace(next, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
+
+  useEffect(() => {
+    pushCalendarUrl({ viewMode, focusDayKey, selectedTechnicianId, searchQuery });
+  }, [viewMode, focusDayKey, selectedTechnicianId, searchQuery, pushCalendarUrl]);
 
   const refDateIso = useMemo(() => swissWeekReferenceIsoFromDayKey(focusDayKey), [focusDayKey]);
   const monthY = Number(focusDayKey.slice(0, 4));
@@ -118,8 +170,6 @@ export function TechCalendar({
     () => visibleTasks.filter((t) => taskMatchesSearch(t, searchQuery)),
     [visibleTasks, searchQuery],
   );
-
-  const todayKey = useMemo(() => todayKeySwiss(), []);
 
   const daysToRender = useMemo(() => {
     if (viewMode === "week") {
@@ -339,7 +389,7 @@ export function TechCalendar({
           role="tablist"
           aria-label="Zeitraum"
         >
-          {(["day", "week", "month"] as TechCalView[]).map((m) => (
+          {(["day", "week", "month"] as TechCalendarView[]).map((m) => (
             <button
               key={m}
               type="button"
@@ -404,7 +454,7 @@ export function TechCalendar({
                     return (
                       <Link
                         key={group.key}
-                        href={`/auftrag/${task.projectId}`}
+                        href={buildAuftragHref(task.projectId, calendarReturnHref)}
                         className={cn(
                           "flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-transform active:scale-[0.98]",
                           isDone

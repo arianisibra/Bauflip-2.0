@@ -1,6 +1,7 @@
 import dynamic from "next/dynamic";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
+import { sanitizeTechReturnTo } from "@/lib/navigation/tech-field-navigation";
 import { isMonteurMontageContext } from "@/lib/tech/monteur-context";
 import { getProjectCore, listActiveOrderFormTemplatesForOrg, signAttachmentUrls } from "@/lib/db/repository";
 import { BauflipLoading } from "@/components/ui/bauflip-loading";
@@ -16,10 +17,18 @@ const MonteurAuftragClient = dynamic(
   },
 );
 
-type Params = { params: Promise<{ projectId: string }> };
+type PageProps = {
+  params: Promise<{ projectId: string }>;
+  searchParams: Promise<{ returnTo?: string }>;
+};
 
-export default async function MonteurAuftragPage({ params }: Params) {
-  const [session, { projectId }] = await Promise.all([getCurrentSession(), params]);
+export default async function MonteurAuftragPage({ params, searchParams }: PageProps) {
+  const [session, { projectId }, sp] = await Promise.all([
+    getCurrentSession(),
+    params,
+    searchParams,
+  ]);
+  const returnTo = sanitizeTechReturnTo(sp.returnTo ?? null);
   if (!session) redirect("/anmeldung");
   const core = await getProjectCore(projectId);
   if (!core) {
@@ -66,6 +75,7 @@ export default async function MonteurAuftragPage({ params }: Params) {
       orderFormTemplates={orderFormTemplates}
       viewerRole={session.role}
       currentUserId={session.user.id}
+      returnTo={returnTo}
     />
   );
 }

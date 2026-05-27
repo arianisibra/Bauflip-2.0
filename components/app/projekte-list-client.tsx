@@ -16,7 +16,9 @@ import {
 import { cn } from "@/lib/utils";
 import { useDeleteProject, useProjectsList } from "@/lib/query/hooks";
 import { queryKeys } from "@/lib/query/keys";
+import { OfficeReturnBar } from "@/components/app/office-return-bar";
 import { ListPageToolbar } from "@/components/app/list-page-toolbar";
+import { sanitizeAppReturnTo } from "@/lib/navigation/app-return-to";
 import { BauflipLoading } from "@/components/ui/bauflip-loading";
 import { Sheet } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -180,12 +182,14 @@ export function ProjekteListClient({
   canEditProjectSheet,
   initialOpenProjectId,
   initialOpenSource,
+  initialReturnTo = null,
 }: {
   projects: OfficeProjectListItem[];
   technicians: UserProfile[];
   canEditProjectSheet: boolean;
   initialOpenProjectId?: string;
   initialOpenSource?: "kalender";
+  initialReturnTo?: string | null;
 }) {
   const router = useRouter();
   const qc = useQueryClient();
@@ -206,13 +210,15 @@ export function ProjekteListClient({
   const [intakeOpen, setIntakeOpen] = useState(false);
   const [pendingOpenProjectId, setPendingOpenProjectId] = useState(initialOpenProjectId ?? "");
   const [openSource, setOpenSource] = useState<"kalender" | null>(initialOpenSource ?? null);
+  const [returnTo, setReturnTo] = useState<string | null>(initialReturnTo);
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
 
   useEffect(() => {
     setPendingOpenProjectId(initialOpenProjectId ?? "");
     setOpenSource(initialOpenSource ?? null);
-  }, [initialOpenProjectId, initialOpenSource]);
+    setReturnTo(initialReturnTo ?? null);
+  }, [initialOpenProjectId, initialOpenSource, initialReturnTo]);
 
   useEffect(() => {
     if (!pendingOpenProjectId) {
@@ -554,15 +560,17 @@ export function ProjekteListClient({
         onOpenChange={(next) => {
           setOpen(next);
           if (!next) {
+            const safeReturn = sanitizeAppReturnTo(returnTo);
             const returnToCalendar = openSource === "kalender";
             setSelected(null);
             setOpenSource(null);
+            setReturnTo(null);
+            if (safeReturn) {
+              router.push(safeReturn);
+              return;
+            }
             if (returnToCalendar) {
-              if (globalThis.history.length > 1) {
-                globalThis.history.back();
-              } else {
-                router.push("/kalender");
-              }
+              router.push("/kalender");
               return;
             }
             // Strip ?openProjectId without triggering an RSC refetch.
@@ -580,6 +588,10 @@ export function ProjekteListClient({
               params.delete("from");
               changed = true;
             }
+            if (params.has("returnTo")) {
+              params.delete("returnTo");
+              changed = true;
+            }
             if (changed) {
               const suffix = params.toString();
               globalThis.history.replaceState(null, "", suffix ? `/projekte?${suffix}` : "/projekte");
@@ -591,12 +603,18 @@ export function ProjekteListClient({
         description={selected?.displayLabel?.trim() ? selected.displayLabel : undefined}
       >
         {selected ? (
-          <ProjektSheetEditor
-            projectId={selected.id}
-            open={open}
-            canEdit={canEditProjectSheet}
-            statusCounts={statusCounts}
-          />
+          <>
+            <OfficeReturnBar
+              returnTo={returnTo}
+              label={openSource === "kalender" ? "Zurück zum Kalender" : "Zurück"}
+            />
+            <ProjektSheetEditor
+              projectId={selected.id}
+              open={open}
+              canEdit={canEditProjectSheet}
+              statusCounts={statusCounts}
+            />
+          </>
         ) : null}
       </Sheet>
 

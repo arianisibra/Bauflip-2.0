@@ -3,7 +3,13 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { Appointment, TechnicianReport, ProjectStatus } from "@/lib/domain/types";
-import { projectStatusBadgeClassName, projectStatusLabels, projectStatuses } from "@/lib/domain/types";
+import {
+  PROJECT_STATUS_ABGESCHLOSSEN_REQUIRES_ABRECHNEN_MESSAGE,
+  canSetProjectStatus,
+  projectStatusBadgeClassName,
+  projectStatusLabels,
+  projectStatuses,
+} from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 import { telHref } from "@/lib/phone";
 import {
@@ -336,6 +342,10 @@ function StatusPipeline({
   const label = projectStatusLabels[currentStatus] ?? currentStatus;
 
   const advance = (nextStatus: ProjectStatus) => {
+    if (!canSetProjectStatus(currentStatus, nextStatus)) {
+      toast.error(PROJECT_STATUS_ABGESCHLOSSEN_REQUIRES_ABRECHNEN_MESSAGE);
+      return;
+    }
     updateStatus.mutate({ projectId, status: nextStatus }, {
       onError: (e) => {
         console.error(e);
@@ -386,6 +396,10 @@ function StatusPipeline({
             if (!nextStatus || nextStatus === currentStatus) {
               return;
             }
+            if (!canSetProjectStatus(currentStatus, nextStatus)) {
+              toast.error(PROJECT_STATUS_ABGESCHLOSSEN_REQUIRES_ABRECHNEN_MESSAGE);
+              return;
+            }
             advance(nextStatus);
           }}
         >
@@ -403,13 +417,20 @@ function StatusPipeline({
               {projectStatuses.map((status) => {
                 const label = projectStatusLabels[status];
                 const n = statusCounts?.get(status);
+                const allowed = canSetProjectStatus(currentStatus, status);
                 return (
-                  <option key={status} value={status}>
+                  <option key={status} value={status} disabled={!allowed}>
                     {n !== undefined ? `${label} (${n})` : label}
+                    {!allowed && status === "abgeschlossen" ? " — zuerst Abrechnen" : ""}
                   </option>
                 );
               })}
             </select>
+            {currentStatus !== "abrechnen" ? (
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                «Abgeschlossen» erst nach manuellem Wechsel auf «Abrechnen» (externe Buchhaltung).
+              </p>
+            ) : null}
           </div>
           <Button type="submit" size="sm" variant="outline" disabled={pending}>
             {pending ? <BauflipLoadingButtonLabel variant="onSurface">Ändert …</BauflipLoadingButtonLabel> : "Setzen"}

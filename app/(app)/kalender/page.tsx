@@ -1,4 +1,5 @@
 import dynamic from "next/dynamic";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
 import { listMonthTasks } from "@/lib/db/repository";
@@ -33,11 +34,15 @@ export default async function KalenderPage() {
           Termine nach Monat, Kalenderwoche oder einzelnem Tag (Europe/Zurich).
         </p>
       </div>
-      <AdminCalendar
-        initialTasks={tasks}
-        initialYear={y}
-        initialMonth={m}
-      />
+      <Suspense
+        fallback={
+          <div className="flex min-h-[18rem] items-center justify-center py-12" role="status" aria-live="polite">
+            <BauflipLoading size="sm" label="Kalender wird geladen …" />
+          </div>
+        }
+      >
+        <AdminCalendar initialTasks={tasks} initialYear={y} initialMonth={m} />
+      </Suspense>
     </section>
   );
 }

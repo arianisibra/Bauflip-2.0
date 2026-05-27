@@ -114,6 +114,23 @@ export type RapportNextStep = (typeof RAPPORT_ALL_NEXT_STEPS)[number];
 /** Status nach Rapport "Behoben" / "Fertig" — immer Abrechnen */
 export const RAPPORT_NEXT_STEP_BEHOBEN = "abrechnen" as const satisfies ProjectStatus;
 
+/** Hinweis im Büro-Sheet, wenn «Abgeschlossen» noch nicht wählbar ist. */
+export const PROJECT_STATUS_ABGESCHLOSSEN_REQUIRES_ABRECHNEN_MESSAGE =
+  "Abschluss nur möglich, wenn der Auftrag auf «Abrechnen» steht. Bitte zuerst auf «Abrechnen» setzen (Buchhaltung extern).";
+
+/** Darf `to` aus `from` gesetzt werden? (Büro manuell + Server-Validierung) */
+export function canSetProjectStatus(from: ProjectStatus, to: ProjectStatus): boolean {
+  if (to === from) return true;
+  if (to === "abgeschlossen") return from === "abrechnen";
+  return true;
+}
+
+export function assertAllowedProjectStatusTransition(from: ProjectStatus, to: ProjectStatus): void {
+  if (!canSetProjectStatus(from, to)) {
+    throw new Error(PROJECT_STATUS_ABGESCHLOSSEN_REQUIRES_ABRECHNEN_MESSAGE);
+  }
+}
+
 export const roleTypes = ["admin", "office", "technician"] as const;
 export type RoleType = (typeof roleTypes)[number];
 

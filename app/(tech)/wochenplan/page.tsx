@@ -1,9 +1,11 @@
+import { Suspense } from "react";
 import { getCurrentSession } from "@/lib/auth/session";
 import { listWeekTasks } from "@/lib/db/repository";
 import { canAccessTechFieldRoutes } from "@/lib/domain/types";
 import { todayKeySwiss } from "@/lib/date/swiss";
 import { swissWeekReferenceIsoFromDayKey } from "@/lib/date/swiss-week";
 import { TechCalendar } from "@/components/app/tech-calendar";
+import { BauflipLoading } from "@/components/ui/bauflip-loading";
 
 export default async function TechKalenderPage() {
   const session = await getCurrentSession();
@@ -23,7 +25,15 @@ export default async function TechKalenderPage() {
           Termine nach Tag, Woche oder Monat (Europe/Zurich).
         </p>
       </header>
-      <TechCalendar initialTasks={tasks} isTechnicianView={session.role === "technician"} />
+      <Suspense
+        fallback={
+          <div className="flex justify-center py-12" role="status" aria-live="polite">
+            <BauflipLoading size="sm" label="Kalender wird geladen …" />
+          </div>
+        }
+      >
+        <TechCalendar initialTasks={tasks} isTechnicianView={session.role === "technician"} />
+      </Suspense>
     </section>
   );
 }

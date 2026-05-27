@@ -124,7 +124,7 @@ export async function addAppointmentAction(
     kind: v.kind,
     startsAt: v.startsAt,
     endsAt: v.endsAt,
-    assignedTechnicianId: v.assignedTechnicianId ?? null,
+    assignedTechnicianId: v.assignedTechnicianId,
     planningNotes: v.planningNotes ?? null,
   });
   const core = await coreOrThrow(v.projectId);

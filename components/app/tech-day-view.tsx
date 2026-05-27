@@ -22,6 +22,9 @@ import { cn } from "@/lib/utils";
 import { todayKeySwiss } from "@/lib/date/swiss";
 import { Badge } from "@/components/ui/badge";
 import { MapsNavButton } from "@/components/app/maps-nav-button";
+import { buildAuftragHref } from "@/lib/navigation/tech-field-navigation";
+
+const TAG_AUFTRAG_RETURN = "/tag";
 
 function profileInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -53,7 +56,7 @@ function MonteurTodayGroupCard({ group }: { group: WeekTaskProjectDayGroup }) {
   const isDone = task.projectStatus === "abgeschlossen";
   return (
     <Link
-      href={`/auftrag/${task.projectId}`}
+      href={buildAuftragHref(task.projectId, TAG_AUFTRAG_RETURN)}
       className={`flex items-center gap-3 rounded-2xl border border-border border-l-4 bg-card px-4 py-4 shadow-sm transition-transform active:scale-[0.98] ${
         isDone
           ? "border-l-muted-foreground/30 opacity-60"
@@ -121,7 +124,7 @@ function MonteurUpcomingGroupCard({ group }: { group: WeekTaskProjectDayGroup })
   const task = group.primary;
   return (
     <Link
-      href={`/auftrag/${task.projectId}`}
+      href={buildAuftragHref(task.projectId, TAG_AUFTRAG_RETURN)}
       className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 shadow-sm transition-transform active:scale-[0.98]"
     >
       <div className="min-w-0 flex-1">
@@ -296,7 +299,7 @@ export function TechDayView({
                     : upcomingTasks!.map((task) => (
                         <Link
                           key={task.appointmentId}
-                          href={`/auftrag/${task.projectId}`}
+                          href={buildAuftragHref(task.projectId, TAG_AUFTRAG_RETURN)}
                           className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 shadow-sm transition-transform active:scale-[0.98]"
                         >
                           <div className="min-w-0 flex-1">
@@ -338,7 +341,7 @@ export function TechDayView({
                   return (
                     <Link
                       key={task.appointmentId}
-                      href={`/auftrag/${task.projectId}`}
+                      href={buildAuftragHref(task.projectId, TAG_AUFTRAG_RETURN)}
                       className={`flex items-center gap-3 rounded-2xl border border-border border-l-4 bg-card px-4 py-4 shadow-sm transition-transform active:scale-[0.98] ${
                         isDone
                           ? "border-l-muted-foreground/30 opacity-60"
@@ -428,7 +431,7 @@ export function TechDayView({
             {openRapportProjects.map((item) => (
               <Link
                 key={item.projectId}
-                href={`/auftrag/${item.projectId}`}
+                href={buildAuftragHref(item.projectId, TAG_AUFTRAG_RETURN)}
                 className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-sm transition-transform active:scale-[0.98]"
               >
                 <span className="line-clamp-1 text-sm text-foreground">{item.projectTitle}</span>

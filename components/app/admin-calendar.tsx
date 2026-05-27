@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import type { WeekTaskItem } from "@/lib/domain/types";
 import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
@@ -11,7 +12,14 @@ import {
   type WeekTaskProjectDayGroup,
 } from "@/lib/tech/group-week-tasks-by-project-day";
 import { formatWeekRangeDe, getSwissDayBounds, getWeekBounds } from "@/lib/date/week-bounds";
-import { swissYmdParts } from "@/lib/date/swiss";
+import { swissYmdParts, todayKeySwiss } from "@/lib/date/swiss";
+import {
+  anchorDateFromDayKey,
+  buildAdminCalendarHref,
+  buildProjekteSheetHref,
+  parseAdminCalendarUrlState,
+  type AdminCalendarViewMode,
+} from "@/lib/navigation/admin-calendar-navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BauflipLoadingInline } from "@/components/ui/bauflip-loading";
@@ -27,8 +35,6 @@ const MONTH_NAMES = [
 ];
 
 const TZ = "Europe/Zurich";
-
-type CalendarViewMode = "year" | "month" | "week" | "day" | "availability";
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", timeZone: TZ });
@@ -118,14 +124,16 @@ function bucketGroupsByIsoWeek(groups: WeekTaskProjectDayGroup[]): { weekKey: st
 function AppointmentCard({
   group,
   dimmed,
+  href,
 }: {
   group: WeekTaskProjectDayGroup;
   dimmed: boolean;
+  href: string;
 }) {
   const task = group.primary;
   return (
     <Link
-      href={`/projekte?sheet=${task.projectId}&from=kalender`}
+      href={href}
       className={`flex min-h-0 items-stretch gap-2 rounded-lg border bg-card px-2 py-1.5 text-left shadow-sm outline-none ring-offset-background transition-colors hover:border-border hover:bg-muted/25 focus-visible:ring-2 focus-visible:ring-ring ${
         dimmed ? "border-border/40 opacity-50" : "border-border/90"
       }`}
@@ -178,12 +186,14 @@ function WeekSection({
   groups,
   dimmed,
   subdivideByWeekDays = false,
+  buildProjectHref,
 }: {
   weekKey: string;
   groups: WeekTaskProjectDayGroup[];
   dimmed: boolean;
   /** In der Wochenansicht: Termine nach Kalendertag in eigene Karten-Blöcke mit Titel trennen. */
   subdivideByWeekDays?: boolean;
+  buildProjectHref: (projectId: string) => string;
 }) {
   const dayChunks = useMemo(() => {
     if (!subdivideByWeekDays || groups.length === 0) return null;
@@ -205,7 +215,12 @@ function WeekSection({
   const cardGrid = (chunk: WeekTaskProjectDayGroup[]) => (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
       {chunk.map((group) => (
-        <AppointmentCard key={group.key} group={group} dimmed={dimmed} />
+        <AppointmentCard
+          key={group.key}
+          group={group}
+          dimmed={dimmed}
+          href={buildProjectHref(group.primary.projectId)}
+        />
       ))}
     </div>
   );
@@ -245,7 +260,12 @@ function WeekSection({
       ) : (
         <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
           {groups.map((group) => (
-            <AppointmentCard key={group.key} group={group} dimmed={dimmed} />
+            <AppointmentCard
+              key={group.key}
+              group={group}
+              dimmed={dimmed}
+              href={buildProjectHref(group.primary.projectId)}
+            />
           ))}
         </div>
       )}
@@ -263,13 +283,79 @@ export function AdminCalendar({
   initialMonth: number;
 }) {
   const qc = useQueryClient();
-  const [viewMode, setViewMode] = useState<CalendarViewMode>("day");
-  const [year, setYear] = useState(initialYear);
-  const [month, setMonth] = useState(initialMonth);
-  const [anchorDate, setAnchorDate] = useState(() => anchorDateForYearMonth(initialYear, initialMonth));
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const todayKey = useMemo(() => todayKeySwiss(), []);
+
+  const urlState = useMemo(
+    () => parseAdminCalendarUrlState(searchParams, todayKey),
+    [searchParams, todayKey],
+  );
+
+  const [viewMode, setViewMode] = useState<AdminCalendarViewMode>(urlState.viewMode);
+  const [year, setYear] = useState(() => swissYmdParts(anchorDateFromDayKey(urlState.dayKey)).y);
+  const [month, setMonth] = useState(() => swissYmdParts(anchorDateFromDayKey(urlState.dayKey)).m);
+  const [anchorDate, setAnchorDate] = useState(() => anchorDateFromDayKey(urlState.dayKey));
   const [calendarNowTs] = useState(() => Date.now());
-  const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>("all");
-  const [sortMode, setSortMode] = useState<"time" | "technician">("technician");
+  const [selectedTechnicianId, setSelectedTechnicianId] = useState(urlState.selectedTechnicianId);
+  const [sortMode, setSortMode] = useState<"time" | "technician">(urlState.sortMode);
+
+  useEffect(() => {
+    setViewMode(urlState.viewMode);
+    const ad = anchorDateFromDayKey(urlState.dayKey);
+    setAnchorDate(ad);
+    const { y, m } = swissYmdParts(ad);
+    setYear(y);
+    setMonth(m);
+    setSelectedTechnicianId(urlState.selectedTechnicianId);
+    setSortMode(urlState.sortMode);
+  }, [urlState]);
+
+  const dayKeyFromAnchor = useMemo(() => {
+    const { y, m, day } = swissYmdParts(anchorDate);
+    return `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }, [anchorDate]);
+
+  const calendarReturnHref = useMemo(
+    () =>
+      buildAdminCalendarHref({
+        viewMode,
+        dayKey: dayKeyFromAnchor,
+        selectedTechnicianId,
+        sortMode,
+      }),
+    [viewMode, dayKeyFromAnchor, selectedTechnicianId, sortMode],
+  );
+
+  const buildProjectHref = useCallback(
+    (projectId: string) => buildProjekteSheetHref(projectId, calendarReturnHref),
+    [calendarReturnHref],
+  );
+
+  const pushCalendarUrl = useCallback(
+    (state: {
+      viewMode: AdminCalendarViewMode;
+      dayKey: string;
+      selectedTechnicianId: string;
+      sortMode: "time" | "technician";
+    }) => {
+      if (pathname !== "/kalender") return;
+      const next = buildAdminCalendarHref(state);
+      const current = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
+      if (current !== next) router.replace(next, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
+
+  useEffect(() => {
+    pushCalendarUrl({
+      viewMode,
+      dayKey: dayKeyFromAnchor,
+      selectedTechnicianId,
+      sortMode,
+    });
+  }, [viewMode, dayKeyFromAnchor, selectedTechnicianId, sortMode, pushCalendarUrl]);
 
   const { startIso, endIso, heading, rangeLabel } = useMemo(() => {
     if (viewMode === "availability") {
@@ -423,7 +509,7 @@ export function AdminCalendar({
     [viewMode, navigateYear, navigateMonth, navigateWeek, navigateDay],
   );
 
-  const onViewModeChange = useCallback((next: CalendarViewMode) => {
+  const onViewModeChange = useCallback((next: AdminCalendarViewMode) => {
     setViewMode(next);
     if (next === "year" || next === "month") {
       const { y, m } = swissYmdParts(anchorDate);
@@ -487,7 +573,7 @@ export function AdminCalendar({
 
           {/* Zeitraum-Selector */}
           <div className="flex h-8 overflow-hidden rounded-lg border border-border/70 bg-background text-xs font-semibold shadow-sm">
-            {(["day", "week", "month", "year", "availability"] as CalendarViewMode[]).map((m) => (
+            {(["day", "week", "month", "year", "availability"] as AdminCalendarViewMode[]).map((m) => (
               <button
                 key={m}
                 type="button"
@@ -651,6 +737,7 @@ export function AdminCalendar({
                   groups={groups}
                   dimmed={false}
                   subdivideByWeekDays={viewMode === "week"}
+                  buildProjectHref={buildProjectHref}
                 />
               ))
             )}
@@ -674,6 +761,7 @@ export function AdminCalendar({
                 groups={groups}
                 dimmed={true}
                 subdivideByWeekDays={viewMode === "week"}
+                buildProjectHref={buildProjectHref}
               />
             ))}
           </>

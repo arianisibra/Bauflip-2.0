@@ -312,13 +312,17 @@ export function AppointmentBookingForm({
       setError("Endzeit muss nach Beginn liegen.");
       return;
     }
+    if (!assignedTechnicianId.trim()) {
+      setError("Bitte eine zuständige Person wählen.");
+      return;
+    }
     addAppointment.mutate(
       {
         projectId,
         kind: "ausfuehrung",
         startsAt: startIso,
         endsAt: endIso,
-        assignedTechnicianId: assignedTechnicianId || null,
+        assignedTechnicianId,
       },
       {
         onError: (err) =>
@@ -367,10 +371,11 @@ export function AppointmentBookingForm({
         />
       </div>
       <div className="min-w-0 space-y-1 sm:col-span-2">
-        <Label htmlFor="bookingTechnician">Zuständige Person</Label>
+        <Label htmlFor="bookingTechnician">Zuständige Person *</Label>
         <select
           id="bookingTechnician"
           name="assignedTechnicianId"
+          required
           className="flex min-h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 text-base sm:min-h-10 sm:text-sm"
           value={assignedTechnicianId}
           onChange={(e) => {
@@ -378,7 +383,7 @@ export function AppointmentBookingForm({
             setError(null);
           }}
         >
-          <option value="">—</option>
+          <option value="">Bitte wählen …</option>
           {technicians.map((t) => (
             <option key={t.id} value={t.id}>
               {t.displayName}
@@ -457,7 +462,7 @@ export function AppointmentBookingForm({
       <Button
         type="submit"
         size="sm"
-        disabled={addAppointment.isPending}
+        disabled={addAppointment.isPending || !assignedTechnicianId || !formReady}
         className="min-h-11 w-full sm:col-span-2 sm:min-h-10 sm:w-auto sm:justify-self-start"
       >
         {addAppointment.isPending ? (

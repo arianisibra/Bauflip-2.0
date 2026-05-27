@@ -23,6 +23,7 @@ import type {
 import {
   RAPPORT_NEXT_STEP_BEHOBEN,
   appointmentEndsInFutureOrNow,
+  assertAllowedProjectStatusTransition,
   nextProjectStatusAfterAppointmentBooked,
   projectStatusAfterLastAppointmentDeleted,
   projectStatuses,
@@ -877,10 +878,28 @@ export async function updateProject(projectId: string, patch: ProjectPatch): Pro
   if (!supabase) {
     const p = mockProjects.find((x) => x.id === projectId);
     if (!p) throw new Error("Projekt nicht gefunden.");
+    if (patch.status !== undefined && patch.status !== p.status) {
+      assertAllowedProjectStatusTransition(p.status, patch.status);
+    }
     Object.assign(p, patch);
     p.updatedAt = new Date().toISOString();
     return p;
   }
+
+  if (patch.status !== undefined) {
+    const { data: currentRow, error: currentErr } = await supabase
+      .from("projects")
+      .select("status")
+      .eq("id", projectId)
+      .maybeSingle();
+    if (currentErr) throw new Error(currentErr.message);
+    if (!currentRow) throw new Error("Projekt nicht gefunden.");
+    const currentStatus = (currentRow.status as ProjectStatus | undefined) ?? "offen";
+    if (patch.status !== currentStatus) {
+      assertAllowedProjectStatusTransition(currentStatus, patch.status);
+    }
+  }
+
   const row: Record<string, unknown> = {};
   if (patch.title !== undefined) row.title = patch.title;
   if (patch.status !== undefined) row.status = patch.status;
@@ -939,6 +958,9 @@ export async function deleteProject(projectId: string): Promise<void> {
 }
 
 export async function addAppointment(input: Omit<Appointment, "id" | "createdAt">): Promise<Appointment> {
+  if (!input.assignedTechnicianId?.trim()) {
+    throw new Error("Bitte eine zuständige Person wählen.");
+  }
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
     const appointmentIsUpcoming = appointmentEndsInFutureOrNow(input.endsAt);

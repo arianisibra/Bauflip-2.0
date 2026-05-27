@@ -2,11 +2,12 @@ import { TriangleAlert } from "lucide-react";
 import { getCurrentSession } from "@/lib/auth/session";
 import { listAssignableProfiles, listProjectsForOffice } from "@/lib/db/repository";
 import { hasSupabaseConfig } from "@/lib/supabase/server";
+import { sanitizeAppReturnTo } from "@/lib/navigation/app-return-to";
 import { ProjekteListClient } from "@/components/app/projekte-list-client";
 
 type Props = {
   /** `sheet` wird vom Kalender verwendet — gleiche Bedeutung wie `openProjectId`. */
-  searchParams: Promise<{ openProjectId?: string; sheet?: string; from?: string }>;
+  searchParams: Promise<{ openProjectId?: string; sheet?: string; from?: string; returnTo?: string }>;
 };
 
 export default async function ProjektePage(props: Props) {
@@ -20,6 +21,9 @@ export default async function ProjektePage(props: Props) {
     typeof searchParams.openProjectId === "string" ? searchParams.openProjectId.trim() : "";
   const rawSheet = typeof searchParams.sheet === "string" ? searchParams.sheet.trim() : "";
   const openSource = searchParams.from === "kalender" ? "kalender" : undefined;
+  const returnTo = sanitizeAppReturnTo(
+    typeof searchParams.returnTo === "string" ? searchParams.returnTo : null,
+  );
   const openProjectId = rawOpen || rawSheet || undefined;
   const canEditProjectSheet = session?.role === "office" || session?.role === "admin";
   const supabaseConfigured = hasSupabaseConfig();
@@ -40,6 +44,7 @@ export default async function ProjektePage(props: Props) {
         canEditProjectSheet={canEditProjectSheet}
         initialOpenProjectId={openProjectId}
         initialOpenSource={openSource}
+        initialReturnTo={returnTo}
       />
     </section>
   );
