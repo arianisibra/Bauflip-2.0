@@ -1,5 +1,11 @@
 import type { ReadonlyURLSearchParams } from "next/navigation";
+import { swissYmdParts } from "@/lib/date/swiss";
 import { sanitizeAppReturnTo } from "@/lib/navigation/app-return-to";
+
+export function dayKeyFromDate(d: Date): string {
+  const { y, m, day } = swissYmdParts(d);
+  return `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
 
 export type AdminCalendarViewMode = "year" | "month" | "week" | "day" | "availability";
 
@@ -13,9 +19,21 @@ export type AdminCalendarUrlState = {
 const DAY_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const VIEW_MODES = new Set<AdminCalendarViewMode>(["year", "month", "week", "day", "availability"]);
 
+/** Mittag UTC — vermeidet TZ-Drift zwischen dayKey (Zürich) und lokalem `Date`. */
 export function anchorDateFromDayKey(dayKey: string): Date {
   const [y, m, d] = dayKey.split("-").map(Number);
-  return new Date(y, m - 1, d, 12, 0, 0, 0);
+  return new Date(Date.UTC(y, m - 1, d, 12, 0, 0, 0));
+}
+
+export function calendarQueriesEqual(currentQs: string, builtHref: string): boolean {
+  const builtQs = builtHref.includes("?") ? builtHref.split("?")[1] ?? "" : "";
+  const a = new URLSearchParams(currentQs);
+  const b = new URLSearchParams(builtQs);
+  const keys = new Set([...a.keys(), ...b.keys()]);
+  for (const k of keys) {
+    if (a.get(k) !== b.get(k)) return false;
+  }
+  return true;
 }
 
 export function parseAdminCalendarUrlState(

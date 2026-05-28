@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -13,10 +13,13 @@ import {
 } from "@/lib/tech/group-week-tasks-by-project-day";
 import { formatWeekRangeDe, getSwissDayBounds, getWeekBounds } from "@/lib/date/week-bounds";
 import { swissYmdParts, todayKeySwiss } from "@/lib/date/swiss";
+import { shiftSwissDayKey } from "@/lib/date/swiss-week";
 import {
   anchorDateFromDayKey,
   buildAdminCalendarHref,
   buildProjekteSheetHref,
+  calendarQueriesEqual,
+  dayKeyFromDate,
   parseAdminCalendarUrlState,
   type AdminCalendarViewMode,
 } from "@/lib/navigation/admin-calendar-navigation";
@@ -294,38 +297,45 @@ export function AdminCalendar({
   );
 
   const [viewMode, setViewMode] = useState<AdminCalendarViewMode>(urlState.viewMode);
+  const [dayKey, setDayKey] = useState(urlState.dayKey);
   const [year, setYear] = useState(() => swissYmdParts(anchorDateFromDayKey(urlState.dayKey)).y);
   const [month, setMonth] = useState(() => swissYmdParts(anchorDateFromDayKey(urlState.dayKey)).m);
   const [anchorDate, setAnchorDate] = useState(() => anchorDateFromDayKey(urlState.dayKey));
   const [calendarNowTs] = useState(() => Date.now());
   const [selectedTechnicianId, setSelectedTechnicianId] = useState(urlState.selectedTechnicianId);
   const [sortMode, setSortMode] = useState<"time" | "technician">(urlState.sortMode);
+  const skipUrlPushRef = useRef(false);
 
-  useEffect(() => {
-    setViewMode(urlState.viewMode);
-    const ad = anchorDateFromDayKey(urlState.dayKey);
+  const applyDayKey = useCallback((nextDayKey: string) => {
+    setDayKey(nextDayKey);
+    const ad = anchorDateFromDayKey(nextDayKey);
     setAnchorDate(ad);
     const { y, m } = swissYmdParts(ad);
     setYear(y);
     setMonth(m);
+  }, []);
+
+  useEffect(() => {
+    skipUrlPushRef.current = true;
+    setViewMode(urlState.viewMode);
+    applyDayKey(urlState.dayKey);
     setSelectedTechnicianId(urlState.selectedTechnicianId);
     setSortMode(urlState.sortMode);
-  }, [urlState]);
-
-  const dayKeyFromAnchor = useMemo(() => {
-    const { y, m, day } = swissYmdParts(anchorDate);
-    return `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  }, [anchorDate]);
+    const id = window.requestAnimationFrame(() => {
+      skipUrlPushRef.current = false;
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [urlState, applyDayKey]);
 
   const calendarReturnHref = useMemo(
     () =>
       buildAdminCalendarHref({
         viewMode,
-        dayKey: dayKeyFromAnchor,
+        dayKey,
         selectedTechnicianId,
         sortMode,
       }),
-    [viewMode, dayKeyFromAnchor, selectedTechnicianId, sortMode],
+    [viewMode, dayKey, selectedTechnicianId, sortMode],
   );
 
   const buildProjectHref = useCallback(
@@ -342,8 +352,9 @@ export function AdminCalendar({
     }) => {
       if (pathname !== "/kalender") return;
       const next = buildAdminCalendarHref(state);
-      const current = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
-      if (current !== next) router.replace(next, { scroll: false });
+      const currentQs = searchParams.toString();
+      if (skipUrlPushRef.current) return;
+      if (!calendarQueriesEqual(currentQs, next)) router.replace(next, { scroll: false });
     },
     [pathname, router, searchParams],
   );
@@ -351,11 +362,11 @@ export function AdminCalendar({
   useEffect(() => {
     pushCalendarUrl({
       viewMode,
-      dayKey: dayKeyFromAnchor,
+      dayKey,
       selectedTechnicianId,
       sortMode,
     });
-  }, [viewMode, dayKeyFromAnchor, selectedTechnicianId, sortMode, pushCalendarUrl]);
+  }, [viewMode, dayKey, selectedTechnicianId, sortMode, pushCalendarUrl]);
 
   const { startIso, endIso, heading, rangeLabel } = useMemo(() => {
     if (viewMode === "availability") {
@@ -464,6 +475,18 @@ export function AdminCalendar({
     return { upcomingByWeek: upcomingWeeks, pastByWeek: pastWeeks };
   }, [calendarNowTs, sortMode, visibleTasks]);
 
+  const bumpDayKey = useCallback((deltaDays: number) => {
+    setDayKey((k) => {
+      const next = shiftSwissDayKey(k, deltaDays);
+      const ad = anchorDateFromDayKey(next);
+      setAnchorDate(ad);
+      const { y, m } = swissYmdParts(ad);
+      setYear(y);
+      setMonth(m);
+      return next;
+    });
+  }, []);
+
   const navigateMonth = useCallback(
     (dir: -1 | 1) => {
       let newMonth = month + dir;
@@ -475,28 +498,22 @@ export function AdminCalendar({
         newMonth = 1;
         newYear += 1;
       }
-      setYear(newYear);
-      setMonth(newMonth);
-      setAnchorDate(anchorDateForYearMonth(newYear, newMonth));
+      const ad = anchorDateForYearMonth(newYear, newMonth);
+      applyDayKey(dayKeyFromDate(ad));
     },
-    [year, month],
+    [year, month, applyDayKey],
   );
 
-  const navigateWeek = useCallback((dir: -1 | 1) => {
-    setAnchorDate((d) => shiftCalendarDays(d, dir * 7));
-  }, []);
+  const navigateWeek = useCallback((dir: -1 | 1) => bumpDayKey(dir * 7), [bumpDayKey]);
 
-  const navigateDay = useCallback((dir: -1 | 1) => {
-    setAnchorDate((d) => shiftCalendarDays(d, dir));
-  }, []);
+  const navigateDay = useCallback((dir: -1 | 1) => bumpDayKey(dir), [bumpDayKey]);
 
   const navigateYear = useCallback(
     (dir: -1 | 1) => {
       const nextYear = year + dir;
-      setYear(nextYear);
-      setAnchorDate(anchorDateForYearMonth(nextYear, month));
+      applyDayKey(dayKeyFromDate(anchorDateForYearMonth(nextYear, month)));
     },
-    [year, month],
+    [year, month, applyDayKey],
   );
 
   const onNavigate = useCallback(
@@ -517,14 +534,11 @@ export function AdminCalendar({
       setMonth(m);
     }
     if (next === "week" || next === "day" || next === "availability") {
-      setAnchorDate(anchorDateForYearMonth(year, month));
+      applyDayKey(dayKeyFromDate(anchorDateForYearMonth(year, month)));
     }
-  }, [anchorDate, year, month]);
+  }, [anchorDate, year, month, applyDayKey]);
 
-  const dayPickerValue = useMemo(() => {
-    const { y, m, day } = swissYmdParts(anchorDate);
-    return `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  }, [anchorDate]);
+  const dayPickerValue = dayKey;
   const monthPickerValue = useMemo(() => `${year}-${String(month).padStart(2, "0")}`, [year, month]);
   const weekPickerValue = useMemo(() => isoWeekInputValueFromDate(anchorDate), [anchorDate]);
 
@@ -609,8 +623,7 @@ export function AdminCalendar({
                 const y = Number(e.target.value);
                 if (!Number.isFinite(y)) return;
                 const clamped = Math.min(2100, Math.max(2000, y));
-                setYear(clamped);
-                setAnchorDate(anchorDateForYearMonth(clamped, month));
+                applyDayKey(dayKeyFromDate(anchorDateForYearMonth(clamped, month)));
               }}
             />
           ) : viewMode === "month" ? (
@@ -623,9 +636,7 @@ export function AdminCalendar({
                 if (!v) return;
                 const [y, mo] = v.split("-").map(Number);
                 if (!y || !mo) return;
-                setYear(y);
-                setMonth(mo);
-                setAnchorDate(anchorDateForYearMonth(y, mo));
+                applyDayKey(dayKeyFromDate(anchorDateForYearMonth(y, mo)));
               }}
             />
           ) : viewMode === "availability" ? (
@@ -636,9 +647,7 @@ export function AdminCalendar({
               onChange={(e) => {
                 const v = e.target.value;
                 if (!v) return;
-                const [y, mo, d] = v.split("-").map(Number);
-                if (!y || !mo || !d) return;
-                setAnchorDate(new Date(y, mo - 1, d));
+                if (v) applyDayKey(v);
               }}
             />
           ) : viewMode === "week" ? (
@@ -660,10 +669,7 @@ export function AdminCalendar({
                 mondayWeek1.setUTCDate(jan4.getUTCDate() - (jan4Day - 1));
                 const targetMonday = new Date(mondayWeek1);
                 targetMonday.setUTCDate(mondayWeek1.getUTCDate() + (w - 1) * 7);
-                setAnchorDate(targetMonday);
-                const sm = swissYmdParts(targetMonday);
-                setYear(sm.y);
-                setMonth(sm.m);
+                applyDayKey(dayKeyFromDate(targetMonday));
               }}
             />
           ) : (
@@ -673,10 +679,7 @@ export function AdminCalendar({
               value={dayPickerValue}
               onChange={(e) => {
                 const v = e.target.value;
-                if (!v) return;
-                const [y, mo, d] = v.split("-").map(Number);
-                if (!y || !mo || !d) return;
-                setAnchorDate(new Date(y, mo - 1, d));
+                if (v) applyDayKey(v);
               }}
             />
           )}

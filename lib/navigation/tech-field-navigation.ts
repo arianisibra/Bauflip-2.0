@@ -42,6 +42,17 @@ export function buildTechCalendarHref(state: TechCalendarUrlState): string {
   return qs ? `/wochenplan?${qs}` : "/wochenplan";
 }
 
+export function calendarQueriesEqual(currentQs: string, builtHref: string): boolean {
+  const builtQs = builtHref.includes("?") ? builtHref.split("?")[1] ?? "" : "";
+  const a = new URLSearchParams(currentQs);
+  const b = new URLSearchParams(builtQs);
+  const keys = new Set([...a.keys(), ...b.keys()]);
+  for (const k of keys) {
+    if (a.get(k) !== b.get(k)) return false;
+  }
+  return true;
+}
+
 /** Interne Rücknavigation (Feld-Routen + Büro-Kalender). */
 export const sanitizeTechReturnTo = sanitizeAppReturnTo;
 

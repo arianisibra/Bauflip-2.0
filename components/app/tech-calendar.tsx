@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -25,6 +25,7 @@ import { queryKeys } from "@/lib/query/keys";
 import {
   buildAuftragHref,
   buildTechCalendarHref,
+  calendarQueriesEqual,
   parseTechCalendarUrlState,
   type TechCalendarView,
 } from "@/lib/navigation/tech-field-navigation";
@@ -93,11 +94,18 @@ export function TechCalendar({
   const [selectedTechnicianId, setSelectedTechnicianId] = useState(urlState.selectedTechnicianId);
   const [searchQuery, setSearchQuery] = useState(urlState.searchQuery);
 
+  const skipUrlPushRef = useRef(false);
+
   useEffect(() => {
+    skipUrlPushRef.current = true;
     setViewMode(urlState.viewMode);
     setFocusDayKey(urlState.focusDayKey);
     setSelectedTechnicianId(urlState.selectedTechnicianId);
     setSearchQuery(urlState.searchQuery);
+    const id = window.requestAnimationFrame(() => {
+      skipUrlPushRef.current = false;
+    });
+    return () => window.cancelAnimationFrame(id);
   }, [urlState]);
 
   const calendarReturnHref = useMemo(
@@ -120,8 +128,9 @@ export function TechCalendar({
     }) => {
       if (pathname !== "/wochenplan") return;
       const next = buildTechCalendarHref(state);
-      const current = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
-      if (current !== next) router.replace(next, { scroll: false });
+      const currentQs = searchParams.toString();
+      if (skipUrlPushRef.current) return;
+      if (!calendarQueriesEqual(currentQs, next)) router.replace(next, { scroll: false });
     },
     [pathname, router, searchParams],
   );
