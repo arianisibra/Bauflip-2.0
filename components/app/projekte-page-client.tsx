@@ -5,7 +5,11 @@ import { TriangleAlert } from "lucide-react";
 import { sanitizeAppReturnTo } from "@/lib/navigation/app-return-to";
 import { ProjekteListClient } from "@/components/app/projekte-list-client";
 
-export function ProjektePageClient({ supabaseConfigured }: { supabaseConfigured: boolean }) {
+export function ProjektePageClient({
+  supabaseConfigured,
+}: {
+  supabaseConfigured: boolean;
+}) {
   const searchParams = useSearchParams();
   const rawOpen =
     (searchParams.get("openProjectId") ?? "").trim() ||

@@ -18,7 +18,8 @@ import {
   updateTechnicianReport,
 } from "@/lib/db/repository";
 import type { ProjectCore } from "@/lib/db/repository";
-import type { OfficeProjectListItem, ProjectStatus, UserProfile } from "@/lib/domain/types";
+import type { ProjectStatus, UserProfile } from "@/lib/domain/types";
+import { DEFAULT_PROJEKTE_LIST_FILTER, type ProjekteListFilter } from "@/lib/projekte/list-filter";
 import { loadProjekteBootstrapData } from "@/lib/projekte/server-bootstrap";
 import { publish } from "@/lib/realtime/publish";
 import { projectStammdatenUpdateSchema, appointmentSchema, technicianReportUpdateSchema } from "@/lib/validations/forms";
@@ -59,16 +60,13 @@ export async function listAssignableProfilesAction(): Promise<UserProfile[]> {
 }
 
 export async function fetchProjekteBootstrapAction(
-  status?: ProjectStatus,
-): Promise<{
-  projects: OfficeProjectListItem[];
-  branding: { name: string; logoUrl: string | null };
-}> {
+  listFilter: ProjekteListFilter = DEFAULT_PROJEKTE_LIST_FILTER,
+): Promise<Awaited<ReturnType<typeof loadProjekteBootstrapData>>> {
   const session = await requireOfficeSession();
   if (!session.organizationId) {
     throw new Error("Keine Organisation.");
   }
-  return loadProjekteBootstrapData(session.organizationId, status);
+  return loadProjekteBootstrapData(session.organizationId, listFilter);
 }
 
 export async function updateProjectStammdatenAction(

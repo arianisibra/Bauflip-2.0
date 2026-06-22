@@ -50,8 +50,13 @@ import {
   type AvailabilityBundle,
 } from "@/app/(app)/kalender/availability-actions";
 import { fetchOrganizationBrandingAction } from "@/app/(app)/layout-actions";
-import type { OrganizationBrandingSnapshot } from "@/lib/projekte/bootstrap-types";
+import type { OrganizationBrandingSnapshot, ProjekteBootstrapData } from "@/lib/projekte/bootstrap-types";
 import { PROJEKTE_BOOTSTRAP_STALE_MS, primeProjekteBootstrapCache } from "@/lib/query/projekt-bootstrap-cache";
+import {
+  DEFAULT_PROJEKTE_LIST_FILTER,
+  projekteBootstrapStatusKey,
+  type ProjekteListFilter,
+} from "@/lib/projekte/list-filter";
 import { fetchAuftragProjectCoreAction } from "@/app/(tech)/auftrag-data-actions";
 import { fetchTechMonthTasksAction, fetchWeekTasksAction } from "@/app/(tech)/wochenplan/actions";
 import {
@@ -131,19 +136,18 @@ export function useOrganizationBranding(options?: { fetch?: boolean }) {
   });
 }
 
-export function useProjekteBootstrap(status?: ProjectStatus) {
-  const statusKey = status ?? "all";
+export function useProjekteBootstrap(listFilter: ProjekteListFilter = DEFAULT_PROJEKTE_LIST_FILTER) {
+  const statusKey = projekteBootstrapStatusKey(listFilter);
   const qc = useQueryClient();
-  return useQuery({
+  return useQuery<ProjekteBootstrapData>({
     queryKey: queryKeys.projekteBootstrap(statusKey),
     queryFn: async () => {
-      const data = await fetchProjekteBootstrapAction(status);
+      const data = await fetchProjekteBootstrapAction(listFilter);
       primeProjekteBootstrapCache(qc, statusKey, data);
       return data;
     },
     staleTime: PROJEKTE_BOOTSTRAP_STALE_MS,
     refetchOnMount: false,
-    select: (data) => data.projects,
   });
 }
 

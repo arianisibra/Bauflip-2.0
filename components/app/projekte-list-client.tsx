@@ -2,11 +2,10 @@
 
 import { useVirtualizer } from "@tanstack/react-virtual";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
 import type { OfficeProjectListItem, ProjectStatus } from "@/lib/domain/types";
 import {
   projectStatusLabels,
@@ -15,8 +14,13 @@ import {
 } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 import { DEFAULT_PROJECT_LIST_MAX_ROWS } from "@/lib/constants/project-list";
+import {
+  buildProjekteListHref,
+  parseProjekteListUrlFilter,
+  projekteListQueriesEqual,
+} from "@/lib/navigation/projekte-list-navigation";
+import { isProjectStatus, parseProjekteListFilter, type ProjekteListFilter } from "@/lib/projekte/list-filter";
 import { useDeleteProject, useProjekteBootstrap } from "@/lib/query/hooks";
-import { queryKeys } from "@/lib/query/keys";
 import { OfficeReturnBar } from "@/components/app/office-return-bar";
 import { ListPageToolbar } from "@/components/app/list-page-toolbar";
 import { sanitizeAppReturnTo } from "@/lib/navigation/app-return-to";
@@ -64,8 +68,6 @@ function statusWorkflowIndex(status: ProjectStatus): number {
 
 type ProjectsListSort = "default" | "status_asc" | "status_desc";
 
-type StatusFilterValue = ProjectStatus | "all";
-
 /** Für Filter «ABGEMACHT»: nächster Termin am nächsten zu «jetzt» zuerst (früheres `starts_at` zuerst); ohne offenen Termin ans Ende. */
 function compareAbgemachtListOrder(a: OfficeProjectListItem, b: OfficeProjectListItem): number {
   const ta = a.nextAppointmentStartsAt;
@@ -87,7 +89,7 @@ function compareOfficeListRows(
   a: OfficeProjectListItem,
   b: OfficeProjectListItem,
   listSort: ProjectsListSort,
-  statusFilter: StatusFilterValue,
+  statusFilter: ProjekteListFilter,
 ): number {
   const aDone = a.status === "abgeschlossen";
   const bDone = b.status === "abgeschlossen";
@@ -189,10 +191,11 @@ export function ProjekteListClient({
   initialReturnTo?: string | null;
 }) {
   const router = useRouter();
-  const qc = useQueryClient();
-  const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("all");
-  const serverStatus = statusFilter === "all" ? undefined : statusFilter;
-  const { data: projects = [], isLoading: projectsLoading } = useProjekteBootstrap(serverStatus);
+  const searchParams = useSearchParams();
+  const statusFilter = parseProjekteListUrlFilter(searchParams);
+  const { data: bootstrap, isLoading: projectsLoading } = useProjekteBootstrap(statusFilter);
+  const projects = bootstrap?.projects ?? [];
+  const statusCountsSnapshot = bootstrap?.statusCounts;
   const deleteProject = useDeleteProject();
   const [listSort, setListSort] = useState<ProjectsListSort>("default");
   const [q, setQ] = useState("");
@@ -204,6 +207,16 @@ export function ProjekteListClient({
   const [returnTo, setReturnTo] = useState<string | null>(initialReturnTo);
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
+
+  const handleStatusFilterChange = useCallback(
+    (next: ProjekteListFilter) => {
+      const href = buildProjekteListHref(next, searchParams);
+      if (!projekteListQueriesEqual(searchParams.toString(), href)) {
+        router.replace(href, { scroll: false });
+      }
+    },
+    [router, searchParams],
+  );
 
   useEffect(() => {
     setPendingOpenProjectId(initialOpenProjectId ?? "");
@@ -241,31 +254,28 @@ export function ProjekteListClient({
     });
   }, [projects, q]);
 
-  const statusCounts = useMemo(() => {
-    const m = new Map<ProjectStatus, number>();
-    for (const s of projectStatuses) {
-      m.set(s, 0);
-    }
-    for (const p of filtered) {
-      m.set(p.status, (m.get(p.status) ?? 0) + 1);
-    }
-    return m;
-  }, [filtered]);
-
-  const statusFiltered = useMemo(() => {
-    if (statusFilter === "all") return filtered;
-    return filtered.filter((p) => p.status === statusFilter);
-  }, [filtered, statusFilter]);
-
   const sorted = useMemo(() => {
-    const copy = [...statusFiltered];
+    const copy = [...filtered];
     copy.sort((a, b) => compareOfficeListRows(a, b, listSort, statusFilter));
     return copy;
-  }, [statusFiltered, listSort, statusFilter]);
+  }, [filtered, listSort, statusFilter]);
+
+  const statusCountsForSheet = useMemo(() => {
+    const m = new Map<ProjectStatus, number>();
+    if (statusCountsSnapshot?.byStatus) {
+      for (const [status, count] of Object.entries(statusCountsSnapshot.byStatus)) {
+        if (isProjectStatus(status) && typeof count === "number") {
+          m.set(status, count);
+        }
+      }
+    }
+    return m;
+  }, [statusCountsSnapshot]);
 
   const hasSearch = q.trim().length > 0;
-  const hasNoMatchesForStatus =
-    statusFilter !== "all" && filtered.length > 0 && statusFiltered.length === 0;
+  const isConcreteStatusFilter = isProjectStatus(statusFilter);
+  const hasNoMatchesForStatus = isConcreteStatusFilter && !hasSearch && projects.length === 0;
+  const hasNoActiveProjects = statusFilter === "active" && !hasSearch && projects.length === 0;
   const showEmptyState = sorted.length === 0;
   const useVirtualTable = sorted.length > PROJECT_TABLE_VIRTUAL_THRESHOLD;
   const scrollParentRef = useRef<HTMLDivElement>(null);
@@ -356,19 +366,25 @@ export function ProjekteListClient({
           </span>
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilterValue)}
+            onChange={(e) => handleStatusFilterChange(parseProjekteListFilter(e.target.value))}
             className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs font-bold sm:max-w-sm"
             aria-label="Statusfilter für Projekte"
           >
-            <option value="all" className="font-bold">Alle ({filtered.length})</option>
+            <option value="active" className="font-bold">
+              Aktiv (ohne Abgeschlossen) ({statusCountsSnapshot?.totalActive ?? projects.length})
+            </option>
+            <option value="all" className="font-bold">
+              Alle ({statusCountsSnapshot?.totalAll ?? projects.length})
+            </option>
             {projectStatusesOfficeListFilter.map((s) => (
               <option key={s} value={s} className="font-bold">
-                {projectStatusLabels[s]} ({statusCounts.get(s) ?? 0})
+                {projectStatusLabels[s]} ({statusCountsSnapshot?.byStatus[s] ?? 0})
               </option>
             ))}
           </select>
           <p className="text-[11px] text-muted-foreground">
-            Es werden nur Projekte mit dem gewählten Status gelistet (zusätzlich zur Suche). „Alle“ hebt den Filter auf.
+            Standard: aktive Projekte ohne «Abgeschlossen». «Alle» schliesst auch abgeschlossene Projekte ein.
+            Einzelstatus filtert serverseitig (zusätzlich zur Suche).
           </p>
         </div>
         <div className="flex flex-col gap-2 border-t border-border/60 pt-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
@@ -427,21 +443,30 @@ export function ProjekteListClient({
             <h2 className="text-base font-semibold">
               {hasNoMatchesForStatus
                 ? `Keine Projekte mit Status „${projectStatusLabels[statusFilter]}“`
+                : hasNoActiveProjects
+                  ? "Keine aktiven Projekte"
                 : hasSearch
                   ? "Keine passenden Projekte gefunden"
                   : "Noch keine Projekte vorhanden"}
             </h2>
             <p className="max-w-2xl text-sm text-muted-foreground">
               {hasNoMatchesForStatus
-                ? "Wählen Sie einen anderen Status oder setzen Sie den Filter auf „Alle“."
+                ? "Wählen Sie einen anderen Status oder zeigen Sie alle Projekte an."
+                : hasNoActiveProjects
+                  ? "Alle Projekte sind abgeschlossen — wählen Sie «Alle» oder «Abgeschlossen»."
                 : hasSearch
                   ? "Passen Sie die Suche oder den Status-Filter an."
                   : "Erfassen Sie die erste Anfrage, damit sie hier erscheint."}
             </p>
             <div className="flex flex-wrap gap-2">
+              {hasNoMatchesForStatus || hasNoActiveProjects ? (
+                <Button size="sm" variant="outline" onClick={() => handleStatusFilterChange("all")}>
+                  Alle Projekte anzeigen
+                </Button>
+              ) : null}
               {hasNoMatchesForStatus ? (
-                <Button size="sm" variant="outline" onClick={() => setStatusFilter("all")}>
-                  Alle Status anzeigen
+                <Button size="sm" variant="outline" onClick={() => handleStatusFilterChange("active")}>
+                  Nur aktive anzeigen
                 </Button>
               ) : null}
               {hasSearch ? (
@@ -622,7 +647,7 @@ export function ProjekteListClient({
               projectId={selected.id}
               open={open}
               canEdit={canEditProjectSheet}
-              statusCounts={statusCounts}
+              statusCounts={statusCountsForSheet}
             />
           </>
         ) : null}

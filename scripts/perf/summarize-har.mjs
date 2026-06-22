@@ -64,6 +64,18 @@ if (doc) {
   console.log("  total:", Math.round(doc.time) + "ms");
   console.log("  TTFB (wait):", Math.round(doc.timings?.wait ?? 0) + "ms");
   console.log("  transfer:", Math.round((doc.response._transferSize ?? 0) / 1024) + "KB");
+  const contentKb = Math.round((doc.response.content?.size ?? 0) / 1024);
+  if (contentKb > 0) {
+    console.log("  RSC content (uncompressed):", contentKb + "KB");
+  }
+  const statusParam = (() => {
+    try {
+      return new URL(doc.request.url).searchParams.get("status") ?? "(default active)";
+    } catch {
+      return "n/a";
+    }
+  })();
+  console.log("  URL status param:", statusParam);
 }
 
 console.log("\nBootstrap POST /projekte:", bootstrapPosts.length);
@@ -89,6 +101,10 @@ if (doc && bootstrapPosts[0]) {
   console.log("  bootstrap end:", end(bootstrapPosts[0]));
   console.log("  data ready:", end(bootstrapPosts[0]));
   console.log("  hydration gap:", rel(bootstrapPosts[0]) - end(doc));
+} else if (doc) {
+  console.log("\nTimeline (ms from first request)");
+  console.log("  document end:", end(doc));
+  console.log("  data ready (Hybrid-SSR):", end(doc));
 }
 
 if (har.log.pages?.[0]?.pageTimings) {

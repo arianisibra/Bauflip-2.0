@@ -184,6 +184,51 @@ node scripts/perf/summarize-har.mjs ~/Desktop/app.gross-storenbau.ch-phase1.har
 
 ---
 
+## Phase 2a — RPC defer + Default «Aktiv» (2026-06-22)
+
+| Massnahme | Wirkung |
+|-----------|---------|
+| Default-Filter `active` (ohne `abgeschlossen`) | Kleinerer initialer RSC-Payload |
+| RPC `next_appointment_starts_for_org` nur bei `?status=abgemacht` | 1 DB-Roundtrip weniger beim Normal-Load |
+| Status-Zähler (`listProjectStatusCountsForOffice`) | Korrekte Dropdown-Labels ohne «Alle» zu laden |
+| URL `?status=active\|all\|…` | Reload-stabil, teilbar |
+
+**Prod-Baseline Phase 1 (deployed):** Document ~1311 ms, RSC ~864 KB, Bootstrap POST **0×**.
+
+**Erwartung Phase 2a (Warm, Default `/projekte`):**
+
+| Metrik | Phase 1 | Phase 2a (Ziel) |
+|--------|---------|-----------------|
+| TTFB | ~480 ms | ~350–420 ms |
+| RSC content | ~864 KB | ~15–25 % kleiner |
+| RPC | immer | **skipped** (Default) |
+| Bootstrap POST | 0× | 0× |
+
+**Messung nach Deploy:**
+
+```bash
+# Default (active)
+node scripts/perf/summarize-har.mjs ~/Desktop/app.gross-storenbau.ch.har
+
+# Localhost
+BAUFLIP_HAR_HOST=localhost node scripts/perf/summarize-har.mjs ~/Desktop/localhost.har
+
+# ABGEMACHT (RPC aktiv)
+# Browser: /projekte?status=abgemacht → HAR exportieren
+```
+
+**Dev-Log (RPC):** In Development loggt `listProjectsForOffice` JSON mit `listFilter`, `projectCount`, `rpc: skipped|next_appointment_starts_for_org`.
+
+**Manuelle Checkliste:**
+
+1. `/projekte` — nur aktive Projekte, kein POST, kein RPC (Dev-Log: `skipped`)
+2. `?status=all` — inkl. abgeschlossen
+3. `?status=abgemacht` — Termin-Sortierung, RPC in Dev-Log
+4. Dropdown-Zähler stimmen ohne vorher «Alle» zu wählen
+5. Filter-Wechsel aktualisiert URL; Reload behält Filter
+
+---
+
 ## Frühere Baselines
 
 ### Dev-HAR vor Optimierung

@@ -35,6 +35,13 @@ import { formatServiceAddressFields } from "@/lib/tech/bundle-display";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { withSlowLog } from "@/lib/observability/slow-log";
 import { DEFAULT_PROJECT_LIST_MAX_ROWS } from "@/lib/constants/project-list";
+import type { ProjekteStatusCountsSnapshot } from "@/lib/projekte/bootstrap-types";
+import {
+  DEFAULT_PROJEKTE_LIST_FILTER,
+  matchesProjekteListFilter,
+  needsNextAppointmentRpc,
+  type ProjekteListFilter,
+} from "@/lib/projekte/list-filter";
 import {
   mockAppointments,
   mockProfiles,
@@ -246,23 +253,74 @@ export const getOrganizationBranding = cache(async function getOrganizationBrand
   return { name, logoUrl };
 });
 
+export const listProjectStatusCountsForOffice = cache(async function listProjectStatusCountsForOffice(
+  organizationId?: string | null,
+): Promise<ProjekteStatusCountsSnapshot> {
+  const empty: ProjekteStatusCountsSnapshot = {
+    byStatus: {},
+    totalAll: 0,
+    totalActive: 0,
+  };
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const byStatus: Partial<Record<ProjectStatus, number>> = {};
+    for (const p of mockProjects) {
+      byStatus[p.status] = (byStatus[p.status] ?? 0) + 1;
+    }
+    const totalAll = mockProjects.length;
+    return {
+      byStatus,
+      totalAll,
+      totalActive: mockProjects.filter((p) => p.status !== "abgeschlossen").length,
+    };
+  }
+  const orgId = organizationId ?? (await getCachedCurrentOrganizationId());
+  if (!orgId) return empty;
+
+  const { data, error } = await supabase
+    .from("projects")
+    .select("status")
+    .eq("organization_id", orgId);
+  if (error || !data) return empty;
+
+  const byStatus: Partial<Record<ProjectStatus, number>> = {};
+  for (const row of data as { status?: string }[]) {
+    const status = row.status;
+    if (typeof status !== "string" || !projectStatuses.includes(status as ProjectStatus)) continue;
+    const key = status as ProjectStatus;
+    byStatus[key] = (byStatus[key] ?? 0) + 1;
+  }
+  const totalAll = data.length;
+  let totalActive = 0;
+  for (const [status, count] of Object.entries(byStatus)) {
+    if (status !== "abgeschlossen" && typeof count === "number") {
+      totalActive += count;
+    }
+  }
+  return { byStatus, totalAll, totalActive };
+});
+
 export const listProjectsForOffice = cache(async function listProjectsForOffice(
   organizationId?: string | null,
-  status?: ProjectStatus,
+  listFilter: ProjekteListFilter = DEFAULT_PROJEKTE_LIST_FILTER,
 ): Promise<OfficeProjectListItem[]> {
+  const runRpc = needsNextAppointmentRpc(listFilter);
   return withSlowLog("listProjectsForOffice", async () => {
     const supabase = await createSupabaseServerClient();
     if (!supabase) {
-      return sortOfficeProjects(mockProjects.map((p) => ({
-        id: p.id,
-        title: p.tenantName?.trim() || p.title,
-        type: p.type,
-        status: p.status,
-        displayLabel: p.tenantName?.trim() || p.title,
-        serviceAddressShort: null,
-        createdAt: p.createdAt,
-        nextAppointmentStartsAt: null,
-      })));
+      const mockItems = mockProjects
+        .filter((p) => matchesProjekteListFilter(p.status, listFilter))
+        .map((p) => ({
+          id: p.id,
+          title: p.tenantName?.trim() || p.title,
+          type: p.type,
+          status: p.status,
+          displayLabel: p.tenantName?.trim() || p.title,
+          serviceAddressShort: null,
+          createdAt: p.createdAt,
+          nextAppointmentStartsAt: null as string | null,
+        }));
+      return sortOfficeProjects(mockItems);
     }
     const orgId = organizationId ?? (await getCachedCurrentOrganizationId());
     let q = supabase
@@ -272,8 +330,10 @@ export const listProjectsForOffice = cache(async function listProjectsForOffice(
     if (orgId) {
       q = q.eq("organization_id", orgId);
     }
-    if (status) {
-      q = q.eq("status", status);
+    if (listFilter === "active") {
+      q = q.neq("status", "abgeschlossen");
+    } else if (listFilter !== "all") {
+      q = q.eq("status", listFilter);
     }
     const maxRows = projectListMaxRows();
     q = q.limit(maxRows);
@@ -302,7 +362,7 @@ export const listProjectsForOffice = cache(async function listProjectsForOffice(
     });
 
     const nextByProject = new Map<string, string>();
-    if (orgId) {
+    if (orgId && runRpc) {
       const nowIso = new Date().toISOString();
       const { data: apRows, error: apErr } = await supabase.rpc("next_appointment_starts_for_org", {
         p_org_id: orgId,
@@ -320,6 +380,17 @@ export const listProjectsForOffice = cache(async function listProjectsForOffice(
     }
     for (const p of mapped) {
       p.nextAppointmentStartsAt = nextByProject.get(p.id) ?? null;
+    }
+
+    if (process.env.NODE_ENV === "development") {
+      console.info(
+        JSON.stringify({
+          type: "listProjectsForOffice",
+          listFilter,
+          projectCount: mapped.length,
+          rpc: runRpc ? "next_appointment_starts_for_org" : "skipped",
+        }),
+      );
     }
 
     return sortOfficeProjects(mapped);
