@@ -1,8 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
 import dynamic from "next/dynamic";
-import { swissYmdParts } from "@/lib/date/swiss";
 import { BauflipLoading } from "@/components/ui/bauflip-loading";
 
 const AdminCalendar = dynamic(
@@ -17,8 +15,6 @@ const AdminCalendar = dynamic(
 );
 
 export function KalenderPageClient() {
-  const { y, m } = useMemo(() => swissYmdParts(new Date()), []);
-
   return (
     <section className="flex flex-col gap-6">
       <div className="space-y-1 border-b border-border/60 pb-4">
@@ -29,7 +25,7 @@ export function KalenderPageClient() {
           Termine nach Monat, Kalenderwoche oder einzelnem Tag (Europe/Zurich).
         </p>
       </div>
-      <AdminCalendar initialTasks={[]} initialYear={y} initialMonth={m} />
+      <AdminCalendar />
     </section>
   );
 }

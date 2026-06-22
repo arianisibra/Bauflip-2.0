@@ -312,6 +312,7 @@ function RailRow({
             <Link
               key={b.key}
               href={`/projekte?sheet=${t.projectId}`}
+              prefetch={false}
               className="absolute top-1 bottom-1 flex min-h-[36px] items-center justify-center overflow-hidden rounded-md border border-foreground/10 shadow-sm transition-shadow hover:shadow-md active:opacity-90 sm:min-h-0"
               style={{
                 left: `${leftPct}%`,

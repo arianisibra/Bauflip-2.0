@@ -4,16 +4,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import type { WeekTaskItem } from "@/lib/domain/types";
 import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
 import {
   groupWeekTasksByProjectDay,
   swissDayKeyFromTaskStart,
   type WeekTaskProjectDayGroup,
 } from "@/lib/tech/group-week-tasks-by-project-day";
-import { formatWeekRangeDe, getSwissDayBounds, getWeekBounds } from "@/lib/date/week-bounds";
 import { swissYmdParts, todayKeySwiss } from "@/lib/date/swiss";
 import { shiftSwissDayKey } from "@/lib/date/swiss-week";
+import { calendarRangeBoundsFromState } from "@/lib/kalender/calendar-range";
 import {
   anchorDateFromDayKey,
   buildAdminCalendarHref,
@@ -23,19 +22,14 @@ import {
   parseAdminCalendarUrlState,
   type AdminCalendarViewMode,
 } from "@/lib/navigation/admin-calendar-navigation";
+import { prefetchProjectCore } from "@/lib/query/prefetch-project-core";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BauflipLoadingInline } from "@/components/ui/bauflip-loading";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCalendarRangeTasks } from "@/lib/query/hooks";
-import { queryKeys } from "@/lib/query/keys";
 import { CalendarAvailabilityRail } from "@/components/app/calendar-availability-rail";
 import { cn } from "@/lib/utils";
-
-const MONTH_NAMES = [
-  "Januar", "Februar", "März", "April", "Mai", "Juni",
-  "Juli", "August", "September", "Oktober", "November", "Dezember",
-];
 
 const TZ = "Europe/Zurich";
 
@@ -128,15 +122,20 @@ function AppointmentCard({
   group,
   dimmed,
   href,
+  onProjectHover,
 }: {
   group: WeekTaskProjectDayGroup;
   dimmed: boolean;
   href: string;
+  onProjectHover?: (projectId: string) => void;
 }) {
   const task = group.primary;
   return (
     <Link
       href={href}
+      prefetch={false}
+      onMouseEnter={() => onProjectHover?.(task.projectId)}
+      onFocus={() => onProjectHover?.(task.projectId)}
       className={`flex min-h-0 items-stretch gap-2 rounded-lg border bg-card px-2 py-1.5 text-left shadow-sm outline-none ring-offset-background transition-colors hover:border-border hover:bg-muted/25 focus-visible:ring-2 focus-visible:ring-ring ${
         dimmed ? "border-border/40 opacity-50" : "border-border/90"
       }`}
@@ -190,6 +189,7 @@ function WeekSection({
   dimmed,
   subdivideByWeekDays = false,
   buildProjectHref,
+  onProjectHover,
 }: {
   weekKey: string;
   groups: WeekTaskProjectDayGroup[];
@@ -197,6 +197,7 @@ function WeekSection({
   /** In der Wochenansicht: Termine nach Kalendertag in eigene Karten-Blöcke mit Titel trennen. */
   subdivideByWeekDays?: boolean;
   buildProjectHref: (projectId: string) => string;
+  onProjectHover?: (projectId: string) => void;
 }) {
   const dayChunks = useMemo(() => {
     if (!subdivideByWeekDays || groups.length === 0) return null;
@@ -223,6 +224,7 @@ function WeekSection({
           group={group}
           dimmed={dimmed}
           href={buildProjectHref(group.primary.projectId)}
+          onProjectHover={onProjectHover}
         />
       ))}
     </div>
@@ -268,6 +270,7 @@ function WeekSection({
               group={group}
               dimmed={dimmed}
               href={buildProjectHref(group.primary.projectId)}
+              onProjectHover={onProjectHover}
             />
           ))}
         </div>
@@ -276,15 +279,7 @@ function WeekSection({
   );
 }
 
-export function AdminCalendar({
-  initialTasks,
-  initialYear,
-  initialMonth,
-}: {
-  initialTasks: WeekTaskItem[];
-  initialYear: number;
-  initialMonth: number;
-}) {
+export function AdminCalendar() {
   const qc = useQueryClient();
   const router = useRouter();
   const pathname = usePathname();
@@ -343,6 +338,13 @@ export function AdminCalendar({
     [calendarReturnHref],
   );
 
+  const handleProjectHover = useCallback(
+    (projectId: string) => {
+      prefetchProjectCore(qc, projectId);
+    },
+    [qc],
+  );
+
   const pushCalendarUrl = useCallback(
     (state: {
       viewMode: AdminCalendarViewMode;
@@ -368,74 +370,10 @@ export function AdminCalendar({
     });
   }, [viewMode, dayKey, selectedTechnicianId, sortMode, pushCalendarUrl]);
 
-  const { startIso, endIso, heading, rangeLabel } = useMemo(() => {
-    if (viewMode === "availability") {
-      const { start, end } = getSwissDayBounds(anchorDate);
-      const headingLong = new Intl.DateTimeFormat("de-CH", {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-        timeZone: TZ,
-      }).format(anchorDate);
-      return {
-        startIso: start.toISOString(),
-        endIso: end.toISOString(),
-        heading: headingLong,
-        rangeLabel: "Verfügbarkeit",
-      };
-    }
-    if (viewMode === "year") {
-      const start = new Date(year, 0, 1, 0, 0, 0, 0);
-      const end = new Date(year, 11, 31, 23, 59, 59, 999);
-      return {
-        startIso: start.toISOString(),
-        endIso: end.toISOString(),
-        heading: `${year}`,
-        rangeLabel: "Jahr",
-      };
-    }
-    if (viewMode === "month") {
-      const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
-      const end = new Date(year, month, 0, 23, 59, 59, 999);
-      return {
-        startIso: start.toISOString(),
-        endIso: end.toISOString(),
-        heading: `${MONTH_NAMES[month - 1]} ${year}`,
-        rangeLabel: "Monat",
-      };
-    }
-    if (viewMode === "week") {
-      const { start, end } = getWeekBounds(anchorDate);
-      return {
-        startIso: start.toISOString(),
-        endIso: end.toISOString(),
-        heading: formatWeekRangeDe(start, end),
-        rangeLabel: "Kalenderwoche",
-      };
-    }
-    const { start, end } = getSwissDayBounds(anchorDate);
-    const headingLong = new Intl.DateTimeFormat("de-CH", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-      timeZone: TZ,
-    }).format(anchorDate);
-    return {
-      startIso: start.toISOString(),
-      endIso: end.toISOString(),
-      heading: headingLong,
-      rangeLabel: "Tag",
-    };
-  }, [viewMode, year, month, anchorDate]);
-
-  useEffect(() => {
-    if (initialTasks.length === 0) return;
-    const start = new Date(initialYear, initialMonth - 1, 1, 0, 0, 0, 0);
-    const end = new Date(initialYear, initialMonth, 0, 23, 59, 59, 999);
-    qc.setQueryData(queryKeys.calendarRange.byStartEnd(start.toISOString(), end.toISOString()), initialTasks);
-  }, [qc, initialYear, initialMonth, initialTasks]);
+  const { startIso, endIso, heading, rangeLabel } = useMemo(
+    () => calendarRangeBoundsFromState(viewMode, anchorDate, year, month),
+    [viewMode, year, month, anchorDate],
+  );
 
   const { data: tasks = [], isFetching: pending } = useCalendarRangeTasks(
     startIso,
@@ -745,6 +683,7 @@ export function AdminCalendar({
                   dimmed={false}
                   subdivideByWeekDays={viewMode === "week"}
                   buildProjectHref={buildProjectHref}
+                  onProjectHover={handleProjectHover}
                 />
               ))
             )}
@@ -769,6 +708,7 @@ export function AdminCalendar({
                 dimmed={true}
                 subdivideByWeekDays={viewMode === "week"}
                 buildProjectHref={buildProjectHref}
+                onProjectHover={handleProjectHover}
               />
             ))}
           </>

@@ -263,6 +263,7 @@ export function useCalendarRangeTasks(
     queryFn: () => fetchCalendarRangeTasksAction(rangeStartIso!, rangeEndIso!),
     enabled,
     staleTime: 90_000,
+    refetchOnMount: false,
   });
 }
 
@@ -282,6 +283,7 @@ export function useAvailabilityRange(
     queryFn: () => fetchAvailabilityRangeAction(rangeStartIso!, rangeEndIso!),
     enabled,
     staleTime: 60_000,
+    refetchOnMount: false,
   });
 }
 
