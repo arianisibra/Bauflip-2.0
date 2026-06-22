@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { getCurrentSession } from "@/lib/auth/session";
+import { requireAdminLayoutSession } from "@/lib/auth/organization";
 import { insertOrderFormTemplate, updateOrderFormTemplate } from "@/lib/db/repository";
 import { orderFormFieldsSchema, slugifyOrderFormSlug } from "@/lib/order-forms/schema";
 
@@ -18,8 +18,8 @@ const cmsPayloadSchema = z.object({
 });
 
 export async function createOrderFormCmsAction(payload: unknown): Promise<{ id: string }> {
-  const session = await getCurrentSession();
-  if (!session || session.role !== "admin" || !session.organizationId) {
+  const session = await requireAdminLayoutSession();
+  if (!session.organizationId) {
     throw new Error("Keine Berechtigung.");
   }
 
@@ -49,8 +49,8 @@ export async function createOrderFormCmsAction(payload: unknown): Promise<{ id: 
 }
 
 export async function updateOrderFormCmsAction(templateId: string, payload: unknown): Promise<void> {
-  const session = await getCurrentSession();
-  if (!session || session.role !== "admin" || !session.organizationId) {
+  const session = await requireAdminLayoutSession();
+  if (!session.organizationId) {
     throw new Error("Keine Berechtigung.");
   }
 

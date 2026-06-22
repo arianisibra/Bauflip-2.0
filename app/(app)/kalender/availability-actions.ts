@@ -1,6 +1,6 @@
 "use server";
 
-import { getCurrentSession } from "@/lib/auth/session";
+import { getOfficeSessionOrNull } from "@/lib/auth/organization";
 import { listAvailabilityForRange } from "@/lib/db/repository";
 import type { TechnicianAbsence, UserProfile, WeekTaskItem } from "@/lib/domain/types";
 
@@ -17,8 +17,8 @@ export async function fetchAvailabilityRangeAction(
   rangeStartIso: string,
   rangeEndIso: string,
 ): Promise<AvailabilityBundle> {
-  const session = await getCurrentSession();
-  if (!session || (session.role !== "office" && session.role !== "admin")) {
+  const session = await getOfficeSessionOrNull();
+  if (!session) {
     return EMPTY;
   }
   return listAvailabilityForRange(rangeStartIso, rangeEndIso);

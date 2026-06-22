@@ -26,29 +26,31 @@ import {
   deleteAppointmentAction,
   deleteProjectAction,
   deleteReportAction,
+  fetchProjekteBootstrapAction,
   getProjectSheetDataAction,
   listAssignableProfilesAction,
-  listProjectsForOfficeAction,
   updateProjectStammdatenAction,
   updateProjectStatusAction,
   updateTechnicianReportAction,
 } from "@/app/(app)/projekte/actions";
+import { listTeamMembersAction } from "@/app/(app)/einstellungen/actions";
+import {
+  createAbsenceAction,
+  deleteAbsenceAction,
+  listAbsencesAction,
+} from "@/app/(app)/mitarbeiter/absence-actions";
 import {
   createIntakeAction,
   deleteAttachmentAction,
   updateAttachmentNotesAction,
   uploadProjectReportFileAction,
 } from "@/app/(app)/actions";
-import { fetchCalendarRangeTasksAction, fetchMonthTasksAction } from "@/app/(app)/kalender/actions";
+import { fetchCalendarRangeTasksAction } from "@/app/(app)/kalender/actions";
 import {
   fetchAvailabilityRangeAction,
   type AvailabilityBundle,
 } from "@/app/(app)/kalender/availability-actions";
-import {
-  createAbsenceAction,
-  deleteAbsenceAction,
-  listAbsencesAction,
-} from "@/app/(app)/mitarbeiter/absence-actions";
+import { fetchOrganizationBrandingAction } from "@/app/(app)/layout-actions";
 import { fetchAuftragProjectCoreAction } from "@/app/(tech)/auftrag-data-actions";
 import { fetchTechMonthTasksAction, fetchWeekTasksAction } from "@/app/(tech)/wochenplan/actions";
 import {
@@ -62,11 +64,13 @@ import {
 import {
   afterAbsenceChange,
   afterOrderFormTemplateChange,
-  afterProjectCoreChange,
   afterProjectDeleted,
+  afterAttachmentChange,
   invalidateProjectAdjacencies,
+  invalidateProjectListCaches,
   invalidateReportAdjacencies,
 } from "./invalidations";
+import { notifyOtherTabs } from "./cross-tab-broadcast";
 import { queryKeys } from "./keys";
 import { getTabId } from "./tab-id";
 
@@ -100,26 +104,67 @@ export function useAuftragProjectCore(projectId: string, initialCore: ProjectCor
     queryFn: () => fetchAuftragProjectCoreAction(projectId),
     initialData: initialCore,
     staleTime: 60_000,
+    refetchOnMount: false,
   });
 }
 
-export function useProjectsList(initialData?: OfficeProjectListItem[]) {
-  return useQuery<OfficeProjectListItem[]>({
-    queryKey: queryKeys.projects.list(),
-    queryFn: () => listProjectsForOfficeAction(),
-    initialData,
-    staleTime: 45_000,
+/** /projekte: ein Request für Liste + Profile + Branding (Sheet-/Header-Cache). */
+const PROJEKTE_BOOTSTRAP_STALE_MS = 3 * 60 * 1000;
+
+const ORGANIZATION_BRANDING_STALE_MS = 5 * 60 * 1000;
+
+export type OrganizationBranding = { name: string; logoUrl: string | null };
+
+/**
+ * Org-Name/Logo im Header. Auf `/projekte` mit `fetch: false` — Bootstrap primt den Cache.
+ * Sonst: nur Netzwerk wenn noch kein Cache-Eintrag (z. B. nach Bootstrap).
+ */
+export function useOrganizationBranding(options?: { fetch?: boolean }) {
+  const qc = useQueryClient();
+  const cached = qc.getQueryData<OrganizationBranding>(queryKeys.organizationBranding());
+  const wantsNetwork = options?.fetch !== false;
+  return useQuery<OrganizationBranding>({
+    queryKey: queryKeys.organizationBranding(),
+    queryFn: () => fetchOrganizationBrandingAction(),
+    staleTime: ORGANIZATION_BRANDING_STALE_MS,
+    enabled: wantsNetwork && cached == null,
+    placeholderData: cached,
   });
 }
 
-export function useAssignableProfiles(initialData?: UserProfile[]) {
+export function useProjekteBootstrap(status?: ProjectStatus) {
+  const statusKey = status ?? "all";
+  const qc = useQueryClient();
+  return useQuery({
+    queryKey: queryKeys.projekteBootstrap(statusKey),
+    queryFn: async () => {
+      const data = await fetchProjekteBootstrapAction(status);
+      qc.setQueryData(queryKeys.projects.list(), data.projects);
+      qc.setQueryData(queryKeys.assignableProfiles(), data.profiles);
+      qc.setQueryData(queryKeys.organizationBranding(), data.branding);
+      return data;
+    },
+    staleTime: PROJEKTE_BOOTSTRAP_STALE_MS,
+    select: (data) => data.projects,
+  });
+}
+
+export function useAssignableProfiles(initialData?: UserProfile[], enabled = true) {
   return useQuery<UserProfile[]>({
     queryKey: queryKeys.assignableProfiles(),
     queryFn: () => listAssignableProfilesAction(),
     initialData,
-    // Team membership changes rarely and is covered by SSE (`afterMembershipChange`),
-    // so we don't want time-based staleness to trigger periodic refetches.
     staleTime: Infinity,
+    enabled,
+  });
+}
+
+export function useTeamMembers(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.teamMembers(),
+    queryFn: () => listTeamMembersAction(),
+    enabled,
+    staleTime: 60_000,
   });
 }
 
@@ -141,16 +186,13 @@ export function useTechMonthTasks(year: number, month: number, enabled = true) {
   });
 }
 
-export function useMonthTasks(year: number, month: number) {
-  return useQuery<WeekTaskItem[]>({
-    queryKey: queryKeys.monthTasks.byYearMonth(year, month),
-    queryFn: () => fetchMonthTasksAction(year, month),
-  });
-}
-
 /** Büro-Kalender: Termine im Zeitraum [rangeStartIso, rangeEndIso] (starts_at). */
-export function useCalendarRangeTasks(rangeStartIso: string | null, rangeEndIso: string | null) {
-  const enabled = Boolean(rangeStartIso && rangeEndIso);
+export function useCalendarRangeTasks(
+  rangeStartIso: string | null,
+  rangeEndIso: string | null,
+  queryEnabled = true,
+) {
+  const enabled = Boolean(rangeStartIso && rangeEndIso) && queryEnabled;
   return useQuery<WeekTaskItem[]>({
     queryKey:
       enabled && rangeStartIso && rangeEndIso
@@ -158,6 +200,7 @@ export function useCalendarRangeTasks(rangeStartIso: string | null, rangeEndIso:
         : ["admin-calendar-range", "__disabled"],
     queryFn: () => fetchCalendarRangeTasksAction(rangeStartIso!, rangeEndIso!),
     enabled,
+    staleTime: 90_000,
   });
 }
 
@@ -180,10 +223,13 @@ export function useAvailabilityRange(
   });
 }
 
-export function useAbsences(initialData?: TechnicianAbsence[]) {
+export function useAbsences(initialDataOrEnabled?: TechnicianAbsence[] | boolean) {
+  const enabled = typeof initialDataOrEnabled === "boolean" ? initialDataOrEnabled : true;
+  const initialData = Array.isArray(initialDataOrEnabled) ? initialDataOrEnabled : undefined;
   return useQuery<TechnicianAbsence[]>({
     queryKey: queryKeys.absences.all(),
     queryFn: () => listAbsencesAction(),
+    enabled,
     initialData,
     staleTime: 60_000,
   });
@@ -213,11 +259,13 @@ export function useDeleteAbsence() {
   });
 }
 
-export function useOrderFormTemplates(initialData?: OrderFormTemplate[]) {
+export function useOrderFormTemplates(initialData?: OrderFormTemplate[], enabled = true) {
   return useQuery<OrderFormTemplate[]>({
     queryKey: queryKeys.orderFormTemplates.all(),
     queryFn: () => listOrderFormTemplatesForOrgAction(),
     initialData,
+    enabled,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -233,10 +281,11 @@ function primeCore(qc: QueryClient, projectId: string, core: ProjectCore) {
 export function useUpdateStammdaten() {
   const qc = useQueryClient();
   return useMutation<{ core: ProjectCore }, Error, Parameters<typeof updateProjectStammdatenAction>[0]>({
-    mutationFn: (values) => updateProjectStammdatenAction(values),
+    mutationFn: (values) => updateProjectStammdatenAction(values, getTabId()),
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
-      invalidateProjectAdjacencies(qc, core.project.id);
+      invalidateProjectListCaches(qc);
+      notifyOtherTabs({ type: "project.core_changed", projectId: core.project.id });
     },
   });
 }
@@ -248,6 +297,7 @@ export function useAddAppointment() {
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
       invalidateProjectAdjacencies(qc, core.project.id);
+      notifyOtherTabs({ type: "appointment.changed", projectId: core.project.id });
     },
   });
 }
@@ -260,6 +310,7 @@ export function useDeleteAppointment() {
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
       invalidateProjectAdjacencies(qc, core.project.id);
+      notifyOtherTabs({ type: "appointment.changed", projectId: core.project.id });
     },
   });
 }
@@ -271,7 +322,8 @@ export function useUpdateProjectStatus() {
       updateProjectStatusAction(projectId, status, getTabId()),
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
-      invalidateProjectAdjacencies(qc, core.project.id);
+      invalidateProjectListCaches(qc);
+      notifyOtherTabs({ type: "project.core_changed", projectId: core.project.id });
     },
   });
 }
@@ -294,7 +346,7 @@ export function useUpdateTechnicianReport() {
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
       qc.setQueryData(queryKeys.projects.auftragCore(core.project.id), core);
-      invalidateProjectAdjacencies(qc, core.project.id);
+      invalidateProjectListCaches(qc);
       invalidateReportAdjacencies(qc, core.project.id);
     },
   });
@@ -306,6 +358,7 @@ export function useDeleteProject() {
     mutationFn: (projectId) => deleteProjectAction(projectId, getTabId()),
     onSuccess: (_, projectId) => {
       afterProjectDeleted(qc, projectId);
+      notifyOtherTabs({ type: "project.deleted", projectId });
     },
   });
 }
@@ -313,9 +366,10 @@ export function useDeleteProject() {
 export function useCreateIntake() {
   const qc = useQueryClient();
   return useMutation<{ projectId: string }, Error, FormData>({
-    mutationFn: (formData) => createIntakeAction(formData),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.projects.list() });
+    mutationFn: (formData) => createIntakeAction(formData, getTabId()),
+    onSuccess: ({ projectId }) => {
+      invalidateProjectListCaches(qc);
+      notifyOtherTabs({ type: "project.core_changed", projectId });
     },
   });
 }
@@ -359,7 +413,7 @@ export function useUploadAttachment() {
   return useMutation<UploadResult, Error, { formData: FormData; projectId: string }>({
     mutationFn: ({ formData }) => uploadProjectReportFileAction(formData, getTabId()),
     onSuccess: (result, { projectId }) => {
-      if (result.success) afterProjectCoreChange(qc, projectId);
+      if (result.success) afterAttachmentChange(qc, projectId);
     },
   });
 }
@@ -369,7 +423,7 @@ export function useUpdateAttachmentNotes() {
   return useMutation<UploadResult, Error, { attachmentId: string; notes: string; projectId: string }>({
     mutationFn: ({ attachmentId, notes }) => updateAttachmentNotesAction(attachmentId, notes, getTabId()),
     onSuccess: (result, { projectId }) => {
-      if (result.success) afterProjectCoreChange(qc, projectId);
+      if (result.success) afterAttachmentChange(qc, projectId);
     },
   });
 }
@@ -379,7 +433,7 @@ export function useDeleteAttachment() {
   return useMutation<UploadResult, Error, { attachmentId: string; filePath: string; projectId: string }>({
     mutationFn: ({ attachmentId, filePath }) => deleteAttachmentAction(attachmentId, filePath, getTabId()),
     onSuccess: (result, { projectId }) => {
-      if (result.success) afterProjectCoreChange(qc, projectId);
+      if (result.success) afterAttachmentChange(qc, projectId);
     },
   });
 }

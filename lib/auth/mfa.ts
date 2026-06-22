@@ -1,14 +1,17 @@
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getCurrentSession } from "@/lib/auth/session";
+import "server-only";
 
-export async function isAdminMfaRequiredAndMissing() {
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import type { LayoutSession } from "@/lib/auth/session";
+import { getLayoutSession } from "@/lib/auth/session";
+
+export async function isAdminMfaRequiredAndMissing(layoutSession?: LayoutSession | null) {
   try {
     const enforce = process.env.ENFORCE_ADMIN_MFA === "true";
     if (!enforce) {
       return false;
     }
 
-    const session = await getCurrentSession();
+    const session = layoutSession ?? (await getLayoutSession());
     if (!session || session.role !== "admin") {
       return false;
     }

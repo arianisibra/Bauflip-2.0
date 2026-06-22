@@ -431,13 +431,17 @@ export function AdminCalendar({
   }, [viewMode, year, month, anchorDate]);
 
   useEffect(() => {
+    if (initialTasks.length === 0) return;
     const start = new Date(initialYear, initialMonth - 1, 1, 0, 0, 0, 0);
     const end = new Date(initialYear, initialMonth, 0, 23, 59, 59, 999);
     qc.setQueryData(queryKeys.calendarRange.byStartEnd(start.toISOString(), end.toISOString()), initialTasks);
-    qc.setQueryData(queryKeys.monthTasks.byYearMonth(initialYear, initialMonth), initialTasks);
   }, [qc, initialYear, initialMonth, initialTasks]);
 
-  const { data: tasks = [], isFetching: pending } = useCalendarRangeTasks(startIso, endIso);
+  const { data: tasks = [], isFetching: pending } = useCalendarRangeTasks(
+    startIso,
+    endIso,
+    viewMode !== "availability",
+  );
 
   const technicianOptions = useMemo(() => {
     const map = new Map<string, { id: string; name: string }>();

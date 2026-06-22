@@ -21,7 +21,7 @@ import { telHref } from "@/lib/phone";
 import { formatServiceAddress, managementLabel, tenantLabel } from "@/lib/tech/bundle-display";
 import { submitTechnicianReportAction } from "@/app/(tech)/actions";
 import { useAuftragProjectCore, useUpdateTechnicianReport, useUploadAttachment } from "@/lib/query/hooks";
-import { afterProjectCoreChange } from "@/lib/query/invalidations";
+import { afterAttachmentChange } from "@/lib/query/invalidations";
 import { getTabId } from "@/lib/query/tab-id";
 import { pickMonteurAppointmentDisplay } from "@/lib/tech/auftrag-appointments";
 import { updateAttachmentNotesAction, deleteAttachmentAction } from "@/app/(app)/actions";
@@ -497,7 +497,7 @@ export function MonteurAuftragClient({
     async (attachmentId: string, notes: string) => {
       const result = await updateAttachmentNotesAction(attachmentId, notes, getTabId());
       if (result.success) {
-        void afterProjectCoreChange(qc, p.id);
+        void afterAttachmentChange(qc, p.id);
       }
     },
     [p.id, qc],
@@ -510,7 +510,7 @@ export function MonteurAuftragClient({
         toast.error(result.error);
       } else {
         toast.success("Datei gelöscht");
-        void afterProjectCoreChange(qc, p.id);
+        void afterAttachmentChange(qc, p.id);
       }
     },
     [p.id, qc],

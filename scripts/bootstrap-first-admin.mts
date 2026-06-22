@@ -85,9 +85,13 @@ if (membershipError) {
   throw new Error(`Could not create membership: ${membershipError.message}`);
 }
 
-// Mirror role into user_metadata so the middleware can read it without a DB lookup.
+// Mirror role + org into user_metadata so proxy can skip membership DB lookup.
 const { error: metaError } = await admin.auth.admin.updateUserById(authUser.id, {
-  user_metadata: { ...authUser.user_metadata, role: "admin" },
+  user_metadata: {
+    ...authUser.user_metadata,
+    role: "admin",
+    organization_id: organizationId,
+  },
 });
 if (metaError) {
   throw new Error(`Could not set user_metadata.role: ${metaError.message}`);

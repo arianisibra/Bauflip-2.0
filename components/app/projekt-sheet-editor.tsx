@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { Appointment, TechnicianReport, ProjectStatus } from "@/lib/domain/types";
 import {
@@ -24,6 +25,7 @@ import {
   useUpdateTechnicianReport,
   useUploadAttachment,
 } from "@/lib/query/hooks";
+import { queryKeys } from "@/lib/query/keys";
 import { isLikelyProjectImage } from "@/lib/storage/mime";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -452,16 +454,20 @@ export function ProjektSheetEditor({
   canEdit: boolean;
   statusCounts?: ReadonlyMap<ProjectStatus, number>;
 }) {
+  const qc = useQueryClient();
+  const profilesReady =
+    qc.getQueryState(queryKeys.projekteBootstrap())?.status === "success" ||
+    qc.getQueryState(queryKeys.assignableProfiles())?.status === "success";
   const coreQuery = useProjectCore(projectId, open);
-  const { data: technicians = [] } = useAssignableProfiles();
+  const { data: technicians = [] } = useAssignableProfiles(undefined, open && profilesReady);
   const updateStammdaten = useUpdateStammdaten();
   const deleteAppointment = useDeleteAppointment();
   const deleteAttachment = useDeleteAttachment();
   const deleteReport = useDeleteReport();
   const updateReport = useUpdateTechnicianReport();
   const uploadAttachment = useUploadAttachment();
-  const { data: orderFormTemplates = [] } = useOrderFormTemplates();
   const [editReport, setEditReport] = useState<TechnicianReport | null>(null);
+  const { data: orderFormTemplates = [] } = useOrderFormTemplates(undefined, editReport != null);
   const [error, setError] = useState<string | null>(null);
   const [fieldOverlay, setFieldOverlay] = useState<{
     label: string;

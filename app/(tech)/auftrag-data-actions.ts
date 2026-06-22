@@ -1,6 +1,6 @@
 "use server";
 
-import { getCurrentSession } from "@/lib/auth/session";
+import { getLayoutSession } from "@/lib/auth/session";
 import { getProjectCore, signAttachmentUrls } from "@/lib/db/repository";
 import type { ProjectCore } from "@/lib/db/repository";
 
@@ -9,7 +9,7 @@ import type { ProjectCore } from "@/lib/db/repository";
  * Zugriff wie in `app/(tech)/auftrag/[projectId]/page.tsx`.
  */
 export async function fetchAuftragProjectCoreAction(projectId: string): Promise<ProjectCore> {
-  const session = await getCurrentSession();
+  const session = await getLayoutSession();
   if (!session) {
     throw new Error("Nicht angemeldet.");
   }
@@ -25,8 +25,8 @@ export async function fetchAuftragProjectCoreAction(projectId: string): Promise<
 
   if (session.role === "technician") {
     const isAssigned =
-      core.appointments.some((a) => a.assignedTechnicianId === session.user.id) ||
-      core.project.nextOwnerUserId === session.user.id;
+      core.appointments.some((a) => a.assignedTechnicianId === session.userId) ||
+      core.project.nextOwnerUserId === session.userId;
     if (!isAssigned) {
       throw new Error("Keine Berechtigung.");
     }

@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "bootstrap:first-admin": "node --env-file=.env.local scripts/bootstrap-first-admin.mts",
+    "sync:user-auth-metadata": "node --env-file=.env.local scripts/sync-user-auth-metadata.mts",
     "db:login": "npx supabase login",
     "db:link": "npx supabase link",
     "db:push": "npx supabase db push",
@@ -52,6 +53,7 @@
     "cross-env": "^7.0.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
+    "netlify-cli": "^26.1.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

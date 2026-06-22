@@ -1,15 +1,16 @@
 import { redirect } from "next/navigation";
 import { MobileContextSwitch } from "@/components/app/mobile-context-switch";
 import { MobileAdminNav } from "@/components/app/mobile-admin-nav";
+import { OrganizationBrandingHeader } from "@/components/app/organization-branding-header";
 import { SidebarNav } from "@/components/app/sidebar-nav";
-import { UserAvatarButton } from "@/components/app/user-avatar-button";
-import { getCurrentSession } from "@/lib/auth/session";
-import { getOrganizationBranding } from "@/lib/db/repository";
+import { getCachedSessionProfile, getLayoutSession } from "@/lib/auth/session";
 import { isAdminMfaRequiredAndMissing } from "@/lib/auth/mfa";
 import { getVisibleSidebarItems } from "@/lib/navigation/sidebar-config";
+import { AuthenticatedRealtime } from "@/components/app/authenticated-realtime";
+import { SessionProfileProvider } from "@/components/app/session-profile-provider";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const session = await getCurrentSession();
+  const session = await getLayoutSession();
   if (!session) {
     redirect("/anmeldung");
   }
@@ -17,17 +18,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect("/");
   }
   const role = session.role;
-  const [branding, mfaMissing] = await Promise.all([
-    getOrganizationBranding(session.organizationId ?? null),
-    isAdminMfaRequiredAndMissing(),
-  ]);
-  if (mfaMissing && role === "admin") {
-    redirect("/mfa/setup");
+  if (role === "admin") {
+    const mfaMissing = await isAdminMfaRequiredAndMissing(session);
+    if (mfaMissing) {
+      redirect("/mfa/setup");
+    }
   }
   const items = getVisibleSidebarItems(role);
+  const profile = await getCachedSessionProfile(session);
 
   return (
-    <div className="flex h-dvh max-h-dvh min-h-0 flex-col overflow-hidden bg-muted/40 dark:bg-muted/35 md:h-screen md:max-h-none">
+    <SessionProfileProvider value={profile}>
+      <div className="flex h-dvh max-h-dvh min-h-0 flex-col overflow-hidden bg-muted/40 dark:bg-muted/35 md:h-screen md:max-h-none">
+      <AuthenticatedRealtime orgId={session.organizationId} />
       <div className="flex min-h-0 flex-1">
         <div className="hidden overflow-hidden md:block">
           <SidebarNav items={items} />
@@ -39,11 +42,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <MobileAdminNav items={items} />
               <MobileContextSwitch />
             </div>
-            <UserAvatarButton organizationName={branding.name} organizationLogoUrl={branding.logoUrl} />
+            <OrganizationBrandingHeader />
           </header>
           <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-4 sm:px-6 sm:py-6">{children}</main>
         </div>
       </div>
-    </div>
+      </div>
+    </SessionProfileProvider>
   );
 }

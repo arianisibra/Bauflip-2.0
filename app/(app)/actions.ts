@@ -1,6 +1,10 @@
 "use server";
 
-import { getCurrentSession } from "@/lib/auth/session";
+import {
+  requireOrgLayoutSession,
+  requireTechFieldSession,
+} from "@/lib/auth/organization";
+import type { LayoutSession } from "@/lib/auth/session";
 import {
   createProject,
   addProjectAttachment,
@@ -18,14 +22,14 @@ import {
 } from "@/lib/storage/mime";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { RoleType } from "@/lib/domain/types";
-import { publish } from "@/lib/sse/hub";
+import { publish } from "@/lib/realtime/publish";
 
 function canManageProjectReportFiles(role: RoleType): boolean {
   return role === "office" || role === "admin" || role === "technician";
 }
 
 function ensureProjectAccessForReportFiles(
-  session: { role: RoleType; user: { id: string }; organizationId: string | null },
+  session: Pick<LayoutSession, "userId" | "role" | "organizationId">,
   core: ProjectCore,
 ): { ok: true } | { ok: false; error: string } {
   if (session.role === "office" || session.role === "admin") {
@@ -36,8 +40,8 @@ function ensureProjectAccessForReportFiles(
   }
   if (session.role === "technician") {
     const isAssigned =
-      core.appointments.some((a) => a.assignedTechnicianId === session.user.id) ||
-      core.project.nextOwnerUserId === session.user.id;
+      core.appointments.some((a) => a.assignedTechnicianId === session.userId) ||
+      core.project.nextOwnerUserId === session.userId;
     if (!isAssigned) return { ok: false, error: "Keine Berechtigung." };
     if (!session.organizationId || session.organizationId !== core.project.organizationId) {
       return { ok: false, error: "Keine Berechtigung." };
@@ -73,14 +77,8 @@ function deriveIntakeTitle(rawTenantName: string): string {
   return "NEUER AUFTRAG";
 }
 
-export async function createIntakeAction(formData: FormData) {
-  const session = await getCurrentSession();
-  if (!session || (session.role !== "office" && session.role !== "admin")) {
-    throw new Error("Keine Berechtigung.");
-  }
-  if (!session.organizationId) {
-    throw new Error("Keine Organisation.");
-  }
+export async function createIntakeAction(formData: FormData, tabId?: string) {
+  const session = await requireOrgLayoutSession();
 
   const raw = Object.fromEntries(formData.entries());
   const intakeOriginalText = String(raw.intakeOriginalText ?? "");
@@ -132,7 +130,13 @@ export async function createIntakeAction(formData: FormData) {
     serviceCountry: "CH",
   });
 
-  // Client-side cache invalidation is owned by TanStack via `useCreateIntake.onSuccess`.
+  if (session.organizationId) {
+    publish(session.organizationId, {
+      type: "project.core_changed",
+      projectId: project.id,
+      originTabId: tabId,
+    });
+  }
   return { projectId: project.id };
 }
 
@@ -140,8 +144,12 @@ export async function uploadProjectReportFileAction(
   formData: FormData,
   tabId?: string,
 ): Promise<{ success: true } | { success: false; error: string }> {
-  const session = await getCurrentSession();
-  if (!session) return { success: false, error: "Nicht angemeldet." };
+  let session;
+  try {
+    session = await requireTechFieldSession();
+  } catch {
+    return { success: false, error: "Nicht angemeldet." };
+  }
   if (!canManageProjectReportFiles(session.role)) {
     return { success: false, error: "Keine Berechtigung." };
   }
@@ -179,7 +187,7 @@ export async function uploadProjectReportFileAction(
       fileName: file.name,
       fileType: storedMime,
       sizeBytes: file.size,
-      uploadedBy: session.profile.id,
+      uploadedBy: session.userId,
       notes,
     });
     if (session.organizationId) {
@@ -202,8 +210,12 @@ export async function updateAttachmentNotesAction(
   notes: string,
   tabId?: string,
 ): Promise<{ success: true } | { success: false; error: string }> {
-  const session = await getCurrentSession();
-  if (!session) return { success: false, error: "Nicht angemeldet." };
+  let session;
+  try {
+    session = await requireTechFieldSession();
+  } catch {
+    return { success: false, error: "Nicht angemeldet." };
+  }
   if (!canManageProjectReportFiles(session.role)) {
     return { success: false, error: "Keine Berechtigung." };
   }
@@ -242,8 +254,12 @@ export async function deleteAttachmentAction(
   filePath: string,
   tabId?: string,
 ): Promise<{ success: true } | { success: false; error: string }> {
-  const session = await getCurrentSession();
-  if (!session) return { success: false, error: "Nicht angemeldet." };
+  let session;
+  try {
+    session = await requireTechFieldSession();
+  } catch {
+    return { success: false, error: "Nicht angemeldet." };
+  }
   if (!canManageProjectReportFiles(session.role)) {
     return { success: false, error: "Keine Berechtigung." };
   }

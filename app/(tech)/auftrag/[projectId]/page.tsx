@@ -1,6 +1,6 @@
 import dynamic from "next/dynamic";
 import { notFound, redirect } from "next/navigation";
-import { getCurrentSession } from "@/lib/auth/session";
+import { getLayoutSession } from "@/lib/auth/session";
 import { sanitizeTechReturnTo } from "@/lib/navigation/tech-field-navigation";
 import { isMonteurMontageContext } from "@/lib/tech/monteur-context";
 import { getProjectCore, listActiveOrderFormTemplatesForOrg, signAttachmentUrls } from "@/lib/db/repository";
@@ -24,7 +24,7 @@ type PageProps = {
 
 export default async function MonteurAuftragPage({ params, searchParams }: PageProps) {
   const [session, { projectId }, sp] = await Promise.all([
-    getCurrentSession(),
+    getLayoutSession(),
     params,
     searchParams,
   ]);
@@ -37,8 +37,8 @@ export default async function MonteurAuftragPage({ params, searchParams }: PageP
 
   if (session.role === "technician") {
     const isAssigned =
-      core.appointments.some((a) => a.assignedTechnicianId === session.user.id) ||
-      core.project.nextOwnerUserId === session.user.id;
+      core.appointments.some((a) => a.assignedTechnicianId === session.userId) ||
+      core.project.nextOwnerUserId === session.userId;
     if (!isAssigned) {
       notFound();
     }
@@ -74,7 +74,7 @@ export default async function MonteurAuftragPage({ params, searchParams }: PageP
       core={coreWithSignedUrls}
       orderFormTemplates={orderFormTemplates}
       viewerRole={session.role}
-      currentUserId={session.user.id}
+      currentUserId={session.userId}
       returnTo={returnTo}
     />
   );

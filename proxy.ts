@@ -1,6 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import type { RoleType } from "@/lib/domain/types";
+import { applyProxyAuthContext } from "@/lib/auth/proxy-auth-headers";
+import { readProxyAuthFromUserMetadata } from "@/lib/auth/user-metadata-keys";
 
 const PUBLIC_PATHS = ["/anmeldung", "/onboarding", "/mfa/setup"];
 
@@ -8,13 +11,11 @@ function withSecurityHeaders(res: NextResponse): NextResponse {
   const isProd = process.env.NODE_ENV === "production";
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  // camera=(self): Monteur-Fotos per <input capture> / Kamera-API auf derselben Origin; Rest gesperrt.
   res.headers.set(
     "Permissions-Policy",
     "camera=(self), microphone=(), geolocation=(), payment=(), usb=()",
   );
   res.headers.set("X-Frame-Options", "SAMEORIGIN");
-  // Cloudflare Turnstile: Script + iframe von challenges.cloudflare.com (sonst leeres Widget trotz Site-Key).
   res.headers.set(
     "Content-Security-Policy",
     [
@@ -33,7 +34,7 @@ function withSecurityHeaders(res: NextResponse): NextResponse {
   }
   return res;
 }
-/** Monteur: nur Einsatz-Routen und Onboarding/MFA, kein Büro (/projekte, /einstellungen, /mitarbeiter). */
+
 const TECHNICIAN_ALLOWED_PREFIXES = [
   "/tag",
   "/auftrag",
@@ -44,18 +45,17 @@ const TECHNICIAN_ALLOWED_PREFIXES = [
   "/anmeldung",
   "/profil",
   "/tech",
-  // SSE realtime stream — same origin, auth'd via session cookie.
-  "/api/events",
 ];
 
 function isTechnicianAllowedPath(pathname: string): boolean {
   if (pathname === "/") return true;
   return TECHNICIAN_ALLOWED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-function mapRole(raw: string | null | undefined) {
+function mapRole(raw: string | null | undefined): RoleType {
   if (raw === "admin" || raw === "office" || raw === "technician") {
     return raw;
   }
@@ -63,6 +63,30 @@ function mapRole(raw: string | null | undefined) {
     return "technician";
   }
   return "office";
+}
+
+function hasSupabaseAuthCookie(request: NextRequest): boolean {
+  return request.cookies
+    .getAll()
+    .some((c) => c.name.startsWith("sb-") && c.name.includes("auth-token"));
+}
+
+async function resolveMembershipRole(
+  supabase: ReturnType<typeof createServerClient>,
+  userId: string,
+  fallbackRole: RoleType,
+): Promise<{ role: RoleType; organizationId: string | null }> {
+  const { data: membership } = await supabase
+    .from("organization_memberships")
+    .select("role, organization_id")
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  const role = mapRole((membership?.role as string | undefined) ?? fallbackRole);
+  const organizationId = (membership?.organization_id as string | null | undefined) ?? null;
+  return { role, organizationId };
 }
 
 export async function proxy(request: NextRequest) {
@@ -88,10 +112,25 @@ export async function proxy(request: NextRequest) {
     return withSecurityHeaders(NextResponse.next());
   }
 
+  // Public pages without auth cookie: skip Supabase auth API entirely.
+  if (isPublicPath && !hasSupabaseAuthCookie(request)) {
+    return withSecurityHeaders(NextResponse.next());
+  }
+
+  // Protected routes without session cookie: redirect without getUser() round-trip.
+  if (!isPublicPath && !hasSupabaseAuthCookie(request)) {
+    if (pathname.startsWith("/api")) {
+      return withSecurityHeaders(NextResponse.json({ error: "Nicht autorisiert." }, { status: 401 }));
+    }
+    const loginUrl = new URL("/anmeldung", request.url);
+    return withSecurityHeaders(NextResponse.redirect(loginUrl));
+  }
+
+  const requestHeaders = new Headers(request.headers);
   const response = withSecurityHeaders(
     NextResponse.next({
       request: {
-        headers: request.headers,
+        headers: requestHeaders,
       },
     }),
   );
@@ -115,10 +154,22 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
   const isAuthenticated = Boolean(user);
 
-  let role: ReturnType<typeof mapRole> = "office";
+  let role: RoleType = "office";
+  let organizationId: string | null = null;
+
   if (user) {
-    const rawMeta = user.user_metadata?.role as string | undefined;
-    role = mapRole(rawMeta);
+    const metaRole = mapRole(user.user_metadata?.role as string | undefined);
+    const fromMetadata = readProxyAuthFromUserMetadata(user);
+    const membership = fromMetadata
+      ? fromMetadata
+      : await resolveMembershipRole(supabase, user.id, metaRole);
+    role = membership.role;
+    organizationId = membership.organizationId;
+    applyProxyAuthContext(requestHeaders, {
+      userId: user.id,
+      role,
+      organizationId,
+    });
   }
 
   if (!isAuthenticated && !isPublicPath) {
@@ -134,7 +185,8 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isAuthenticated && pathname === "/") {
-    return redirectRootByRole(supabase, user!, role, request);
+    const dest = role === "technician" ? "/tag" : "/projekte";
+    return withSecurityHeaders(NextResponse.redirect(new URL(dest, request.url)));
   }
 
   if (isAuthenticated && role === "technician" && !isTechnicianAllowedPath(pathname)) {
@@ -142,27 +194,6 @@ export async function proxy(request: NextRequest) {
   }
 
   return response;
-}
-
-async function redirectRootByRole(
-  supabase: ReturnType<typeof createServerClient>,
-  user: { id: string },
-  fallbackRole: ReturnType<typeof mapRole>,
-  request: NextRequest,
-): Promise<NextResponse> {
-  // Resolve role from membership here (before any layout streams) so
-  // technicians don't flash the office sidebar.
-  const { data: membership } = await supabase
-    .from("organization_memberships")
-    .select("role")
-    .eq("user_id", user.id)
-    .eq("is_active", true)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  const resolvedRole = mapRole((membership?.role as string | undefined) ?? fallbackRole);
-  const dest = resolvedRole === "technician" ? "/tag" : "/projekte";
-  return withSecurityHeaders(NextResponse.redirect(new URL(dest, request.url)));
 }
 
 function denyTechnician(pathname: string, request: NextRequest): NextResponse {
@@ -173,5 +204,7 @@ function denyTechnician(pathname: string, request: NextRequest): NextResponse {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?|txt|xml)$).*)",
+  ],
 };

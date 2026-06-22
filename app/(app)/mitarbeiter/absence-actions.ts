@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getCurrentSession } from "@/lib/auth/session";
+import { getOfficeSessionOrNull, requireOfficeSession } from "@/lib/auth/organization";
 import {
   createTechnicianAbsence,
   deleteTechnicianAbsence,
@@ -10,24 +10,15 @@ import {
 import type { TechnicianAbsence } from "@/lib/domain/types";
 import { technicianAbsenceCreateSchema } from "@/lib/validations/forms";
 
-function ensureOfficeOrAdmin(role: string | undefined): asserts role is "admin" | "office" {
-  if (role !== "admin" && role !== "office") {
-    throw new Error("Nur Admin und Büro dürfen Abwesenheiten verwalten.");
-  }
-}
-
 /** Liste aller Abwesenheiten der Organisation (für Mitarbeiter-Drawer). */
 export async function listAbsencesAction(): Promise<TechnicianAbsence[]> {
-  const session = await getCurrentSession();
+  const session = await getOfficeSessionOrNull();
   if (!session) return [];
-  if (session.role !== "admin" && session.role !== "office") return [];
   return listAllTechnicianAbsences();
 }
 
 export async function createAbsenceAction(input: unknown): Promise<TechnicianAbsence> {
-  const session = await getCurrentSession();
-  if (!session) throw new Error("Nicht angemeldet.");
-  ensureOfficeOrAdmin(session.role);
+  const session = await requireOfficeSession();
 
   const parsed = technicianAbsenceCreateSchema.safeParse(input);
   if (!parsed.success) {
@@ -42,7 +33,7 @@ export async function createAbsenceAction(input: unknown): Promise<TechnicianAbs
       kind: parsed.data.kind,
       note: parsed.data.note?.trim() ? parsed.data.note.trim() : null,
     },
-    session.user.id,
+    session.userId,
   );
   revalidatePath("/mitarbeiter");
   revalidatePath("/kalender");
@@ -50,9 +41,7 @@ export async function createAbsenceAction(input: unknown): Promise<TechnicianAbs
 }
 
 export async function deleteAbsenceAction(absenceId: string): Promise<{ ok: true }> {
-  const session = await getCurrentSession();
-  if (!session) throw new Error("Nicht angemeldet.");
-  ensureOfficeOrAdmin(session.role);
+  await requireOfficeSession();
   if (!absenceId || typeof absenceId !== "string") {
     throw new Error("Ungültige ID.");
   }

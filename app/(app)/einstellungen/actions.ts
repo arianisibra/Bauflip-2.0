@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { verifyTurnstileToken } from "@/lib/security/turnstile";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { syncUserAuthMetadata } from "@/lib/auth/sync-user-auth-metadata";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ensureCurrentOrganizationId, requireAdminSession } from "@/lib/auth/organization";
@@ -242,14 +243,14 @@ export async function listTeamMembersAction(): Promise<TeamMemberListItem[]> {
     const adminClient = createSupabaseAdminClient();
     const emailByUserId = new Map<string, string>();
     if (adminClient) {
-      const { data: usersData, error } = await adminClient.auth.admin.listUsers();
-      if (!error) {
-        for (const u of usersData.users) {
-          if (u.id && u.email) {
-            emailByUserId.set(u.id, u.email);
+      await Promise.all(
+        memberships.map(async (m) => {
+          const { data, error } = await adminClient.auth.admin.getUserById(m.user_id);
+          if (!error && data.user?.email) {
+            emailByUserId.set(m.user_id, data.user.email);
           }
-        }
-      }
+        }),
+      );
     }
 
     const activeItems: TeamMemberListItem[] = memberships.map((m) => {
@@ -332,7 +333,7 @@ export async function inviteEmployeeAction(formData: FormData) {
     organization_id: organizationId,
     email,
     role,
-    invited_by: adminSession.user.id,
+    invited_by: adminSession.userId,
     expires_at: expiresAt,
   });
 
@@ -415,13 +416,8 @@ export async function acceptInviteOnboardingAction() {
     { onConflict: "id" },
   );
 
-  // Mirror role into user_metadata so the middleware can read it without a DB lookup.
-  const adminClient = createSupabaseAdminClient();
-  if (adminClient) {
-    await adminClient.auth.admin.updateUserById(user.id, {
-      user_metadata: { ...user.user_metadata, role: invite.role },
-    });
-  }
+  // Mirror role + org into user_metadata so proxy can skip membership DB lookup.
+  await syncUserAuthMetadata(user.id, invite.role, String(invite.organization_id), user.user_metadata);
 
   const { error: invitationUpdateError } = await supabase
     .from("invitations")

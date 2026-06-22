@@ -1,0 +1,145 @@
+# Performance: Dev-HAR vs. Production-Baseline
+
+Stand: 2026-05-26 (Phase C)
+
+## Phase C — Erwartung (`npm run build && npm run start`)
+
+| Route | Server-Action POSTs (kalt) | Profil-POST |
+|-------|---------------------------|-------------|
+| `/projekte` | **1×** `fetchProjekteBootstrapAction` | **0** (Layout) |
+| `/tag`, `/wochenplan`, `/profil` | Wochen-/Tagesdaten nur | **0** |
+| `/mitarbeiter`, `/bestellformulare` | Team/Templates | **0** (RSC-Guard + Context) |
+
+| Metrik | Phase B | Phase C |
+|--------|---------|---------|
+| Membership+Profile DB pro Mutation | 2 Queries | **0** (Layout-Session) |
+| Proxy membership DB | Jeder Request | **0** nach metadata-Backfill |
+| Status-Filter `/projekte` | Client-only | **Server** `.eq(status)` |
+
+---
+
+## Warm Dev-HAR (`localhost.har`, `/projekte`, nach Phase 1)
+
+| Phase | Dauer |
+|-------|-------|
+| Document `GET /projekte` | ~341 ms (TTFB ~124 ms) |
+| Hydration bis erste POST | ~617 ms |
+| Branding-POST | ~262 ms |
+| Bootstrap-POST (~83 KB) | ~539 ms |
+| **Daten sichtbar gesamt** | **~1,43 s** |
+
+Vorher: 3 POSTs, ~2+ s bis Daten.
+
+---
+
+## Phase 2 — Erwartung nach Deploy
+
+| Metrik | Vorher (Warm) | Nach Phase 2 |
+|--------|---------------|--------------|
+| Server-Action POSTs auf `/projekte` | 2 (Branding + Bootstrap) | **1** (Bootstrap inkl. Branding) |
+| `current_organization_id` RPC pro Bootstrap | 2× | **1×** (OrgId aus Session) |
+| SSE/Mutationen invalidieren weiter | **Supabase Realtime** (kein Netlify-Dauerstream) |
+| Repeat-Navigation `/projekte` | Oft **0 POST** (Cache < 3 min) |
+| Time-to-List (Warm, geschätzt) | ~1,0–1,2 s |
+
+### Umgesetzt in Phase 2 + Realtime-Migration
+
+| Massnahme | Dateien |
+|-----------|---------|
+| Branding in Bootstrap + Cache-Prime | [`app/(app)/projekte/actions.ts`](app/(app)/projekte/actions.ts), [`lib/query/hooks.ts`](lib/query/hooks.ts) |
+| Supabase Realtime Broadcast statt `/api/events` | [`lib/realtime/publish.ts`](lib/realtime/publish.ts), [`lib/query/realtime-bridge.tsx`](lib/query/realtime-bridge.tsx) |
+| Realtime nur auf Daten-Routen | [`lib/realtime/connect-routes.ts`](lib/realtime/connect-routes.ts) |
+| Disconnect bei hidden Tab | [`lib/query/realtime-bridge.tsx`](lib/query/realtime-bridge.tsx) |
+
+### Netlify Observability nach Realtime-Migration
+
+| Metrik | Vorher (SSE) | Nachher |
+|--------|--------------|---------|
+| `GET /api/events` | Dauernd, ~23–60 s | **0** |
+| Function `Duration: 60000 ms` | ~1×/Min pro Tab | **0** (kein Streaming-Handler) |
+| Cross-Tab-Sync | Unzuverlässig multi-instance | **Supabase WebSocket** (Browser ↔ Supabase) |
+
+**Nach Deploy prüfen:** Netlify Observability zeigt keine `/api/events`-Zeilen; Function-Logs ohne 60-Sekunden-SSE-Schleife.
+
+---
+
+## Preview-HAR Gate (vor optionaler Phase B)
+
+**Ziel:** Entscheidungsgrundlage, ob Hybrid-SSR für Bootstrap nötig ist.
+
+### Aufnahme
+
+1. Netlify Preview-Deploy mit Phase-2-Branch
+2. Chrome DevTools → Network → «Disable cache»
+3. Einloggen, `/projekte` hart neu laden (2×: kalt + warm)
+4. HAR exportieren (`Save all as HAR with content`)
+
+### Checkliste
+
+| Prüfpunkt | Erwartung Phase 2 |
+|-----------|-------------------|
+| `POST` auf `/projekte` (Server Actions) | **1×** Bootstrap |
+| Kein `GET /api/events` | Realtime über Supabase WebSocket |
+| Daten sichtbar (Warm) | **< 1,5 s** |
+
+### Phase-B-Entscheidung
+
+| Ergebnis Preview-HAR | Aktion |
+|----------------------|--------|
+| Warm ≤ 1,5 s, 1 POST | **Phase B (Hybrid-SSR) nicht nötig** |
+| Hydration-Gap > 500 ms dominiert | Hybrid-SSR für Bootstrap evaluieren |
+| Cold Start > +500 ms nur auf Netlify | Beobachten; kein Architektur-Umbau |
+
+---
+
+## Prod-Observability (A4 / A5)
+
+### Slow-Logs
+
+In Netlify Site → Environment variables:
+
+```
+SERVER_ACTION_SLOW_MS=800
+```
+
+Logs erscheinen als JSON auf stderr, wenn `listProjectsForOffice` o. ä. > 800 ms dauert ([`lib/observability/slow-log.ts`](lib/observability/slow-log.ts)).
+
+### RPC `next_appointment_starts_for_org`
+
+Migration: [`supabase/migrations/20260622140000_perf_next_appointment_rpc.sql`](supabase/migrations/20260622140000_perf_next_appointment_rpc.sql)
+
+Verifikation:
+
+```bash
+# Lokal oder Supabase SQL Editor
+psql "$DATABASE_URL" -f scripts/perf/verify-next-appointment-rpc.sql
+```
+
+Nach Deploy: keine `[bauflip] next_appointment_starts_for_org:` Warnings in Function-Logs (Fallback auf Client-Aggregation wäre langsamer).
+
+---
+
+## Frühere Baselines
+
+### Dev-HAR vor Optimierung
+
+| Metrik | Wert |
+|--------|------|
+| `onContentLoad` | 508 ms |
+| Document `GET /projekte` | 487 ms |
+| Daten sichtbar | ~1,7–2,5 s (3× POST) |
+
+### Production lokal (`npm run build && npm start`)
+
+| Route | TTFB | Total |
+|-------|------|-------|
+| `GET /anmeldung` | ~88 ms | ~88 ms |
+| `GET /projekte` (ohne Cookie) | ~4 ms | Redirect |
+
+---
+
+## Nächste Schritte (optional, Phase B)
+
+- `npm run analyze` für Listen-Chunk-Grösse
+- Hybrid-SSR Bootstrap nur wenn Preview-HAR Hydration-Gap > 500 ms zeigt
+- Bei >500 Projekten: serverseitiger Status-Filter / Pagination

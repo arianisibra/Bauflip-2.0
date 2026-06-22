@@ -34,6 +34,7 @@ import { resolveCalendarColor } from "@/lib/calendar/team-colors";
 import { formatServiceAddressFields } from "@/lib/tech/bundle-display";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { withSlowLog } from "@/lib/observability/slow-log";
+import { DEFAULT_PROJECT_LIST_MAX_ROWS } from "@/lib/constants/project-list";
 import {
   mockAppointments,
   mockProfiles,
@@ -42,13 +43,18 @@ import {
   mockReports,
 } from "@/lib/db/mock-data";
 
-/** Optional safety cap for office project list (server env). Unset = no limit. */
-function projectListMaxRows(): number | undefined {
+/** Safety cap for office project list. Env overrides; default from constants. */
+function projectListMaxRows(): number {
   const raw = process.env.PROJECT_LIST_MAX_ROWS?.trim();
-  if (!raw) return undefined;
+  if (!raw) return DEFAULT_PROJECT_LIST_MAX_ROWS;
   const n = Number.parseInt(raw, 10);
-  if (!Number.isFinite(n) || n < 1) return undefined;
+  if (!Number.isFinite(n) || n < 1) return DEFAULT_PROJECT_LIST_MAX_ROWS;
   return Math.min(n, 50_000);
+}
+
+/** Exposed for SSR/UI truncation hint. */
+export function getProjectListMaxRows(): number {
+  return projectListMaxRows();
 }
 
 export { mapUserProfileRow } from "./repository-map";
@@ -240,7 +246,10 @@ export const getOrganizationBranding = cache(async function getOrganizationBrand
   return { name, logoUrl };
 });
 
-export const listProjectsForOffice = cache(async function listProjectsForOffice(): Promise<OfficeProjectListItem[]> {
+export const listProjectsForOffice = cache(async function listProjectsForOffice(
+  organizationId?: string | null,
+  status?: ProjectStatus,
+): Promise<OfficeProjectListItem[]> {
   return withSlowLog("listProjectsForOffice", async () => {
     const supabase = await createSupabaseServerClient();
     if (!supabase) {
@@ -255,7 +264,7 @@ export const listProjectsForOffice = cache(async function listProjectsForOffice(
         nextAppointmentStartsAt: null,
       })));
     }
-    const orgId = await getCachedCurrentOrganizationId();
+    const orgId = organizationId ?? (await getCachedCurrentOrganizationId());
     let q = supabase
       .from("projects")
       .select(PROJECT_LIST_COLUMNS)
@@ -263,10 +272,11 @@ export const listProjectsForOffice = cache(async function listProjectsForOffice(
     if (orgId) {
       q = q.eq("organization_id", orgId);
     }
-    const maxRows = projectListMaxRows();
-    if (maxRows) {
-      q = q.limit(maxRows);
+    if (status) {
+      q = q.eq("status", status);
     }
+    const maxRows = projectListMaxRows();
+    q = q.limit(maxRows);
     const { data, error } = await q;
     if (error || !data) {
       return [];
@@ -291,30 +301,25 @@ export const listProjectsForOffice = cache(async function listProjectsForOffice(
       };
     });
 
-    const ids = mapped.map((p) => p.id);
-    if (ids.length > 0) {
+    const nextByProject = new Map<string, string>();
+    if (orgId) {
       const nowIso = new Date().toISOString();
-      const nextByProject = new Map<string, string>();
-      const chunkSize = 150;
-      for (let i = 0; i < ids.length; i += chunkSize) {
-        const chunk = ids.slice(i, i + chunkSize);
-        const { data: apRows, error: apErr } = await supabase
-          .from("appointments")
-          .select("project_id, starts_at, ends_at")
-          .in("project_id", chunk)
-          .gte("ends_at", nowIso);
-        if (apErr || !apRows?.length) continue;
+      const { data: apRows, error: apErr } = await supabase.rpc("next_appointment_starts_for_org", {
+        p_org_id: orgId,
+        p_now: nowIso,
+      });
+      if (!apErr && apRows?.length) {
         for (const raw of apRows as { project_id?: string; starts_at?: string }[]) {
           const pid = String(raw.project_id ?? "");
           const st = String(raw.starts_at ?? "");
-          if (!pid || !st) continue;
-          const prev = nextByProject.get(pid);
-          if (!prev || st < prev) nextByProject.set(pid, st);
+          if (pid && st) nextByProject.set(pid, st);
         }
+      } else if (apErr) {
+        console.warn("[bauflip] next_appointment_starts_for_org:", apErr.message);
       }
-      for (const p of mapped) {
-        p.nextAppointmentStartsAt = nextByProject.get(p.id) ?? null;
-      }
+    }
+    for (const p of mapped) {
+      p.nextAppointmentStartsAt = nextByProject.get(p.id) ?? null;
     }
 
     return sortOfficeProjects(mapped);
@@ -709,12 +714,14 @@ export const listAvailabilityForRange = cache(async function listAvailabilityFor
   return { technicians, appointments, absences };
 });
 
-export const listAssignableProfiles = cache(async function listAssignableProfiles(): Promise<UserProfile[]> {
+export const listAssignableProfiles = cache(async function listAssignableProfiles(
+  organizationId?: string | null,
+): Promise<UserProfile[]> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
     return mockProfiles.filter((p) => p.role === "technician" || p.role === "admin" || p.role === "office");
   }
-  const orgId = await getCachedCurrentOrganizationId();
+  const orgId = organizationId ?? (await getCachedCurrentOrganizationId());
   if (!orgId) return [];
   const { data, error } = await supabase
     .from("organization_memberships")

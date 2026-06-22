@@ -177,7 +177,9 @@ export function TechDayView({
   // Seed the cache once with SSR data. Subsequent refetches (e.g., after an
   // SSE invalidation) come through the hook.
   useMemo(() => {
-    qc.setQueryData(queryKeys.weekTasks.byDate(referenceIso), initialTasks);
+    if (initialTasks.length > 0) {
+      qc.setQueryData(queryKeys.weekTasks.byDate(referenceIso), initialTasks);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

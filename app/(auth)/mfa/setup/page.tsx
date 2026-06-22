@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 import { MfaSetupForm } from "@/components/auth/mfa-setup-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getCurrentSession } from "@/lib/auth/session";
+import { getLayoutSession } from "@/lib/auth/session";
 
 export default async function MfaSetupPage() {
-  const session = await getCurrentSession();
+  const session = await getLayoutSession();
   if (!session) {
     redirect("/anmeldung");
   }

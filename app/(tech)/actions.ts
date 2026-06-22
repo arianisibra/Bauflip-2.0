@@ -1,11 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getCurrentSession } from "@/lib/auth/session";
-import { canAccessTechFieldRoutes } from "@/lib/domain/types";
+import { requireTechFieldSession } from "@/lib/auth/organization";
 import { addTechnicianReport, listActiveOrderFormTemplatesForOrg } from "@/lib/db/repository";
 import { validateOrderFormValues } from "@/lib/order-forms/validate-submission";
-import { publish } from "@/lib/sse/hub";
+import { publish } from "@/lib/realtime/publish";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { technicianReportSchema } from "@/lib/validations/forms";
 
@@ -15,10 +14,7 @@ export async function submitTechnicianReportAction(
   values: unknown,
   tabId?: string,
 ): Promise<ActionResult> {
-  const session = await getCurrentSession();
-  if (!session || !canAccessTechFieldRoutes(session.role)) {
-    return { success: false, error: "Keine Berechtigung." };
-  }
+  const session = await requireTechFieldSession();
 
   const parsed = technicianReportSchema.safeParse(values);
   if (!parsed.success) {
@@ -79,7 +75,7 @@ export async function submitTechnicianReportAction(
         timeSpentMinutes: null,
       },
       {
-        createdByProfileId: session.user.id,
+        createdByProfileId: session.userId,
         orderFormSubmissions,
         nextStatus: v.nextStatus,
       },

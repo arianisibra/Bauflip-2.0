@@ -27,12 +27,22 @@ function inv(qc: QueryClient, queryKey: readonly unknown[], opts: InvalidateOpts
 
 // ─── Adjacent-only (for mutation hooks) ───────────────────────────────────
 
+/** List + bootstrap only — stammdaten/status/intake (sheet already primed via primeCore). */
+export function invalidateProjectListCaches(
+  qc: QueryClient,
+  opts?: InvalidateOpts,
+): void {
+  inv(qc, queryKeys.projects.list(), opts);
+  inv(qc, queryKeys.projekteBootstrapAll(), opts);
+}
+
 export function invalidateProjectAdjacencies(
   qc: QueryClient,
   _projectId: string,
   opts?: InvalidateOpts,
 ): void {
   inv(qc, queryKeys.projects.list(), opts);
+  inv(qc, queryKeys.projekteBootstrapAll(), opts);
   inv(qc, queryKeys.weekTasks.all(), opts);
   inv(qc, queryKeys.monthTasks.all(), opts);
   inv(qc, queryKeys.techMonthTasks.all(), opts);
@@ -65,7 +75,7 @@ export function afterProjectCoreChange(
 ): void {
   inv(qc, queryKeys.projects.core(projectId), opts);
   inv(qc, queryKeys.projects.auftragCore(projectId), opts);
-  invalidateProjectAdjacencies(qc, projectId, opts);
+  invalidateProjectListCaches(qc, opts);
 }
 
 export function afterAppointmentChange(
@@ -93,6 +103,7 @@ export function afterAttachmentChange(
   opts?: InvalidateOpts,
 ): void {
   inv(qc, queryKeys.projects.core(projectId), opts);
+  inv(qc, queryKeys.projects.auftragCore(projectId), opts);
   invalidateAttachmentAdjacencies(qc, projectId, opts);
 }
 
@@ -103,6 +114,7 @@ export function afterProjectDeleted(
 ): void {
   qc.removeQueries({ queryKey: queryKeys.projects.core(projectId) });
   inv(qc, queryKeys.projects.list(), opts);
+  inv(qc, queryKeys.projekteBootstrapAll(), opts);
   inv(qc, queryKeys.weekTasks.all(), opts);
   inv(qc, queryKeys.monthTasks.all(), opts);
   inv(qc, queryKeys.techMonthTasks.all(), opts);
@@ -117,9 +129,9 @@ export function afterAbsenceChange(qc: QueryClient, opts?: InvalidateOpts): void
 
 export function afterMembershipChange(qc: QueryClient, opts?: InvalidateOpts): void {
   inv(qc, queryKeys.assignableProfiles(), opts);
+  inv(qc, queryKeys.projekteBootstrapAll(), opts);
 }
 
 export function afterOrderFormTemplateChange(qc: QueryClient, opts?: InvalidateOpts): void {
   inv(qc, queryKeys.orderFormTemplates.all(), opts);
-  inv(qc, queryKeys.projects.all(), opts);
 }

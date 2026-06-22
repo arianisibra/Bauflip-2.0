@@ -1,11 +1,10 @@
 /**
  * Realtime-event dispatcher. Single entry point for cache invalidations
  * triggered by something *other than* the current tab's own mutation — today
- * that's SSE from /api/events (wired in `sse-bridge.tsx`). The same
- * dispatcher would accept events from a Redis-backed hub, Supabase Realtime,
- * or `postMessage` without any logic changes.
+ * Supabase Realtime broadcast (wired in `realtime-bridge.tsx`). The same
+ * dispatcher would accept events from polling or `postMessage` without logic changes.
  *
- * Events carry an optional `originTabId`. The SSE bridge filters echoes by
+ * Events carry an optional `originTabId`. The realtime bridge filters echoes by
  * comparing against the local tab ID *before* dispatching, so this module
  * stays source-agnostic.
  */
@@ -25,7 +24,7 @@ export type DispatchOpts = inv.InvalidateOpts;
 
 /**
  * Route an event to the correct invalidation helper. `opts.refetchType`
- * controls whether inactive queries should refetch silently — SSE callers
+ * controls whether inactive queries should refetch silently — realtime callers
  * pass `"all"` so the data is already fresh when the user navigates to the
  * affected page.
  */

@@ -1,18 +1,5 @@
-import { redirect } from "next/navigation";
-import { getCurrentSession } from "@/lib/auth/session";
-import { TechProfileClient } from "@/components/app/tech-profile-client";
+import { TechProfilPageClient } from "@/components/app/tech-profil-page-client";
 
-export default async function TechProfilePage() {
-  const session = await getCurrentSession();
-  if (!session) redirect("/anmeldung");
-
-  const profile = session.profile;
-
-  return (
-    <TechProfileClient
-      displayName={profile.displayName ?? null}
-      email={profile.email ?? null}
-    />
-  );
+export default function TechProfilePage() {
+  return <TechProfilPageClient />;
 }
-

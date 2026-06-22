@@ -1,11 +1,17 @@
 import "server-only";
 
 import type { User } from "@supabase/supabase-js";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { cache } from "react";
 import type { RoleType, UserProfile } from "@/lib/domain/types";
 import { mapUserProfileRow } from "@/lib/db/repository";
+import {
+  readProxyAuthOrgId,
+  readProxyAuthRole,
+  readProxyAuthUserId,
+} from "@/lib/auth/proxy-auth-headers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 type CurrentSession = {
   user: User;
@@ -13,6 +19,32 @@ type CurrentSession = {
   organizationId: string | null;
   profile: UserProfile;
 };
+
+/** Slim session for layouts — no profile DB, no membership query when proxy headers match. */
+export type LayoutSession = {
+  userId: string;
+  role: RoleType;
+  organizationId: string | null;
+};
+
+/** Display fields for header / tech pages — loaded once per layout request. */
+export type SessionProfileSnapshot = {
+  userId: string;
+  displayName: string;
+  email: string | null;
+  avatarUrl: string | null;
+  role: RoleType;
+};
+
+function mockLayoutSessionFromCookies(
+  cookieStore: Awaited<ReturnType<typeof cookies>>,
+  mockAuthEnabled: boolean,
+): LayoutSession | null {
+  const mockAuthenticated = cookieStore.get("bauflip_mock_auth")?.value === "1";
+  if (!mockAuthEnabled || !mockAuthenticated) return null;
+  const mockRole = mapRole(cookieStore.get("bauflip_mock_role")?.value);
+  return { userId: "mock-user", role: mockRole, organizationId: null };
+}
 
 function mapRole(raw: string | null | undefined): RoleType {
   if (raw === "admin" || raw === "technician" || raw === "office") {
@@ -23,6 +55,159 @@ function mapRole(raw: string | null | undefined): RoleType {
   }
   return "office";
 }
+
+/**
+ * Resolves the authenticated user. When proxy already ran getUser() this
+ * request, reuse the cookie session (no second Auth API round-trip).
+ */
+async function resolveAuthUser(supabase: SupabaseClient): Promise<User | null> {
+  let proxyUserId: string | null = null;
+  try {
+    const headerStore = await headers();
+    proxyUserId = readProxyAuthUserId(headerStore);
+  } catch {
+    proxyUserId = null;
+  }
+
+  if (proxyUserId) {
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    const sessionUser = sessionData.session?.user ?? null;
+    if (!sessionError && sessionUser?.id === proxyUserId) {
+      return sessionUser;
+    }
+  }
+
+  const { data, error } = await supabase.auth.getUser();
+  if (error) {
+    console.warn("[bauflip] auth.getUser:", error.message);
+  }
+  return data?.user ?? null;
+}
+
+/**
+ * Lightweight layout auth: proxy headers + cookie session verification.
+ * Falls back to full getCurrentSession when headers are missing (e.g. tests).
+ */
+export const getLayoutSession = cache(async function getLayoutSession(): Promise<LayoutSession | null> {
+  let cookieStore: Awaited<ReturnType<typeof cookies>>;
+  try {
+    cookieStore = await cookies();
+  } catch {
+    return null;
+  }
+
+  const mockAuthEnabled =
+    process.env.NODE_ENV !== "production" || process.env.ALLOW_MOCK_AUTH === "true";
+  const mockSession = mockLayoutSessionFromCookies(cookieStore, mockAuthEnabled);
+  if (mockSession) return mockSession;
+
+  let proxyUserId: string | null = null;
+  let proxyRole: RoleType | null = null;
+  let proxyOrgId: string | null = null;
+  try {
+    const headerStore = await headers();
+    proxyUserId = readProxyAuthUserId(headerStore);
+    proxyRole = readProxyAuthRole(headerStore);
+    proxyOrgId = readProxyAuthOrgId(headerStore);
+  } catch {
+    proxyUserId = null;
+  }
+
+  if (proxyUserId && proxyRole) {
+    const supabase = await createSupabaseServerClient();
+    if (supabase) {
+      const { data: sessionData, error } = await supabase.auth.getSession();
+      const sessionUser = sessionData.session?.user ?? null;
+      if (!error && sessionUser?.id === proxyUserId) {
+        return {
+          userId: proxyUserId,
+          role: proxyRole,
+          organizationId: proxyOrgId,
+        };
+      }
+    }
+  }
+
+  const full = await getCurrentSession();
+  if (!full) return null;
+  return {
+    userId: full.user.id,
+    role: full.role,
+    organizationId: full.organizationId,
+  };
+});
+
+/** Single profiles row for layout / slim actions — no membership query. */
+export const getCachedSessionProfile = cache(async function getCachedSessionProfile(
+  layoutSession: LayoutSession,
+): Promise<SessionProfileSnapshot> {
+  const { userId, role } = layoutSession;
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return {
+      userId,
+      role,
+      displayName: role === "admin" ? "Admin" : role === "technician" ? "Monteur" : "Büro",
+      email: null,
+      avatarUrl: null,
+    };
+  }
+
+  const [{ data: sessionData }, { data: row }] = await Promise.all([
+    supabase.auth.getSession(),
+    supabase
+      .from("profiles")
+      .select("id, display_name, avatar_url")
+      .eq("id", userId)
+      .maybeSingle(),
+  ]);
+
+  const email = sessionData.session?.user?.email ?? null;
+  const displayName =
+    (row?.display_name != null && String(row.display_name).trim()
+      ? String(row.display_name).trim()
+      : null) ??
+    (email?.split("@")[0] ?? "Benutzer");
+  const avatarUrl =
+    row?.avatar_url != null && String(row.avatar_url).trim() ? String(row.avatar_url).trim() : null;
+
+  return { userId, role, displayName, email, avatarUrl };
+});
+
+/** Full profile row for settings — no membership query. */
+export const getCachedUserProfile = cache(async function getCachedUserProfile(
+  layoutSession: LayoutSession,
+): Promise<UserProfile> {
+  const snapshot = await getCachedSessionProfile(layoutSession);
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return {
+      id: snapshot.userId,
+      displayName: snapshot.displayName,
+      email: snapshot.email ?? "",
+      role: snapshot.role,
+      avatarUrl: snapshot.avatarUrl,
+      calendarColor: null,
+      calendarPosition: 0,
+    };
+  }
+
+  const { data: row } = await supabase
+    .from("profiles")
+    .select("calendar_color, calendar_position")
+    .eq("id", layoutSession.userId)
+    .maybeSingle();
+
+  return {
+    id: snapshot.userId,
+    displayName: snapshot.displayName,
+    email: snapshot.email ?? "",
+    role: snapshot.role,
+    avatarUrl: snapshot.avatarUrl,
+    calendarColor: row?.calendar_color != null ? String(row.calendar_color) : null,
+    calendarPosition: typeof row?.calendar_position === "number" ? row.calendar_position : 0,
+  };
+});
 
 export const getCurrentSession = cache(async function getCurrentSession(): Promise<CurrentSession | null> {
   let cookieStore: Awaited<ReturnType<typeof cookies>>;
@@ -80,13 +265,9 @@ export const getCurrentSession = cache(async function getCurrentSession(): Promi
 
   let user: User | null = null;
   try {
-    const { data, error } = await supabase.auth.getUser();
-    if (error) {
-      console.warn("[bauflip] auth.getUser:", error.message);
-    }
-    user = data?.user ?? null;
+    user = await resolveAuthUser(supabase);
   } catch (err) {
-    console.error("[bauflip] auth.getUser failed", err);
+    console.error("[bauflip] resolveAuthUser failed", err);
     user = null;
   }
 

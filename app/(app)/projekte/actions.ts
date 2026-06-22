@@ -1,12 +1,18 @@
 "use server";
 
-import { getCurrentSession } from "@/lib/auth/session";
+import {
+  requireAdminLayoutSession,
+  requireOfficeSession,
+  requireOrgLayoutSession,
+  requireTechFieldSession,
+} from "@/lib/auth/organization";
 import {
   addAppointment,
   deleteProject,
   deleteAppointment,
   deleteTechnicianReport,
   getProjectCore,
+  getOrganizationBranding,
   listAssignableProfiles,
   listActiveOrderFormTemplatesForOrg,
   signAttachmentUrls,
@@ -16,7 +22,7 @@ import {
 import type { ProjectCore } from "@/lib/db/repository";
 import { listProjectsForOffice } from "@/lib/db/repository";
 import type { OfficeProjectListItem, ProjectStatus, UserProfile } from "@/lib/domain/types";
-import { publish } from "@/lib/sse/hub";
+import { publish } from "@/lib/realtime/publish";
 import { projectStammdatenUpdateSchema, appointmentSchema, technicianReportUpdateSchema } from "@/lib/validations/forms";
 import { validateOrderFormValues } from "@/lib/order-forms/validate-submission";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -40,10 +46,7 @@ function nz(s: string | undefined | null): string | null {
 }
 
 export async function getProjectSheetDataAction(projectId: string) {
-  const session = await getCurrentSession();
-  if (!session || (session.role !== "office" && session.role !== "admin")) {
-    throw new Error("Keine Berechtigung.");
-  }
+  await requireOfficeSession();
   const bundle = await getProjectCore(projectId);
   if (!bundle) {
     throw new Error("Projekt nicht gefunden.");
@@ -52,27 +55,33 @@ export async function getProjectSheetDataAction(projectId: string) {
   return { bundle: { ...bundle, attachments: signedAttachments } };
 }
 
-export async function listProjectsForOfficeAction(): Promise<OfficeProjectListItem[]> {
-  const session = await getCurrentSession();
-  if (!session || (session.role !== "office" && session.role !== "admin")) {
-    throw new Error("Keine Berechtigung.");
-  }
-  return listProjectsForOffice();
-}
-
 export async function listAssignableProfilesAction(): Promise<UserProfile[]> {
-  const session = await getCurrentSession();
-  if (!session || (session.role !== "office" && session.role !== "admin")) {
-    throw new Error("Keine Berechtigung.");
-  }
-  return listAssignableProfiles();
+  const session = await requireOfficeSession();
+  return listAssignableProfiles(session.organizationId);
 }
 
-export async function updateProjectStammdatenAction(values: unknown): Promise<{ core: ProjectCore }> {
-  const session = await getCurrentSession();
-  if (!session || (session.role !== "office" && session.role !== "admin")) {
-    throw new Error("Keine Berechtigung.");
-  }
+export async function fetchProjekteBootstrapAction(
+  status?: ProjectStatus,
+): Promise<{
+  projects: OfficeProjectListItem[];
+  profiles: UserProfile[];
+  branding: { name: string; logoUrl: string | null };
+}> {
+  const session = await requireOfficeSession();
+  const orgId = session.organizationId;
+  const [projects, profiles, branding] = await Promise.all([
+    listProjectsForOffice(orgId, status),
+    listAssignableProfiles(orgId),
+    getOrganizationBranding(orgId),
+  ]);
+  return { projects, profiles, branding };
+}
+
+export async function updateProjectStammdatenAction(
+  values: unknown,
+  tabId?: string,
+): Promise<{ core: ProjectCore }> {
+  const session = await requireOfficeSession();
 
   const parsed = projectStammdatenUpdateSchema.safeParse(values);
   if (!parsed.success) {
@@ -103,6 +112,13 @@ export async function updateProjectStammdatenAction(values: unknown): Promise<{ 
   });
 
   const core = await coreOrThrow(v.projectId);
+  if (session.organizationId) {
+    publish(session.organizationId, {
+      type: "project.core_changed",
+      projectId: v.projectId,
+      originTabId: tabId,
+    });
+  }
   return { core };
 }
 
@@ -110,10 +126,7 @@ export async function addAppointmentAction(
   input: unknown,
   tabId?: string,
 ): Promise<{ core: ProjectCore }> {
-  const session = await getCurrentSession();
-  if (!session || (session.role !== "office" && session.role !== "admin")) {
-    throw new Error("Keine Berechtigung.");
-  }
+  const session = await requireOfficeSession();
   const parsed = appointmentSchema.safeParse(input);
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Ungültige Eingabe.");
@@ -143,10 +156,7 @@ export async function deleteAppointmentAction(
   projectId: string,
   tabId?: string,
 ): Promise<{ core: ProjectCore }> {
-  const session = await getCurrentSession();
-  if (!session || (session.role !== "office" && session.role !== "admin")) {
-    throw new Error("Keine Berechtigung.");
-  }
+  const session = await requireOfficeSession();
   await deleteAppointment(appointmentId);
   const core = await coreOrThrow(projectId);
   if (session.organizationId) {
@@ -160,10 +170,7 @@ export async function deleteAppointmentAction(
 }
 
 export async function deleteProjectAction(projectId: string, tabId?: string) {
-  const session = await getCurrentSession();
-  if (!session || (session.role !== "office" && session.role !== "admin")) {
-    throw new Error("Keine Berechtigung.");
-  }
+  const session = await requireOfficeSession();
   if (!projectId) {
     throw new Error("Projekt-ID fehlt.");
   }
@@ -182,10 +189,7 @@ export async function updateProjectStatusAction(
   status: ProjectStatus,
   tabId?: string,
 ): Promise<{ core: ProjectCore }> {
-  const session = await getCurrentSession();
-  if (!session || (session.role !== "office" && session.role !== "admin")) {
-    throw new Error("Keine Berechtigung.");
-  }
+  const session = await requireOfficeSession();
   await updateProject(projectId, { status, statusUpdateSource: "manual" });
   const core = await coreOrThrow(projectId);
   if (session.organizationId) {
@@ -202,10 +206,7 @@ export async function deleteReportAction(
   reportId: string,
   projectId: string,
 ): Promise<{ core: ProjectCore }> {
-  const session = await getCurrentSession();
-  if (!session || session.role !== "admin") {
-    throw new Error("Keine Berechtigung.");
-  }
+  await requireAdminLayoutSession();
   await deleteTechnicianReport(reportId);
   const core = await coreOrThrow(projectId);
   return { core };
@@ -215,15 +216,9 @@ export async function updateTechnicianReportAction(
   values: unknown,
   tabId?: string,
 ): Promise<{ core: ProjectCore }> {
-  const session = await getCurrentSession();
-  if (!session) {
-    throw new Error("Keine Berechtigung.");
-  }
+  const session = await requireTechFieldSession();
   const isOffice = session.role === "office" || session.role === "admin";
   const isTechnician = session.role === "technician";
-  if (!isOffice && !isTechnician) {
-    throw new Error("Keine Berechtigung.");
-  }
 
   const parsed = technicianReportUpdateSchema.safeParse(values);
   if (!parsed.success) {
@@ -247,7 +242,7 @@ export async function updateTechnicianReportAction(
       throw new Error(repErr.message);
     }
     const author = (rep as { created_by?: string | null } | null)?.created_by;
-    if (!author || author !== session.user.id) {
+    if (!author || author !== session.userId) {
       throw new Error("Sie können nur eigene Rapporte bearbeiten.");
     }
   }

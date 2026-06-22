@@ -44,6 +44,11 @@ export const queryKeys = {
     all: () => ["technician-absences"] as const,
   },
   assignableProfiles: () => ["assignable-profiles"] as const,
+  projekteBootstrap: (status = "all") => ["projekte-bootstrap", status] as const,
+  /** Prefix — invalidates every status-specific bootstrap cache. */
+  projekteBootstrapAll: () => ["projekte-bootstrap"] as const,
+  organizationBranding: () => ["organization-branding"] as const,
+  teamMembers: () => ["team-members"] as const,
   orderFormTemplates: {
     all: () => ["order-form-templates"] as const,
     byOrg: (orgId: string | null) => ["order-form-templates", orgId] as const,

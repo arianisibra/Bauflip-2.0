@@ -145,7 +145,9 @@ export function TechCalendar({
 
   // Seed the initial week's cache from SSR so the first render has data without a fetch.
   useMemo(() => {
-    qc.setQueryData(queryKeys.weekTasks.byDate(refDateIso), initialTasks);
+    if (initialTasks.length > 0) {
+      qc.setQueryData(queryKeys.weekTasks.byDate(refDateIso), initialTasks);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

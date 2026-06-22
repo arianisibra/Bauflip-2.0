@@ -7,14 +7,15 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import type { OfficeProjectListItem, ProjectStatus, UserProfile } from "@/lib/domain/types";
+import type { OfficeProjectListItem, ProjectStatus } from "@/lib/domain/types";
 import {
   projectStatusLabels,
   projectStatuses,
   projectStatusesOfficeListFilter,
 } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
-import { useDeleteProject, useProjectsList } from "@/lib/query/hooks";
+import { DEFAULT_PROJECT_LIST_MAX_ROWS } from "@/lib/constants/project-list";
+import { useDeleteProject, useProjekteBootstrap } from "@/lib/query/hooks";
 import { queryKeys } from "@/lib/query/keys";
 import { OfficeReturnBar } from "@/components/app/office-return-bar";
 import { ListPageToolbar } from "@/components/app/list-page-toolbar";
@@ -177,15 +178,11 @@ const ProjectTableRow = memo(function ProjectTableRow({
 });
 
 export function ProjekteListClient({
-  projects: initialProjects,
-  technicians: initialTechnicians,
   canEditProjectSheet,
   initialOpenProjectId,
   initialOpenSource,
   initialReturnTo = null,
 }: {
-  projects: OfficeProjectListItem[];
-  technicians: UserProfile[];
   canEditProjectSheet: boolean;
   initialOpenProjectId?: string;
   initialOpenSource?: "kalender";
@@ -193,16 +190,10 @@ export function ProjekteListClient({
 }) {
   const router = useRouter();
   const qc = useQueryClient();
-  const { data: projects = initialProjects } = useProjectsList(initialProjects);
-  // Seed the assignable-profiles cache WITHOUT subscribing — the sheet editor
-  // reads it via useAssignableProfiles() when it opens. Avoids a fetch on every
-  // /projekte page render.
-  useMemo(() => {
-    qc.setQueryData(queryKeys.assignableProfiles(), initialTechnicians);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const deleteProject = useDeleteProject();
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("all");
+  const serverStatus = statusFilter === "all" ? undefined : statusFilter;
+  const { data: projects = [], isLoading: projectsLoading } = useProjekteBootstrap(serverStatus);
+  const deleteProject = useDeleteProject();
   const [listSort, setListSort] = useState<ProjectsListSort>("default");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -324,9 +315,16 @@ export function ProjekteListClient({
     [deleteProject],
   );
   const deletingId = deleteProject.isPending ? (deleteProject.variables as string | undefined) ?? null : null;
+  const listMayBeTruncated = projects.length >= DEFAULT_PROJECT_LIST_MAX_ROWS;
 
   return (
     <>
+      {projectsLoading && projects.length === 0 ? (
+        <div className="flex justify-center py-16" role="status" aria-live="polite">
+          <BauflipLoading size="sm" label="Projekte werden geladen …" />
+        </div>
+      ) : null}
+      <div className={projectsLoading && projects.length === 0 ? "hidden" : undefined}>
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold">Projekte</h1>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -338,6 +336,18 @@ export function ProjekteListClient({
           </Button>
         </div>
       </div>
+
+      {listMayBeTruncated ? (
+        <div
+          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100"
+          role="status"
+        >
+          Es werden maximal {DEFAULT_PROJECT_LIST_MAX_ROWS.toLocaleString("de-CH")} neueste Projekte angezeigt. Ältere Einträge fehlen in
+          dieser Liste — bei Bedarf Limit per{" "}
+          <code className="rounded bg-amber-100/80 px-1 text-xs dark:bg-amber-900/50">PROJECT_LIST_MAX_ROWS</code>{" "}
+          anpassen.
+        </div>
+      ) : null}
 
       <div className="space-y-3 rounded-xl border border-border/70 bg-muted/30 px-3 py-2.5">
         <div className="space-y-2">
@@ -628,11 +638,12 @@ export function ProjekteListClient({
               const params = new URLSearchParams(globalThis.location.search);
               params.delete("sheet");
               params.set("openProjectId", projectId);
-              globalThis.history.pushState(null, "", `/projekte?${params.toString()}`);
+              globalThis.history.replaceState(null, "", `/projekte?${params.toString()}`);
             }}
           />
         </div>
       </Sheet>
+      </div>
     </>
   );
 }

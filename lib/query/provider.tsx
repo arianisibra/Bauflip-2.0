@@ -3,8 +3,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 
-import { SseBridge } from "./sse-bridge";
-
 /**
  * One QueryClient per browser session. `useState` gives each component tree
  * a stable instance across re-renders while still being per-request on SSR.
@@ -29,7 +27,6 @@ export function QueryProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [client] = useState(makeQueryClient);
   return (
     <QueryClientProvider client={client}>
-      <SseBridge />
       {children}
     </QueryClientProvider>
   );
