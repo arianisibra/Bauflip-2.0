@@ -7,7 +7,7 @@ import { useOrganizationBranding } from "@/lib/query/hooks";
 
 export function OrganizationBrandingHeader() {
   const pathname = usePathname();
-  // Branding auf /projekte kommt aus fetchProjekteBootstrapAction (Cache-Prime).
+  // Branding auf /projekte kommt aus SSR-Bootstrap (Cache-Prime).
   const isProjekteHub = pathname === "/projekte";
   const { data } = useOrganizationBranding({ fetch: !isProjekteHub });
 

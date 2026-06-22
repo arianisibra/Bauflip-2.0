@@ -157,6 +157,33 @@ HAR exportiert mit Network-Filter (36 Einträge, keine Extension-Requests).
 
 ---
 
+## Phase 1 — Hybrid-SSR `/projekte` (2026-05-26)
+
+Liste + Branding werden im **RSC-Page-Load** geladen und per TanStack `HydrationBoundary` dehydriert. Kein initialer Bootstrap-POST bei erstem Besuch.
+
+| Metrik | Phase C (vorher) | Phase 1 (Ziel nach Deploy) |
+|--------|------------------|----------------------------|
+| `POST /projekte` beim ersten Load | **1×** (~900 ms) | **0×** |
+| Daten im Document/RSC | Shell only | Projekte + Branding |
+| `listAssignableProfiles` initial | Im Bootstrap | **Lazy** (Sheet öffnen) |
+| Hydration-Gap + 2. Invocation | ~135 ms + ~900 ms | **entfällt** |
+| Daten sichtbar (Warm) | ~1,8 s | **~Document-TTFB** (geschätzt 0,7–1,2 s) |
+
+**HAR-Vergleich nach Deploy:**
+
+```bash
+node scripts/perf/summarize-har.mjs ~/Desktop/app.gross-storenbau.ch.har
+# → Baseline Phase C (1× POST, data ready ~1781 ms)
+
+# Nach Deploy: gleiche Aufnahme (Incognito, Filter gross-storenbau, 2. Reload)
+node scripts/perf/summarize-har.mjs ~/Desktop/app.gross-storenbau.ch-phase1.har
+# Erwartung: Bootstrap POST 0, data ready ≈ document end
+```
+
+**Sicherheit:** `organizationId` aus `getLayoutSession()` in der Page; `loadProjekteBootstrapData(orgId)` nur mit expliziter Org — RLS unverändert. `assignableProfiles` weiter per `listAssignableProfilesAction` (org-scoped).
+
+---
+
 ## Frühere Baselines
 
 ### Dev-HAR vor Optimierung

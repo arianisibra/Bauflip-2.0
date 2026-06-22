@@ -3,7 +3,6 @@
 import {
   requireAdminLayoutSession,
   requireOfficeSession,
-  requireOrgLayoutSession,
   requireTechFieldSession,
 } from "@/lib/auth/organization";
 import {
@@ -12,7 +11,6 @@ import {
   deleteAppointment,
   deleteTechnicianReport,
   getProjectCore,
-  getOrganizationBranding,
   listAssignableProfiles,
   listActiveOrderFormTemplatesForOrg,
   signAttachmentUrls,
@@ -20,8 +18,8 @@ import {
   updateTechnicianReport,
 } from "@/lib/db/repository";
 import type { ProjectCore } from "@/lib/db/repository";
-import { listProjectsForOffice } from "@/lib/db/repository";
 import type { OfficeProjectListItem, ProjectStatus, UserProfile } from "@/lib/domain/types";
+import { loadProjekteBootstrapData } from "@/lib/projekte/server-bootstrap";
 import { publish } from "@/lib/realtime/publish";
 import { projectStammdatenUpdateSchema, appointmentSchema, technicianReportUpdateSchema } from "@/lib/validations/forms";
 import { validateOrderFormValues } from "@/lib/order-forms/validate-submission";
@@ -64,17 +62,13 @@ export async function fetchProjekteBootstrapAction(
   status?: ProjectStatus,
 ): Promise<{
   projects: OfficeProjectListItem[];
-  profiles: UserProfile[];
   branding: { name: string; logoUrl: string | null };
 }> {
   const session = await requireOfficeSession();
-  const orgId = session.organizationId;
-  const [projects, profiles, branding] = await Promise.all([
-    listProjectsForOffice(orgId, status),
-    listAssignableProfiles(orgId),
-    getOrganizationBranding(orgId),
-  ]);
-  return { projects, profiles, branding };
+  if (!session.organizationId) {
+    throw new Error("Keine Organisation.");
+  }
+  return loadProjekteBootstrapData(session.organizationId, status);
 }
 
 export async function updateProjectStammdatenAction(

@@ -14,7 +14,6 @@ import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { ProjectCore } from "@/lib/db/repository";
 import type {
-  OfficeProjectListItem,
   OrderFormTemplate,
   ProjectStatus,
   TechnicianAbsence,
@@ -51,6 +50,8 @@ import {
   type AvailabilityBundle,
 } from "@/app/(app)/kalender/availability-actions";
 import { fetchOrganizationBrandingAction } from "@/app/(app)/layout-actions";
+import type { OrganizationBrandingSnapshot } from "@/lib/projekte/bootstrap-types";
+import { PROJEKTE_BOOTSTRAP_STALE_MS, primeProjekteBootstrapCache } from "@/lib/query/projekt-bootstrap-cache";
 import { fetchAuftragProjectCoreAction } from "@/app/(tech)/auftrag-data-actions";
 import { fetchTechMonthTasksAction, fetchWeekTasksAction } from "@/app/(tech)/wochenplan/actions";
 import {
@@ -108,12 +109,10 @@ export function useAuftragProjectCore(projectId: string, initialCore: ProjectCor
   });
 }
 
-/** /projekte: ein Request für Liste + Profile + Branding (Sheet-/Header-Cache). */
-const PROJEKTE_BOOTSTRAP_STALE_MS = 3 * 60 * 1000;
-
+/** /projekte: Liste + Branding (SSR-dehydriert oder Server Action bei Status-Wechsel). */
 const ORGANIZATION_BRANDING_STALE_MS = 5 * 60 * 1000;
 
-export type OrganizationBranding = { name: string; logoUrl: string | null };
+export type OrganizationBranding = OrganizationBrandingSnapshot;
 
 /**
  * Org-Name/Logo im Header. Auf `/projekte` mit `fetch: false` — Bootstrap primt den Cache.
@@ -139,23 +138,22 @@ export function useProjekteBootstrap(status?: ProjectStatus) {
     queryKey: queryKeys.projekteBootstrap(statusKey),
     queryFn: async () => {
       const data = await fetchProjekteBootstrapAction(status);
-      qc.setQueryData(queryKeys.projects.list(), data.projects);
-      qc.setQueryData(queryKeys.assignableProfiles(), data.profiles);
-      qc.setQueryData(queryKeys.organizationBranding(), data.branding);
+      primeProjekteBootstrapCache(qc, statusKey, data);
       return data;
     },
     staleTime: PROJEKTE_BOOTSTRAP_STALE_MS,
+    refetchOnMount: false,
     select: (data) => data.projects,
   });
 }
 
-export function useAssignableProfiles(initialData?: UserProfile[], enabled = true) {
+export function useAssignableProfiles(enabled = true) {
   return useQuery<UserProfile[]>({
     queryKey: queryKeys.assignableProfiles(),
     queryFn: () => listAssignableProfilesAction(),
-    initialData,
-    staleTime: Infinity,
+    staleTime: PROJEKTE_BOOTSTRAP_STALE_MS,
     enabled,
+    refetchOnMount: false,
   });
 }
 
