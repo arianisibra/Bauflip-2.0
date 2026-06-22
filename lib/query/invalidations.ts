@@ -32,7 +32,6 @@ export function invalidateProjectListCaches(
   qc: QueryClient,
   opts?: InvalidateOpts,
 ): void {
-  inv(qc, queryKeys.projects.list(), opts);
   inv(qc, queryKeys.projekteBootstrapAll(), opts);
   inv(qc, queryKeys.projekteListAll(), opts);
 }
@@ -42,7 +41,6 @@ export function invalidateProjectAdjacencies(
   _projectId: string,
   opts?: InvalidateOpts,
 ): void {
-  inv(qc, queryKeys.projects.list(), opts);
   inv(qc, queryKeys.projekteBootstrapAll(), opts);
   inv(qc, queryKeys.projekteListAll(), opts);
   inv(qc, queryKeys.weekTasks.all(), opts);
@@ -115,7 +113,6 @@ export function afterProjectDeleted(
   opts?: InvalidateOpts,
 ): void {
   qc.removeQueries({ queryKey: queryKeys.projects.core(projectId) });
-  inv(qc, queryKeys.projects.list(), opts);
   inv(qc, queryKeys.projekteBootstrapAll(), opts);
   inv(qc, queryKeys.projekteListAll(), opts);
   inv(qc, queryKeys.weekTasks.all(), opts);

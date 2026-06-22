@@ -74,15 +74,6 @@ export function getProjectListMaxRows(): number {
 
 export { mapUserProfileRow } from "./repository-map";
 
-function sortOfficeProjects(items: OfficeProjectListItem[]): OfficeProjectListItem[] {
-  return [...items].sort((a, b) => {
-    const aDone = a.status === "abgeschlossen";
-    const bDone = b.status === "abgeschlossen";
-    if (aDone === bDone) return 0;
-    return aDone ? 1 : -1;
-  });
-}
-
 /** DB-Spaltenliste — kein select('*') für Projektkern. */
 const PROJECT_DB_COLUMNS =
   "id, organization_id, title, type, status, status_updated_source, status_revert_on_appointment_clear, next_owner_role, next_owner_user_id, source, intake_original_text, access_notes, created_at, updated_at, closed_at, reference_code, hints_and_notes, tenant_name, tenant_phone, tenant_email, management_name, management_phone, management_email, cost_ceiling_text, service_street, service_postal_code, service_city, service_country";
@@ -285,6 +276,44 @@ export const listProjectStatusCountsForOffice = cache(async function listProject
   const orgId = organizationId ?? (await getCachedCurrentOrganizationId());
   if (!orgId) return empty;
 
+  const { data, error } = await supabase.rpc("project_status_counts_for_org", {
+    p_org_id: orgId,
+  });
+  if (error || !data) {
+    return listProjectStatusCountsForOfficeFallback(supabase, orgId);
+  }
+
+  const byStatus: Partial<Record<ProjectStatus, number>> = {};
+  let totalAll = 0;
+  for (const row of data as { status?: string; count?: number | string }[]) {
+    const status = row.status;
+    const countRaw = row.count;
+    const count =
+      typeof countRaw === "number" ? countRaw : Number.parseInt(String(countRaw ?? "0"), 10);
+    if (typeof status !== "string" || !projectStatuses.includes(status as ProjectStatus)) continue;
+    if (!Number.isFinite(count) || count < 0) continue;
+    const key = status as ProjectStatus;
+    byStatus[key] = count;
+    totalAll += count;
+  }
+  let totalActive = 0;
+  for (const [status, count] of Object.entries(byStatus)) {
+    if (status !== "abgeschlossen" && typeof count === "number") {
+      totalActive += count;
+    }
+  }
+  return { byStatus, totalAll, totalActive };
+});
+
+async function listProjectStatusCountsForOfficeFallback(
+  supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
+  orgId: string,
+): Promise<ProjekteStatusCountsSnapshot> {
+  const empty: ProjekteStatusCountsSnapshot = {
+    byStatus: {},
+    totalAll: 0,
+    totalActive: 0,
+  };
   const { data, error } = await supabase
     .from("projects")
     .select("status")
@@ -306,7 +335,7 @@ export const listProjectStatusCountsForOffice = cache(async function listProject
     }
   }
   return { byStatus, totalAll, totalActive };
-});
+}
 
 function mapProjectListRow(row: Record<string, unknown>): OfficeProjectListItem {
   const tenant = row.tenant_name != null ? String(row.tenant_name).trim() : "";
@@ -687,17 +716,6 @@ export const getOfficeProjectListItemById = cache(async function getOfficeProjec
     }
     return item;
   });
-});
-
-/** @deprecated Use listProjectsForOfficePage — loads first page only for callers still on full list. */
-export const listProjectsForOffice = cache(async function listProjectsForOffice(
-  organizationId?: string | null,
-  listFilter: ProjekteListFilter = DEFAULT_PROJEKTE_LIST_FILTER,
-): Promise<OfficeProjectListItem[]> {
-  const page = await listProjectsForOfficePage(organizationId, listFilter, {
-    limit: projectListMaxRows(),
-  });
-  return sortOfficeProjects(page.projects);
 });
 
 export const getProjectCore = cache(async function getProjectCore(projectId: string): Promise<ProjectCore | null> {

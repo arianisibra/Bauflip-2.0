@@ -13,8 +13,8 @@ export function primeProjekteBootstrapCache(
   searchKey: string,
   data: ProjekteBootstrapData,
 ): void {
+  /** Meta only — branding lives in organizationBranding; projects in projekteList infinite query. */
   const meta = {
-    branding: data.branding,
     statusCounts: data.statusCounts,
     listMeta: data.listMeta,
   };
@@ -29,7 +29,6 @@ export function primeProjekteBootstrapCache(
     ],
     pageParams: [null],
   });
-  queryClient.setQueryData(queryKeys.projects.list(), data.projects);
   queryClient.setQueryData(queryKeys.organizationBranding(), data.branding);
 }
 

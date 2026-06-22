@@ -267,6 +267,41 @@ BAUFLIP_HAR_HOST=localhost node scripts/perf/summarize-har.mjs ~/Desktop/localho
 
 ---
 
+## Phase 2c — Prod-Baseline (deployed, 2026-06-22)
+
+HAR: `app.gross-storenbau.ch`, Warm, Default `/projekte`, Incognito empfohlen (Extensions erzeugen sonst ~118 Requests / 6 MB Rauschen).
+
+| Metrik | Wert |
+|--------|------|
+| Document total | ~783 ms |
+| TTFB | ~338 ms |
+| Wire transfer | **17 KB** |
+| RSC unkomprimiert | ~345 KB (50 Zeilen dehydriert) |
+| Bootstrap POST | **0×** |
+| Projekte im Payload | **50** |
+| DOMContentLoaded | ~750 ms |
+
+Vergleich: Phase 2a ~866 ms → **~83 ms schneller**.
+
+---
+
+## Phase 2d — Interne Optimierungen (kein UI-Change)
+
+| Massnahme | Wirkung |
+|-----------|---------|
+| Dehydration: kein doppeltes `projects.list` + kein Branding in Meta-Query | Kleinerer RSC-Flight |
+| RPC `project_status_counts_for_org` | Kein Fetch aller `status`-Zeilen pro Org |
+| `pg_trgm`-Indexes für Listensuche | Schnellere `ilike`-Suche |
+| Legacy `listProjectsForOffice` entfernt | Weniger toter Code |
+
+Migration: [`20260622190000_perf_status_counts_search_trgm.sql`](supabase/migrations/20260622190000_perf_status_counts_search_trgm.sql)
+
+**Nach Deploy:** `npm run db:push`, dann HAR erneut — erwartet leicht kleinerer RSC + schnellere Suche.
+
+**Mess-Hinweis:** DevTools «118 requests / 6 MB» oft Browser-Extensions (`inject.bundle.js`, `chrome-extension://`) — für Bauflip nur Filter `gross-storenbau` oder Incognito.
+
+---
+
 ## Frühere Baselines
 
 ### Dev-HAR vor Optimierung

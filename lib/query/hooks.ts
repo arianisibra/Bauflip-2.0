@@ -125,7 +125,7 @@ const ORGANIZATION_BRANDING_STALE_MS = 5 * 60 * 1000;
 
 export type OrganizationBranding = OrganizationBrandingSnapshot;
 
-export type ProjekteBootstrapMeta = Pick<ProjekteBootstrapData, "branding" | "statusCounts" | "listMeta">;
+export type ProjekteBootstrapMeta = Pick<ProjekteBootstrapData, "statusCounts" | "listMeta">;
 
 /**
  * Org-Name/Logo im Header. Auf `/projekte` mit `fetch: false` — Bootstrap primt den Cache.
@@ -157,7 +157,6 @@ export function useProjekteBootstrap(
       const data = await fetchProjekteBootstrapAction(listFilter, searchQuery);
       primeProjekteBootstrapCache(qc, statusKey, searchKey, data);
       return {
-        branding: data.branding,
         statusCounts: data.statusCounts,
         listMeta: data.listMeta,
       };

@@ -1,13 +1,39 @@
 -- Reference queries for EXPLAIN (ANALYZE, BUFFERS) against production-like data.
 -- Run in Supabase SQL Editor or psql after replacing placeholders.
 --
--- Office project list (see listProjectsForOffice in lib/db/repository.ts)
--- Uses projects.organization_id + order by created_at desc; index: idx_projects_org_created_at
+-- Office project list page 1 (see listProjectsForOfficePage in lib/db/repository.ts)
+-- Uses projects.organization_id + order by created_at desc, id desc; index: idx_projects_org_created_at
 explain (analyze, buffers)
-select id, title, type, status, tenant_name, service_street, service_postal_code, service_city
+select id, title, type, status, tenant_name, service_street, service_postal_code, service_city, created_at
 from public.projects
 where organization_id = '00000000-0000-0000-0000-000000000000'::uuid
-order by created_at desc;
+  and status <> 'abgeschlossen'
+order by created_at desc, id desc
+limit 51;
+
+-- Status dropdown counts (RPC project_status_counts_for_org)
+explain (analyze, buffers)
+select p.status::text, count(*)::bigint
+from public.projects p
+where p.organization_id = '00000000-0000-0000-0000-000000000000'::uuid
+group by p.status;
+
+-- Server search (trgm indexes on title, tenant_name, …)
+explain (analyze, buffers)
+select id, title, type, status, tenant_name, service_street, service_postal_code, service_city, created_at
+from public.projects
+where organization_id = '00000000-0000-0000-0000-000000000000'::uuid
+  and status <> 'abgeschlossen'
+  and (
+    title ilike '%müller%'
+    or tenant_name ilike '%müller%'
+    or service_street ilike '%müller%'
+    or service_city ilike '%müller%'
+    or service_postal_code ilike '%müller%'
+    or reference_code ilike '%müller%'
+  )
+order by created_at desc, id desc
+limit 51;
 
 -- Week / “Mein Tag” task list (see listWeekTasks in lib/db/repository.ts)
 -- Range on appointments.starts_at; index: idx_appointments_starts_at
