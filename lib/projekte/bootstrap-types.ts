@@ -22,7 +22,6 @@ export type ProjekteListPageSnapshot = {
 export type ProjekteBootstrapData = {
   /** First page only — use infinite query for additional pages. */
   projects: OfficeProjectListItem[];
-  branding: OrganizationBrandingSnapshot;
   statusCounts: ProjekteStatusCountsSnapshot;
   nextCursor: string | null;
   hasMore: boolean;
@@ -34,7 +33,7 @@ export type ProjekteBootstrapData = {
     hasMore: boolean;
     nextCursor: string | null;
     totalForFilter: number;
-    rpc: "skipped" | "next_appointment_starts_for_org";
+    rpc: "skipped" | "next_appointment_starts_for_org" | "projekte_office_bootstrap";
   };
 };
 

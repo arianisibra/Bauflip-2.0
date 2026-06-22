@@ -2,14 +2,23 @@
 -- Run in Supabase SQL Editor or psql after replacing placeholders.
 --
 -- Office project list page 1 (see listProjectsForOfficePage in lib/db/repository.ts)
--- Uses projects.organization_id + order by created_at desc, id desc; index: idx_projects_org_created_at
+-- Default «active»: partial index idx_projects_org_created_active; fallback idx_projects_org_created_at
 explain (analyze, buffers)
-select id, title, type, status, tenant_name, service_street, service_postal_code, service_city, created_at
+select id, title, type, status, tenant_name, created_at
 from public.projects
 where organization_id = '00000000-0000-0000-0000-000000000000'::uuid
   and status <> 'abgeschlossen'
 order by created_at desc, id desc
 limit 51;
+
+-- Combined bootstrap RPC (page 1 + status counts — Phase 2e)
+explain (analyze, buffers)
+select public.projekte_office_bootstrap(
+  '00000000-0000-0000-0000-000000000000'::uuid,
+  'active',
+  null,
+  50
+);
 
 -- Status dropdown counts (RPC project_status_counts_for_org)
 explain (analyze, buffers)
@@ -20,7 +29,7 @@ group by p.status;
 
 -- Server search (trgm indexes on title, tenant_name, …)
 explain (analyze, buffers)
-select id, title, type, status, tenant_name, service_street, service_postal_code, service_city, created_at
+select id, title, type, status, tenant_name, created_at
 from public.projects
 where organization_id = '00000000-0000-0000-0000-000000000000'::uuid
   and status <> 'abgeschlossen'

@@ -1,9 +1,9 @@
 import "server-only";
 
 import {
-  getOrganizationBranding,
   listProjectStatusCountsForOffice,
   listProjectsForOfficePage,
+  loadProjekteOfficeBootstrap,
 } from "@/lib/db/repository";
 import {
   type ProjekteBootstrapData,
@@ -20,8 +20,8 @@ import { PROJEKTE_BOOTSTRAP_STALE_MS, primeProjekteBootstrapCache } from "@/lib/
 import { dehydrate, QueryClient } from "@tanstack/react-query";
 
 /**
- * Loads office project list page 1 + branding + counts for the authenticated user's organization only.
- * RLS + explicit organization_id filter — never cross-tenant.
+ * Loads office project list page 1 + counts for the authenticated user's organization only.
+ * Branding comes from App Layout SSR. RLS + explicit organization_id filter — never cross-tenant.
  */
 export async function loadProjekteBootstrapData(
   organizationId: string,
@@ -29,11 +29,21 @@ export async function loadProjekteBootstrapData(
   searchQueryRaw?: string | null,
 ): Promise<ProjekteBootstrapData> {
   const searchQuery = parseProjekteSearchQuery(searchQueryRaw);
-  const [page, branding, statusCounts] = await Promise.all([
-    listProjectsForOfficePage(organizationId, listFilter, { searchQuery }),
-    getOrganizationBranding(organizationId),
-    listProjectStatusCountsForOffice(organizationId),
-  ]);
+
+  let page: Awaited<ReturnType<typeof listProjectsForOfficePage>>;
+  let statusCounts: Awaited<ReturnType<typeof listProjectStatusCountsForOffice>>;
+
+  const rpcResult = await loadProjekteOfficeBootstrap(organizationId, listFilter, searchQuery);
+  if (rpcResult) {
+    page = rpcResult.page;
+    statusCounts = rpcResult.statusCounts;
+  } else {
+    [page, statusCounts] = await Promise.all([
+      listProjectsForOfficePage(organizationId, listFilter, { searchQuery }),
+      listProjectStatusCountsForOffice(organizationId),
+    ]);
+  }
+
   const totalForFilter = searchQuery
     ? page.projects.length + (page.hasMore ? 1 : 0)
     : totalProjectsForListFilter(statusCounts, listFilter);
@@ -42,7 +52,6 @@ export async function loadProjekteBootstrapData(
     projects: page.projects,
     nextCursor: page.nextCursor,
     hasMore: page.hasMore,
-    branding,
     statusCounts,
     listMeta: {
       listFilter,
@@ -53,7 +62,9 @@ export async function loadProjekteBootstrapData(
       totalForFilter,
       rpc: needsNextAppointmentRpc(listFilter)
         ? "next_appointment_starts_for_org"
-        : "skipped",
+        : rpcResult
+          ? "projekte_office_bootstrap"
+          : "skipped",
     },
   };
 }

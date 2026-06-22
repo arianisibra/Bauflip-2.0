@@ -1,20 +1,21 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-
 import { UserAvatarButton } from "@/components/app/user-avatar-button";
+import { useOrganizationBrandingContext } from "@/components/app/organization-branding-provider";
 import { useOrganizationBranding } from "@/lib/query/hooks";
 
 export function OrganizationBrandingHeader() {
-  const pathname = usePathname();
-  // Branding auf /projekte kommt aus SSR-Bootstrap (Cache-Prime).
-  const isProjekteHub = pathname === "/projekte";
-  const { data } = useOrganizationBranding({ fetch: !isProjekteHub });
+  const layoutBranding = useOrganizationBrandingContext();
+  const { data: queryBranding } = useOrganizationBranding({
+    fetch: layoutBranding == null,
+    initialData: layoutBranding ?? undefined,
+  });
+  const branding = queryBranding ?? layoutBranding;
 
   return (
     <UserAvatarButton
-      organizationName={data?.name ?? "Bauflip"}
-      organizationLogoUrl={data?.logoUrl ?? null}
+      organizationName={branding?.name ?? "Bauflip"}
+      organizationLogoUrl={branding?.logoUrl ?? null}
     />
   );
 }

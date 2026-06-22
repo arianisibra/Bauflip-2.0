@@ -128,19 +128,19 @@ export type OrganizationBranding = OrganizationBrandingSnapshot;
 export type ProjekteBootstrapMeta = Pick<ProjekteBootstrapData, "statusCounts" | "listMeta">;
 
 /**
- * Org-Name/Logo im Header. Auf `/projekte` mit `fetch: false` — Bootstrap primt den Cache.
- * Sonst: nur Netzwerk wenn noch kein Cache-Eintrag (z. B. nach Bootstrap).
+ * Org-Name/Logo im Header. Layout SSR primt via Context; Query nur bei fehlendem Layout-Wert.
  */
-export function useOrganizationBranding(options?: { fetch?: boolean }) {
+export function useOrganizationBranding(options?: { fetch?: boolean; initialData?: OrganizationBranding }) {
   const qc = useQueryClient();
   const cached = qc.getQueryData<OrganizationBranding>(queryKeys.organizationBranding());
+  const initialData = options?.initialData ?? cached ?? undefined;
   const wantsNetwork = options?.fetch !== false;
   return useQuery<OrganizationBranding>({
     queryKey: queryKeys.organizationBranding(),
     queryFn: () => fetchOrganizationBrandingAction(),
     staleTime: ORGANIZATION_BRANDING_STALE_MS,
-    enabled: wantsNetwork && cached == null,
-    placeholderData: cached,
+    enabled: wantsNetwork && initialData == null,
+    initialData,
   });
 }
 

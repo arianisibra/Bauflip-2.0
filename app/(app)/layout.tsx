@@ -2,8 +2,10 @@ import { redirect } from "next/navigation";
 import { MobileContextSwitch } from "@/components/app/mobile-context-switch";
 import { MobileAdminNav } from "@/components/app/mobile-admin-nav";
 import { OrganizationBrandingHeader } from "@/components/app/organization-branding-header";
+import { OrganizationBrandingProvider } from "@/components/app/organization-branding-provider";
 import { SidebarNav } from "@/components/app/sidebar-nav";
 import { getCachedSessionProfile, getLayoutSession } from "@/lib/auth/session";
+import { getOrganizationBranding } from "@/lib/db/repository";
 import { isAdminMfaRequiredAndMissing } from "@/lib/auth/mfa";
 import { getVisibleSidebarItems } from "@/lib/navigation/sidebar-config";
 import { AuthenticatedRealtime } from "@/components/app/authenticated-realtime";
@@ -25,10 +27,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     }
   }
   const items = getVisibleSidebarItems(role);
-  const profile = await getCachedSessionProfile(session);
+  const [profile, branding] = await Promise.all([
+    getCachedSessionProfile(session),
+    getOrganizationBranding(session.organizationId),
+  ]);
 
   return (
     <SessionProfileProvider value={profile}>
+    <OrganizationBrandingProvider value={branding}>
       <div className="flex h-dvh max-h-dvh min-h-0 flex-col overflow-hidden bg-muted/40 dark:bg-muted/35 md:h-screen md:max-h-none">
       <AuthenticatedRealtime orgId={session.organizationId} />
       <div className="flex min-h-0 flex-1">
@@ -48,6 +54,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </div>
       </div>
+    </OrganizationBrandingProvider>
     </SessionProfileProvider>
   );
 }

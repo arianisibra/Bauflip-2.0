@@ -338,6 +338,126 @@ async function listProjectStatusCountsForOfficeFallback(
   return { byStatus, totalAll, totalActive };
 }
 
+function mapRpcStatusCounts(raw: unknown): ProjekteStatusCountsSnapshot | null {
+  if (!raw || typeof raw !== "object") return null;
+  const sc = raw as {
+    byStatus?: Record<string, unknown>;
+    totalAll?: number | string;
+    totalActive?: number | string;
+  };
+  const byStatus: Partial<Record<ProjectStatus, number>> = {};
+  if (sc.byStatus && typeof sc.byStatus === "object") {
+    for (const [status, countRaw] of Object.entries(sc.byStatus)) {
+      if (!projectStatuses.includes(status as ProjectStatus)) continue;
+      const count =
+        typeof countRaw === "number" ? countRaw : Number.parseInt(String(countRaw ?? "0"), 10);
+      if (!Number.isFinite(count) || count < 0) continue;
+      byStatus[status as ProjectStatus] = count;
+    }
+  }
+  const totalAll =
+    typeof sc.totalAll === "number"
+      ? sc.totalAll
+      : Number.parseInt(String(sc.totalAll ?? "0"), 10);
+  const totalActive =
+    typeof sc.totalActive === "number"
+      ? sc.totalActive
+      : Number.parseInt(String(sc.totalActive ?? "0"), 10);
+  if (!Number.isFinite(totalAll) || !Number.isFinite(totalActive)) return null;
+  return { byStatus, totalAll, totalActive };
+}
+
+export type ProjekteOfficeBootstrapResult = {
+  page: ProjekteListPageResult;
+  statusCounts: ProjekteStatusCountsSnapshot;
+};
+
+/** Combined page 1 + status counts via RPC. Returns null → caller uses parallel fallback. */
+export const loadProjekteOfficeBootstrap = cache(async function loadProjekteOfficeBootstrap(
+  organizationId: string,
+  listFilter: ProjekteListFilter = DEFAULT_PROJEKTE_LIST_FILTER,
+  searchQuery = "",
+  limit: number = PROJEKTE_LIST_PAGE_SIZE,
+): Promise<ProjekteOfficeBootstrapResult | null> {
+  if (listFilter === "abgemacht") return null;
+
+  return withSlowLog("loadProjekteOfficeBootstrap", async () => {
+    const supabase = await createSupabaseServerClient();
+    if (!supabase) return null;
+
+    const { data, error } = await supabase.rpc("projekte_office_bootstrap", {
+      p_org_id: organizationId,
+      p_filter: listFilter,
+      p_search: searchQuery || null,
+      p_limit: limit,
+    });
+
+    if (error || !data || typeof data !== "object") {
+      if (error) {
+        console.warn("[bauflip] projekte_office_bootstrap:", error.message);
+      }
+      return null;
+    }
+
+    const payload = data as Record<string, unknown>;
+    if (payload.deferred === true) return null;
+
+    const statusCounts = mapRpcStatusCounts(payload.statusCounts);
+    if (!statusCounts) return null;
+
+    const projectsRaw = payload.projects;
+    const projects = Array.isArray(projectsRaw)
+      ? projectsRaw.map((row) => mapProjectListRow(row as Record<string, unknown>))
+      : [];
+
+    let hasMore = payload.hasMore === true;
+    let nextCursor: string | null = null;
+    const lastCreatedAt = payload.lastCreatedAt != null ? String(payload.lastCreatedAt) : null;
+    const lastId = payload.lastId != null ? String(payload.lastId) : null;
+
+    if (hasMore && lastCreatedAt && lastId) {
+      nextCursor = encodeProjekteListCursor({
+        kind: "keyset",
+        segment: listFilter === "all" ? "open" : undefined,
+        createdAt: lastCreatedAt,
+        id: lastId,
+      });
+    } else if (
+      listFilter === "all" &&
+      !hasMore &&
+      projects.length > 0 &&
+      statusCounts.totalAll > statusCounts.totalActive
+    ) {
+      hasMore = true;
+      nextCursor = encodeProjekteListCursor({ kind: "keyset", segment: "closed" });
+    } else if (
+      listFilter === "all" &&
+      projects.length === 0 &&
+      statusCounts.totalAll > statusCounts.totalActive
+    ) {
+      return null;
+    }
+
+    if (process.env.NODE_ENV === "development") {
+      console.info(
+        JSON.stringify({
+          type: "loadProjekteOfficeBootstrap",
+          listFilter,
+          searchQuery: searchQuery || null,
+          projectCount: projects.length,
+          hasMore,
+          rpc: "projekte_office_bootstrap",
+        }),
+      );
+    }
+
+    return {
+      page: { projects, hasMore, nextCursor },
+      statusCounts,
+    };
+  });
+});
+
 function mapProjectListRow(row: Record<string, unknown>): OfficeProjectListItem {
   const tenant = row.tenant_name != null ? String(row.tenant_name).trim() : "";
   const title = tenant || String(row.title ?? "");

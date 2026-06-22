@@ -327,6 +327,37 @@ node scripts/perf/summarize-har.mjs ~/Desktop/app.gross-storenbau.ch.har
 
 ---
 
+## Phase 2e — Server/DB Roundtrips (kein UI-Change)
+
+| Massnahme | Wirkung |
+|-----------|---------|
+| RPC `projekte_office_bootstrap` | Liste Seite 1 + Status-Counts in **1 DB-Roundtrip** |
+| Branding im App-Layout SSR | Kein Branding-Fetch im Projekte-Bootstrap; Header via Context |
+| Partial Index `idx_projects_org_created_active` | Schnellerer Default-Filter «aktiv» |
+| Fallback bei RPC-Fehler / `abgemacht` | Bestehende parallele Queries — keine Datenlücke |
+
+Migration: [`20260626120000_perf_projekte_office_bootstrap_rpc.sql`](supabase/migrations/20260626120000_perf_projekte_office_bootstrap_rpc.sql)
+
+**Nach Deploy:** `npm run db:push`, dann HAR erneut.
+
+| Metrik | Phase 2b/2d | Ziel 2e |
+|--------|-------------|---------|
+| Supabase Roundtrips `/projekte` | 3 | **2** |
+| TTFB | ~351 ms | **~280–320 ms** |
+| Data ready (warm) | ~816 ms | **~730–780 ms** |
+| Dehydrated TanStack Queries | 3 | **2** (bootstrap meta + list) |
+| UI/UX | — | **unverändert** |
+
+Verifikation:
+
+```bash
+psql "$DATABASE_URL" -f scripts/perf/verify-projekte-bootstrap-rpc.sql
+```
+
+Dev-Log: `listMeta.rpc` = `projekte_office_bootstrap` bei Default-Load; `abgemacht` weiter `next_appointment_starts_for_org`.
+
+---
+
 ## Frühere Baselines
 
 ### Dev-HAR vor Optimierung
