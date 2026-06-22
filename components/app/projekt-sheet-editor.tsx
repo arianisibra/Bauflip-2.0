@@ -453,7 +453,8 @@ export function ProjektSheetEditor({
   statusCounts?: ReadonlyMap<ProjectStatus, number>;
 }) {
   const coreQuery = useProjectCore(projectId, open);
-  const { data: technicians = [] } = useAssignableProfiles(open);
+  const [loadTechnicians, setLoadTechnicians] = useState(false);
+  const { data: technicians = [] } = useAssignableProfiles(open && loadTechnicians);
   const updateStammdaten = useUpdateStammdaten();
   const deleteAppointment = useDeleteAppointment();
   const deleteAttachment = useDeleteAttachment();
@@ -693,15 +694,21 @@ export function ProjektSheetEditor({
       </form>
 
       {canEdit ? (
-        <section className="border-t pt-4">
+        <section
+          className="border-t pt-4"
+          onFocusCapture={() => setLoadTechnicians(true)}
+        >
           <h3 className="mb-2 text-sm font-semibold">Termin planen</h3>
           <AppointmentBookingForm projectId={projectId} technicians={technicians} />
 
           <ul className="mt-3 space-y-2 text-sm">
             {core.appointments.map((a: Appointment, appointmentIndex: number) => {
-              const assignedPerson = a.assignedTechnicianId
-                ? technicians.find((t) => t.id === a.assignedTechnicianId)
-                : null;
+              const assignedName =
+                a.assignedTechnicianDisplayName?.trim() ||
+                (a.assignedTechnicianId
+                  ? technicians.find((t) => t.id === a.assignedTechnicianId)?.displayName?.trim()
+                  : null) ||
+                null;
               return (
                 <li key={a.id} className="rounded-lg border border-border bg-muted/20 px-3 py-2">
                   <div className="flex items-start justify-between gap-2">
@@ -710,7 +717,7 @@ export function ProjektSheetEditor({
                       <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-muted-foreground">
                         <span>
                           {a.kind === "besichtigung" ? "Besichtigung" : "Ausführung"}
-                          {assignedPerson ? ` · ${assignedPerson.displayName}` : " · Keine Person zugewiesen"}
+                          {assignedName ? ` · ${assignedName}` : " · Keine Person zugewiesen"}
                         </span>
                         <span className="rounded-md bg-primary/10 px-1.5 py-0 text-[10px] font-medium text-primary">
                           {appointmentIndex + 1}. Termin
@@ -760,6 +767,12 @@ export function ProjektSheetEditor({
 
       <section className="border-t pt-4">
         <h3 className="mb-2 text-sm font-semibold">Anhänge</h3>
+        {coreQuery.isDetailsLoading ? (
+          <div className="flex justify-center py-6" role="status" aria-live="polite">
+            <BauflipLoading size="sm" label="Anhänge & Rapporte werden geladen …" />
+          </div>
+        ) : (
+          <>
         <form
           className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end"
           onSubmit={async (e) => {
@@ -921,9 +934,11 @@ export function ProjektSheetEditor({
             ))}
           </ul>
         ) : null}
+          </>
+        )}
       </section>
 
-      {core.reports.length > 0 && (
+      {!coreQuery.isDetailsLoading && core.reports.length > 0 && (
         <section className="border-t pt-4">
           <h3 className="mb-3 text-sm font-semibold">
             Rapporte ({core.reports.length})

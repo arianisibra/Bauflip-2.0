@@ -225,12 +225,17 @@ function mapProjectAttachmentRow(row: Record<string, unknown>): ProjectAttachmen
   };
 }
 
-export type ProjectCore = {
+export type ProjectCoreHead = {
   project: Project;
   appointments: Appointment[];
+};
+
+export type ProjectCoreDetails = {
   attachments: ProjectAttachment[];
   reports: TechnicianReport[];
 };
+
+export type ProjectCore = ProjectCoreHead & ProjectCoreDetails;
 
 export const getOrganizationBranding = cache(async function getOrganizationBranding(
   organizationId: string | null,
@@ -820,73 +825,162 @@ export const getOfficeProjectListItemById = cache(async function getOfficeProjec
   });
 });
 
-export const getProjectCore = cache(async function getProjectCore(projectId: string): Promise<ProjectCore | null> {
-  return withSlowLog("getProjectCore", async () => {
+function enrichMockAppointmentsWithTechnicianNames(appointments: Appointment[]): Appointment[] {
+  return appointments.map((a) => ({
+    ...a,
+    assignedTechnicianDisplayName: a.assignedTechnicianId
+      ? mockProfiles.find((p) => p.id === a.assignedTechnicianId)?.displayName ?? null
+      : null,
+  }));
+}
+
+async function enrichAppointmentsWithTechnicianDisplayNames(
+  supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
+  appointments: Appointment[],
+): Promise<Appointment[]> {
+  const techIds = [
+    ...new Set(
+      appointments.map((a) => a.assignedTechnicianId).filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  if (techIds.length === 0) return appointments;
+
+  const { data } = await supabase.from("profiles").select("id, display_name").in("id", techIds);
+  const nameById = new Map<string, string>();
+  for (const row of data ?? []) {
+    const r = row as { id: string; display_name?: string | null };
+    const name = String(r.display_name ?? "").trim();
+    if (name) nameById.set(String(r.id), name);
+  }
+
+  return appointments.map((a) => ({
+    ...a,
+    assignedTechnicianDisplayName: a.assignedTechnicianId
+      ? nameById.get(a.assignedTechnicianId) ?? null
+      : null,
+  }));
+}
+
+async function loadProjectReportsWithOrderForms(
+  supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
+  projectId: string,
+): Promise<TechnicianReport[]> {
+  const { data: reports } = await supabase
+    .from("technician_reports")
+    .select(TECH_REPORT_DB_COLUMNS)
+    .eq("project_id", projectId)
+    .order("created_at");
+
+  const reportRows = ((reports as Record<string, unknown>[]) ?? []).map(mapTechnicianReportRow);
+  if (reportRows.length === 0) return reportRows;
+
+  const ids = reportRows.map((r) => r.id);
+  const { data: ofRows } = await supabase
+    .from("technician_report_order_forms")
+    .select("technician_report_id, template_id, values_json, order_form_templates ( name, fields )")
+    .in("technician_report_id", ids);
+
+  const byReport = new Map<string, TechnicianReportOrderFormEntry[]>();
+  for (const raw of ofRows ?? []) {
+    const row = raw as Record<string, unknown>;
+    const rid = String(row.technician_report_id ?? "");
+    const tplWrap = row.order_form_templates as Record<string, unknown> | Record<string, unknown>[] | null;
+    const t = Array.isArray(tplWrap) ? tplWrap[0] : tplWrap;
+    if (!t || !rid) continue;
+    const entry: TechnicianReportOrderFormEntry = {
+      templateId: String(row.template_id ?? ""),
+      templateName: String(t.name ?? ""),
+      fields: parseOrderFormFieldsJson(t.fields),
+      values: valuesJsonToStringRecord(row.values_json),
+    };
+    const list = byReport.get(rid) ?? [];
+    list.push(entry);
+    byReport.set(rid, list);
+  }
+
+  return reportRows.map((r) => ({ ...r, orderForms: byReport.get(r.id) ?? [] }));
+}
+
+export const getProjectCoreHead = cache(async function getProjectCoreHead(
+  projectId: string,
+): Promise<ProjectCoreHead | null> {
+  return withSlowLog("getProjectCoreHead", async () => {
     const supabase = await createSupabaseServerClient();
     if (!supabase) {
       const project = mockProjects.find((x) => x.id === projectId);
       if (!project) return null;
-      const appts = mockAppointments.filter((a) => a.projectId === projectId);
-      return {
-        project,
-        appointments: appts,
-        attachments: mockProjectAttachments.filter((a) => a.projectId === projectId),
-        reports: mockReports.filter((r) => r.projectId === projectId),
-      };
+      const appts = enrichMockAppointmentsWithTechnicianNames(
+        mockAppointments.filter((a) => a.projectId === projectId),
+      );
+      return { project, appointments: appts };
     }
 
-    const [{ data: project }, { data: appointments }, { data: attachments }, { data: reports }] = await Promise.all([
+    const [{ data: project }, { data: appointments }] = await Promise.all([
       supabase.from("projects").select(PROJECT_DB_COLUMNS).eq("id", projectId).maybeSingle(),
       supabase
         .from("appointments")
         .select(APPOINTMENT_DB_COLUMNS)
         .eq("project_id", projectId)
         .order("starts_at"),
-      supabase.from("project_attachments").select(ATTACHMENT_DB_COLUMNS).eq("project_id", projectId).order("created_at"),
-      supabase.from("technician_reports").select(TECH_REPORT_DB_COLUMNS).eq("project_id", projectId).order("created_at"),
     ]);
 
     if (!project) return null;
 
-    const projectModel = mapProjectRow(project as Record<string, unknown>);
     const apptModels = ((appointments as Record<string, unknown>[]) ?? []).map(mapAppointmentRow);
-
-    const reportRows = ((reports as Record<string, unknown>[]) ?? []).map(mapTechnicianReportRow);
-
-    let mergedReports = reportRows;
-    if (reportRows.length > 0) {
-      const ids = reportRows.map((r) => r.id);
-      const { data: ofRows } = await supabase
-        .from("technician_report_order_forms")
-        .select("technician_report_id, template_id, values_json, order_form_templates ( name, fields )")
-        .in("technician_report_id", ids);
-
-      const byReport = new Map<string, TechnicianReportOrderFormEntry[]>();
-      for (const raw of ofRows ?? []) {
-        const row = raw as Record<string, unknown>;
-        const rid = String(row.technician_report_id ?? "");
-        const tplWrap = row.order_form_templates as Record<string, unknown> | Record<string, unknown>[] | null;
-        const t = Array.isArray(tplWrap) ? tplWrap[0] : tplWrap;
-        if (!t || !rid) continue;
-        const entry: TechnicianReportOrderFormEntry = {
-          templateId: String(row.template_id ?? ""),
-          templateName: String(t.name ?? ""),
-          fields: parseOrderFormFieldsJson(t.fields),
-          values: valuesJsonToStringRecord(row.values_json),
-        };
-        const list = byReport.get(rid) ?? [];
-        list.push(entry);
-        byReport.set(rid, list);
-      }
-      mergedReports = reportRows.map((r) => ({ ...r, orderForms: byReport.get(r.id) ?? [] }));
-    }
+    const enrichedAppointments = await enrichAppointmentsWithTechnicianDisplayNames(supabase, apptModels);
 
     return {
-      project: projectModel,
-      appointments: apptModels,
-      attachments: ((attachments as Record<string, unknown>[]) ?? []).map(mapProjectAttachmentRow),
-      reports: mergedReports,
+      project: mapProjectRow(project as Record<string, unknown>),
+      appointments: enrichedAppointments,
     };
+  });
+});
+
+export const getProjectCoreDetails = cache(async function getProjectCoreDetails(
+  projectId: string,
+): Promise<ProjectCoreDetails | null> {
+  return withSlowLog("getProjectCoreDetails", async () => {
+    const supabase = await createSupabaseServerClient();
+    if (!supabase) {
+      const project = mockProjects.find((x) => x.id === projectId);
+      if (!project) return null;
+      return {
+        attachments: mockProjectAttachments.filter((a) => a.projectId === projectId),
+        reports: mockReports.filter((r) => r.projectId === projectId),
+      };
+    }
+
+    const { data: project } = await supabase
+      .from("projects")
+      .select("id")
+      .eq("id", projectId)
+      .maybeSingle();
+    if (!project) return null;
+
+    const [{ data: attachments }, reports] = await Promise.all([
+      supabase
+        .from("project_attachments")
+        .select(ATTACHMENT_DB_COLUMNS)
+        .eq("project_id", projectId)
+        .order("created_at"),
+      loadProjectReportsWithOrderForms(supabase, projectId),
+    ]);
+
+    return {
+      attachments: ((attachments as Record<string, unknown>[]) ?? []).map(mapProjectAttachmentRow),
+      reports,
+    };
+  });
+});
+
+export const getProjectCore = cache(async function getProjectCore(projectId: string): Promise<ProjectCore | null> {
+  return withSlowLog("getProjectCore", async () => {
+    const [head, details] = await Promise.all([
+      getProjectCoreHead(projectId),
+      getProjectCoreDetails(projectId),
+    ]);
+    if (!head || !details) return null;
+    return { ...head, ...details };
   });
 });
 

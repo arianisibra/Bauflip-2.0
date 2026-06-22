@@ -66,14 +66,18 @@ export function invalidateAttachmentAdjacencies(
   // no adjacencies
 }
 
-// ─── Full invalidation (for external events — SSE / etc.) ─────────────────
+function invalidateProjectCoreSplit(qc: QueryClient, projectId: string, opts?: Parameters<typeof inv>[2]) {
+  inv(qc, queryKeys.projects.core(projectId), opts);
+  inv(qc, queryKeys.projects.coreHead(projectId), opts);
+  inv(qc, queryKeys.projects.coreDetails(projectId), opts);
+}
 
 export function afterProjectCoreChange(
   qc: QueryClient,
   projectId: string,
   opts?: InvalidateOpts,
 ): void {
-  inv(qc, queryKeys.projects.core(projectId), opts);
+  invalidateProjectCoreSplit(qc, projectId, opts);
   inv(qc, queryKeys.projects.auftragCore(projectId), opts);
   invalidateProjectListCaches(qc, opts);
 }
@@ -83,7 +87,7 @@ export function afterAppointmentChange(
   projectId: string,
   opts?: InvalidateOpts,
 ): void {
-  inv(qc, queryKeys.projects.core(projectId), opts);
+  invalidateProjectCoreSplit(qc, projectId, opts);
   inv(qc, queryKeys.projects.auftragCore(projectId), opts);
   invalidateProjectAdjacencies(qc, projectId, opts);
 }
@@ -93,7 +97,7 @@ export function afterReportChange(
   projectId: string,
   opts?: InvalidateOpts,
 ): void {
-  inv(qc, queryKeys.projects.core(projectId), opts);
+  invalidateProjectCoreSplit(qc, projectId, opts);
   invalidateReportAdjacencies(qc, projectId, opts);
 }
 
@@ -102,7 +106,7 @@ export function afterAttachmentChange(
   projectId: string,
   opts?: InvalidateOpts,
 ): void {
-  inv(qc, queryKeys.projects.core(projectId), opts);
+  invalidateProjectCoreSplit(qc, projectId, opts);
   inv(qc, queryKeys.projects.auftragCore(projectId), opts);
   invalidateAttachmentAdjacencies(qc, projectId, opts);
 }
@@ -113,6 +117,8 @@ export function afterProjectDeleted(
   opts?: InvalidateOpts,
 ): void {
   qc.removeQueries({ queryKey: queryKeys.projects.core(projectId) });
+  qc.removeQueries({ queryKey: queryKeys.projects.coreHead(projectId) });
+  qc.removeQueries({ queryKey: queryKeys.projects.coreDetails(projectId) });
   inv(qc, queryKeys.projekteBootstrapAll(), opts);
   inv(qc, queryKeys.projekteListAll(), opts);
   inv(qc, queryKeys.weekTasks.all(), opts);

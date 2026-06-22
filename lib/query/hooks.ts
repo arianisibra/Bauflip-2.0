@@ -10,7 +10,7 @@
  *   `setQueryData` before invalidating adjacent queries — no refetch of the
  *   just-mutated resource.
  */
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useMutation, useInfiniteQuery, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { ProjectCore } from "@/lib/db/repository";
 import type {
@@ -27,7 +27,8 @@ import {
   deleteReportAction,
   fetchProjekteBootstrapAction,
   fetchProjekteListPageAction,
-  getProjectSheetDataAction,
+  getProjectSheetDetailsAction,
+  getProjectSheetHeadAction,
   listAssignableProfilesAction,
   updateProjectStammdatenAction,
   updateProjectStatusAction,
@@ -90,17 +91,58 @@ type UploadResult = { success: true } | { success: false; error: string };
 
 // ───────── Queries ─────────
 
-export function useProjectCore(projectId: string | null, enabled = true) {
-  return useQuery<ProjectCore>({
-    queryKey: projectId ? queryKeys.projects.core(projectId) : ["projects", "core", "__disabled"],
-    enabled: Boolean(projectId) && enabled,
+export type ProjectCoreQueryResult = {
+  data: ProjectCore | undefined;
+  isLoading: boolean;
+  /** Anhänge/Rapporte laden noch (Kopf bereits da). */
+  isDetailsLoading: boolean;
+  isFetching: boolean;
+  isError: boolean;
+  error: Error | null;
+  isSuccess: boolean;
+};
+
+export function useProjectCore(projectId: string | null, enabled = true): ProjectCoreQueryResult {
+  const isEnabled = Boolean(projectId) && enabled;
+
+  const headQuery = useQuery({
+    queryKey: projectId ? queryKeys.projects.coreHead(projectId) : ["projects", "core-head", "__disabled"],
+    enabled: isEnabled,
     queryFn: async () => {
-      if (!projectId) throw new Error("projectId required");
-      const { bundle } = await getProjectSheetDataAction(projectId);
-      return bundle;
+      const { head } = await getProjectSheetHeadAction(projectId!);
+      return head;
     },
     staleTime: 60_000,
   });
+
+  const detailsQuery = useQuery({
+    queryKey: projectId ? queryKeys.projects.coreDetails(projectId) : ["projects", "core-details", "__disabled"],
+    enabled: isEnabled && headQuery.isSuccess,
+    queryFn: async () => {
+      const { details } = await getProjectSheetDetailsAction(projectId!);
+      return details;
+    },
+    staleTime: 60_000,
+  });
+
+  const merged = useMemo((): ProjectCore | undefined => {
+    if (!headQuery.data) return undefined;
+    return {
+      ...headQuery.data,
+      attachments: detailsQuery.data?.attachments ?? [],
+      reports: detailsQuery.data?.reports ?? [],
+    };
+  }, [headQuery.data, detailsQuery.data]);
+
+  return {
+    data: merged,
+    isLoading: headQuery.isLoading,
+    isDetailsLoading: headQuery.isSuccess && detailsQuery.isFetching && !detailsQuery.data,
+    isFetching: headQuery.isFetching || detailsQuery.isFetching,
+    isError: headQuery.isError,
+    error: headQuery.error instanceof Error ? headQuery.error : null,
+    isSuccess: headQuery.isSuccess && detailsQuery.isSuccess,
+  };
 }
 
 /** Auftragsseite: SSE `appointment.changed` invalidiert diesen Key; SSR-`initialCore` wird in den Cache gespiegelt. */
@@ -335,9 +377,17 @@ export function useOrderFormTemplates(initialData?: OrderFormTemplate[], enabled
 
 // ───────── Mutation helpers ─────────
 
-/** Seed the core cache with a fresh bundle so the sheet re-renders without a refetch. */
+/** Seed head, details, and merged core after mutations — no refetch of the just-mutated resource. */
 function primeCore(qc: QueryClient, projectId: string, core: ProjectCore) {
   qc.setQueryData(queryKeys.projects.core(projectId), core);
+  qc.setQueryData(queryKeys.projects.coreHead(projectId), {
+    project: core.project,
+    appointments: core.appointments,
+  });
+  qc.setQueryData(queryKeys.projects.coreDetails(projectId), {
+    attachments: core.attachments,
+    reports: core.reports,
+  });
 }
 
 // ───────── Mutations ─────────

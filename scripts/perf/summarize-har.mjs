@@ -11,6 +11,9 @@ if (!harPath) {
   process.exit(1);
 }
 
+/** POST /kalender within this window after document end = hydration regression. */
+const HYDRATION_GAP_MS = 500;
+
 const har = JSON.parse(fs.readFileSync(harPath, "utf8"));
 const entries = har.log.entries ?? [];
 
@@ -74,6 +77,26 @@ function rel(e) {
 }
 function end(e) {
   return rel(e) + Math.round(e.time);
+}
+
+function kalenderPostKind(url) {
+  try {
+    const u = new URL(url);
+    if (u.searchParams.has("sheet")) return "sheet";
+    return "range";
+  } catch {
+    return "range";
+  }
+}
+
+function shortKalenderUrl(url) {
+  try {
+    const u = new URL(url);
+    const qs = u.search.startsWith("?") ? u.search.slice(1) : u.search;
+    return qs.length > 72 ? qs.slice(0, 72) + "…" : qs || "(no query)";
+  } catch {
+    return url;
+  }
 }
 
 const totalTransferKb = Math.round(
@@ -151,31 +174,57 @@ if (kalenderDoc) {
 }
 
 const docEndMs = kalenderDoc ? end(kalenderDoc) : null;
-const kalenderPostsAfterDoc = docEndMs != null ? kalenderPosts.filter((p) => rel(p) >= docEndMs) : kalenderPosts;
+const kalenderPostsAfterDoc =
+  docEndMs != null ? kalenderPosts.filter((p) => rel(p) >= docEndMs) : kalenderPosts;
+const kalenderEarlyPosts =
+  docEndMs != null
+    ? kalenderPostsAfterDoc.filter((p) => rel(p) - docEndMs < HYDRATION_GAP_MS)
+    : [];
+const kalenderRangePosts = kalenderPostsAfterDoc.filter((p) => kalenderPostKind(p.request.url) === "range");
+const kalenderSheetPosts = kalenderPostsAfterDoc.filter((p) => kalenderPostKind(p.request.url) === "sheet");
 const projektePostsAfterDoc =
   docEndMs != null ? bootstrapPosts.filter((p) => rel(p) >= docEndMs) : bootstrapPosts;
 const kalenderRscAfterDoc =
   docEndMs != null ? kalenderRscGets.filter((p) => rel(p) >= docEndMs) : kalenderRscGets;
 
 console.log("\nKalender interaction (after document load)");
-console.log("  POST /kalender:", kalenderPostsAfterDoc.length);
-console.log("  POST /projekte (sheet/actions):", projektePostsAfterDoc.length);
+console.log("  POST /kalender total:", kalenderPostsAfterDoc.length);
+console.log("    early (<" + HYDRATION_GAP_MS + "ms, regression):", kalenderEarlyPosts.length);
+console.log("    range/view (expected on nav):", kalenderRangePosts.length);
+console.log("    sheet (Server Action on /kalender?sheet=):", kalenderSheetPosts.length);
+console.log("  POST /projekte:", projektePostsAfterDoc.length);
 console.log("  GET /kalender?_rsc= (soft nav):", kalenderRscAfterDoc.length);
 console.log("  Sidebar _rsc prefetches (total session):", sidebarRscGets.length);
 
-console.log("\nBootstrap POST /kalender:", kalenderPosts.length);
+if (kalenderPostsAfterDoc.length > 0) {
+  console.log("\n  POST /kalender timeline:");
+  for (const p of [...kalenderPostsAfterDoc].sort((a, b) => rel(a) - rel(b))) {
+    const gap = docEndMs != null ? rel(p) - docEndMs : 0;
+    const kind = kalenderPostKind(p.request.url);
+    console.log(
+      "   ",
+      "t+" + gap + "ms",
+      Math.round(p.time) + "ms",
+      Math.round((p.response._transferSize ?? 0) / 1024) + "KB",
+      kind,
+      shortKalenderUrl(p.request.url),
+    );
+  }
+}
+
+console.log("\nAll POST /kalender (session):", kalenderPosts.length);
 for (const p of kalenderPosts) {
   console.log(
     "  ",
     Math.round(p.time) + "ms",
     Math.round((p.response._transferSize ?? 0) / 1024) + "KB",
+    kalenderPostKind(p.request.url),
     "status",
     p.response.status,
   );
 }
 
 console.log("GET /projekte?sheet= prefetches:", projekteSheetPrefetches.length);
-
 console.log("/api/events:", events.length);
 console.log("Profile-related POSTs:", profilePosts.length);
 console.log("WebSocket:", ws.length);
@@ -194,17 +243,18 @@ if (doc && bootstrapPosts[0]) {
   console.log("  data ready (Hybrid-SSR):", end(doc));
 }
 
-if (kalenderDoc && kalenderPosts[0]) {
+if (kalenderDoc) {
   console.log("\nTimeline /kalender (ms from first request)");
   console.log("  document end:", end(kalenderDoc));
-  console.log("  calendar POST start:", rel(kalenderPosts[0]));
-  console.log("  calendar POST end:", end(kalenderPosts[0]));
-  console.log("  data ready:", end(kalenderPosts[0]));
-  console.log("  hydration gap:", rel(kalenderPosts[0]) - end(kalenderDoc));
-} else if (kalenderDoc) {
-  console.log("\nTimeline /kalender (ms from first request)");
-  console.log("  document end:", end(kalenderDoc));
-  console.log("  data ready (Hybrid-SSR):", end(kalenderDoc));
+  if (kalenderEarlyPosts[0]) {
+    console.log("  early POST start:", rel(kalenderEarlyPosts[0]));
+    console.log("  hydration gap:", rel(kalenderEarlyPosts[0]) - end(kalenderDoc));
+  } else if (kalenderPostsAfterDoc[0]) {
+    console.log("  first POST start:", rel(kalenderPostsAfterDoc[0]));
+    console.log("  gap to first POST:", rel(kalenderPostsAfterDoc[0]) - end(kalenderDoc));
+  } else {
+    console.log("  data ready (Hybrid-SSR):", end(kalenderDoc));
+  }
 }
 
 if (har.log.pages?.[0]?.pageTimings) {
@@ -215,11 +265,12 @@ if (har.log.pages?.[0]?.pageTimings) {
 }
 
 if (kalenderDoc) {
+  const isInteractionHar = kalenderPostsAfterDoc.length > 0;
   const gates = [
     {
-      label: "Bootstrap POST /kalender after load = 0",
-      pass: kalenderPostsAfterDoc.length === 0,
-      detail: String(kalenderPostsAfterDoc.length),
+      label: "No POST /kalender within " + HYDRATION_GAP_MS + "ms of document (hydration)",
+      pass: kalenderEarlyPosts.length === 0,
+      detail: String(kalenderEarlyPosts.length),
     },
     {
       label: "GET /projekte?sheet= prefetches = 0",
@@ -237,7 +288,14 @@ if (kalenderDoc) {
       detail: String(kalenderRscAfterDoc.length),
     },
   ];
-  console.log("\nKalender interaction gates");
+  if (isInteractionHar) {
+    gates.push({
+      label: "Sheet uses POST /kalender?sheet= (not full RSC reload)",
+      pass: kalenderSheetPosts.length === 0 || kalenderRscAfterDoc.length === 0,
+      detail: kalenderSheetPosts.length + " sheet POST(s), " + kalenderRscAfterDoc.length + " _rsc",
+    });
+  }
+  console.log("\nKalender gates" + (isInteractionHar ? " (interaction HAR)" : " (load-only HAR)"));
   for (const g of gates) {
     console.log(" ", g.pass ? "PASS" : "FAIL", "—", g.label, `(${g.detail})`);
   }

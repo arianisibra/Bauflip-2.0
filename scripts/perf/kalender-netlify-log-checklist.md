@@ -34,4 +34,8 @@ Nach Deploy auf Prod (`app.gross-storenbau.ch`). Dauer: ~5 Minuten.
 node scripts/perf/summarize-har.mjs ~/Desktop/app.gross-storenbau.ch.har
 ```
 
-Erwartung im Summary-Block **Kalender interaction gates** — alle `PASS`.
+Erwartung im Summary-Block **Kalender gates (interaction HAR)** — alle `PASS`:
+
+- `early (<500ms)` = **0** (kein Hydration-Re-Fetch)
+- `sheet` POSTs auf `/kalender?sheet=` = kleine Payloads, **kein** `_rsc`
+- `range/view` POSTs = nur bei Ansichtswechsel

@@ -392,11 +392,13 @@ node scripts/perf/summarize-har.mjs ~/Desktop/app.gross-storenbau.ch.har
 
 | Prüfpunkt | Erwartung |
 |-----------|-----------|
-| Bootstrap POST `/kalender` nach Load | **0×** |
-| POST `/kalender` bei Sheet open/close | **0×** |
-| POST `/projekte` bei Sheet (getProjectCore) | **1×** pro neuem Projekt |
-| POST `/kalender` bei View-Wechsel (neuer Range) | **1×** (Client-Action) |
-| `GET /kalender?_rsc=` bei Tag-Wechsel | **0×** (nach Kal-URL replaceState) |
+| POST `/kalender` innerhalb **500 ms** nach Document | **0×** (Hydration-Regression) |
+| POST `/kalender?sheet=` bei Sheet (getProjectCore) | **1–2×** kleine Payloads (6 KB), Server Action auf aktueller Route |
+| POST `/projekte` bei Sheet auf Kalender | **0×** (Actions posten zu `/kalender`, nicht `/projekte`) |
+| POST `/kalender` bei View-Wechsel (neuer Range) | **1×** pro Ansicht (Client-Action) |
+| `GET /kalender?_rsc=` bei Tag/Sheet | **0×** (replaceState) |
+
+**Verifiziert (Interaktions-HAR, Sheet + Woche):** Document ~2401 ms (kalt), 0 early POST, 1× range POST (4 KB), 2× sheet POST (6 KB + 1 KB), 0× `_rsc`, alle Gates PASS.
 
 ---
 

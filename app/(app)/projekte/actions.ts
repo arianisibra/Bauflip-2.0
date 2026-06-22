@@ -12,6 +12,8 @@ import {
   deleteTechnicianReport,
   getOfficeProjectListItemById,
   getProjectCore,
+  getProjectCoreDetails,
+  getProjectCoreHead,
   listAssignableProfiles,
   listActiveOrderFormTemplatesForOrg,
   listProjectsForOfficePage,
@@ -19,7 +21,7 @@ import {
   updateProject,
   updateTechnicianReport,
 } from "@/lib/db/repository";
-import type { ProjectCore } from "@/lib/db/repository";
+import type { ProjectCore, ProjectCoreDetails, ProjectCoreHead } from "@/lib/db/repository";
 import type { ProjectStatus, UserProfile } from "@/lib/domain/types";
 import { DEFAULT_PROJEKTE_LIST_FILTER, type ProjekteListFilter } from "@/lib/projekte/list-filter";
 import { parseProjekteSearchQuery } from "@/lib/projekte/list-page";
@@ -47,6 +49,28 @@ function nz(s: string | undefined | null): string | null {
   return t === "" ? null : t;
 }
 
+export async function getProjectSheetHeadAction(projectId: string): Promise<{ head: ProjectCoreHead }> {
+  await requireOfficeSession();
+  const head = await getProjectCoreHead(projectId);
+  if (!head) {
+    throw new Error("Projekt nicht gefunden.");
+  }
+  return { head };
+}
+
+export async function getProjectSheetDetailsAction(
+  projectId: string,
+): Promise<{ details: ProjectCoreDetails }> {
+  await requireOfficeSession();
+  const details = await getProjectCoreDetails(projectId);
+  if (!details) {
+    throw new Error("Projekt nicht gefunden.");
+  }
+  const signedAttachments = await signAttachmentUrls(details.attachments);
+  return { details: { ...details, attachments: signedAttachments } };
+}
+
+/** Volles Bundle — Mutations, Prefetch-Fallback, Legacy. */
 export async function getProjectSheetDataAction(projectId: string) {
   await requireOfficeSession();
   const bundle = await getProjectCore(projectId);

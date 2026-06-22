@@ -204,6 +204,8 @@ export type Appointment = {
   startsAt: string;
   endsAt: string;
   assignedTechnicianId: string | null;
+  /** Anzeigename aus profiles — ohne separate Monteur-Liste im Sheet. */
+  assignedTechnicianDisplayName?: string | null;
   planningNotes: string | null;
   createdAt: string;
 };
