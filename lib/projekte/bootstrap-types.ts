@@ -13,14 +13,27 @@ export type ProjekteStatusCountsSnapshot = {
   totalActive: number;
 };
 
+export type ProjekteListPageSnapshot = {
+  projects: OfficeProjectListItem[];
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
 export type ProjekteBootstrapData = {
+  /** First page only — use infinite query for additional pages. */
   projects: OfficeProjectListItem[];
   branding: OrganizationBrandingSnapshot;
   statusCounts: ProjekteStatusCountsSnapshot;
+  nextCursor: string | null;
+  hasMore: boolean;
   /** Server-side observability for perf docs — not used in UI. */
   listMeta: {
     listFilter: ProjekteListFilter;
-    projectCount: number;
+    searchQuery: string;
+    pageSize: number;
+    hasMore: boolean;
+    nextCursor: string | null;
+    totalForFilter: number;
     rpc: "skipped" | "next_appointment_starts_for_org";
   };
 };

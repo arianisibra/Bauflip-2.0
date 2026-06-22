@@ -4,6 +4,7 @@ import {
   parseProjekteListFilter,
   type ProjekteListFilter,
 } from "@/lib/projekte/list-filter";
+import { normalizeSearchQuery, parseProjekteSearchQuery } from "@/lib/projekte/list-page";
 
 export function parseProjekteListUrlFilter(
   searchParams: Pick<ReadonlyURLSearchParams, "get">,
@@ -11,9 +12,16 @@ export function parseProjekteListUrlFilter(
   return parseProjekteListFilter(searchParams.get("status"));
 }
 
+export function parseProjekteListUrlSearchQuery(
+  searchParams: Pick<ReadonlyURLSearchParams, "get">,
+): string {
+  return parseProjekteSearchQuery(searchParams.get("q"));
+}
+
 export function buildProjekteListSearchParams(
   listFilter: ProjekteListFilter,
   preserve?: URLSearchParams | ReadonlyURLSearchParams,
+  searchQuery?: string,
 ): URLSearchParams {
   const params = new URLSearchParams(preserve?.toString() ?? "");
   if (listFilter === DEFAULT_PROJEKTE_LIST_FILTER) {
@@ -21,14 +29,21 @@ export function buildProjekteListSearchParams(
   } else {
     params.set("status", listFilter);
   }
+  const q = normalizeSearchQuery(searchQuery ?? params.get("q"));
+  if (q) {
+    params.set("q", q);
+  } else {
+    params.delete("q");
+  }
   return params;
 }
 
 export function buildProjekteListHref(
   listFilter: ProjekteListFilter,
   preserve?: URLSearchParams | ReadonlyURLSearchParams,
+  searchQuery?: string,
 ): string {
-  const qs = buildProjekteListSearchParams(listFilter, preserve).toString();
+  const qs = buildProjekteListSearchParams(listFilter, preserve, searchQuery).toString();
   return qs ? `/projekte?${qs}` : "/projekte";
 }
 

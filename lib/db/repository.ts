@@ -43,6 +43,14 @@ import {
   type ProjekteListFilter,
 } from "@/lib/projekte/list-filter";
 import {
+  decodeProjekteListCursor,
+  encodeProjekteListCursor,
+  PROJEKTE_ABGEMACHT_MAX_ROWS,
+  PROJEKTE_LIST_PAGE_SIZE,
+  type ProjekteListPageResult,
+} from "@/lib/projekte/list-page";
+import { sortAbgemachtOfficeProjects } from "@/lib/projekte/list-sort";
+import {
   mockAppointments,
   mockProfiles,
   mockProjectAttachments,
@@ -300,101 +308,396 @@ export const listProjectStatusCountsForOffice = cache(async function listProject
   return { byStatus, totalAll, totalActive };
 });
 
-export const listProjectsForOffice = cache(async function listProjectsForOffice(
-  organizationId?: string | null,
+function mapProjectListRow(row: Record<string, unknown>): OfficeProjectListItem {
+  const tenant = row.tenant_name != null ? String(row.tenant_name).trim() : "";
+  const title = tenant || String(row.title ?? "");
+  const addrShort = formatServiceAddressFields({
+    serviceStreet: row.service_street as string | null,
+    servicePostalCode: row.service_postal_code as string | null,
+    serviceCity: row.service_city as string | null,
+  });
+  return {
+    id: String(row.id),
+    title,
+    type: row.type as OfficeProjectListItem["type"],
+    status: row.status as ProjectStatus,
+    displayLabel: tenant || title,
+    serviceAddressShort: addrShort === "—" ? null : addrShort,
+    createdAt: String(row.created_at ?? new Date(0).toISOString()),
+    nextAppointmentStartsAt: null as string | null,
+  };
+}
+
+function escapeIlikePattern(term: string): string {
+  return term.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
+async function attachNextAppointmentsForProjects(
+  supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
+  orgId: string,
+  projects: OfficeProjectListItem[],
+): Promise<void> {
+  if (projects.length === 0) return;
+  const projectIds = new Set(projects.map((p) => p.id));
+  const nowIso = new Date().toISOString();
+  const { data: apRows, error: apErr } = await supabase.rpc("next_appointment_starts_for_org", {
+    p_org_id: orgId,
+    p_now: nowIso,
+  });
+  if (apErr) {
+    console.warn("[bauflip] next_appointment_starts_for_org:", apErr.message);
+    return;
+  }
+  const nextByProject = new Map<string, string>();
+  if (apRows?.length) {
+    for (const raw of apRows as { project_id?: string; starts_at?: string }[]) {
+      const pid = String(raw.project_id ?? "");
+      const st = String(raw.starts_at ?? "");
+      if (pid && st && projectIds.has(pid)) nextByProject.set(pid, st);
+    }
+  }
+  for (const p of projects) {
+    p.nextAppointmentStartsAt = nextByProject.get(p.id) ?? null;
+  }
+}
+
+function mockProjectsForFilter(listFilter: ProjekteListFilter): OfficeProjectListItem[] {
+  return mockProjects
+    .filter((p) => matchesProjekteListFilter(p.status, listFilter))
+    .map((p) => ({
+      id: p.id,
+      title: p.tenantName?.trim() || p.title,
+      type: p.type,
+      status: p.status,
+      displayLabel: p.tenantName?.trim() || p.title,
+      serviceAddressShort: null,
+      createdAt: p.createdAt,
+      nextAppointmentStartsAt: null as string | null,
+    }));
+}
+
+function paginateMockProjects(
+  items: OfficeProjectListItem[],
+  listFilter: ProjekteListFilter,
+  searchQuery: string,
+  limit: number,
+  cursorRaw: string | null | undefined,
+): ProjekteListPageResult {
+  let sorted = [...items];
+  if (listFilter === "abgemacht") {
+    sorted = sortAbgemachtOfficeProjects(sorted);
+  } else if (listFilter === "all") {
+    sorted.sort((a, b) => {
+      const aDone = a.status === "abgeschlossen";
+      const bDone = b.status === "abgeschlossen";
+      if (aDone !== bDone) return aDone ? 1 : -1;
+      return b.createdAt.localeCompare(a.createdAt);
+    });
+  } else {
+    sorted.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  if (searchQuery) {
+    const n = searchQuery.toLowerCase();
+    sorted = sorted.filter(
+      (p) =>
+        p.title.toLowerCase().includes(n) ||
+        (p.displayLabel ?? "").toLowerCase().includes(n) ||
+        (p.serviceAddressShort ?? "").toLowerCase().includes(n),
+    );
+  }
+
+  if (listFilter === "abgemacht") {
+    const cursor = decodeProjekteListCursor(cursorRaw);
+    const offset = cursor?.kind === "offset" ? cursor.offset : 0;
+    const page = sorted.slice(offset, offset + limit);
+    const nextOffset = offset + page.length;
+    const hasMore = nextOffset < sorted.length;
+    return {
+      projects: page,
+      hasMore,
+      nextCursor: hasMore ? encodeProjekteListCursor({ kind: "offset", offset: nextOffset }) : null,
+    };
+  }
+
+  const cursor = decodeProjekteListCursor(cursorRaw);
+  let startIndex = 0;
+  if (cursor?.kind === "keyset" && cursor.createdAt && cursor.id) {
+    startIndex =
+      sorted.findIndex((p) => p.createdAt === cursor.createdAt && p.id === cursor.id) + 1;
+    if (startIndex < 0) startIndex = 0;
+  } else if (cursor?.kind === "keyset" && cursor.segment === "closed" && listFilter === "all") {
+    startIndex = sorted.findIndex((p) => p.status === "abgeschlossen");
+    if (startIndex < 0) startIndex = sorted.length;
+  }
+
+  const page = sorted.slice(startIndex, startIndex + limit);
+  const last = page[page.length - 1];
+  const hasMore = startIndex + page.length < sorted.length;
+  let nextCursor: string | null = null;
+  if (hasMore && last) {
+    if (listFilter === "all" && last.status !== "abgeschlossen") {
+      const openRemaining = sorted
+        .slice(startIndex + page.length)
+        .some((p) => p.status !== "abgeschlossen");
+      if (!openRemaining) {
+        nextCursor = encodeProjekteListCursor({ kind: "keyset", segment: "closed" });
+      } else {
+        nextCursor = encodeProjekteListCursor({
+          kind: "keyset",
+          segment: "open",
+          createdAt: last.createdAt,
+          id: last.id,
+        });
+      }
+    } else {
+      nextCursor = encodeProjekteListCursor({
+        kind: "keyset",
+        segment: listFilter === "all" ? "closed" : undefined,
+        createdAt: last.createdAt,
+        id: last.id,
+      });
+    }
+  }
+  return { projects: page, hasMore, nextCursor };
+}
+
+export type ListProjectsForOfficePageOptions = {
+  limit?: number;
+  cursor?: string | null;
+  searchQuery?: string;
+};
+
+export const listProjectsForOfficePage = cache(async function listProjectsForOfficePage(
+  organizationId: string | null | undefined,
   listFilter: ProjekteListFilter = DEFAULT_PROJEKTE_LIST_FILTER,
-): Promise<OfficeProjectListItem[]> {
+  options: ListProjectsForOfficePageOptions = {},
+): Promise<ProjekteListPageResult> {
+  const limit = options.limit ?? PROJEKTE_LIST_PAGE_SIZE;
+  const searchQuery = options.searchQuery?.trim() ?? "";
+  const cursorRaw = options.cursor ?? null;
   const runRpc = needsNextAppointmentRpc(listFilter);
-  return withSlowLog("listProjectsForOffice", async () => {
+
+  return withSlowLog("listProjectsForOfficePage", async () => {
     const supabase = await createSupabaseServerClient();
     if (!supabase) {
-      const mockItems = mockProjects
-        .filter((p) => matchesProjekteListFilter(p.status, listFilter))
-        .map((p) => ({
-          id: p.id,
-          title: p.tenantName?.trim() || p.title,
-          type: p.type,
-          status: p.status,
-          displayLabel: p.tenantName?.trim() || p.title,
-          serviceAddressShort: null,
-          createdAt: p.createdAt,
-          nextAppointmentStartsAt: null as string | null,
-        }));
-      return sortOfficeProjects(mockItems);
+      return paginateMockProjects(mockProjectsForFilter(listFilter), listFilter, searchQuery, limit, cursorRaw);
     }
+
     const orgId = organizationId ?? (await getCachedCurrentOrganizationId());
-    let q = supabase
-      .from("projects")
-      .select(PROJECT_LIST_COLUMNS)
-      .order("created_at", { ascending: false });
-    if (orgId) {
-      q = q.eq("organization_id", orgId);
+    if (!orgId) {
+      return { projects: [], hasMore: false, nextCursor: null };
     }
-    if (listFilter === "active") {
+
+    if (listFilter === "abgemacht") {
+      return listAbgemachtProjectsPage(supabase, orgId, limit, cursorRaw, runRpc);
+    }
+
+    const cursor = decodeProjekteListCursor(cursorRaw);
+    let segment: "open" | "closed" | null = null;
+    if (listFilter === "all") {
+      if (cursor?.kind === "keyset" && cursor.segment === "closed") {
+        segment = "closed";
+      } else {
+        segment = "open";
+      }
+    }
+
+    let q = supabase.from("projects").select(PROJECT_LIST_COLUMNS).eq("organization_id", orgId);
+
+    if (searchQuery) {
+      const pattern = `%${escapeIlikePattern(searchQuery)}%`;
+      q = q.or(
+        [
+          `title.ilike.${pattern}`,
+          `tenant_name.ilike.${pattern}`,
+          `service_street.ilike.${pattern}`,
+          `service_city.ilike.${pattern}`,
+          `service_postal_code.ilike.${pattern}`,
+          `reference_code.ilike.${pattern}`,
+        ].join(","),
+      );
+    }
+
+    if (listFilter === "active" || (listFilter === "all" && segment === "open")) {
       q = q.neq("status", "abgeschlossen");
+    } else if (listFilter === "all" && segment === "closed") {
+      q = q.eq("status", "abgeschlossen");
     } else if (listFilter !== "all") {
       q = q.eq("status", listFilter);
     }
-    const maxRows = projectListMaxRows();
-    q = q.limit(maxRows);
+
+    q = q.order("created_at", { ascending: false }).order("id", { ascending: false });
+
+    if (cursor?.kind === "keyset" && cursor.createdAt && cursor.id) {
+      q = q.or(
+        `created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`,
+      );
+    }
+
+    q = q.limit(limit + 1);
     const { data, error } = await q;
     if (error || !data) {
-      return [];
+      return { projects: [], hasMore: false, nextCursor: null };
     }
-    const mapped = (data as Record<string, unknown>[]).map((row) => {
-      const tenant = row.tenant_name != null ? String(row.tenant_name).trim() : "";
-      const title = tenant || String(row.title ?? "");
-      const addrShort = formatServiceAddressFields({
-        serviceStreet: row.service_street as string | null,
-        servicePostalCode: row.service_postal_code as string | null,
-        serviceCity: row.service_city as string | null,
-      });
-      return {
-        id: String(row.id),
-        title,
-        type: row.type as OfficeProjectListItem["type"],
-        status: row.status as ProjectStatus,
-        displayLabel: tenant || title,
-        serviceAddressShort: addrShort === "—" ? null : addrShort,
-        createdAt: String(row.created_at ?? new Date(0).toISOString()),
-        nextAppointmentStartsAt: null as string | null,
-      };
-    });
 
-    const nextByProject = new Map<string, string>();
-    if (orgId && runRpc) {
-      const nowIso = new Date().toISOString();
-      const { data: apRows, error: apErr } = await supabase.rpc("next_appointment_starts_for_org", {
-        p_org_id: orgId,
-        p_now: nowIso,
+    let rows = data as Record<string, unknown>[];
+    let hasMore = rows.length > limit;
+    if (hasMore) rows = rows.slice(0, limit);
+
+    if (
+      listFilter === "all" &&
+      segment === "open" &&
+      !hasMore &&
+      rows.length === 0 &&
+      cursor?.kind !== "keyset"
+    ) {
+      return listProjectsForOfficePage(orgId, listFilter, {
+        ...options,
+        cursor: encodeProjekteListCursor({ kind: "keyset", segment: "closed" }),
       });
-      if (!apErr && apRows?.length) {
-        for (const raw of apRows as { project_id?: string; starts_at?: string }[]) {
-          const pid = String(raw.project_id ?? "");
-          const st = String(raw.starts_at ?? "");
-          if (pid && st) nextByProject.set(pid, st);
-        }
-      } else if (apErr) {
-        console.warn("[bauflip] next_appointment_starts_for_org:", apErr.message);
-      }
     }
-    for (const p of mapped) {
-      p.nextAppointmentStartsAt = nextByProject.get(p.id) ?? null;
+
+    if (listFilter === "all" && segment === "open" && !hasMore && rows.length > 0) {
+      const mappedOpen = rows.map(mapProjectListRow);
+      if (runRpc) await attachNextAppointmentsForProjects(supabase, orgId, mappedOpen);
+      const { count: closedCount } = await supabase
+        .from("projects")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", orgId)
+        .eq("status", "abgeschlossen");
+      const hasClosed = (closedCount ?? 0) > 0;
+      return {
+        projects: mappedOpen,
+        hasMore: hasClosed,
+        nextCursor: hasClosed
+          ? encodeProjekteListCursor({ kind: "keyset", segment: "closed" })
+          : null,
+      };
+    }
+
+    if (listFilter === "all" && segment === "open" && !hasMore && rows.length === 0) {
+      return listProjectsForOfficePage(orgId, listFilter, {
+        ...options,
+        cursor: encodeProjekteListCursor({ kind: "keyset", segment: "closed" }),
+      });
+    }
+
+    const mapped = rows.map(mapProjectListRow);
+    if (runRpc) await attachNextAppointmentsForProjects(supabase, orgId, mapped);
+
+    const last = rows[rows.length - 1];
+    let nextCursor: string | null = null;
+    if (hasMore && last) {
+      nextCursor = encodeProjekteListCursor({
+        kind: "keyset",
+        segment: listFilter === "all" ? segment ?? undefined : undefined,
+        createdAt: String(last.created_at),
+        id: String(last.id),
+      });
+    } else if (listFilter === "all" && segment === "open" && !hasMore && last) {
+      nextCursor = encodeProjekteListCursor({ kind: "keyset", segment: "closed" });
     }
 
     if (process.env.NODE_ENV === "development") {
       console.info(
         JSON.stringify({
-          type: "listProjectsForOffice",
+          type: "listProjectsForOfficePage",
           listFilter,
+          searchQuery: searchQuery || null,
           projectCount: mapped.length,
+          hasMore,
           rpc: runRpc ? "next_appointment_starts_for_org" : "skipped",
         }),
       );
     }
 
-    return sortOfficeProjects(mapped);
+    return { projects: mapped, hasMore, nextCursor };
   });
+});
+
+async function listAbgemachtProjectsPage(
+  supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
+  orgId: string,
+  limit: number,
+  cursorRaw: string | null | undefined,
+  runRpc: boolean,
+): Promise<ProjekteListPageResult> {
+  const cursor = decodeProjekteListCursor(cursorRaw);
+  const offset = cursor?.kind === "offset" ? cursor.offset : 0;
+
+  const { data, error } = await supabase
+    .from("projects")
+    .select(PROJECT_LIST_COLUMNS)
+    .eq("organization_id", orgId)
+    .eq("status", "abgemacht")
+    .order("created_at", { ascending: false })
+    .limit(PROJEKTE_ABGEMACHT_MAX_ROWS);
+
+  if (error || !data) {
+    return { projects: [], hasMore: false, nextCursor: null };
+  }
+
+  const mapped = (data as Record<string, unknown>[]).map(mapProjectListRow);
+  if (runRpc) await attachNextAppointmentsForProjects(supabase, orgId, mapped);
+  const sorted = sortAbgemachtOfficeProjects(mapped);
+  const page = sorted.slice(offset, offset + limit);
+  const nextOffset = offset + page.length;
+  const hasMore = nextOffset < sorted.length;
+
+  return {
+    projects: page,
+    hasMore,
+    nextCursor: hasMore ? encodeProjekteListCursor({ kind: "offset", offset: nextOffset }) : null,
+  };
+}
+
+export const getOfficeProjectListItemById = cache(async function getOfficeProjectListItemById(
+  organizationId: string,
+  projectId: string,
+): Promise<OfficeProjectListItem | null> {
+  return withSlowLog("getOfficeProjectListItemById", async () => {
+    const supabase = await createSupabaseServerClient();
+    if (!supabase) {
+      const p = mockProjects.find((x) => x.id === projectId);
+      if (!p) return null;
+      return {
+        id: p.id,
+        title: p.tenantName?.trim() || p.title,
+        type: p.type,
+        status: p.status,
+        displayLabel: p.tenantName?.trim() || p.title,
+        serviceAddressShort: null,
+        createdAt: p.createdAt,
+        nextAppointmentStartsAt: null,
+      };
+    }
+
+    const { data, error } = await supabase
+      .from("projects")
+      .select(PROJECT_LIST_COLUMNS)
+      .eq("organization_id", organizationId)
+      .eq("id", projectId)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    const item = mapProjectListRow(data as Record<string, unknown>);
+    if (item.status === "abgemacht") {
+      await attachNextAppointmentsForProjects(supabase, organizationId, [item]);
+    }
+    return item;
+  });
+});
+
+/** @deprecated Use listProjectsForOfficePage — loads first page only for callers still on full list. */
+export const listProjectsForOffice = cache(async function listProjectsForOffice(
+  organizationId?: string | null,
+  listFilter: ProjekteListFilter = DEFAULT_PROJEKTE_LIST_FILTER,
+): Promise<OfficeProjectListItem[]> {
+  const page = await listProjectsForOfficePage(organizationId, listFilter, {
+    limit: projectListMaxRows(),
+  });
+  return sortOfficeProjects(page.projects);
 });
 
 export const getProjectCore = cache(async function getProjectCore(projectId: string): Promise<ProjectCore | null> {

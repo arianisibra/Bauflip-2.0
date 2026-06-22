@@ -10,9 +10,11 @@ import {
   deleteProject,
   deleteAppointment,
   deleteTechnicianReport,
+  getOfficeProjectListItemById,
   getProjectCore,
   listAssignableProfiles,
   listActiveOrderFormTemplatesForOrg,
+  listProjectsForOfficePage,
   signAttachmentUrls,
   updateProject,
   updateTechnicianReport,
@@ -20,6 +22,7 @@ import {
 import type { ProjectCore } from "@/lib/db/repository";
 import type { ProjectStatus, UserProfile } from "@/lib/domain/types";
 import { DEFAULT_PROJEKTE_LIST_FILTER, type ProjekteListFilter } from "@/lib/projekte/list-filter";
+import { parseProjekteSearchQuery } from "@/lib/projekte/list-page";
 import { loadProjekteBootstrapData } from "@/lib/projekte/server-bootstrap";
 import { publish } from "@/lib/realtime/publish";
 import { projectStammdatenUpdateSchema, appointmentSchema, technicianReportUpdateSchema } from "@/lib/validations/forms";
@@ -61,12 +64,42 @@ export async function listAssignableProfilesAction(): Promise<UserProfile[]> {
 
 export async function fetchProjekteBootstrapAction(
   listFilter: ProjekteListFilter = DEFAULT_PROJEKTE_LIST_FILTER,
+  searchQueryRaw?: string | null,
 ): Promise<Awaited<ReturnType<typeof loadProjekteBootstrapData>>> {
   const session = await requireOfficeSession();
   if (!session.organizationId) {
     throw new Error("Keine Organisation.");
   }
-  return loadProjekteBootstrapData(session.organizationId, listFilter);
+  return loadProjekteBootstrapData(session.organizationId, listFilter, searchQueryRaw);
+}
+
+export async function fetchProjekteListPageAction(input: {
+  listFilter?: ProjekteListFilter;
+  searchQuery?: string | null;
+  cursor: string;
+}): Promise<Awaited<ReturnType<typeof listProjectsForOfficePage>>> {
+  const session = await requireOfficeSession();
+  if (!session.organizationId) {
+    throw new Error("Keine Organisation.");
+  }
+  const listFilter = input.listFilter ?? DEFAULT_PROJEKTE_LIST_FILTER;
+  const searchQuery = parseProjekteSearchQuery(input.searchQuery);
+  return listProjectsForOfficePage(session.organizationId, listFilter, {
+    cursor: input.cursor,
+    searchQuery,
+  });
+}
+
+export async function fetchOfficeProjectListItemAction(projectId: string) {
+  const session = await requireOfficeSession();
+  if (!session.organizationId) {
+    throw new Error("Keine Organisation.");
+  }
+  const item = await getOfficeProjectListItemById(session.organizationId, projectId);
+  if (!item) {
+    throw new Error("Projekt nicht gefunden.");
+  }
+  return item;
 }
 
 export async function updateProjectStammdatenAction(

@@ -11,7 +11,14 @@ import { hasSupabaseConfig } from "@/lib/supabase/config";
 export const dynamic = "force-dynamic";
 
 type PageProps = {
-  searchParams: Promise<{ status?: string; openProjectId?: string; sheet?: string; from?: string; returnTo?: string }>;
+  searchParams: Promise<{
+    status?: string;
+    q?: string;
+    openProjectId?: string;
+    sheet?: string;
+    from?: string;
+    returnTo?: string;
+  }>;
 };
 
 export default async function ProjektePage({ searchParams }: PageProps) {
@@ -30,7 +37,11 @@ export default async function ProjektePage({ searchParams }: PageProps) {
   const listFilter = parseProjekteListUrlFilter({
     get: (key: string) => (key === "status" ? sp.status ?? null : null),
   });
-  const dehydratedState = await buildProjekteDehydratedState(session.organizationId, listFilter);
+  const dehydratedState = await buildProjekteDehydratedState(
+    session.organizationId,
+    listFilter,
+    sp.q ?? null,
+  );
 
   return (
     <ProjekteHydrationBoundary state={dehydratedState}>

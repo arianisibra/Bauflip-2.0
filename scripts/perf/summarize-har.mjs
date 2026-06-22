@@ -75,7 +75,15 @@ if (doc) {
       return "n/a";
     }
   })();
+  const searchParam = (() => {
+    try {
+      return new URL(doc.request.url).searchParams.get("q") ?? "(none)";
+    } catch {
+      return "n/a";
+    }
+  })();
   console.log("  URL status param:", statusParam);
+  console.log("  URL search param:", searchParam);
 }
 
 console.log("\nBootstrap POST /projekte:", bootstrapPosts.length);

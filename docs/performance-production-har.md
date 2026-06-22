@@ -229,6 +229,44 @@ BAUFLIP_HAR_HOST=localhost node scripts/perf/summarize-har.mjs ~/Desktop/localho
 
 ---
 
+## Phase 2c — Pagination + Server-Suche (Ziel)
+
+| Metrik | Phase 2a | Phase 2c (Ziel) |
+|--------|----------|-----------------|
+| Prod data ready (warm) | ~866 ms | ~**500–700 ms** |
+| RSC initial | ~325 KB | ~**50–80 KB** |
+| Zeilen initial | alle aktiven (~200+) | **50** |
+| Bootstrap POST | 0× | 0× |
+
+### Umgesetzt
+
+| Massnahme | Dateien |
+|-----------|---------|
+| Cursor-Pagination (50er Seiten) | [`lib/db/repository.ts`](lib/db/repository.ts) `listProjectsForOfficePage` |
+| ABGEMACHT: Vollsort + Offset-Paging | [`lib/projekte/list-sort.ts`](lib/projekte/list-sort.ts), Repository |
+| Server-Suche org-weit `?q=` (min. 2 Zeichen) | [`lib/navigation/projekte-list-navigation.ts`](lib/navigation/projekte-list-navigation.ts), Repository |
+| SSR dehydriert Seite 1 | [`lib/projekte/server-bootstrap.ts`](lib/projekte/server-bootstrap.ts) |
+| «Mehr laden» + Infinite Query | [`lib/query/hooks.ts`](lib/query/hooks.ts), [`components/app/projekte-list-client.tsx`](components/app/projekte-list-client.tsx) |
+| Deep-Link `?openProjectId=` Fallback | `fetchOfficeProjectListItemAction` |
+
+**Messung nach Deploy:**
+
+```bash
+node scripts/perf/summarize-har.mjs ~/Desktop/app.gross-storenbau.ch.har
+BAUFLIP_HAR_HOST=localhost node scripts/perf/summarize-har.mjs ~/Desktop/localhost.har
+```
+
+**Manuelle Checkliste Phase 2c:**
+
+1. `/projekte` warm — Document RSC ~50–80 KB, 0 Bootstrap-POST, ~50 Zeilen sichtbar
+2. «Weitere laden» — 1 Server Action, Zeilen werden angehängt
+3. `?status=abgemacht` — Termin-Sortierung erste Seite plausibel
+4. `?q=müller` — Treffer org-weit, URL sync, Hinweis «durchsucht alle Projekte»
+5. Kalender-Deep-Link `?openProjectId=` für Projekt auf Seite 2+ — Sheet öffnet
+6. Realtime-Mutation — Liste invalidiert, zurück auf Seite 1
+
+---
+
 ## Frühere Baselines
 
 ### Dev-HAR vor Optimierung

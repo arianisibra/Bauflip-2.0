@@ -33,3 +33,13 @@ export function matchesProjekteListFilter(status: ProjectStatus, filter: Projekt
   if (filter === "active") return status !== "abgeschlossen";
   return status === filter;
 }
+
+export function totalProjectsForListFilter(
+  counts: { byStatus: Partial<Record<ProjectStatus, number>>; totalAll: number; totalActive: number },
+  filter: ProjekteListFilter,
+): number {
+  if (filter === "all") return counts.totalAll;
+  if (filter === "active") return counts.totalActive;
+  if (isProjectStatus(filter)) return counts.byStatus[filter] ?? 0;
+  return counts.totalActive;
+}

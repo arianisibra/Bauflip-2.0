@@ -13,14 +13,26 @@ import {
   projectStatusesOfficeListFilter,
 } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
-import { DEFAULT_PROJECT_LIST_MAX_ROWS } from "@/lib/constants/project-list";
 import {
   buildProjekteListHref,
   parseProjekteListUrlFilter,
+  parseProjekteListUrlSearchQuery,
   projekteListQueriesEqual,
 } from "@/lib/navigation/projekte-list-navigation";
-import { isProjectStatus, parseProjekteListFilter, type ProjekteListFilter } from "@/lib/projekte/list-filter";
-import { useDeleteProject, useProjekteBootstrap } from "@/lib/query/hooks";
+import {
+  isProjectStatus,
+  parseProjekteListFilter,
+  totalProjectsForListFilter,
+  type ProjekteListFilter,
+} from "@/lib/projekte/list-filter";
+import {
+  normalizeSearchQuery,
+  PROJEKTE_LIST_PAGE_SIZE,
+  PROJEKTE_SEARCH_MIN_CHARS,
+} from "@/lib/projekte/list-page";
+import { compareAbgemachtListOrder } from "@/lib/projekte/list-sort";
+import { useDeleteProject, useProjekteBootstrap, useProjekteListInfinite } from "@/lib/query/hooks";
+import { fetchOfficeProjectListItemAction } from "@/app/(app)/projekte/actions";
 import { OfficeReturnBar } from "@/components/app/office-return-bar";
 import { ListPageToolbar } from "@/components/app/list-page-toolbar";
 import { sanitizeAppReturnTo } from "@/lib/navigation/app-return-to";
@@ -56,10 +68,6 @@ const IntakeForm = dynamic(() => import("@/components/app/intake-form").then((m)
   ),
 });
 
-function normalize(s: string) {
-  return s.toLowerCase().trim();
-}
-
 /** Reihenfolge wie im Workflow (`projectStatuses`); unbekannte Werte ans Ende. */
 function statusWorkflowIndex(status: ProjectStatus): number {
   const i = projectStatuses.indexOf(status);
@@ -67,22 +75,6 @@ function statusWorkflowIndex(status: ProjectStatus): number {
 }
 
 type ProjectsListSort = "default" | "status_asc" | "status_desc";
-
-/** Für Filter «ABGEMACHT»: nächster Termin am nächsten zu «jetzt» zuerst (früheres `starts_at` zuerst); ohne offenen Termin ans Ende. */
-function compareAbgemachtListOrder(a: OfficeProjectListItem, b: OfficeProjectListItem): number {
-  const ta = a.nextAppointmentStartsAt;
-  const tb = b.nextAppointmentStartsAt;
-  if (ta && tb) {
-    const byAppt = ta.localeCompare(tb);
-    if (byAppt !== 0) return byAppt;
-  } else if (ta && !tb) return -1;
-  else if (!ta && tb) return 1;
-
-  const byCreated = b.createdAt.localeCompare(a.createdAt);
-  if (byCreated !== 0) return byCreated;
-
-  return a.title.localeCompare(b.title, "de", { sensitivity: "base" });
-}
 
 /** Abgeschlossen zuletzt; bei Status-Sortierung zuerst Workflow-Index; bei Filter ABGEMACHT: nächster Termin zuerst, sonst neu → Termin → Titel. */
 function compareOfficeListRows(
@@ -193,20 +185,46 @@ export function ProjekteListClient({
   const router = useRouter();
   const searchParams = useSearchParams();
   const statusFilter = parseProjekteListUrlFilter(searchParams);
-  const { data: bootstrap, isLoading: projectsLoading } = useProjekteBootstrap(statusFilter);
-  const projects = bootstrap?.projects ?? [];
+  const urlSearchQuery = parseProjekteListUrlSearchQuery(searchParams);
+  const { data: bootstrap, isLoading: metaLoading } = useProjekteBootstrap(statusFilter, urlSearchQuery);
+  const {
+    data: listData,
+    isLoading: listLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = useProjekteListInfinite(statusFilter, urlSearchQuery);
   const statusCountsSnapshot = bootstrap?.statusCounts;
+  const listMeta = bootstrap?.listMeta;
   const deleteProject = useDeleteProject();
   const [listSort, setListSort] = useState<ProjectsListSort>("default");
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(() => searchParams.get("q") ?? "");
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<OfficeProjectListItem | null>(null);
   const [intakeOpen, setIntakeOpen] = useState(false);
   const [pendingOpenProjectId, setPendingOpenProjectId] = useState(initialOpenProjectId ?? "");
+  const [prefetchedOpenProject, setPrefetchedOpenProject] = useState<OfficeProjectListItem | null>(null);
   const [openSource, setOpenSource] = useState<"kalender" | null>(initialOpenSource ?? null);
   const [returnTo, setReturnTo] = useState<string | null>(initialReturnTo);
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
+
+  useEffect(() => {
+    setQ(searchParams.get("q") ?? "");
+  }, [searchParams]);
+
+  useEffect(() => {
+    const normalized = normalizeSearchQuery(q);
+    if (normalized.length === 1) return;
+
+    const timer = globalThis.setTimeout(() => {
+      const href = buildProjekteListHref(statusFilter, searchParams, normalized);
+      if (!projekteListQueriesEqual(searchParams.toString(), href)) {
+        router.replace(href, { scroll: false });
+      }
+    }, 300);
+    return () => globalThis.clearTimeout(timer);
+  }, [q, statusFilter, router, searchParams]);
 
   const handleStatusFilterChange = useCallback(
     (next: ProjekteListFilter) => {
@@ -218,47 +236,64 @@ export function ProjekteListClient({
     [router, searchParams],
   );
 
+  const handleClearSearch = useCallback(() => {
+    setQ("");
+    const href = buildProjekteListHref(statusFilter, searchParams, "");
+    if (!projekteListQueriesEqual(searchParams.toString(), href)) {
+      router.replace(href, { scroll: false });
+    }
+  }, [router, searchParams, statusFilter]);
+
   useEffect(() => {
     setPendingOpenProjectId(initialOpenProjectId ?? "");
     setOpenSource(initialOpenSource ?? null);
     setReturnTo(initialReturnTo ?? null);
   }, [initialOpenProjectId, initialOpenSource, initialReturnTo]);
 
+  const loadedProjects = useMemo(
+    () => listData?.pages.flatMap((page) => page.projects) ?? [],
+    [listData],
+  );
+
+  const projects = useMemo(() => {
+    if (!prefetchedOpenProject) return loadedProjects;
+    if (loadedProjects.some((item) => item.id === prefetchedOpenProject.id)) return loadedProjects;
+    return [prefetchedOpenProject, ...loadedProjects];
+  }, [loadedProjects, prefetchedOpenProject]);
+
   useEffect(() => {
     if (!pendingOpenProjectId) {
       return;
     }
-    const project = projects.find((item) => item.id === pendingOpenProjectId);
-    if (!project) {
+    const project = loadedProjects.find((item) => item.id === pendingOpenProjectId);
+    if (project) {
+      setSelected(project);
+      setOpen(true);
       setPendingOpenProjectId("");
       return;
     }
-    setSelected(project);
-    setOpen(true);
-    setPendingOpenProjectId("");
-  }, [pendingOpenProjectId, projects]);
-
-  const filtered = useMemo(() => {
-    if (!q.trim()) {
-      return projects;
-    }
-    const n = normalize(q);
-    return projects.filter((p) => {
-      return (
-        normalize(p.title).includes(n) ||
-        normalize(p.displayLabel ?? "").includes(n) ||
-        normalize(p.serviceAddressShort ?? "").includes(n) ||
-        normalize(projectStatusLabels[p.status]).includes(n) ||
-        normalize(p.type).includes(n)
-      );
-    });
-  }, [projects, q]);
+    let cancelled = false;
+    void fetchOfficeProjectListItemAction(pendingOpenProjectId)
+      .then((item) => {
+        if (cancelled) return;
+        setPrefetchedOpenProject(item);
+        setSelected(item);
+        setOpen(true);
+        setPendingOpenProjectId("");
+      })
+      .catch(() => {
+        if (!cancelled) setPendingOpenProjectId("");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingOpenProjectId, loadedProjects]);
 
   const sorted = useMemo(() => {
-    const copy = [...filtered];
+    const copy = [...projects];
     copy.sort((a, b) => compareOfficeListRows(a, b, listSort, statusFilter));
     return copy;
-  }, [filtered, listSort, statusFilter]);
+  }, [projects, listSort, statusFilter]);
 
   const statusCountsForSheet = useMemo(() => {
     const m = new Map<ProjectStatus, number>();
@@ -272,11 +307,23 @@ export function ProjekteListClient({
     return m;
   }, [statusCountsSnapshot]);
 
-  const hasSearch = q.trim().length > 0;
+  const hasSearch = urlSearchQuery.length > 0;
+  const searchDraftTooShort =
+    normalizeSearchQuery(q).length > 0 && normalizeSearchQuery(q).length < PROJEKTE_SEARCH_MIN_CHARS;
   const isConcreteStatusFilter = isProjectStatus(statusFilter);
   const hasNoMatchesForStatus = isConcreteStatusFilter && !hasSearch && projects.length === 0;
   const hasNoActiveProjects = statusFilter === "active" && !hasSearch && projects.length === 0;
   const showEmptyState = sorted.length === 0;
+  const projectsLoading = metaLoading || listLoading;
+  const totalForFilter = useMemo(() => {
+    if (hasSearch) {
+      return hasNextPage ? null : projects.length;
+    }
+    if (statusCountsSnapshot) {
+      return totalProjectsForListFilter(statusCountsSnapshot, statusFilter);
+    }
+    return listMeta?.totalForFilter ?? projects.length;
+  }, [hasSearch, hasNextPage, projects.length, statusCountsSnapshot, statusFilter, listMeta?.totalForFilter]);
   const useVirtualTable = sorted.length > PROJECT_TABLE_VIRTUAL_THRESHOLD;
   const scrollParentRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
@@ -325,7 +372,7 @@ export function ProjekteListClient({
     [deleteProject],
   );
   const deletingId = deleteProject.isPending ? (deleteProject.variables as string | undefined) ?? null : null;
-  const listMayBeTruncated = projects.length >= DEFAULT_PROJECT_LIST_MAX_ROWS;
+  const loadMoreLabel = totalForFilter == null ? `${projects.length}+` : String(totalForFilter);
 
   return (
     <>
@@ -341,23 +388,21 @@ export function ProjekteListClient({
           <div className="w-full sm:w-auto">
             <ListPageToolbar value={q} onChange={setQ} placeholder="Suche…" />
           </div>
+          {searchDraftTooShort ? (
+            <p className="text-[11px] text-muted-foreground sm:order-last sm:basis-full">
+              Mindestens {PROJEKTE_SEARCH_MIN_CHARS} Zeichen für die org-weite Suche.
+            </p>
+          ) : null}
+          {hasSearch ? (
+            <p className="text-[11px] text-muted-foreground sm:order-last sm:basis-full">
+              Suche durchsucht alle Projekte in Ihrer Organisation.
+            </p>
+          ) : null}
           <Button size="sm" className="h-11 w-full rounded-lg sm:h-9 sm:w-auto" onClick={() => setIntakeOpen(true)}>
             + Neue Anfrage
           </Button>
         </div>
       </div>
-
-      {listMayBeTruncated ? (
-        <div
-          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100"
-          role="status"
-        >
-          Es werden maximal {DEFAULT_PROJECT_LIST_MAX_ROWS.toLocaleString("de-CH")} neueste Projekte angezeigt. Ältere Einträge fehlen in
-          dieser Liste — bei Bedarf Limit per{" "}
-          <code className="rounded bg-amber-100/80 px-1 text-xs dark:bg-amber-900/50">PROJECT_LIST_MAX_ROWS</code>{" "}
-          anpassen.
-        </div>
-      ) : null}
 
       <div className="space-y-3 rounded-xl border border-border/70 bg-muted/30 px-3 py-2.5">
         <div className="space-y-2">
@@ -470,7 +515,7 @@ export function ProjekteListClient({
                 </Button>
               ) : null}
               {hasSearch ? (
-                <Button size="sm" variant="outline" onClick={() => setQ("")}>
+                <Button size="sm" variant="outline" onClick={handleClearSearch}>
                   Suche zurücksetzen
                 </Button>
               ) : null}
@@ -586,6 +631,29 @@ export function ProjekteListClient({
                 </Table>
               )}
             </div>
+            {hasNextPage ? (
+              <div className="border-t border-border/70 px-4 py-4 sm:px-6">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  disabled={isFetchingNextPage}
+                  onClick={() => void fetchNextPage()}
+                >
+                  {isFetchingNextPage ? (
+                    <>
+                      <Loader2 className="mr-2 size-4 animate-spin" />
+                      Wird geladen …
+                    </>
+                  ) : (
+                    `Weitere laden (${projects.length} von ${loadMoreLabel})`
+                  )}
+                </Button>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Es werden jeweils {PROJEKTE_LIST_PAGE_SIZE} Projekte geladen.
+                </p>
+              </div>
+            ) : null}
           </>
         )}
       </div>

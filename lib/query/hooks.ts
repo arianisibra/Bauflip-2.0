@@ -11,7 +11,7 @@
  *   just-mutated resource.
  */
 import { useEffect } from "react";
-import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useMutation, useInfiniteQuery, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { ProjectCore } from "@/lib/db/repository";
 import type {
   OrderFormTemplate,
@@ -26,6 +26,7 @@ import {
   deleteProjectAction,
   deleteReportAction,
   fetchProjekteBootstrapAction,
+  fetchProjekteListPageAction,
   getProjectSheetDataAction,
   listAssignableProfilesAction,
   updateProjectStammdatenAction,
@@ -50,8 +51,13 @@ import {
   type AvailabilityBundle,
 } from "@/app/(app)/kalender/availability-actions";
 import { fetchOrganizationBrandingAction } from "@/app/(app)/layout-actions";
-import type { OrganizationBrandingSnapshot, ProjekteBootstrapData } from "@/lib/projekte/bootstrap-types";
-import { PROJEKTE_BOOTSTRAP_STALE_MS, primeProjekteBootstrapCache } from "@/lib/query/projekt-bootstrap-cache";
+import type { OrganizationBrandingSnapshot, ProjekteBootstrapData, ProjekteListPageSnapshot } from "@/lib/projekte/bootstrap-types";
+import { projekteListSearchKey } from "@/lib/projekte/list-page";
+import {
+  PROJEKTE_BOOTSTRAP_STALE_MS,
+  primeProjekteBootstrapCache,
+  type ProjekteListInfiniteData,
+} from "@/lib/query/projekt-bootstrap-cache";
 import {
   DEFAULT_PROJEKTE_LIST_FILTER,
   projekteBootstrapStatusKey,
@@ -119,6 +125,8 @@ const ORGANIZATION_BRANDING_STALE_MS = 5 * 60 * 1000;
 
 export type OrganizationBranding = OrganizationBrandingSnapshot;
 
+export type ProjekteBootstrapMeta = Pick<ProjekteBootstrapData, "branding" | "statusCounts" | "listMeta">;
+
 /**
  * Org-Name/Logo im Header. Auf `/projekte` mit `fetch: false` — Bootstrap primt den Cache.
  * Sonst: nur Netzwerk wenn noch kein Cache-Eintrag (z. B. nach Bootstrap).
@@ -136,15 +144,68 @@ export function useOrganizationBranding(options?: { fetch?: boolean }) {
   });
 }
 
-export function useProjekteBootstrap(listFilter: ProjekteListFilter = DEFAULT_PROJEKTE_LIST_FILTER) {
+export function useProjekteBootstrap(
+  listFilter: ProjekteListFilter = DEFAULT_PROJEKTE_LIST_FILTER,
+  searchQuery = "",
+) {
   const statusKey = projekteBootstrapStatusKey(listFilter);
+  const searchKey = projekteListSearchKey(searchQuery);
   const qc = useQueryClient();
-  return useQuery<ProjekteBootstrapData>({
-    queryKey: queryKeys.projekteBootstrap(statusKey),
+  return useQuery<ProjekteBootstrapMeta>({
+    queryKey: queryKeys.projekteBootstrap(statusKey, searchKey),
     queryFn: async () => {
-      const data = await fetchProjekteBootstrapAction(listFilter);
-      primeProjekteBootstrapCache(qc, statusKey, data);
-      return data;
+      const data = await fetchProjekteBootstrapAction(listFilter, searchQuery);
+      primeProjekteBootstrapCache(qc, statusKey, searchKey, data);
+      return {
+        branding: data.branding,
+        statusCounts: data.statusCounts,
+        listMeta: data.listMeta,
+      };
+    },
+    staleTime: PROJEKTE_BOOTSTRAP_STALE_MS,
+    refetchOnMount: false,
+  });
+}
+
+export function useProjekteListInfinite(
+  listFilter: ProjekteListFilter = DEFAULT_PROJEKTE_LIST_FILTER,
+  searchQuery = "",
+) {
+  const statusKey = projekteBootstrapStatusKey(listFilter);
+  const searchKey = projekteListSearchKey(searchQuery);
+  const qc = useQueryClient();
+
+  return useInfiniteQuery<
+    ProjekteListPageSnapshot,
+    Error,
+    ProjekteListInfiniteData,
+    ReturnType<typeof queryKeys.projekteList>,
+    string | null
+  >({
+    queryKey: queryKeys.projekteList(statusKey, searchKey),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => (last.hasMore && last.nextCursor ? last.nextCursor : undefined),
+    queryFn: async ({ pageParam }) => {
+      if (pageParam === null) {
+        const cached = qc.getQueryData<ProjekteListInfiniteData>(
+          queryKeys.projekteList(statusKey, searchKey),
+        );
+        if (cached?.pages[0]) {
+          return cached.pages[0];
+        }
+        const data = await fetchProjekteBootstrapAction(listFilter, searchQuery);
+        primeProjekteBootstrapCache(qc, statusKey, searchKey, data);
+        return {
+          projects: data.projects,
+          nextCursor: data.nextCursor,
+          hasMore: data.hasMore,
+        };
+      }
+      return fetchProjekteListPageAction({
+        listFilter,
+        searchQuery,
+        cursor: pageParam,
+      });
     },
     staleTime: PROJEKTE_BOOTSTRAP_STALE_MS,
     refetchOnMount: false,

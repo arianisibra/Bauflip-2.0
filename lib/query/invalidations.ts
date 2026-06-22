@@ -34,6 +34,7 @@ export function invalidateProjectListCaches(
 ): void {
   inv(qc, queryKeys.projects.list(), opts);
   inv(qc, queryKeys.projekteBootstrapAll(), opts);
+  inv(qc, queryKeys.projekteListAll(), opts);
 }
 
 export function invalidateProjectAdjacencies(
@@ -43,6 +44,7 @@ export function invalidateProjectAdjacencies(
 ): void {
   inv(qc, queryKeys.projects.list(), opts);
   inv(qc, queryKeys.projekteBootstrapAll(), opts);
+  inv(qc, queryKeys.projekteListAll(), opts);
   inv(qc, queryKeys.weekTasks.all(), opts);
   inv(qc, queryKeys.monthTasks.all(), opts);
   inv(qc, queryKeys.techMonthTasks.all(), opts);
@@ -115,6 +117,7 @@ export function afterProjectDeleted(
   qc.removeQueries({ queryKey: queryKeys.projects.core(projectId) });
   inv(qc, queryKeys.projects.list(), opts);
   inv(qc, queryKeys.projekteBootstrapAll(), opts);
+  inv(qc, queryKeys.projekteListAll(), opts);
   inv(qc, queryKeys.weekTasks.all(), opts);
   inv(qc, queryKeys.monthTasks.all(), opts);
   inv(qc, queryKeys.techMonthTasks.all(), opts);
@@ -130,6 +133,7 @@ export function afterAbsenceChange(qc: QueryClient, opts?: InvalidateOpts): void
 export function afterMembershipChange(qc: QueryClient, opts?: InvalidateOpts): void {
   inv(qc, queryKeys.assignableProfiles(), opts);
   inv(qc, queryKeys.projekteBootstrapAll(), opts);
+  inv(qc, queryKeys.projekteListAll(), opts);
 }
 
 export function afterOrderFormTemplateChange(qc: QueryClient, opts?: InvalidateOpts): void {
