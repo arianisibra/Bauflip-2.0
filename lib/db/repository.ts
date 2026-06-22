@@ -81,7 +81,8 @@ const PROJECT_DB_COLUMNS =
 const APPOINTMENT_DB_COLUMNS =
   "id, project_id, kind, starts_at, ends_at, assigned_technician_id, planning_notes, created_at";
 
-const PROJECT_LIST_COLUMNS = "id, title, type, status, tenant_name, service_street, service_postal_code, service_city, created_at";
+const PROJECT_LIST_COLUMNS =
+  "id, title, type, status, tenant_name, created_at";
 
 const ATTACHMENT_DB_COLUMNS =
   "id, project_id, file_path, file_name, mime_type, size_bytes, uploaded_by, notes, created_at";
@@ -340,20 +341,12 @@ async function listProjectStatusCountsForOfficeFallback(
 function mapProjectListRow(row: Record<string, unknown>): OfficeProjectListItem {
   const tenant = row.tenant_name != null ? String(row.tenant_name).trim() : "";
   const title = tenant || String(row.title ?? "");
-  const addrShort = formatServiceAddressFields({
-    serviceStreet: row.service_street as string | null,
-    servicePostalCode: row.service_postal_code as string | null,
-    serviceCity: row.service_city as string | null,
-  });
   return {
     id: String(row.id),
     title,
     type: row.type as OfficeProjectListItem["type"],
     status: row.status as ProjectStatus,
-    displayLabel: tenant || title,
-    serviceAddressShort: addrShort === "—" ? null : addrShort,
     createdAt: String(row.created_at ?? new Date(0).toISOString()),
-    nextAppointmentStartsAt: null as string | null,
   };
 }
 
@@ -398,10 +391,7 @@ function mockProjectsForFilter(listFilter: ProjekteListFilter): OfficeProjectLis
       title: p.tenantName?.trim() || p.title,
       type: p.type,
       status: p.status,
-      displayLabel: p.tenantName?.trim() || p.title,
-      serviceAddressShort: null,
       createdAt: p.createdAt,
-      nextAppointmentStartsAt: null as string | null,
     }));
 }
 
@@ -428,12 +418,7 @@ function paginateMockProjects(
 
   if (searchQuery) {
     const n = searchQuery.toLowerCase();
-    sorted = sorted.filter(
-      (p) =>
-        p.title.toLowerCase().includes(n) ||
-        (p.displayLabel ?? "").toLowerCase().includes(n) ||
-        (p.serviceAddressShort ?? "").toLowerCase().includes(n),
-    );
+    sorted = sorted.filter((p) => p.title.toLowerCase().includes(n));
   }
 
   if (listFilter === "abgemacht") {
@@ -571,7 +556,7 @@ export const listProjectsForOfficePage = cache(async function listProjectsForOff
     }
 
     let rows = data as Record<string, unknown>[];
-    let hasMore = rows.length > limit;
+    const hasMore = rows.length > limit;
     if (hasMore) rows = rows.slice(0, limit);
 
     if (
@@ -695,10 +680,7 @@ export const getOfficeProjectListItemById = cache(async function getOfficeProjec
         title: p.tenantName?.trim() || p.title,
         type: p.type,
         status: p.status,
-        displayLabel: p.tenantName?.trim() || p.title,
-        serviceAddressShort: null,
         createdAt: p.createdAt,
-        nextAppointmentStartsAt: null,
       };
     }
 

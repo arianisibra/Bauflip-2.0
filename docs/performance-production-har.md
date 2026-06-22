@@ -302,6 +302,31 @@ Migration: [`20260622190000_perf_status_counts_search_trgm.sql`](supabase/migrat
 
 ---
 
+## Phase 2b — Schlanke Listendaten (Option A)
+
+Siehe [`docs/phase-2b-list-slim.md`](docs/phase-2b-list-slim.md).
+
+| Änderung | Wirkung |
+|----------|---------|
+| Listen-Select ohne Adress-Spalten | Weniger DB + JSON |
+| Kein `displayLabel` / `serviceAddressShort` in Payload | ~40 % kleiner pro Zeile |
+| Adresse nur im Projekt-Sheet | UI: Spalte entfernt |
+| `nextAppointmentStartsAt` nur bei `abgemacht` | Kein Termin-Feld im Default-Load |
+
+**HAR-Ziel nach Deploy:**
+
+| Metrik | Phase 2d | Ziel 2b |
+|--------|----------|---------|
+| RSC Content | ~353 KB | ~120–180 KB |
+| Receive | ~437 ms | ~150–250 ms |
+| Total | ~838 ms | ~650–750 ms |
+
+```bash
+node scripts/perf/summarize-har.mjs ~/Desktop/app.gross-storenbau.ch.har
+```
+
+---
+
 ## Frühere Baselines
 
 ### Dev-HAR vor Optimierung

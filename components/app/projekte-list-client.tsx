@@ -140,7 +140,6 @@ const ProjectTableRow = memo(function ProjectTableRow({
       onClick={() => onOpen(p)}
     >
       <TableCell className="font-medium">{p.title}</TableCell>
-      <TableCell className="text-muted-foreground">{p.serviceAddressShort ?? "—"}</TableCell>
       <TableCell className="capitalize">{p.type}</TableCell>
       <TableCell>
         <StatusBadge status={p.status} />
@@ -475,9 +474,8 @@ export function ProjekteListClient({
             </button>
           </div>
           <p className="text-[11px] leading-snug text-muted-foreground">
-            Bei gleichem Status: zuerst neuere Projekte (Erstellungsdatum), danach der früheste noch nicht beendete
-            Termin. Ausnahme: Filter «ABGEMACHT» — dort zuerst der nächste Termin (am nächsten zu jetzt), ohne Termin
-            ans Ende, dann Erstellungsdatum.
+            Bei gleichem Status: zuerst neuere Projekte (Erstellungsdatum). Ausnahme: Filter «ABGEMACHT» — dort zuerst der nächste Termin.
+            Adresse und weitere Details beim Öffnen des Projekts.
           </p>
         </div>
       </div>
@@ -537,7 +535,6 @@ export function ProjekteListClient({
                     onClick={() => handleOpenRow(p)}
                   >
                     <p className="text-base font-semibold leading-tight">{p.title}</p>
-                    <p className="text-sm text-muted-foreground">{p.serviceAddressShort ?? "—"}</p>
                     <div>
                       <StatusBadge status={p.status} />
                     </div>
@@ -571,7 +568,6 @@ export function ProjekteListClient({
                     <TableHeader className="sticky top-0 z-10 border-b bg-card shadow-[0_1px_0_0_hsl(var(--border))]">
                       <TableRow className="hover:bg-transparent">
                         <TableHead>Mieter / Kontakt</TableHead>
-                        <TableHead>Adresse</TableHead>
                         <TableHead>Typ</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="w-[120px] text-right">Aktion</TableHead>
@@ -580,7 +576,7 @@ export function ProjekteListClient({
                     <TableBody>
                       {paddingTop > 0 ? (
                         <tr aria-hidden>
-                          <td colSpan={5} className="h-0 border-0 p-0" style={{ height: paddingTop }} />
+                          <td colSpan={4} className="h-0 border-0 p-0" style={{ height: paddingTop }} />
                         </tr>
                       ) : null}
                       {virtualItems.map((vi) => {
@@ -599,7 +595,7 @@ export function ProjekteListClient({
                       })}
                       {paddingBottom > 0 ? (
                         <tr aria-hidden>
-                          <td colSpan={5} className="h-0 border-0 p-0" style={{ height: paddingBottom }} />
+                          <td colSpan={4} className="h-0 border-0 p-0" style={{ height: paddingBottom }} />
                         </tr>
                       ) : null}
                     </TableBody>
@@ -610,7 +606,6 @@ export function ProjekteListClient({
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
                       <TableHead>Mieter / Kontakt</TableHead>
-                      <TableHead>Adresse</TableHead>
                       <TableHead>Typ</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="w-[120px] text-right">Aktion</TableHead>
@@ -703,7 +698,7 @@ export function ProjekteListClient({
         }}
         className="max-w-6xl w-[min(100vw-1.5rem,80rem)]"
         title={selected?.title ?? "Projekt"}
-        description={selected?.displayLabel?.trim() ? selected.displayLabel : undefined}
+        description={selected?.title?.trim() ? selected.title : undefined}
       >
         {selected ? (
           <>

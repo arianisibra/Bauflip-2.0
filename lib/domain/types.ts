@@ -235,15 +235,13 @@ export type OfficeProjectListItem = {
   title: string;
   type: ProjectType;
   status: ProjectStatus;
-  displayLabel: string | null;
-  serviceAddressShort: string | null;
-  /** ISO: Erstellung des Projekts (Sortierung „neueste zuerst“ innerhalb eines Status). */
+  /** ISO: Erstellung (Sortierung „neueste zuerst“). */
   createdAt: string;
-  /**
-   * ISO `starts_at` des frühesten Termins mit `ends_at >= jetzt` (noch nicht beendet);
-   * `null` wenn kein solcher Termin existiert.
-   */
-  nextAppointmentStartsAt: string | null;
+  /** Nur bei Filter ABGEMACHT (Termin-Sortierung). */
+  nextAppointmentStartsAt?: string | null;
+  /** Nicht in schlanker Listen-Payload — Sheet / Legacy. */
+  displayLabel?: string | null;
+  serviceAddressShort?: string | null;
 };
 
 export type WeekTaskItem = {

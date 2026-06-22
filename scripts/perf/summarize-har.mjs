@@ -68,6 +68,16 @@ if (doc) {
   if (contentKb > 0) {
     console.log("  RSC content (uncompressed):", contentKb + "KB");
   }
+  const text = doc.response.content?.text ?? "";
+  const titleRows = (text.match(/"title":/g) || []).length;
+  const displayLabelRows = (text.match(/displayLabel/g) || []).length;
+  const serviceAddrRows = (text.match(/serviceAddressShort/g) || []).length;
+  if (titleRows > 0) {
+    console.log("  list row titles in payload (approx):", Math.min(titleRows, 200));
+  }
+  if (displayLabelRows > 0 || serviceAddrRows > 0) {
+    console.log("  displayLabel / serviceAddressShort refs:", displayLabelRows, "/", serviceAddrRows);
+  }
   const statusParam = (() => {
     try {
       return new URL(doc.request.url).searchParams.get("status") ?? "(default active)";
