@@ -117,6 +117,44 @@ psql "$DATABASE_URL" -f scripts/perf/verify-next-appointment-rpc.sql
 
 Nach Deploy: keine `[bauflip] next_appointment_starts_for_org:` Warnings in Function-Logs (Fallback auf Client-Aggregation wäre langsamer).
 
+**Verifiziert 2026-05-26 (Prod `bauflip`, SQL Editor):**
+
+| Prüfpunkt | Ergebnis |
+|-----------|----------|
+| `next_appointment_starts_for_org` existiert | `prosecdef=false`, `provolatile=s` |
+| Index `idx_appointments_ends_at` | `btree (ends_at)` auf `appointments` |
+| Smoke-Test (Gross Storenbau Org) | RPC liefert Zeilen ohne Fehler |
+
+---
+
+## Live Prod — `app.gross-storenbau.ch` (2026-05-26)
+
+HAR exportiert mit Network-Filter (36 Einträge, keine Extension-Requests).
+
+| Metrik | Wert | Phase C |
+|--------|------|---------|
+| `POST /projekte` (Bootstrap) | **1×**, ~962 ms, **~60 KB** | OK |
+| `GET /api/events` | **0** | OK |
+| Supabase WebSocket | **1×** | OK |
+| Profil-POST | **0** | OK |
+| Document TTFB | ~301 ms | normal |
+| Document gesamt | ~723 ms | OK |
+| Daten sichtbar (kalt, eingeloggt) | ~1,8 s | Cold Start + Bootstrap |
+
+**Netlify Function-Logs (gleicher Besuch):**
+
+| Invocation | Dauer | Zuordnung |
+|------------|-------|-----------|
+| `f42cf538` | ~4840 ms | Cold Start: Proxy + RSC-Layout |
+| `d62be1ae` | ~1007 ms | Bootstrap-POST |
+| Static `/_next/static/chunks/*` | 8–50 ms | billig |
+
+**Hinweis:** Screenshots mit ~118 Network-Zeilen stammen von Browser-Extensions (`chrome-extension://…`), nicht von Bauflip. Für künftige Messungen: Incognito ohne Extensions, Filter `gross-storenbau`, «Disable cache», **zweiter** Reload für Warm-Baseline.
+
+**Unauth Redirect-Timing (curl, ohne Cookie):** Run 1 ~1,7 s TTFB (Cold), Run 2 ~244 ms TTFB (Warm) — bestätigt, dass Netlify Cold Start primär den ersten Request trifft.
+
+**Bootstrap ~60 KB vs. lokal ~18 KB:** Mehr Projekte und `listAssignableProfiles` auf Prod; kein Fehler bei ~300 Projekten.
+
 ---
 
 ## Frühere Baselines

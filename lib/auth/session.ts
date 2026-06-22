@@ -56,6 +56,36 @@ function mapRole(raw: string | null | undefined): RoleType {
   return "office";
 }
 
+function hasSupabaseAuthCookie(cookieStore: Awaited<ReturnType<typeof cookies>>): boolean {
+  return cookieStore
+    .getAll()
+    .some((c) => c.name.startsWith("sb-") && c.name.includes("auth-token"));
+}
+
+/** Read email from the Supabase auth cookie JWT — no Auth API round-trip. */
+function readEmailFromSupabaseAuthCookie(
+  cookieStore: Awaited<ReturnType<typeof cookies>>,
+): string | null {
+  const authCookie = cookieStore
+    .getAll()
+    .find((c) => c.name.startsWith("sb-") && c.name.includes("auth-token"));
+  if (!authCookie?.value) return null;
+
+  try {
+    const parsed = JSON.parse(authCookie.value) as { access_token?: string };
+    const accessToken = parsed.access_token;
+    if (!accessToken) return null;
+    const payloadSegment = accessToken.split(".")[1];
+    if (!payloadSegment) return null;
+    const payload = JSON.parse(
+      Buffer.from(payloadSegment, "base64url").toString("utf8"),
+    ) as { email?: string };
+    return typeof payload.email === "string" ? payload.email : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Resolves the authenticated user. When proxy already ran getUser() this
  * request, reuse the cookie session (no second Auth API round-trip).
@@ -70,10 +100,10 @@ async function resolveAuthUser(supabase: SupabaseClient): Promise<User | null> {
   }
 
   if (proxyUserId) {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    const sessionUser = sessionData.session?.user ?? null;
-    if (!sessionError && sessionUser?.id === proxyUserId) {
-      return sessionUser;
+    const { data, error } = await supabase.auth.getUser();
+    const user = data?.user ?? null;
+    if (!error && user?.id === proxyUserId) {
+      return user;
     }
   }
 
@@ -113,19 +143,12 @@ export const getLayoutSession = cache(async function getLayoutSession(): Promise
     proxyUserId = null;
   }
 
-  if (proxyUserId && proxyRole) {
-    const supabase = await createSupabaseServerClient();
-    if (supabase) {
-      const { data: sessionData, error } = await supabase.auth.getSession();
-      const sessionUser = sessionData.session?.user ?? null;
-      if (!error && sessionUser?.id === proxyUserId) {
-        return {
-          userId: proxyUserId,
-          role: proxyRole,
-          organizationId: proxyOrgId,
-        };
-      }
-    }
+  if (proxyUserId && proxyRole && hasSupabaseAuthCookie(cookieStore)) {
+    return {
+      userId: proxyUserId,
+      role: proxyRole,
+      organizationId: proxyOrgId,
+    };
   }
 
   const full = await getCurrentSession();
@@ -143,35 +166,39 @@ export const getCachedSessionProfile = cache(async function getCachedSessionProf
 ): Promise<SessionProfileSnapshot> {
   const { userId, role } = layoutSession;
   const supabase = await createSupabaseServerClient();
+  let cookieStore: Awaited<ReturnType<typeof cookies>> | null = null;
+  try {
+    cookieStore = await cookies();
+  } catch {
+    cookieStore = null;
+  }
+  const emailFromCookie = cookieStore ? readEmailFromSupabaseAuthCookie(cookieStore) : null;
+
   if (!supabase) {
     return {
       userId,
       role,
       displayName: role === "admin" ? "Admin" : role === "technician" ? "Monteur" : "Büro",
-      email: null,
+      email: emailFromCookie,
       avatarUrl: null,
     };
   }
 
-  const [{ data: sessionData }, { data: row }] = await Promise.all([
-    supabase.auth.getSession(),
-    supabase
-      .from("profiles")
-      .select("id, display_name, avatar_url")
-      .eq("id", userId)
-      .maybeSingle(),
-  ]);
+  const { data: row } = await supabase
+    .from("profiles")
+    .select("id, display_name, avatar_url")
+    .eq("id", userId)
+    .maybeSingle();
 
-  const email = sessionData.session?.user?.email ?? null;
   const displayName =
     (row?.display_name != null && String(row.display_name).trim()
       ? String(row.display_name).trim()
       : null) ??
-    (email?.split("@")[0] ?? "Benutzer");
+    (emailFromCookie?.split("@")[0] ?? "Benutzer");
   const avatarUrl =
     row?.avatar_url != null && String(row.avatar_url).trim() ? String(row.avatar_url).trim() : null;
 
-  return { userId, role, displayName, email, avatarUrl };
+  return { userId, role, displayName, email: emailFromCookie, avatarUrl };
 });
 
 /** Full profile row for settings — no membership query. */
