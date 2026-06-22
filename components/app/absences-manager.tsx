@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useAbsences, useCreateAbsence, useDeleteAbsence } from "@/lib/query/hooks";
+import { useAbsences, useAssignableProfiles, useCreateAbsence, useDeleteAbsence } from "@/lib/query/hooks";
 import {
   technicianAbsenceKindLabels,
   technicianAbsenceKinds,
@@ -64,24 +64,25 @@ function kindBadgeClass(kind: TechnicianAbsenceKind): string {
   return "border-zinc-500/30 bg-zinc-500/10 text-zinc-800 dark:text-zinc-100";
 }
 
-export function AbsencesManager({
-  technicians,
-  initialAbsences,
-}: {
-  technicians: UserProfile[];
-  initialAbsences: TechnicianAbsence[];
-}) {
+export function AbsencesManager() {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [techId, setTechId] = useState<string>(() => technicians[0]?.id ?? "");
+  const { data: absences = [] } = useAbsences(open);
+  const { data: technicians = [] } = useAssignableProfiles(open);
+  const [techId, setTechId] = useState<string>("");
   const [kind, setKind] = useState<TechnicianAbsenceKind>("ferien");
   const [startsAt, setStartsAt] = useState<string>(() => todayLocalDateTimeStart());
   const [endsAt, setEndsAt] = useState<string>(() => todayLocalDateTimeEnd());
   const [note, setNote] = useState<string>("");
 
-  const { data: absences = initialAbsences } = useAbsences(initialAbsences);
   const create = useCreateAbsence();
   const remove = useDeleteAbsence();
+
+  useEffect(() => {
+    if (open && technicians.length > 0 && !techId) {
+      setTechId(technicians[0]!.id);
+    }
+  }, [open, technicians, techId]);
 
   const techMap = useMemo(() => {
     const m = new Map<string, UserProfile>();

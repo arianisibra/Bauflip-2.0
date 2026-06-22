@@ -134,6 +134,7 @@ export function afterAbsenceChange(qc: QueryClient, opts?: InvalidateOpts): void
 }
 
 export function afterMembershipChange(qc: QueryClient, opts?: InvalidateOpts): void {
+  inv(qc, queryKeys.teamMembers(), opts);
   inv(qc, queryKeys.assignableProfiles(), opts);
   inv(qc, queryKeys.projekteBootstrapAll(), opts);
   inv(qc, queryKeys.projekteListAll(), opts);

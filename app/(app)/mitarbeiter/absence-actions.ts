@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { getOfficeSessionOrNull, requireOfficeSession } from "@/lib/auth/organization";
 import {
   createTechnicianAbsence,
@@ -35,8 +34,6 @@ export async function createAbsenceAction(input: unknown): Promise<TechnicianAbs
     },
     session.userId,
   );
-  revalidatePath("/mitarbeiter");
-  revalidatePath("/kalender");
   return created;
 }
 
@@ -46,7 +43,5 @@ export async function deleteAbsenceAction(absenceId: string): Promise<{ ok: true
     throw new Error("Ungültige ID.");
   }
   await deleteTechnicianAbsence(absenceId);
-  revalidatePath("/mitarbeiter");
-  revalidatePath("/kalender");
   return { ok: true };
 }

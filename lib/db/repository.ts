@@ -32,6 +32,8 @@ import { parseOrderFormFieldsJson } from "@/lib/order-forms/schema";
 import { getWeekBounds } from "@/lib/date/week-bounds";
 import { resolveCalendarColor } from "@/lib/calendar/team-colors";
 import { formatServiceAddressFields } from "@/lib/tech/bundle-display";
+import type { TeamMemberListItem } from "@/lib/mitarbeiter/types";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { withSlowLog } from "@/lib/observability/slow-log";
 import { DEFAULT_PROJECT_LIST_MAX_ROWS } from "@/lib/constants/project-list";
@@ -1251,19 +1253,218 @@ export const listTechnicianAbsencesInRange = cache(async function listTechnician
   });
 });
 
+function isTeamRole(v: unknown): v is TeamMemberListItem["role"] {
+  return v === "admin" || v === "office" || v === "technician";
+}
+
+async function buildEmailByUserIdMap(userIds: string[]): Promise<Map<string, string>> {
+  const emailByUserId = new Map<string, string>();
+  if (userIds.length === 0) return emailByUserId;
+
+  const adminClient = createSupabaseAdminClient();
+  if (!adminClient) return emailByUserId;
+
+  const wanted = new Set(userIds);
+  let page = 1;
+  const perPage = 1000;
+  while (true) {
+    const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage });
+    if (error || !data?.users?.length) break;
+    for (const user of data.users) {
+      if (user.id && user.email && wanted.has(user.id)) {
+        emailByUserId.set(user.id, user.email);
+      }
+    }
+    if (data.users.length < perPage) break;
+    page += 1;
+  }
+
+  return emailByUserId;
+}
+
+function mapRpcTeamMemberRow(raw: Record<string, unknown>): TeamMemberListItem | null {
+  const roleRaw = raw.role;
+  if (!isTeamRole(roleRaw)) return null;
+  const status = raw.status === "eingeladen" ? "eingeladen" : raw.status === "aktiv" ? "aktiv" : null;
+  if (!status) return null;
+  const userId = raw.userId != null ? String(raw.userId) : null;
+  const email = String(raw.email ?? "—");
+  const displayName = String(raw.displayName ?? "").trim() || email.split("@")[0] || "Mitarbeiter";
+  const avatarRaw = raw.avatarUrl;
+  const avatarUrl =
+    avatarRaw != null && String(avatarRaw).trim() !== "" ? String(avatarRaw).trim() : null;
+  return {
+    key: String(raw.key ?? ""),
+    userId,
+    displayName,
+    email,
+    role: roleRaw,
+    status,
+    createdAt: raw.createdAt != null ? String(raw.createdAt) : null,
+    avatarUrl,
+  };
+}
+
+function mapRpcAbsenceRow(raw: Record<string, unknown>): TechnicianAbsence | null {
+  const kind = raw.kind;
+  if (!isAbsenceKind(kind)) return null;
+  return {
+    id: String(raw.id ?? ""),
+    technicianId: String(raw.technicianId ?? ""),
+    technicianName: raw.technicianName != null ? String(raw.technicianName) : null,
+    startsAt: String(raw.startsAt ?? ""),
+    endsAt: String(raw.endsAt ?? ""),
+    kind,
+    note: raw.note != null ? String(raw.note) : null,
+    createdAt: String(raw.createdAt ?? new Date().toISOString()),
+  };
+}
+
+export const listTeamMembersForOrg = cache(async function listTeamMembersForOrg(
+  organizationId: string,
+): Promise<TeamMemberListItem[]> {
+  return withSlowLog("listTeamMembersForOrg", async () => {
+    const supabase = await createSupabaseServerClient();
+    if (!supabase) return [];
+
+    const [membershipsResult, invitationsResult] = await Promise.all([
+      supabase
+        .from("organization_memberships")
+        .select("user_id, role, is_active, created_at, profiles(display_name, avatar_url)")
+        .eq("organization_id", organizationId)
+        .eq("is_active", true)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("invitations")
+        .select("id, email, role, created_at")
+        .eq("organization_id", organizationId)
+        .is("accepted_at", null)
+        .is("revoked_at", null)
+        .order("created_at", { ascending: false }),
+    ]);
+
+    const memberships = (membershipsResult.data as Array<{
+      user_id: string;
+      role: TeamMemberListItem["role"];
+      created_at: string | null;
+      profiles?:
+        | { display_name?: string | null; avatar_url?: string | null }
+        | Array<{ display_name?: string | null; avatar_url?: string | null }>
+        | null;
+    }> | null) ?? [];
+    const invitations = (invitationsResult.data as Array<{
+      id: string;
+      email: string;
+      role: TeamMemberListItem["role"];
+      created_at: string | null;
+    }> | null) ?? [];
+
+    const emailByUserId = await buildEmailByUserIdMap(memberships.map((m) => m.user_id));
+
+    const activeItems: TeamMemberListItem[] = memberships.map((m) => {
+      const profileRaw = Array.isArray(m.profiles) ? m.profiles[0] ?? null : m.profiles ?? null;
+      const displayName = String(profileRaw?.display_name ?? "").trim();
+      const email = emailByUserId.get(m.user_id) ?? "—";
+      const rawAvatar = profileRaw?.avatar_url;
+      const avatarUrl = rawAvatar != null && String(rawAvatar).trim() !== "" ? String(rawAvatar).trim() : null;
+      return {
+        key: `member:${m.user_id}`,
+        userId: m.user_id,
+        displayName: displayName || email.split("@")[0] || "Mitarbeiter",
+        email,
+        role: m.role,
+        status: "aktiv",
+        createdAt: m.created_at ?? null,
+        avatarUrl,
+      };
+    });
+
+    const pendingItems: TeamMemberListItem[] = invitations.map((inv) => ({
+      key: `invite:${inv.id}`,
+      userId: null,
+      displayName: inv.email.split("@")[0] || "Einladung",
+      email: inv.email,
+      role: inv.role,
+      status: "eingeladen",
+      createdAt: inv.created_at ?? null,
+      avatarUrl: null,
+    }));
+
+    return [...activeItems, ...pendingItems];
+  });
+});
+
+export type MitarbeiterOfficeBootstrapResult = {
+  team: TeamMemberListItem[];
+  absences: TechnicianAbsence[];
+};
+
+export const loadMitarbeiterOfficeBootstrap = cache(async function loadMitarbeiterOfficeBootstrap(
+  organizationId: string,
+): Promise<MitarbeiterOfficeBootstrapResult | null> {
+  return withSlowLog("loadMitarbeiterOfficeBootstrap", async () => {
+    const supabase = await createSupabaseServerClient();
+    if (!supabase) return null;
+
+    const { data, error } = await supabase.rpc("mitarbeiter_office_bootstrap", {
+      p_org_id: organizationId,
+    });
+
+    if (error || data == null || typeof data !== "object") {
+      if (error) {
+        console.warn(
+          JSON.stringify({
+            type: "mitarbeiter_bootstrap_rpc_fallback",
+            message: error.message,
+          }),
+        );
+      }
+      return null;
+    }
+
+    const payload = data as Record<string, unknown>;
+    const teamRaw = payload.team;
+    const absencesRaw = payload.absences;
+    const team = Array.isArray(teamRaw)
+      ? teamRaw
+          .map((row) => mapRpcTeamMemberRow(row as Record<string, unknown>))
+          .filter((x): x is TeamMemberListItem => x !== null && x.key.length > 0)
+      : [];
+    const absences = Array.isArray(absencesRaw)
+      ? absencesRaw
+          .map((row) => mapRpcAbsenceRow(row as Record<string, unknown>))
+          .filter((x): x is TechnicianAbsence => x !== null)
+      : [];
+
+    return { team, absences };
+  });
+});
+
+export async function loadMitarbeiterBootstrapData(
+  organizationId: string,
+): Promise<MitarbeiterOfficeBootstrapResult> {
+  const rpcResult = await loadMitarbeiterOfficeBootstrap(organizationId);
+  if (rpcResult) return rpcResult;
+
+  const [team, absences] = await Promise.all([
+    listTeamMembersForOrg(organizationId),
+    listAllTechnicianAbsencesForOrg(organizationId),
+  ]);
+  return { team, absences };
+}
+
 /** Alle Abwesenheiten der Organisation (alle Zeiträume). */
-export const listAllTechnicianAbsences = cache(async function listAllTechnicianAbsences(
+export const listAllTechnicianAbsencesForOrg = cache(async function listAllTechnicianAbsencesForOrg(
+  organizationId: string,
   technicianId?: string | null,
 ): Promise<TechnicianAbsence[]> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return [];
-  const orgId = await getCachedCurrentOrganizationId();
-  if (!orgId) return [];
 
   let q = supabase
     .from("technician_absences")
     .select(ABSENCE_DB_COLUMNS)
-    .eq("organization_id", orgId);
+    .eq("organization_id", organizationId);
   if (technicianId) q = q.eq("technician_id", technicianId);
 
   const { data, error } = await q.order("starts_at", { ascending: false });
@@ -1286,6 +1487,14 @@ export const listAllTechnicianAbsences = cache(async function listAllTechnicianA
   return rows
     .map((r) => mapAbsenceRow(r, nameMap))
     .filter((x): x is TechnicianAbsence => x !== null);
+});
+
+export const listAllTechnicianAbsences = cache(async function listAllTechnicianAbsences(
+  technicianId?: string | null,
+): Promise<TechnicianAbsence[]> {
+  const orgId = await getCachedCurrentOrganizationId();
+  if (!orgId) return [];
+  return listAllTechnicianAbsencesForOrg(orgId, technicianId);
 });
 
 export type TechnicianAbsenceCreateInput = {

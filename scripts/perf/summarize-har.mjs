@@ -38,6 +38,18 @@ const kalenderDoc = appEntries.find(
     !e.request.url.includes("_rsc=") &&
     e.request.url.replace(/\?.*$/, "").endsWith("/kalender"),
 );
+const mitarbeiterDoc = appEntries.find(
+  (e) =>
+    e.request.method === "GET" &&
+    !e.request.url.includes("_rsc=") &&
+    e.request.url.replace(/\?.*$/, "").endsWith("/mitarbeiter"),
+);
+const mitarbeiterPosts = appEntries.filter(
+  (e) => e.request.method === "POST" && e.request.url.includes("/mitarbeiter"),
+);
+const einstellungenRscGets = appEntries.filter(
+  (e) => e.request.method === "GET" && e.request.url.includes("/einstellungen") && e.request.url.includes("_rsc="),
+);
 const kalenderRscGets = appEntries.filter(
   (e) => e.request.method === "GET" && e.request.url.includes("/kalender") && e.request.url.includes("_rsc="),
 );
@@ -173,6 +185,22 @@ if (kalenderDoc) {
   }
 }
 
+if (mitarbeiterDoc) {
+  console.log("\nDocument GET /mitarbeiter");
+  console.log("  total:", Math.round(mitarbeiterDoc.time) + "ms");
+  console.log("  TTFB (wait):", Math.round(mitarbeiterDoc.timings?.wait ?? 0) + "ms");
+  console.log("  transfer:", Math.round((mitarbeiterDoc.response._transferSize ?? 0) / 1024) + "KB");
+  const contentKb = Math.round((mitarbeiterDoc.response.content?.size ?? 0) / 1024);
+  if (contentKb > 0) {
+    console.log("  RSC content (uncompressed):", contentKb + "KB");
+  }
+  const mitText = mitarbeiterDoc.response.content?.text ?? "";
+  const teamRefs = (mitText.match(/displayName/g) || []).length;
+  if (teamRefs > 0) {
+    console.log("  team rows in payload (displayName refs):", teamRefs);
+  }
+}
+
 const docEndMs = kalenderDoc ? end(kalenderDoc) : null;
 const kalenderPostsAfterDoc =
   docEndMs != null ? kalenderPosts.filter((p) => rel(p) >= docEndMs) : kalenderPosts;
@@ -297,6 +325,83 @@ if (kalenderDoc) {
   }
   console.log("\nKalender gates" + (isInteractionHar ? " (interaction HAR)" : " (load-only HAR)"));
   for (const g of gates) {
+    console.log(" ", g.pass ? "PASS" : "FAIL", "—", g.label, `(${g.detail})`);
+  }
+}
+
+if (mitarbeiterDoc) {
+  const mitDocEndMs = end(mitarbeiterDoc);
+  const mitarbeiterPostsAfterDoc = mitarbeiterPosts.filter((p) => rel(p) >= mitDocEndMs);
+  const mitarbeiterEarlyPosts = mitarbeiterPostsAfterDoc.filter(
+    (p) => rel(p) - mitDocEndMs < HYDRATION_GAP_MS,
+  );
+  const einstellungenRscAfterDoc = einstellungenRscGets.filter((p) => rel(p) >= mitDocEndMs);
+  const assignablePostsAfterDoc = profilePosts.filter(
+    (p) => p.request.url.includes("/mitarbeiter") && rel(p) >= mitDocEndMs,
+  );
+
+  console.log("\nMitarbeiter interaction (after document load)");
+  console.log("  POST /mitarbeiter total:", mitarbeiterPostsAfterDoc.length);
+  console.log("    early (<" + HYDRATION_GAP_MS + "ms, regression):", mitarbeiterEarlyPosts.length);
+  console.log("  listAssignableProfiles POST (drawer lazy):", assignablePostsAfterDoc.length);
+  console.log("  GET /einstellungen?_rsc= after load:", einstellungenRscAfterDoc.length);
+
+  if (mitarbeiterPostsAfterDoc.length > 0) {
+    console.log("\n  POST /mitarbeiter timeline:");
+    for (const p of [...mitarbeiterPostsAfterDoc].sort((a, b) => rel(a) - rel(b))) {
+      const gap = rel(p) - mitDocEndMs;
+      console.log(
+        "   ",
+        "t+" + gap + "ms",
+        Math.round(p.time) + "ms",
+        Math.round((p.response._transferSize ?? 0) / 1024) + "KB",
+      );
+    }
+  }
+
+  console.log("\nTimeline /mitarbeiter (ms from first request)");
+  console.log("  document end:", mitDocEndMs);
+  if (mitarbeiterEarlyPosts[0]) {
+    console.log("  early POST start:", rel(mitarbeiterEarlyPosts[0]));
+    console.log("  hydration gap:", rel(mitarbeiterEarlyPosts[0]) - mitDocEndMs);
+  } else if (mitarbeiterPostsAfterDoc[0]) {
+    console.log("  first POST start:", rel(mitarbeiterPostsAfterDoc[0]));
+    console.log("  gap to first POST:", rel(mitarbeiterPostsAfterDoc[0]) - mitDocEndMs);
+  } else {
+    console.log("  data ready (Hybrid-SSR):", mitDocEndMs);
+  }
+
+  const isInteractionHar = mitarbeiterPostsAfterDoc.length > 0;
+  const mitGates = [
+    {
+      label: "No POST /mitarbeiter within " + HYDRATION_GAP_MS + "ms of document (hydration)",
+      pass: mitarbeiterEarlyPosts.length === 0,
+      detail: String(mitarbeiterEarlyPosts.length),
+    },
+    {
+      label: "GET /api/events = 0",
+      pass: events.length === 0,
+      detail: String(events.length),
+    },
+    {
+      label: "GET /einstellungen?_rsc= after load = 0 (avatar prefetch)",
+      pass: einstellungenRscAfterDoc.length === 0,
+      detail: String(einstellungenRscAfterDoc.length),
+    },
+  ];
+  if (isInteractionHar) {
+    mitGates.push({
+      label: "Load POST /mitarbeiter = 0 (Hybrid-SSR)",
+      pass: mitarbeiterPostsAfterDoc.length === assignablePostsAfterDoc.length,
+      detail:
+        mitarbeiterPostsAfterDoc.length +
+        " POST(s), " +
+        assignablePostsAfterDoc.length +
+        " assignable (drawer ok)",
+    });
+  }
+  console.log("\nMitarbeiter gates" + (isInteractionHar ? " (interaction HAR)" : " (load-only HAR)"));
+  for (const g of mitGates) {
     console.log(" ", g.pass ? "PASS" : "FAIL", "—", g.label, `(${g.detail})`);
   }
 }

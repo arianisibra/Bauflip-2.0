@@ -269,6 +269,7 @@ export function useTeamMembers(enabled = true) {
     queryFn: () => listTeamMembersAction(),
     enabled,
     staleTime: 60_000,
+    refetchOnMount: false,
   });
 }
 
@@ -338,6 +339,7 @@ export function useAbsences(initialDataOrEnabled?: TechnicianAbsence[] | boolean
     enabled,
     initialData,
     staleTime: 60_000,
+    refetchOnMount: false,
   });
 }
 

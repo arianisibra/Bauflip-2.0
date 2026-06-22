@@ -12,9 +12,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { BauflipLoading } from "@/components/ui/bauflip-loading";
 import { cn } from "@/lib/utils";
-import { useAbsences, useAssignableProfiles, useTeamMembers } from "@/lib/query/hooks";
+import { useTeamMembers } from "@/lib/query/hooks";
 import type { LucideIcon } from "lucide-react";
 import { Calendar, Layers, Mail, UserPlus, Users } from "lucide-react";
 
@@ -74,6 +73,7 @@ function MemberAvatar({
     return (
       <Link
         href="/einstellungen"
+        prefetch={false}
         className={cn(baseClass, "hover:ring-2 hover:ring-primary/45")}
         title="Profil und Profilbild bearbeiten"
       >
@@ -126,17 +126,7 @@ export function MitarbeiterPageClient() {
   const profile = useSessionProfile();
   const isAdmin = profile.role === "admin";
 
-  const { data: teamMembers = [], isLoading: teamLoading } = useTeamMembers(isAdmin);
-  const { data: absencesInitial = [] } = useAbsences(isAdmin);
-  const { data: assignableProfiles = [] } = useAssignableProfiles();
-
-  if (isAdmin && teamLoading) {
-    return (
-      <div className="flex justify-center py-16" role="status" aria-live="polite">
-        <BauflipLoading size="sm" label="Mitarbeiter werden geladen …" />
-      </div>
-    );
-  }
+  const { data: teamMembers = [] } = useTeamMembers(isAdmin);
 
   if (!isAdmin) {
     return null;
@@ -146,7 +136,6 @@ export function MitarbeiterPageClient() {
   const pendingCount = teamMembers.filter((m) => m.status === "eingeladen").length;
   const currentUserId = profile.userId;
   const turnstileConfigured = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
-  const absenceTechnicians = assignableProfiles;
 
   return (
     <section className="flex flex-col gap-6">
@@ -176,7 +165,7 @@ export function MitarbeiterPageClient() {
                     Aktive Mitglieder und ausstehende Einladungen.
                   </CardDescription>
                 </div>
-                <AbsencesManager technicians={absenceTechnicians} initialAbsences={absencesInitial} />
+                <AbsencesManager />
               </div>
             </CardHeader>
             <CardContent className="px-0 pb-0 pt-0">

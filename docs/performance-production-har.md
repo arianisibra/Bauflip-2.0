@@ -434,6 +434,30 @@ Die HAR misst nur Browser-Requests. Netlify Function-Logs zeigen **jede Serverle
 
 ---
 
+## Phase Mit — Mitarbeiter Hybrid-SSR (Prod-Baseline)
+
+| Metrik | Vorher (Phase C) | Ziel |
+|--------|------------------|------|
+| Document GET `/mitarbeiter` | ~726 ms Shell, TTFB ~514 ms | Team + Abwesenheiten im dehydrated JSON |
+| POST `/mitarbeiter` nach Load | **3×** (1070 / 849 / 633 ms) | **0×** |
+| `listTeamMembers` Auth | N× `getUserById` | **1×** `listUsers` oder RPC mit `auth.users` |
+| Abwesenheiten-Drawer | `listAssignableProfiles` eager | **lazy** beim Öffnen |
+| Avatar → Einstellungen | 2× `_rsc` Prefetch | **0×** (`prefetch={false}`) |
+
+Checkliste: [`scripts/perf/mitarbeiter-netlify-log-checklist.md`](../scripts/perf/mitarbeiter-netlify-log-checklist.md)
+
+Migration: [`20260627120000_perf_mitarbeiter_bootstrap_rpc.sql`](../supabase/migrations/20260627120000_perf_mitarbeiter_bootstrap_rpc.sql)
+
+Verify: [`scripts/perf/verify-mitarbeiter-bootstrap-rpc.sql`](../scripts/perf/verify-mitarbeiter-bootstrap-rpc.sql)
+
+| Aktion | Function-Invocations |
+|--------|---------------------|
+| Hard reload `/mitarbeiter` | **1×** (SSR Bootstrap) |
+| Abwesenheiten-Drawer öffnen | **0–1×** (`listAssignableProfiles` lazy) |
+| Einladung senden | **1×** + Realtime `membership.changed` |
+
+---
+
 ## Phase Kal-DB — Calendar Range RPC (kein UI-Change)
 
 | Massnahme | Wirkung |
