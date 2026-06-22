@@ -3,9 +3,9 @@
 import { z } from "zod";
 import { requireAdminLayoutSession } from "@/lib/auth/organization";
 import { insertOrderFormTemplate, updateOrderFormTemplate } from "@/lib/db/repository";
+import type { OrderFormTemplate } from "@/lib/domain/types";
 import { orderFormFieldsSchema, slugifyOrderFormSlug } from "@/lib/order-forms/schema";
-
-// Client-side cache invalidation is owned by TanStack hooks in lib/query/hooks.ts.
+import { publish } from "@/lib/realtime/publish";
 
 const cmsPayloadSchema = z.object({
   supplierName: z.string().max(200),
@@ -17,7 +17,10 @@ const cmsPayloadSchema = z.object({
   fields: orderFormFieldsSchema,
 });
 
-export async function createOrderFormCmsAction(payload: unknown): Promise<{ id: string }> {
+export async function createOrderFormCmsAction(
+  payload: unknown,
+  tabId?: string,
+): Promise<{ id: string; template: OrderFormTemplate }> {
   const session = await requireAdminLayoutSession();
   if (!session.organizationId) {
     throw new Error("Keine Berechtigung.");
@@ -45,10 +48,19 @@ export async function createOrderFormCmsAction(payload: unknown): Promise<{ id: 
     isActive: v.isActive,
   });
 
-  return { id: created.id };
+  publish(session.organizationId, {
+    type: "order_form_template.changed",
+    originTabId: tabId,
+  });
+
+  return { id: created.id, template: created };
 }
 
-export async function updateOrderFormCmsAction(templateId: string, payload: unknown): Promise<void> {
+export async function updateOrderFormCmsAction(
+  templateId: string,
+  payload: unknown,
+  tabId?: string,
+): Promise<OrderFormTemplate> {
   const session = await requireAdminLayoutSession();
   if (!session.organizationId) {
     throw new Error("Keine Berechtigung.");
@@ -65,7 +77,7 @@ export async function updateOrderFormCmsAction(templateId: string, payload: unkn
     v.description != null && v.description.trim() ? v.description.trim() : null;
   const slugFinal = v.slug?.trim() ? slugifyOrderFormSlug(v.slug.trim()) : slugifyOrderFormSlug(v.name);
 
-  await updateOrderFormTemplate(templateId, {
+  const updated = await updateOrderFormTemplate(templateId, {
     supplierName,
     name: v.name,
     slug: slugFinal,
@@ -74,4 +86,11 @@ export async function updateOrderFormCmsAction(templateId: string, payload: unkn
     sortOrder: v.sortOrder,
     isActive: v.isActive,
   });
+
+  publish(session.organizationId, {
+    type: "order_form_template.changed",
+    originTabId: tabId,
+  });
+
+  return updated;
 }

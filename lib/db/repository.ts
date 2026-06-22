@@ -2286,7 +2286,7 @@ export async function updateOrderFormTemplate(
     sortOrder: number;
     isActive: boolean;
   }>,
-): Promise<void> {
+): Promise<OrderFormTemplate> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) throw new Error("Supabase nicht konfiguriert.");
   const dbPatch: Record<string, unknown> = {};
@@ -2298,8 +2298,14 @@ export async function updateOrderFormTemplate(
   if (patch.sortOrder !== undefined) dbPatch.sort_order = patch.sortOrder;
   if (patch.isActive !== undefined) dbPatch.is_active = patch.isActive;
   dbPatch.updated_at = new Date().toISOString();
-  const { error } = await supabase.from("order_form_templates").update(dbPatch).eq("id", templateId);
-  if (error) throw new Error(error.message);
+  const { data, error } = await supabase
+    .from("order_form_templates")
+    .update(dbPatch)
+    .eq("id", templateId)
+    .select("id, organization_id, supplier_name, name, slug, description, fields, sort_order, is_active")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Vorlage konnte nicht aktualisiert werden.");
+  return mapOrderFormTemplateRow(data as Record<string, unknown>);
 }
 
 export async function deleteOrderFormTemplate(templateId: string): Promise<void> {

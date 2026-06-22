@@ -16,6 +16,12 @@ import { publish } from "@/lib/realtime/publish";
 import { AVATAR_MAX_BYTES, AVATAR_MIME, extForAvatarMime } from "@/lib/storage/mime";
 import { isHexColor } from "@/lib/calendar/team-colors";
 import { profileSettingsSchema } from "@/lib/validations/forms";
+import type { UserProfile } from "@/lib/domain/types";
+
+export type SaveProfileSettingsResult = {
+  profile: UserProfile;
+  organizationBilling: { companyName: string; logoUrl: string | null } | null;
+};
 
 function extractAvatarPathFromPublicUrl(url: string): string | null {
   try {
@@ -34,7 +40,7 @@ function avatarStorageClient(supabase: SupabaseClient): SupabaseClient {
   return createSupabaseAdminClient() ?? supabase;
 }
 
-export async function saveProfileSettingsAction(formData: FormData) {
+export async function saveProfileSettingsAction(formData: FormData): Promise<SaveProfileSettingsResult> {
   const session = await getCurrentSession();
   if (!session) {
     throw new Error("Nicht angemeldet.");
@@ -122,10 +128,11 @@ export async function saveProfileSettingsAction(formData: FormData) {
     throw new Error("Profil konnte nicht gespeichert werden.");
   }
 
+  let existingCompanyName = "";
+  let organizationLogoUrl: string | null = null;
+
   if (session.role === "admin") {
     const organizationId = session.organizationId ?? (await ensureCurrentOrganizationId());
-    let existingCompanyName = "";
-    let organizationLogoUrl: string | null = null;
 
     if (organizationId) {
       const { data: orgRow } = await supabase
@@ -187,6 +194,28 @@ export async function saveProfileSettingsAction(formData: FormData) {
 
   revalidatePath("/einstellungen");
   revalidatePath("/projekte");
+
+  const savedCompanyName =
+    session.role === "admin"
+      ? companyName || existingCompanyName || "Bauflip Organisation"
+      : null;
+  const savedLogoUrl = session.role === "admin" ? organizationLogoUrl : null;
+
+  return {
+    profile: {
+      id: session.user.id,
+      displayName: displayName || session.profile.displayName,
+      email: session.profile.email,
+      role: session.role,
+      avatarUrl,
+      calendarColor,
+      calendarPosition,
+    },
+    organizationBilling:
+      session.role === "admin" && session.organizationId
+        ? { companyName: savedCompanyName ?? "", logoUrl: savedLogoUrl }
+        : null,
+  };
 }
 
 export type { TeamMemberListItem } from "@/lib/mitarbeiter/types";

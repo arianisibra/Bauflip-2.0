@@ -8,7 +8,8 @@ Stand: 2026-05-26 (Phase C)
 |-------|---------------------------|-------------|
 | `/projekte` | **1×** `fetchProjekteBootstrapAction` | **0** (Layout) |
 | `/tag`, `/wochenplan`, `/profil` | Wochen-/Tagesdaten nur | **0** |
-| `/mitarbeiter`, `/bestellformulare` | Team/Templates | **0** (RSC-Guard + Context) |
+| `/mitarbeiter`, `/bestellformulare` | Team/Templates (Hybrid-SSR) | **0** (dehydrated + Layout) |
+| `/einstellungen` | Profil + Org (Hybrid-SSR) | **0** (dehydrated + Layout) |
 
 | Metrik | Phase B | Phase C |
 |--------|---------|---------|
@@ -455,6 +456,43 @@ Verify: [`scripts/perf/verify-mitarbeiter-bootstrap-rpc.sql`](../scripts/perf/ve
 | Hard reload `/mitarbeiter` | **1×** (SSR Bootstrap) |
 | Abwesenheiten-Drawer öffnen | **0–1×** (`listAssignableProfiles` lazy) |
 | Einladung senden | **1×** + Realtime `membership.changed` |
+
+---
+
+## Phase Est — Einstellungen Hybrid-SSR (Prod-Baseline)
+
+| Metrik | Vorher (Phase B) | Ziel |
+|--------|------------------|------|
+| Document GET `/einstellungen` | Shell + Spinner | Profil + Branding im dehydrated JSON |
+| POST `/einstellungen` nach Load | **1–2×** (`fetchEinstellungenPageDataAction`) | **0×** |
+| Profil-SELECT on load | 2× (Layout snapshot + Client POST) | **1×** (konsolidiert in `getCachedUserProfile`) |
+| Nach Profil-Save | Header/Form stale bis Refetch | **sofort** via TanStack `setQueryData` |
+| Avatar → Einstellungen | `_rsc` Prefetch | **0×** (`prefetch={false}`) |
+
+Checkliste: [`scripts/perf/einstellungen-netlify-log-checklist.md`](../scripts/perf/einstellungen-netlify-log-checklist.md)
+
+| Aktion | Function-Invocations |
+|--------|---------------------|
+| Hard reload `/einstellungen` | **1×** (SSR Bootstrap) |
+| Profil speichern | **1×** `saveProfileSettingsAction` |
+
+---
+
+## Phase BF — Bestellformulare Hybrid-SSR (Prod-Baseline)
+
+| Metrik | Vorher (Phase B) | Ziel |
+|--------|------------------|------|
+| Document GET `/bestellformulare` | Shell + Spinner + POST | Templates im dehydrated JSON |
+| POST `/bestellformulare` nach Load | **1×** `listOrderFormTemplatesForOrgAction` | **0×** |
+| CMS Save/Create/Delete | **2×** POST (mutation + refetch) | **1×** (`setQueryData` + Realtime publish) |
+| Cross-Tab Template-Sync | stale | Realtime `order_form_template.changed` |
+
+Checkliste: [`scripts/perf/bestellformulare-netlify-log-checklist.md`](../scripts/perf/bestellformulare-netlify-log-checklist.md)
+
+| Aktion | Function-Invocations |
+|--------|---------------------|
+| Hard reload `/bestellformulare` | **1×** (SSR Bootstrap) |
+| Template erstellen/speichern/löschen | **1×** pro Aktion |
 
 ---
 

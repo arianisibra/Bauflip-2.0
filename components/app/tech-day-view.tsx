@@ -247,6 +247,7 @@ export function TechDayView({
         <div className="flex gap-3 sm:gap-4">
           <Link
             href="/einstellungen"
+            prefetch={false}
             className={cn(
               "relative flex size-14 shrink-0 overflow-hidden rounded-full border-2 border-border/80 bg-muted shadow-inner ring-2 ring-background",
               "transition-[box-shadow] hover:ring-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",

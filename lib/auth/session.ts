@@ -205,15 +205,23 @@ export const getCachedSessionProfile = cache(async function getCachedSessionProf
 export const getCachedUserProfile = cache(async function getCachedUserProfile(
   layoutSession: LayoutSession,
 ): Promise<UserProfile> {
-  const snapshot = await getCachedSessionProfile(layoutSession);
+  const { userId, role } = layoutSession;
   const supabase = await createSupabaseServerClient();
+  let cookieStore: Awaited<ReturnType<typeof cookies>> | null = null;
+  try {
+    cookieStore = await cookies();
+  } catch {
+    cookieStore = null;
+  }
+  const emailFromCookie = cookieStore ? readEmailFromSupabaseAuthCookie(cookieStore) : null;
+
   if (!supabase) {
     return {
-      id: snapshot.userId,
-      displayName: snapshot.displayName,
-      email: snapshot.email ?? "",
-      role: snapshot.role,
-      avatarUrl: snapshot.avatarUrl,
+      id: userId,
+      displayName: role === "admin" ? "Admin" : role === "technician" ? "Monteur" : "Büro",
+      email: emailFromCookie ?? "",
+      role,
+      avatarUrl: null,
       calendarColor: null,
       calendarPosition: 0,
     };
@@ -221,16 +229,24 @@ export const getCachedUserProfile = cache(async function getCachedUserProfile(
 
   const { data: row } = await supabase
     .from("profiles")
-    .select("calendar_color, calendar_position")
-    .eq("id", layoutSession.userId)
+    .select("display_name, avatar_url, calendar_color, calendar_position")
+    .eq("id", userId)
     .maybeSingle();
 
+  const displayName =
+    (row?.display_name != null && String(row.display_name).trim()
+      ? String(row.display_name).trim()
+      : null) ??
+    (emailFromCookie?.split("@")[0] ?? "Benutzer");
+  const avatarUrl =
+    row?.avatar_url != null && String(row.avatar_url).trim() ? String(row.avatar_url).trim() : null;
+
   return {
-    id: snapshot.userId,
-    displayName: snapshot.displayName,
-    email: snapshot.email ?? "",
-    role: snapshot.role,
-    avatarUrl: snapshot.avatarUrl,
+    id: userId,
+    displayName,
+    email: emailFromCookie ?? "",
+    role,
+    avatarUrl,
     calendarColor: row?.calendar_color != null ? String(row.calendar_color) : null,
     calendarPosition: typeof row?.calendar_position === "number" ? row.calendar_position : 0,
   };

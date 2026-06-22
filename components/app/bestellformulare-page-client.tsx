@@ -1,43 +1,16 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import { useQuery } from "@tanstack/react-query";
 import { useSessionProfile } from "@/components/app/session-profile-provider";
-import { listOrderFormTemplatesForOrgAction } from "@/app/(app)/order-form-template-actions";
-import { BauflipLoading } from "@/components/ui/bauflip-loading";
-import { queryKeys } from "@/lib/query/keys";
-
-const OrderFormTemplatesAdmin = dynamic(
-  () => import("@/components/app/order-form-templates-admin").then((m) => m.OrderFormTemplatesAdmin),
-  {
-    loading: () => (
-      <div className="flex min-h-[14rem] items-center justify-center py-10" role="status" aria-live="polite">
-        <BauflipLoading size="sm" label="Formulare werden geladen …" />
-      </div>
-    ),
-  },
-);
+import { OrderFormTemplatesAdmin } from "@/components/app/order-form-templates-admin";
+import { useOrderFormTemplates } from "@/lib/query/hooks";
 
 export function BestellformularePageClient() {
   const profile = useSessionProfile();
   const isAdmin = profile.role === "admin";
+  const { data: templates } = useOrderFormTemplates(undefined, isAdmin);
 
-  const { data: templates, isLoading: templatesLoading } = useQuery({
-    queryKey: queryKeys.orderFormTemplates.all(),
-    queryFn: () => listOrderFormTemplatesForOrgAction(),
-    enabled: isAdmin,
-  });
-
-  if (!isAdmin) {
+  if (!isAdmin || !templates) {
     return null;
-  }
-
-  if (templatesLoading || !templates) {
-    return (
-      <div className="flex justify-center py-16" role="status" aria-live="polite">
-        <BauflipLoading size="sm" label="Bestellformulare werden geladen …" />
-      </div>
-    );
   }
 
   return (

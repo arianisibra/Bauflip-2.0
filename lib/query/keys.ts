@@ -53,6 +53,7 @@ export const queryKeys = {
   /** Prefix — invalidates every paginated list cache. */
   projekteListAll: () => ["projekte-list"] as const,
   organizationBranding: () => ["organization-branding"] as const,
+  einstellungenPage: () => ["einstellungen-page"] as const,
   teamMembers: () => ["team-members"] as const,
   orderFormTemplates: {
     all: () => ["order-form-templates"] as const,

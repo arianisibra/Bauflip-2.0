@@ -51,7 +51,8 @@ import {
   fetchAvailabilityRangeAction,
   type AvailabilityBundle,
 } from "@/app/(app)/kalender/availability-actions";
-import { fetchOrganizationBrandingAction } from "@/app/(app)/layout-actions";
+import { fetchOrganizationBrandingAction, fetchEinstellungenPageDataAction } from "@/app/(app)/layout-actions";
+import type { EinstellungenPageData } from "@/lib/einstellungen/types";
 import type { OrganizationBrandingSnapshot, ProjekteBootstrapData, ProjekteListPageSnapshot } from "@/lib/projekte/bootstrap-types";
 import { projekteListSearchKey } from "@/lib/projekte/list-page";
 import {
@@ -76,7 +77,6 @@ import {
 } from "@/app/(app)/order-form-template-actions";
 import {
   afterAbsenceChange,
-  afterOrderFormTemplateChange,
   afterProjectDeleted,
   afterAttachmentChange,
   invalidateProjectAdjacencies,
@@ -183,6 +183,15 @@ export function useOrganizationBranding(options?: { fetch?: boolean; initialData
     staleTime: ORGANIZATION_BRANDING_STALE_MS,
     enabled: wantsNetwork && initialData == null,
     initialData,
+  });
+}
+
+export function useEinstellungenPage() {
+  return useQuery<EinstellungenPageData | null>({
+    queryKey: queryKeys.einstellungenPage(),
+    queryFn: () => fetchEinstellungenPageDataAction(),
+    staleTime: 60_000,
+    refetchOnMount: false,
   });
 }
 
@@ -373,8 +382,15 @@ export function useOrderFormTemplates(initialData?: OrderFormTemplate[], enabled
     queryFn: () => listOrderFormTemplatesForOrgAction(),
     initialData,
     enabled,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 60_000,
+    refetchOnMount: false,
   });
+}
+
+function sortOrderFormTemplates(templates: OrderFormTemplate[]): OrderFormTemplate[] {
+  return [...templates].sort(
+    (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, "de-CH"),
+  );
 }
 
 // ───────── Mutation helpers ─────────
@@ -496,30 +512,36 @@ type CmsPayload = Parameters<typeof createOrderFormCmsAction>[0];
 
 export function useCreateOrderFormTemplate() {
   const qc = useQueryClient();
-  return useMutation<{ id: string }, Error, CmsPayload>({
-    mutationFn: (payload) => createOrderFormCmsAction(payload),
-    onSuccess: () => {
-      afterOrderFormTemplateChange(qc);
+  return useMutation<{ id: string; template: OrderFormTemplate }, Error, CmsPayload>({
+    mutationFn: (payload) => createOrderFormCmsAction(payload, getTabId()),
+    onSuccess: ({ template }) => {
+      qc.setQueryData<OrderFormTemplate[]>(queryKeys.orderFormTemplates.all(), (old) =>
+        sortOrderFormTemplates([...(old ?? []), template]),
+      );
     },
   });
 }
 
 export function useUpdateOrderFormTemplate() {
   const qc = useQueryClient();
-  return useMutation<void, Error, { templateId: string; payload: CmsPayload }>({
-    mutationFn: ({ templateId, payload }) => updateOrderFormCmsAction(templateId, payload),
-    onSuccess: () => {
-      afterOrderFormTemplateChange(qc);
+  return useMutation<OrderFormTemplate, Error, { templateId: string; payload: CmsPayload }>({
+    mutationFn: ({ templateId, payload }) => updateOrderFormCmsAction(templateId, payload, getTabId()),
+    onSuccess: (template) => {
+      qc.setQueryData<OrderFormTemplate[]>(queryKeys.orderFormTemplates.all(), (old) =>
+        old ? sortOrderFormTemplates(old.map((t) => (t.id === template.id ? template : t))) : [template],
+      );
     },
   });
 }
 
 export function useDeleteOrderFormTemplate() {
   const qc = useQueryClient();
-  return useMutation<unknown, Error, string>({
-    mutationFn: (templateId) => deleteOrderFormTemplateAction(templateId),
-    onSuccess: () => {
-      afterOrderFormTemplateChange(qc);
+  return useMutation<void, Error, string>({
+    mutationFn: (templateId) => deleteOrderFormTemplateAction(templateId, getTabId()),
+    onSuccess: (_, templateId) => {
+      qc.setQueryData<OrderFormTemplate[]>(queryKeys.orderFormTemplates.all(), (old) =>
+        old ? old.filter((t) => t.id !== templateId) : [],
+      );
     },
   });
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useFormStatus } from "react-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { useState, type FormEvent } from "react";
 import { saveProfileSettingsAction } from "@/app/(app)/einstellungen/actions";
 import { BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { UserProfile } from "@/lib/domain/types";
 import { resolveCalendarColor } from "@/lib/calendar/team-colors";
+import { queryKeys } from "@/lib/query/keys";
 import { cn } from "@/lib/utils";
 
 type ProfileSettingsFormProps = {
@@ -22,26 +23,52 @@ type ProfileSettingsFormProps = {
   } | null;
 };
 
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" size="default" disabled={pending} className="min-w-[9rem]">
-      {pending ? <BauflipLoadingButtonLabel variant="onPrimary">Speichern…</BauflipLoadingButtonLabel> : "Speichern"}
-    </Button>
-  );
-}
-
 export function ProfileSettingsForm({
   profile,
   supabaseConfigured,
   canEditCompanySettings,
   organizationBilling,
 }: ProfileSettingsFormProps) {
+  const qc = useQueryClient();
+  const [pending, setPending] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState(profile.displayName);
   const [companyName, setCompanyName] = useState(organizationBilling?.companyName ?? "");
+  const [avatarUrl, setAvatarUrl] = useState(profile.avatarUrl);
+  const [logoUrl, setLogoUrl] = useState(organizationBilling?.logoUrl ?? null);
   const [calendarColor, setCalendarColor] = useState(() =>
     resolveCalendarColor(profile.calendarColor, profile.id),
   );
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaveError(null);
+    setPending(true);
+    try {
+      const formData = new FormData(event.currentTarget);
+      const result = await saveProfileSettingsAction(formData);
+
+      qc.setQueryData(queryKeys.einstellungenPage(), (old) =>
+        old ? { ...old, profile: result.profile } : old,
+      );
+      if (result.organizationBilling) {
+        qc.setQueryData(queryKeys.organizationBranding(), {
+          name: result.organizationBilling.companyName,
+          logoUrl: result.organizationBilling.logoUrl,
+        });
+        setCompanyName(result.organizationBilling.companyName);
+        setLogoUrl(result.organizationBilling.logoUrl);
+      }
+
+      setDisplayName(result.profile.displayName);
+      setAvatarUrl(result.profile.avatarUrl);
+      setCalendarColor(resolveCalendarColor(result.profile.calendarColor, result.profile.id));
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Speichern fehlgeschlagen.");
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
     <Card className="overflow-hidden border-border/70 shadow-sm">
@@ -52,14 +79,19 @@ export function ProfileSettingsForm({
         </CardDescription>
       </CardHeader>
 
-      <form action={saveProfileSettingsAction}>
+      <form onSubmit={handleSubmit}>
         <CardContent className="space-y-8 px-5 py-6 sm:px-6">
+          {saveError ? (
+            <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {saveError}
+            </p>
+          ) : null}
           <div className="flex flex-col gap-8 lg:flex-row lg:gap-10">
             {/* Avatar */}
             <aside className="flex shrink-0 flex-col items-center gap-3 lg:w-[200px] lg:items-start lg:border-r lg:border-border/50 lg:pr-8">
               <div className="relative size-28 shrink-0 overflow-hidden rounded-full border-2 border-border/80 bg-muted shadow-inner ring-2 ring-background">
-                {profile.avatarUrl ? (
-                  <img src={profile.avatarUrl} alt="" className="size-full object-cover" />
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="" className="size-full object-cover" />
                 ) : (
                   <div className="flex size-full items-center justify-center px-2 text-center text-xs leading-tight text-muted-foreground">
                     Kein Bild
@@ -90,7 +122,7 @@ export function ProfileSettingsForm({
                       JPEG, PNG, WebP oder GIF · max. 2 MB
                     </p>
                   </div>
-                  {profile.avatarUrl ? (
+                  {avatarUrl ? (
                     <Button
                       type="submit"
                       name="removeAvatar"
@@ -152,8 +184,8 @@ export function ProfileSettingsForm({
                 <div className="mb-4 grid gap-4 md:grid-cols-[160px_1fr]">
                   <div className="flex flex-col items-start gap-2">
                     <div className="relative size-24 overflow-hidden rounded-xl border border-border/70 bg-card">
-                      {organizationBilling?.logoUrl ? (
-                        <img src={organizationBilling.logoUrl} alt="Firmenlogo" className="size-full object-contain p-2" />
+                      {logoUrl ? (
+                        <img src={logoUrl} alt="Firmenlogo" className="size-full object-contain p-2" />
                       ) : (
                         <div className="flex size-full items-center justify-center px-2 text-center text-xs text-muted-foreground">
                           Kein Logo
@@ -178,7 +210,7 @@ export function ProfileSettingsForm({
                         >
                           Logo wählen
                         </Label>
-                        {organizationBilling?.logoUrl ? (
+                        {logoUrl ? (
                           <Button
                             type="submit"
                             name="removeCompanyLogo"
@@ -244,7 +276,13 @@ export function ProfileSettingsForm({
               <p className="text-xs text-muted-foreground sm:max-w-md">
                 Änderungen gelten für Ihre Anzeige im Team und in Terminen.
               </p>
-              <SubmitButton />
+              <Button type="submit" size="default" disabled={pending} className="min-w-[9rem]">
+                {pending ? (
+                  <BauflipLoadingButtonLabel variant="onPrimary">Speichern…</BauflipLoadingButtonLabel>
+                ) : (
+                  "Speichern"
+                )}
+              </Button>
             </>
           ) : (
             <p className="text-sm text-amber-800">Supabase nicht verbunden — Profil kann nicht gespeichert werden.</p>

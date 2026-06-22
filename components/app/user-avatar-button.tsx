@@ -56,7 +56,7 @@ export function UserAvatarButton({ organizationName, organizationLogoUrl }: User
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuItem asChild>
-          <Link href="/einstellungen" className="cursor-pointer">
+          <Link href="/einstellungen" prefetch={false} className="cursor-pointer">
             <Settings className="size-4" />
             Einstellungen
           </Link>

@@ -47,6 +47,24 @@ const mitarbeiterDoc = appEntries.find(
 const mitarbeiterPosts = appEntries.filter(
   (e) => e.request.method === "POST" && e.request.url.includes("/mitarbeiter"),
 );
+const einstellungenDoc = appEntries.find(
+  (e) =>
+    e.request.method === "GET" &&
+    !e.request.url.includes("_rsc=") &&
+    e.request.url.replace(/\?.*$/, "").endsWith("/einstellungen"),
+);
+const bestellformulareDoc = appEntries.find(
+  (e) =>
+    e.request.method === "GET" &&
+    !e.request.url.includes("_rsc=") &&
+    e.request.url.replace(/\?.*$/, "").endsWith("/bestellformulare"),
+);
+const einstellungenPosts = appEntries.filter(
+  (e) => e.request.method === "POST" && e.request.url.includes("/einstellungen"),
+);
+const bestellformularePosts = appEntries.filter(
+  (e) => e.request.method === "POST" && e.request.url.includes("/bestellformulare"),
+);
 const einstellungenRscGets = appEntries.filter(
   (e) => e.request.method === "GET" && e.request.url.includes("/einstellungen") && e.request.url.includes("_rsc="),
 );
@@ -402,6 +420,95 @@ if (mitarbeiterDoc) {
   }
   console.log("\nMitarbeiter gates" + (isInteractionHar ? " (interaction HAR)" : " (load-only HAR)"));
   for (const g of mitGates) {
+    console.log(" ", g.pass ? "PASS" : "FAIL", "—", g.label, `(${g.detail})`);
+  }
+}
+
+if (einstellungenDoc) {
+  const estDocEndMs = end(einstellungenDoc);
+  const einstellungenPostsAfterDoc = einstellungenPosts.filter((p) => rel(p) >= estDocEndMs);
+  const einstellungenEarlyPosts = einstellungenPostsAfterDoc.filter(
+    (p) => rel(p) - estDocEndMs < HYDRATION_GAP_MS,
+  );
+  const einstellungenRscAfterEstDoc = einstellungenRscGets.filter((p) => rel(p) >= estDocEndMs);
+
+  console.log("\nEinstellungen interaction (after document load)");
+  console.log("  POST /einstellungen total:", einstellungenPostsAfterDoc.length);
+  console.log("    early (<" + HYDRATION_GAP_MS + "ms, regression):", einstellungenEarlyPosts.length);
+  console.log("  GET /einstellungen?_rsc= after load:", einstellungenRscAfterEstDoc.length);
+
+  console.log("\nTimeline /einstellungen (ms from first request)");
+  console.log("  document end:", estDocEndMs);
+  if (einstellungenEarlyPosts[0]) {
+    console.log("  early POST start:", rel(einstellungenEarlyPosts[0]));
+    console.log("  hydration gap:", rel(einstellungenEarlyPosts[0]) - estDocEndMs);
+  } else if (einstellungenPostsAfterDoc[0]) {
+    console.log("  first POST start:", rel(einstellungenPostsAfterDoc[0]));
+    console.log("  gap to first POST:", rel(einstellungenPostsAfterDoc[0]) - estDocEndMs);
+  } else {
+    console.log("  data ready (Hybrid-SSR):", estDocEndMs);
+  }
+
+  const estGates = [
+    {
+      label: "No POST /einstellungen within " + HYDRATION_GAP_MS + "ms of document (hydration)",
+      pass: einstellungenEarlyPosts.length === 0,
+      detail: String(einstellungenEarlyPosts.length),
+    },
+    {
+      label: "Load POST /einstellungen = 0 (Hybrid-SSR)",
+      pass: einstellungenPostsAfterDoc.length === 0,
+      detail: String(einstellungenPostsAfterDoc.length),
+    },
+    {
+      label: "GET /einstellungen?_rsc= after load = 0 (avatar prefetch)",
+      pass: einstellungenRscAfterEstDoc.length === 0,
+      detail: String(einstellungenRscAfterEstDoc.length),
+    },
+  ];
+  console.log("\nEinstellungen gates (load-only HAR)");
+  for (const g of estGates) {
+    console.log(" ", g.pass ? "PASS" : "FAIL", "—", g.label, `(${g.detail})`);
+  }
+}
+
+if (bestellformulareDoc) {
+  const bfDocEndMs = end(bestellformulareDoc);
+  const bestellformularePostsAfterDoc = bestellformularePosts.filter((p) => rel(p) >= bfDocEndMs);
+  const bestellformulareEarlyPosts = bestellformularePostsAfterDoc.filter(
+    (p) => rel(p) - bfDocEndMs < HYDRATION_GAP_MS,
+  );
+
+  console.log("\nBestellformulare interaction (after document load)");
+  console.log("  POST /bestellformulare total:", bestellformularePostsAfterDoc.length);
+  console.log("    early (<" + HYDRATION_GAP_MS + "ms, regression):", bestellformulareEarlyPosts.length);
+
+  console.log("\nTimeline /bestellformulare (ms from first request)");
+  console.log("  document end:", bfDocEndMs);
+  if (bestellformulareEarlyPosts[0]) {
+    console.log("  early POST start:", rel(bestellformulareEarlyPosts[0]));
+    console.log("  hydration gap:", rel(bestellformulareEarlyPosts[0]) - bfDocEndMs);
+  } else if (bestellformularePostsAfterDoc[0]) {
+    console.log("  first POST start:", rel(bestellformularePostsAfterDoc[0]));
+    console.log("  gap to first POST:", rel(bestellformularePostsAfterDoc[0]) - bfDocEndMs);
+  } else {
+    console.log("  data ready (Hybrid-SSR):", bfDocEndMs);
+  }
+
+  const bfGates = [
+    {
+      label: "No POST /bestellformulare within " + HYDRATION_GAP_MS + "ms of document (hydration)",
+      pass: bestellformulareEarlyPosts.length === 0,
+      detail: String(bestellformulareEarlyPosts.length),
+    },
+    {
+      label: "Load POST /bestellformulare = 0 (Hybrid-SSR)",
+      pass: bestellformularePostsAfterDoc.length === 0,
+      detail: String(bestellformularePostsAfterDoc.length),
+    },
+  ];
+  console.log("\nBestellformulare gates (load-only HAR)");
+  for (const g of bfGates) {
     console.log(" ", g.pass ? "PASS" : "FAIL", "—", g.label, `(${g.detail})`);
   }
 }

@@ -1,26 +1,19 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { fetchEinstellungenPageDataAction } from "@/app/(app)/layout-actions";
+import { useOrganizationBrandingContext } from "@/components/app/organization-branding-provider";
 import { ProfileSettingsForm } from "@/components/app/profile-settings-form";
-import { BauflipLoading } from "@/components/ui/bauflip-loading";
-import { useOrganizationBranding } from "@/lib/query/hooks";
+import { useEinstellungenPage, useOrganizationBranding } from "@/lib/query/hooks";
 
 export function EinstellungenPageClient() {
-  const { data: branding } = useOrganizationBranding();
-
-  const { data, isLoading } = useQuery({
-    queryKey: ["einstellungen-page"],
-    queryFn: () => fetchEinstellungenPageDataAction(),
-    staleTime: 60_000,
+  const layoutBranding = useOrganizationBrandingContext();
+  const { data: branding } = useOrganizationBranding({
+    fetch: false,
+    initialData: layoutBranding ?? undefined,
   });
+  const { data } = useEinstellungenPage();
 
-  if (isLoading || !data) {
-    return (
-      <div className="flex justify-center py-16" role="status" aria-live="polite">
-        <BauflipLoading size="sm" label="Einstellungen werden geladen …" />
-      </div>
-    );
+  if (!data) {
+    return null;
   }
 
   const organizationBilling = branding
