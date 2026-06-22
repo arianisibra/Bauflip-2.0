@@ -1,21 +1,15 @@
+import { swissDayKeyFromInstant, zurichWallClockInstant } from "@/lib/date/swiss";
+import { swissWeekDays, swissWeekReferenceIsoFromDayKey } from "@/lib/date/swiss-week";
+
 /** Monday 00:00:00 – Sunday 23:59:59.999 in Europe/Zurich. */
 export function getWeekBounds(reference = new Date()): { start: Date; end: Date } {
-  const swissDate = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Zurich",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(reference);
-  const date = new Date(swissDate + "T12:00:00");
-  const day = date.getDay();
-  const mondayOffset = day === 0 ? -6 : 1 - day;
-  const monday = new Date(date);
-  monday.setDate(date.getDate() + mondayOffset);
-  monday.setHours(0, 0, 0, 0);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  sunday.setHours(23, 59, 59, 999);
-  return { start: monday, end: sunday };
+  const dayKey = swissDayKeyFromInstant(reference);
+  const monRef = swissWeekReferenceIsoFromDayKey(dayKey);
+  const days = swissWeekDays(monRef);
+  return {
+    start: zurichWallClockInstant(days[0]!.key, 0, 0, 0, 0),
+    end: zurichWallClockInstant(days[6]!.key, 23, 59, 59, 999),
+  };
 }
 
 export function formatWeekRangeDe(start: Date, end: Date): string {
@@ -23,18 +17,22 @@ export function formatWeekRangeDe(start: Date, end: Date): string {
   return `${fmt.format(start)} – ${fmt.format(end)}`;
 }
 
-/** Kalendertag Europe/Zurich, der `reference` enthält — [00:00, 23:59:59.999] (gleiche lokale Datumsidee wie getWeekBounds). */
+/** Kalendertag Europe/Zurich — [00:00, 23:59:59.999] in Zurich wall-clock. */
 export function getSwissDayBounds(reference: Date): { start: Date; end: Date } {
-  const ymd = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Zurich",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(reference);
-  const mid = new Date(`${ymd}T12:00:00`);
-  const start = new Date(mid);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(mid);
-  end.setHours(23, 59, 59, 999);
-  return { start, end };
+  const dayKey = swissDayKeyFromInstant(reference);
+  return {
+    start: zurichWallClockInstant(dayKey, 0, 0, 0, 0),
+    end: zurichWallClockInstant(dayKey, 23, 59, 59, 999),
+  };
+}
+
+/** Last calendar day of month (month 1–12). */
+export function swissMonthLastDay(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/** YYYY-MM-DD for the last day of a Swiss calendar month. */
+export function swissMonthLastDayKey(year: number, month: number): string {
+  const last = swissMonthLastDay(year, month);
+  return `${year}-${String(month).padStart(2, "0")}-${String(last).padStart(2, "0")}`;
 }

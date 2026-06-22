@@ -1,31 +1,37 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import { BauflipLoading } from "@/components/ui/bauflip-loading";
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { AdminCalendar } from "@/components/app/admin-calendar";
+import { KalenderProjectSheet } from "@/components/app/kalender-project-sheet";
+import { KalenderSheetProvider } from "@/components/app/kalender-sheet-context";
 
-const AdminCalendar = dynamic(
-  () => import("@/components/app/admin-calendar").then((m) => m.AdminCalendar),
-  {
-    loading: () => (
-      <div className="flex min-h-[18rem] items-center justify-center py-12" role="status" aria-live="polite">
-        <BauflipLoading size="sm" label="Kalender wird geladen …" />
-      </div>
-    ),
-  },
-);
+function KalenderPageContent() {
+  const searchParams = useSearchParams();
+  const initialSheet = (searchParams.get("sheet") ?? "").trim() || null;
+
+  return (
+    <KalenderSheetProvider initialSheetProjectId={initialSheet}>
+      <section className="flex flex-col gap-6">
+        <div className="space-y-1 border-b border-border/60 pb-4">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+            Kalender
+          </h1>
+          <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+            Termine nach Monat, Kalenderwoche oder einzelnem Tag (Europe/Zurich).
+          </p>
+        </div>
+        <AdminCalendar />
+      </section>
+      <KalenderProjectSheet />
+    </KalenderSheetProvider>
+  );
+}
 
 export function KalenderPageClient() {
   return (
-    <section className="flex flex-col gap-6">
-      <div className="space-y-1 border-b border-border/60 pb-4">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-          Kalender
-        </h1>
-        <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          Termine nach Monat, Kalenderwoche oder einzelnem Tag (Europe/Zurich).
-        </p>
-      </div>
-      <AdminCalendar />
-    </section>
+    <Suspense fallback={null}>
+      <KalenderPageContent />
+    </Suspense>
   );
 }

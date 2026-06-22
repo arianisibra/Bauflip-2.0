@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
@@ -16,13 +15,13 @@ import { calendarRangeBoundsFromState } from "@/lib/kalender/calendar-range";
 import {
   anchorDateFromDayKey,
   buildAdminCalendarHref,
-  buildProjekteSheetHref,
   calendarQueriesEqual,
   dayKeyFromDate,
   parseAdminCalendarUrlState,
   type AdminCalendarViewMode,
 } from "@/lib/navigation/admin-calendar-navigation";
 import { prefetchProjectCore } from "@/lib/query/prefetch-project-core";
+import { useKalenderSheet } from "@/components/app/kalender-sheet-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BauflipLoadingInline } from "@/components/ui/bauflip-loading";
@@ -121,22 +120,22 @@ function bucketGroupsByIsoWeek(groups: WeekTaskProjectDayGroup[]): { weekKey: st
 function AppointmentCard({
   group,
   dimmed,
-  href,
+  onOpenProject,
   onProjectHover,
 }: {
   group: WeekTaskProjectDayGroup;
   dimmed: boolean;
-  href: string;
+  onOpenProject: (projectId: string) => void;
   onProjectHover?: (projectId: string) => void;
 }) {
   const task = group.primary;
   return (
-    <Link
-      href={href}
-      prefetch={false}
+    <button
+      type="button"
+      onClick={() => onOpenProject(task.projectId)}
       onMouseEnter={() => onProjectHover?.(task.projectId)}
       onFocus={() => onProjectHover?.(task.projectId)}
-      className={`flex min-h-0 items-stretch gap-2 rounded-lg border bg-card px-2 py-1.5 text-left shadow-sm outline-none ring-offset-background transition-colors hover:border-border hover:bg-muted/25 focus-visible:ring-2 focus-visible:ring-ring ${
+      className={`flex min-h-0 w-full items-stretch gap-2 rounded-lg border bg-card px-2 py-1.5 text-left shadow-sm outline-none ring-offset-background transition-colors hover:border-border hover:bg-muted/25 focus-visible:ring-2 focus-visible:ring-ring ${
         dimmed ? "border-border/40 opacity-50" : "border-border/90"
       }`}
     >
@@ -179,7 +178,7 @@ function AppointmentCard({
           ) : null}
         </div>
       </div>
-    </Link>
+    </button>
   );
 }
 
@@ -188,7 +187,7 @@ function WeekSection({
   groups,
   dimmed,
   subdivideByWeekDays = false,
-  buildProjectHref,
+  onOpenProject,
   onProjectHover,
 }: {
   weekKey: string;
@@ -196,7 +195,7 @@ function WeekSection({
   dimmed: boolean;
   /** In der Wochenansicht: Termine nach Kalendertag in eigene Karten-Blöcke mit Titel trennen. */
   subdivideByWeekDays?: boolean;
-  buildProjectHref: (projectId: string) => string;
+  onOpenProject: (projectId: string) => void;
   onProjectHover?: (projectId: string) => void;
 }) {
   const dayChunks = useMemo(() => {
@@ -223,7 +222,7 @@ function WeekSection({
           key={group.key}
           group={group}
           dimmed={dimmed}
-          href={buildProjectHref(group.primary.projectId)}
+          onOpenProject={onOpenProject}
           onProjectHover={onProjectHover}
         />
       ))}
@@ -269,7 +268,7 @@ function WeekSection({
               key={group.key}
               group={group}
               dimmed={dimmed}
-              href={buildProjectHref(group.primary.projectId)}
+              onOpenProject={onOpenProject}
               onProjectHover={onProjectHover}
             />
           ))}
@@ -281,10 +280,12 @@ function WeekSection({
 
 export function AdminCalendar() {
   const qc = useQueryClient();
+  const { openProjectSheet } = useKalenderSheet();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const todayKey = useMemo(() => todayKeySwiss(), []);
+  const hoverPrefetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const urlState = useMemo(
     () => parseAdminCalendarUrlState(searchParams, todayKey),
@@ -322,28 +323,23 @@ export function AdminCalendar() {
     return () => window.cancelAnimationFrame(id);
   }, [urlState, applyDayKey]);
 
-  const calendarReturnHref = useMemo(
-    () =>
-      buildAdminCalendarHref({
-        viewMode,
-        dayKey,
-        selectedTechnicianId,
-        sortMode,
-      }),
-    [viewMode, dayKey, selectedTechnicianId, sortMode],
-  );
-
-  const buildProjectHref = useCallback(
-    (projectId: string) => buildProjekteSheetHref(projectId, calendarReturnHref),
-    [calendarReturnHref],
-  );
-
   const handleProjectHover = useCallback(
     (projectId: string) => {
-      prefetchProjectCore(qc, projectId);
+      if (hoverPrefetchTimerRef.current) {
+        clearTimeout(hoverPrefetchTimerRef.current);
+      }
+      hoverPrefetchTimerRef.current = setTimeout(() => {
+        prefetchProjectCore(qc, projectId);
+      }, 250);
     },
     [qc],
   );
+
+  useEffect(() => {
+    return () => {
+      if (hoverPrefetchTimerRef.current) clearTimeout(hoverPrefetchTimerRef.current);
+    };
+  }, []);
 
   const pushCalendarUrl = useCallback(
     (state: {
@@ -633,6 +629,8 @@ export function AdminCalendar() {
           year={swissYmdParts(anchorDate).y}
           month={swissYmdParts(anchorDate).m}
           day={swissYmdParts(anchorDate).day}
+          onOpenProject={openProjectSheet}
+          onProjectHover={handleProjectHover}
         />
       ) : null}
 
@@ -682,7 +680,7 @@ export function AdminCalendar() {
                   groups={groups}
                   dimmed={false}
                   subdivideByWeekDays={viewMode === "week"}
-                  buildProjectHref={buildProjectHref}
+                  onOpenProject={openProjectSheet}
                   onProjectHover={handleProjectHover}
                 />
               ))
@@ -707,7 +705,7 @@ export function AdminCalendar() {
                 groups={groups}
                 dimmed={true}
                 subdivideByWeekDays={viewMode === "week"}
-                buildProjectHref={buildProjectHref}
+                onOpenProject={openProjectSheet}
                 onProjectHover={handleProjectHover}
               />
             ))}

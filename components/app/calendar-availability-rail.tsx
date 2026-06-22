@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import {
   technicianAbsenceKindLabels,
   type TechnicianAbsence,
@@ -75,12 +74,16 @@ export function CalendarAvailabilityRail({
   day,
   hourFrom = 6,
   hourTo = 20,
+  onOpenProject,
+  onProjectHover,
 }: {
   year: number;
   month: number;
   day: number;
   hourFrom?: number;
   hourTo?: number;
+  onOpenProject?: (projectId: string) => void;
+  onProjectHover?: (projectId: string) => void;
 }) {
   // Lade ±1 Tag um den gewählten Tag, damit lange Abwesenheiten an Rändern korrekt angeschnitten werden.
   const range = useMemo(() => {
@@ -246,6 +249,8 @@ export function CalendarAvailabilityRail({
                     railEndMs={railEndMs}
                     accent={accent}
                     nowPct={nowPct}
+                    onOpenProject={onOpenProject}
+                    onProjectHover={onProjectHover}
                   />
                 </li>
               );
@@ -263,12 +268,16 @@ function RailRow({
   railEndMs,
   accent,
   nowPct,
+  onOpenProject,
+  onProjectHover,
 }: {
   blocks: RailBlock[];
   railStartMs: number;
   railEndMs: number;
   accent: string;
   nowPct: number | null;
+  onOpenProject?: (projectId: string) => void;
+  onProjectHover?: (projectId: string) => void;
 }) {
   const railRef = useRef<HTMLDivElement | null>(null);
   const span = railEndMs - railStartMs;
@@ -309,10 +318,12 @@ function RailRow({
           const t = b.task;
           const colour = t.calendarColor || accent;
           return (
-            <Link
+            <button
               key={b.key}
-              href={`/projekte?sheet=${t.projectId}`}
-              prefetch={false}
+              type="button"
+              onClick={() => onOpenProject?.(t.projectId)}
+              onMouseEnter={() => onProjectHover?.(t.projectId)}
+              onFocus={() => onProjectHover?.(t.projectId)}
               className="absolute top-1 bottom-1 flex min-h-[36px] items-center justify-center overflow-hidden rounded-md border border-foreground/10 shadow-sm transition-shadow hover:shadow-md active:opacity-90 sm:min-h-0"
               style={{
                 left: `${leftPct}%`,
@@ -325,7 +336,7 @@ function RailRow({
               <span className="sr-only">
                 Termin {fmtTime(t.startsAt)}–{fmtTime(t.endsAt)}
               </span>
-            </Link>
+            </button>
           );
         }
         const a = b.absence;

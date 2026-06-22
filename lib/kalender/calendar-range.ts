@@ -1,5 +1,5 @@
-import { formatWeekRangeDe, getSwissDayBounds, getWeekBounds } from "@/lib/date/week-bounds";
-import { swissYmdParts } from "@/lib/date/swiss";
+import { formatWeekRangeDe, getSwissDayBounds, getWeekBounds, swissMonthLastDayKey } from "@/lib/date/week-bounds";
+import { swissYmdParts, zurichWallClockInstant } from "@/lib/date/swiss";
 import {
   anchorDateFromDayKey,
   type AdminCalendarUrlState,
@@ -43,8 +43,8 @@ export function calendarRangeBoundsFromState(
     };
   }
   if (viewMode === "year") {
-    const start = new Date(year, 0, 1, 0, 0, 0, 0);
-    const end = new Date(year, 11, 31, 23, 59, 59, 999);
+    const start = zurichWallClockInstant(`${year}-01-01`, 0, 0, 0, 0);
+    const end = zurichWallClockInstant(`${year}-12-31`, 23, 59, 59, 999);
     return {
       startIso: start.toISOString(),
       endIso: end.toISOString(),
@@ -53,8 +53,10 @@ export function calendarRangeBoundsFromState(
     };
   }
   if (viewMode === "month") {
-    const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
-    const end = new Date(year, month, 0, 23, 59, 59, 999);
+    const firstDayKey = `${year}-${String(month).padStart(2, "0")}-01`;
+    const lastDayKey = swissMonthLastDayKey(year, month);
+    const start = zurichWallClockInstant(firstDayKey, 0, 0, 0, 0);
+    const end = zurichWallClockInstant(lastDayKey, 23, 59, 59, 999);
     return {
       startIso: start.toISOString(),
       endIso: end.toISOString(),

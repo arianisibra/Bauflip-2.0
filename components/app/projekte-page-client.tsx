@@ -1,8 +1,14 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { TriangleAlert } from "lucide-react";
+import { todayKeySwiss } from "@/lib/date/swiss";
 import { sanitizeAppReturnTo } from "@/lib/navigation/app-return-to";
+import {
+  buildKalenderSheetHref,
+  parseAdminCalendarUrlState,
+} from "@/lib/navigation/admin-calendar-navigation";
 import { ProjekteListClient } from "@/components/app/projekte-list-client";
 
 export function ProjektePageClient({
@@ -10,6 +16,7 @@ export function ProjektePageClient({
 }: {
   supabaseConfigured: boolean;
 }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const rawOpen =
     (searchParams.get("openProjectId") ?? "").trim() ||
@@ -17,6 +24,31 @@ export function ProjektePageClient({
   const openSource = searchParams.get("from") === "kalender" ? "kalender" : undefined;
   const returnTo = sanitizeAppReturnTo(searchParams.get("returnTo"));
   const openProjectId = rawOpen || undefined;
+
+  useEffect(() => {
+    if (searchParams.get("from") !== "kalender" || !rawOpen) return;
+    const safeReturn = sanitizeAppReturnTo(searchParams.get("returnTo"));
+    if (safeReturn?.startsWith("/kalender")) {
+      const qs = safeReturn.includes("?") ? safeReturn.split("?")[1] ?? "" : "";
+      const params = new URLSearchParams(qs);
+      params.set("sheet", rawOpen);
+      router.replace(`/kalender?${params.toString()}`);
+      return;
+    }
+    router.replace(
+      buildKalenderSheetHref(
+        rawOpen,
+        parseAdminCalendarUrlState(
+          { get: () => null },
+          todayKeySwiss(),
+        ),
+      ),
+    );
+  }, [rawOpen, router, searchParams]);
+
+  if (openSource === "kalender" && rawOpen) {
+    return null;
+  }
 
   return (
     <section className="flex flex-col gap-4">

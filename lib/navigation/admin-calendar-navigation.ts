@@ -69,6 +69,16 @@ export function buildAdminCalendarHref(state: AdminCalendarUrlState): string {
   return qs ? `/kalender?${qs}` : "/kalender";
 }
 
+/** Deep-link: Kalender-Ansicht + Projekt-Sheet ohne Route-Wechsel zu /projekte. */
+export function buildKalenderSheetHref(
+  projectId: string,
+  calendarState: AdminCalendarUrlState,
+): string {
+  const params = buildAdminCalendarSearchParams(calendarState);
+  params.set("sheet", projectId);
+  return `/kalender?${params.toString()}`;
+}
+
 export function buildProjekteSheetHref(projectId: string, returnTo: string | null): string {
   const base = `/projekte?sheet=${encodeURIComponent(projectId)}&from=kalender`;
   const safe = sanitizeAppReturnTo(returnTo);

@@ -14,6 +14,7 @@ type PageProps = {
     day?: string;
     tech?: string;
     sort?: string;
+    sheet?: string;
   }>;
 };
 
