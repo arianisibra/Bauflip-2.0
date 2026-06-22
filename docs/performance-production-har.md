@@ -358,6 +358,104 @@ Dev-Log: `listMeta.rpc` = `projekte_office_bootstrap` bei Default-Load; `abgemac
 
 ---
 
+## Kalender Prod-Baseline (deployed, 2026-06-22)
+
+HAR: `app.gross-storenbau.ch.har`, Warm, `/kalender?day=2026-06-22`, Incognito empfohlen (Extensions erzeugen sonst ~119 Requests / 6 MB Rauschen).
+
+| Metrik | Wert |
+|--------|------|
+| Document total | ~953 ms |
+| TTFB (wait) | ~409 ms |
+| Wire transfer | **10 KB** |
+| RSC unkomprimiert | ~66 KB |
+| Termine im Payload | **9** |
+| Bootstrap POST `/kalender` | **0×** |
+| POST `/projekte` | **0×** |
+| `GET /projekte?sheet=` | **0×** |
+| Daten sichtbar (Hybrid-SSR) | **~953 ms** (= Document-Ende) |
+| Supabase WebSocket | **1×** |
+| `GET /api/events` | **0×** |
+
+Vergleich vor Hybrid-SSR + TZ-Fix: redundant POST ~789 ms, data ready ~1917 ms.
+
+```bash
+node scripts/perf/summarize-har.mjs ~/Desktop/app.gross-storenbau.ch.har
+```
+
+### Interaktions-HAR (Checkliste)
+
+1. Network → «Disable cache», Filter `gross-storenbau`
+2. `/kalender?day=2026-06-22` laden
+3. Termin klicken → Sheet öffnen → schliessen (2–3×)
+4. Optional: Wochenansicht wechseln
+5. HAR exportieren → `summarize-har.mjs`
+
+| Prüfpunkt | Erwartung |
+|-----------|-----------|
+| Bootstrap POST `/kalender` nach Load | **0×** |
+| POST `/kalender` bei Sheet open/close | **0×** |
+| POST `/projekte` bei Sheet (getProjectCore) | **1×** pro neuem Projekt |
+| POST `/kalender` bei View-Wechsel (neuer Range) | **1×** (Client-Action) |
+| `GET /kalender?_rsc=` bei Tag-Wechsel | **0×** (nach Kal-URL replaceState) |
+
+---
+
+## Netlify Function-Logs — Kalender-Matrix
+
+Die HAR misst nur Browser-Requests. Netlify Function-Logs zeigen **jede Serverless-Invocation** (RSC, Middleware, Server Actions).
+
+| Log-Muster | Dauer | Ursache | Status |
+|------------|-------|---------|--------|
+| `Duration: 60000 ms` + `/api/events` | 60 s | SSE-Dauerstream (alt) | **Behoben** — Supabase Realtime |
+| Burst 15–20× in wenigen Sekunden + `weekTasksFromAppointmentRange` | 0,4–2,4 s | Sheet mit `router.replace` → RSC-Reload | **Behoben** — `history.replaceState` in [`kalender-sheet-context.tsx`](components/app/kalender-sheet-context.tsx) |
+| `slow_operation` `weekTasksFromAppointmentRange` 843–1467 ms | DB | Join appointments + projects + profiles | **1× pro SSR/Reload** normal; Kal-DB-RPC reduziert |
+| `Duration: ~950 ms` einmalig | ~1 s | `GET /kalender` Document + SSR Bootstrap | **Normal** |
+| `Duration: 500–900 ms` | 0,5–0,9 s | `getProjectCore` (Sheet/Hover) | **Erwartet** — 1× pro Sheet |
+| Parallele `GET /*?_rsc=` | 200–650 ms | Sidebar-Link-Prefetch | **Reduziert** — `prefetch={false}` auf Sidebar |
+| `GET /kalender?_rsc=` bei Tag-Wechsel | 200–650 ms | `router.replace` Kalender-URL | **Behoben** — `replaceState` in [`admin-calendar.tsx`](components/app/admin-calendar.tsx) |
+
+### Verifikation nach Deploy (5 Minuten)
+
+1. Netlify → Functions → Real-time: Filter `weekTasksFromAppointmentRange`
+2. Kalender hard reload → **max. 1** slow_operation
+3. 3× Termin klicken + Sheet schliessen → **0** neue `weekTasks`-Zeilen
+4. Filter `api/events` → **0** Treffer
+5. Tag wechseln → **1** Client-POST oder Cache-Hit, **kein** `_rsc`-Reload
+
+| Aktion | Function-Invocations | `weekTasksFromAppointmentRange` |
+|--------|---------------------|--------------------------------|
+| Kalender hard reload | **1×** (~950 ms) | **1×** |
+| Termin → Sheet | **1×** POST (`getProjectCore`) | **0×** |
+| Sheet schliessen | **0×** | **0×** |
+| Tag/Ansicht wechseln (Cache hit) | **0–1×** POST | **0–1×** nur bei neuem Range |
+| Realtime-Mutation | **0–1×** Refetch | nur wenn Query aktiv |
+
+---
+
+## Phase Kal-DB — Calendar Range RPC (kein UI-Change)
+
+| Massnahme | Wirkung |
+|-----------|---------|
+| RPC `calendar_range_tasks_for_org` | Termine + Projekt + Monteur in **1 DB-Roundtrip** statt 2 PostgREST-Calls |
+| Fallback bei RPC-Fehler | Bestehende `weekTasksFromAppointmentRange`-Query |
+
+Migration: [`20260626200000_perf_calendar_range_rpc.sql`](supabase/migrations/20260626200000_perf_calendar_range_rpc.sql)
+
+| Metrik | Vor Kal-DB | Ziel |
+|--------|------------|------|
+| DB Roundtrips Kalender-Load | 2 (appointments+projects, profiles) | **1** |
+| `slow_operation` weekTasks | 843–1467 ms | **~500–700 ms** (org-abhängig) |
+| TTFB Document | ~409 ms | **~280–350 ms** |
+
+Verifikation:
+
+```bash
+psql "$DATABASE_URL" -f scripts/perf/verify-calendar-range-rpc.sql
+psql "$DATABASE_URL" -f scripts/perf/explain-top-queries.sql
+```
+
+---
+
 ## Frühere Baselines
 
 ### Dev-HAR vor Optimierung

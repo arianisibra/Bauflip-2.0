@@ -73,6 +73,7 @@ export function SidebarNav({ items, mobile = false, onNavigate }: SidebarNavProp
                   <Link
                     key={item.href}
                     href={item.href}
+                    prefetch={false}
                     target={item.href.startsWith("http") ? "_blank" : undefined}
                     rel={item.href.startsWith("http") ? "noopener noreferrer" : undefined}
                     className={cn(

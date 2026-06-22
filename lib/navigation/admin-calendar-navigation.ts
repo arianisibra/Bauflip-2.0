@@ -69,6 +69,17 @@ export function buildAdminCalendarHref(state: AdminCalendarUrlState): string {
   return qs ? `/kalender?${qs}` : "/kalender";
 }
 
+/** Kalender-Query sync ohne Next.js-Navigation — vermeidet RSC-Reload + weekTasksFromAppointmentRange. */
+export function syncAdminCalendarInUrl(state: AdminCalendarUrlState): void {
+  if (typeof globalThis.location === "undefined") return;
+  const params = buildAdminCalendarSearchParams(state);
+  const current = new URLSearchParams(globalThis.location.search);
+  const sheet = current.get("sheet");
+  if (sheet) params.set("sheet", sheet);
+  const qs = params.toString();
+  globalThis.history.replaceState(null, "", qs ? `/kalender?${qs}` : "/kalender");
+}
+
 /** Deep-link: Kalender-Ansicht + Projekt-Sheet ohne Route-Wechsel zu /projekte. */
 export function buildKalenderSheetHref(
   projectId: string,

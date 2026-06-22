@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
 import {
@@ -18,6 +18,7 @@ import {
   calendarQueriesEqual,
   dayKeyFromDate,
   parseAdminCalendarUrlState,
+  syncAdminCalendarInUrl,
   type AdminCalendarViewMode,
 } from "@/lib/navigation/admin-calendar-navigation";
 import { prefetchProjectCore } from "@/lib/query/prefetch-project-core";
@@ -281,7 +282,6 @@ function WeekSection({
 export function AdminCalendar() {
   const qc = useQueryClient();
   const { openProjectSheet } = useKalenderSheet();
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const todayKey = useMemo(() => todayKeySwiss(), []);
@@ -323,6 +323,27 @@ export function AdminCalendar() {
     return () => window.cancelAnimationFrame(id);
   }, [urlState, applyDayKey]);
 
+  useEffect(() => {
+    if (pathname !== "/kalender") return;
+    const onPopState = () => {
+      skipUrlPushRef.current = true;
+      const params = new URLSearchParams(globalThis.location.search);
+      const parsed = parseAdminCalendarUrlState(
+        { get: (key) => params.get(key) },
+        todayKey,
+      );
+      setViewMode(parsed.viewMode);
+      applyDayKey(parsed.dayKey);
+      setSelectedTechnicianId(parsed.selectedTechnicianId);
+      setSortMode(parsed.sortMode);
+      window.requestAnimationFrame(() => {
+        skipUrlPushRef.current = false;
+      });
+    };
+    globalThis.addEventListener("popstate", onPopState);
+    return () => globalThis.removeEventListener("popstate", onPopState);
+  }, [pathname, todayKey, applyDayKey]);
+
   const handleProjectHover = useCallback(
     (projectId: string) => {
       if (hoverPrefetchTimerRef.current) {
@@ -352,9 +373,9 @@ export function AdminCalendar() {
       const next = buildAdminCalendarHref(state);
       const currentQs = searchParams.toString();
       if (skipUrlPushRef.current) return;
-      if (!calendarQueriesEqual(currentQs, next)) router.replace(next, { scroll: false });
+      if (!calendarQueriesEqual(currentQs, next)) syncAdminCalendarInUrl(state);
     },
-    [pathname, router, searchParams],
+    [pathname, searchParams],
   );
 
   useEffect(() => {

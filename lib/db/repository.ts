@@ -920,6 +920,70 @@ async function weekTasksFromAppointmentRange(
     const supabase = await createSupabaseServerClient();
     if (!supabase) return [];
 
+    const techFilter =
+      assignedTechnicianId && assignedTechnicianId.length > 0 ? assignedTechnicianId : null;
+
+    const { data: rpcData, error: rpcError } = await supabase.rpc("calendar_range_tasks_for_org", {
+      p_range_start: rangeStartIso,
+      p_range_end: rangeEndIso,
+      p_technician_id: techFilter,
+    });
+
+    if (!rpcError && rpcData != null) {
+      const rows = rpcData as Array<{
+        appointmentId: string;
+        startsAt: string;
+        endsAt: string;
+        kind: WeekTaskItem["kind"];
+        projectId: string;
+        projectTitle: string;
+        projectStatus: string;
+        assignedTechnicianId: string | null;
+        technicianName: string | null;
+        calendarColor: string | null;
+        tenantDisplay: string | null;
+        serviceStreet: string | null;
+        servicePostalCode: string | null;
+        serviceCity: string | null;
+      }>;
+
+      return rows
+        .map((row) => {
+          const displayTitle = String(row.projectTitle ?? "").trim();
+          if (!displayTitle) return null;
+          const tid = row.assignedTechnicianId;
+          const addrShort = formatServiceAddressFields({
+            serviceStreet: row.serviceStreet,
+            servicePostalCode: row.servicePostalCode,
+            serviceCity: row.serviceCity,
+          });
+          return {
+            appointmentId: row.appointmentId,
+            startsAt: row.startsAt,
+            endsAt: row.endsAt,
+            kind: row.kind,
+            projectId: row.projectId,
+            projectTitle: displayTitle,
+            projectStatus: row.projectStatus as ProjectStatus,
+            assignedTechnicianId: tid,
+            technicianName: row.technicianName ?? null,
+            calendarColor: resolveCalendarColor(row.calendarColor ?? null, tid),
+            tenantDisplay: row.tenantDisplay ?? null,
+            serviceAddressShort: addrShort === "—" ? null : addrShort,
+          };
+        })
+        .filter((x): x is WeekTaskItem => x !== null);
+    }
+
+    if (rpcError) {
+      console.warn(
+        JSON.stringify({
+          type: "calendar_range_rpc_fallback",
+          message: rpcError.message,
+        }),
+      );
+    }
+
     let q = supabase
       .from("appointments")
       .select(

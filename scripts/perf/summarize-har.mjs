@@ -30,13 +30,28 @@ const doc = appEntries.find(
   (e) => e.request.method === "GET" && e.request.url.replace(/\?.*$/, "").endsWith("/projekte"),
 );
 const kalenderDoc = appEntries.find(
-  (e) => e.request.method === "GET" && e.request.url.replace(/\?.*$/, "").endsWith("/kalender"),
+  (e) =>
+    e.request.method === "GET" &&
+    !e.request.url.includes("_rsc=") &&
+    e.request.url.replace(/\?.*$/, "").endsWith("/kalender"),
 );
-const bootstrapPosts = appEntries.filter(
-  (e) => e.request.method === "POST" && e.request.url.includes("/projekte"),
+const kalenderRscGets = appEntries.filter(
+  (e) => e.request.method === "GET" && e.request.url.includes("/kalender") && e.request.url.includes("_rsc="),
+);
+const sidebarRscGets = appEntries.filter(
+  (e) =>
+    e.request.method === "GET" &&
+    e.request.url.includes("_rsc=") &&
+    !e.request.url.includes("/kalender") &&
+    ["/projekte", "/mitarbeiter", "/bestellformulare", "/tag", "/einstellungen", "/wochenplan"].some((p) =>
+      e.request.url.includes(p),
+    ),
 );
 const kalenderPosts = appEntries.filter(
   (e) => e.request.method === "POST" && e.request.url.includes("/kalender"),
+);
+const bootstrapPosts = appEntries.filter(
+  (e) => e.request.method === "POST" && e.request.url.includes("/projekte"),
 );
 const projekteSheetPrefetches = appEntries.filter(
   (e) =>
@@ -128,7 +143,25 @@ if (kalenderDoc) {
   if (contentKb > 0) {
     console.log("  RSC content (uncompressed):", contentKb + "KB");
   }
+  const kalText = kalenderDoc.response.content?.text ?? "";
+  const startsAtRefs = (kalText.match(/startsAt/g) || []).length;
+  if (startsAtRefs > 0) {
+    console.log("  appointments in payload (startsAt refs):", startsAtRefs);
+  }
 }
+
+const docEndMs = kalenderDoc ? end(kalenderDoc) : null;
+const kalenderPostsAfterDoc = docEndMs != null ? kalenderPosts.filter((p) => rel(p) >= docEndMs) : kalenderPosts;
+const projektePostsAfterDoc =
+  docEndMs != null ? bootstrapPosts.filter((p) => rel(p) >= docEndMs) : bootstrapPosts;
+const kalenderRscAfterDoc =
+  docEndMs != null ? kalenderRscGets.filter((p) => rel(p) >= docEndMs) : kalenderRscGets;
+
+console.log("\nKalender interaction (after document load)");
+console.log("  POST /kalender:", kalenderPostsAfterDoc.length);
+console.log("  POST /projekte (sheet/actions):", projektePostsAfterDoc.length);
+console.log("  GET /kalender?_rsc= (soft nav):", kalenderRscAfterDoc.length);
+console.log("  Sidebar _rsc prefetches (total session):", sidebarRscGets.length);
 
 console.log("\nBootstrap POST /kalender:", kalenderPosts.length);
 for (const p of kalenderPosts) {
@@ -179,4 +212,33 @@ if (har.log.pages?.[0]?.pageTimings) {
   console.log("\nPage timings");
   console.log("  onContentLoad:", Math.round(pt.onContentLoad ?? 0) + "ms");
   console.log("  onLoad:", Math.round(pt.onLoad ?? 0) + "ms");
+}
+
+if (kalenderDoc) {
+  const gates = [
+    {
+      label: "Bootstrap POST /kalender after load = 0",
+      pass: kalenderPostsAfterDoc.length === 0,
+      detail: String(kalenderPostsAfterDoc.length),
+    },
+    {
+      label: "GET /projekte?sheet= prefetches = 0",
+      pass: projekteSheetPrefetches.length === 0,
+      detail: String(projekteSheetPrefetches.length),
+    },
+    {
+      label: "GET /api/events = 0",
+      pass: events.length === 0,
+      detail: String(events.length),
+    },
+    {
+      label: "GET /kalender?_rsc= after load = 0 (replaceState)",
+      pass: kalenderRscAfterDoc.length === 0,
+      detail: String(kalenderRscAfterDoc.length),
+    },
+  ];
+  console.log("\nKalender interaction gates");
+  for (const g of gates) {
+    console.log(" ", g.pass ? "PASS" : "FAIL", "—", g.label, `(${g.detail})`);
+  }
 }

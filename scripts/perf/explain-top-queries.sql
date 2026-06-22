@@ -53,6 +53,14 @@ where a.starts_at >= timestamptz '2026-04-07T00:00:00Z'
   and a.starts_at <= timestamptz '2026-04-13T23:59:59Z'
 order by a.starts_at asc;
 
+-- Calendar range RPC (Phase Kal-DB — calendar_range_tasks_for_org)
+explain (analyze, buffers)
+select public.calendar_range_tasks_for_org(
+  timestamptz '2026-06-22T00:00:00+02:00',
+  timestamptz '2026-06-22T23:59:59+02:00',
+  null::uuid
+);
+
 -- Project detail appointments (see getProjectCore)
 -- Composite supports filter + order; index: idx_appointments_project_starts_at (migration 20260413120000)
 explain (analyze, buffers)
