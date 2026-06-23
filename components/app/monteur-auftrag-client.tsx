@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { ProjectCore } from "@/lib/db/repository";
@@ -14,19 +14,23 @@ import type {
   TechnicianReport,
 } from "@/lib/domain/types";
 import { isSinglePositionOrderFormTemplate } from "@/lib/order-forms/template-utils";
+import { getFilledOrderFormFields } from "@/lib/order-forms/filled-fields";
 import { isMonteurMontageContext } from "@/lib/tech/monteur-context";
 import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 import { telHref } from "@/lib/phone";
 import { formatServiceAddress, managementLabel, tenantLabel } from "@/lib/tech/bundle-display";
-import { submitTechnicianReportAction } from "@/app/(tech)/actions";
 import { fetchAuftragExtrasAction } from "@/app/(tech)/auftrag-data-actions";
-import { useAuftragProjectCore, useUpdateTechnicianReport, useUploadAttachment } from "@/lib/query/hooks";
-import { afterAttachmentChange } from "@/lib/query/invalidations";
+import {
+  useAuftragProjectCore,
+  useDeleteAttachment,
+  useSubmitTechnicianReport,
+  useUpdateAttachmentNotes,
+  useUpdateTechnicianReport,
+  useUploadAttachment,
+} from "@/lib/query/hooks";
 import { queryKeys } from "@/lib/query/keys";
-import { getTabId } from "@/lib/query/tab-id";
 import { pickMonteurAppointmentDisplay } from "@/lib/tech/auftrag-appointments";
-import { updateAttachmentNotesAction, deleteAttachmentAction } from "@/app/(app)/actions";
 import { isLikelyProjectImage } from "@/lib/storage/mime";
 import { TechMobileBackBar } from "@/components/app/tech-mobile-back-bar";
 import { MonteurOrderFormSections } from "@/components/app/monteur-order-form-sections";
@@ -123,10 +127,6 @@ function orderFormsPayloadFromFormData(
       return { templateId, values };
     })
     .filter((x): x is { templateId: string; values: Record<string, string> } => x != null);
-}
-
-function getFilledOrderFormFields(of_: { fields: OrderFormTemplate["fields"]; values: Record<string, string> }) {
-  return of_.fields.filter((f) => Boolean(of_.values[f.key]?.trim()));
 }
 
 function InfoRow({
@@ -439,7 +439,6 @@ export function MonteurAuftragClient({
 }) {
   const router = useRouter();
   const backHref = sanitizeTechReturnTo(returnTo);
-  const qc = useQueryClient();
   const { data: liveCore = core } = useAuftragProjectCore(core.project.id, core);
   const extrasQuery = useQuery({
     queryKey: queryKeys.auftragExtras(core.project.id, skipOrderFormTemplates),
@@ -462,6 +461,9 @@ export function MonteurAuftragClient({
     };
   }, [liveCore, extrasQuery.data?.signedAttachments]);
   const uploadAttachment = useUploadAttachment();
+  const updateAttachmentNotes = useUpdateAttachmentNotes();
+  const deleteAttachment = useDeleteAttachment();
+  const submitReport = useSubmitTechnicianReport();
   const updateReport = useUpdateTechnicianReport();
   const p = bundle.project;
   const tenantTelHref = telHref(p.tenantPhone);
@@ -516,25 +518,21 @@ export function MonteurAuftragClient({
 
   const saveNote = useCallback(
     async (attachmentId: string, notes: string) => {
-      const result = await updateAttachmentNotesAction(attachmentId, notes, getTabId());
-      if (result.success) {
-        void afterAttachmentChange(qc, p.id);
-      }
+      await updateAttachmentNotes.mutateAsync({ attachmentId, notes, projectId: p.id });
     },
-    [p.id, qc],
+    [p.id, updateAttachmentNotes],
   );
 
   const deletePhoto = useCallback(
     async (attachmentId: string, filePath: string) => {
-      const result = await deleteAttachmentAction(attachmentId, filePath, getTabId());
+      const result = await deleteAttachment.mutateAsync({ attachmentId, filePath, projectId: p.id });
       if (!result.success) {
         toast.error(result.error);
       } else {
         toast.success("Datei gelöscht");
-        void afterAttachmentChange(qc, p.id);
       }
     },
-    [p.id, qc],
+    [p.id, deleteAttachment],
   );
 
   const { displayAppt, furtherFuture, allPast } = useMemo(
@@ -835,20 +833,17 @@ export function MonteurAuftragClient({
                 setPending(true);
                 setError(null);
                 try {
-                  const result = await submitTechnicianReportAction(
-                    {
-                      projectId: p.id,
-                      outcome: mode,
-                      nextStatus: mode === "schaden_aufgenommen" ? nextStatus ?? undefined : undefined,
-                      summary: String(fd.get("reportNotes") ?? "").trim(),
-                      measurementsJson: "{}",
-                      workDescription: String(fd.get("reportNotes") ?? "").trim(),
-                      orderForms: isMontageContext
-                        ? []
-                        : orderFormsPayloadFromFormData(fd, orderFormTemplates, orderFormLines),
-                    },
-                    getTabId(),
-                  );
+                  const result = await submitReport.mutateAsync({
+                    projectId: p.id,
+                    outcome: mode,
+                    nextStatus: mode === "schaden_aufgenommen" ? nextStatus ?? undefined : undefined,
+                    summary: String(fd.get("reportNotes") ?? "").trim(),
+                    measurementsJson: "{}",
+                    workDescription: String(fd.get("reportNotes") ?? "").trim(),
+                    orderForms: isMontageContext
+                      ? []
+                      : orderFormsPayloadFromFormData(fd, orderFormTemplates, orderFormLines),
+                  });
                   if (!result.success) {
                     toast.error(result.error);
                     return;

@@ -1,20 +1,23 @@
 "use server";
 
+import { assertAuftragProjectAccess } from "@/lib/auth/auftrag-access";
 import { getLayoutSession } from "@/lib/auth/session";
+import type { ProjectCore } from "@/lib/db/repository";
 import {
-  getProjectCore,
+  getProjectCoreDetails,
+  getProjectCoreHead,
   listActiveOrderFormTemplatesForOrg,
+  listProjectAttachmentsForProject,
   signAttachmentUrls,
 } from "@/lib/db/repository";
-import type { ProjectAttachment } from "@/lib/domain/types";
-import type { OrderFormTemplate } from "@/lib/domain/types";
+import type { ProjectAttachment, OrderFormTemplate } from "@/lib/domain/types";
 
 export type AuftragExtras = {
   signedAttachments: ProjectAttachment[];
   orderFormTemplates: OrderFormTemplate[];
 };
 
-async function assertAuftragAccess(projectId: string) {
+async function assertAuftragAccess(projectId: string): Promise<ProjectCore> {
   const session = await getLayoutSession();
   if (!session) {
     throw new Error("Nicht angemeldet.");
@@ -24,28 +27,18 @@ async function assertAuftragAccess(projectId: string) {
     throw new Error("Projekt-ID fehlt.");
   }
 
-  const core = await getProjectCore(trimmed);
-  if (!core) {
+  const head = await getProjectCoreHead(trimmed);
+  if (!head) {
+    throw new Error("Projekt nicht gefunden.");
+  }
+  assertAuftragProjectAccess(session, head);
+
+  const details = await getProjectCoreDetails(trimmed);
+  if (!details) {
     throw new Error("Projekt nicht gefunden.");
   }
 
-  if (session.role === "technician") {
-    const isAssigned =
-      core.appointments.some((a) => a.assignedTechnicianId === session.userId) ||
-      core.project.nextOwnerUserId === session.userId;
-    if (!isAssigned) {
-      throw new Error("Keine Berechtigung.");
-    }
-  } else if (session.role === "admin" || session.role === "office") {
-    const orgId = core.project.organizationId;
-    if (!session.organizationId || !orgId || session.organizationId !== orgId) {
-      throw new Error("Keine Berechtigung.");
-    }
-  } else {
-    throw new Error("Keine Berechtigung.");
-  }
-
-  return core;
+  return { ...head, ...details };
 }
 
 /**
@@ -56,12 +49,26 @@ export async function fetchAuftragExtrasAction(
   projectId: string,
   skipOrderFormTemplates = false,
 ): Promise<AuftragExtras> {
-  const core = await assertAuftragAccess(projectId);
+  const session = await getLayoutSession();
+  if (!session) {
+    throw new Error("Nicht angemeldet.");
+  }
+  const trimmed = projectId.trim();
+  if (!trimmed) {
+    throw new Error("Projekt-ID fehlt.");
+  }
 
+  const head = await getProjectCoreHead(trimmed);
+  if (!head) {
+    throw new Error("Projekt nicht gefunden.");
+  }
+  assertAuftragProjectAccess(session, head);
+
+  const attachments = await listProjectAttachmentsForProject(trimmed);
   const [signedAttachments, orderFormTemplates] = await Promise.all([
-    signAttachmentUrls(core.attachments),
-    !skipOrderFormTemplates && core.project.organizationId != null
-      ? listActiveOrderFormTemplatesForOrg(core.project.organizationId)
+    signAttachmentUrls(attachments),
+    !skipOrderFormTemplates && head.project.organizationId != null
+      ? listActiveOrderFormTemplatesForOrg(head.project.organizationId)
       : Promise.resolve([]),
   ]);
 

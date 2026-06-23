@@ -1,18 +1,9 @@
 import type { User } from "@supabase/supabase-js";
+import { mapRole } from "@/lib/auth/map-role";
 import type { RoleType } from "@/lib/domain/types";
 
 export const AUTH_METADATA_ROLE_KEY = "role";
 export const AUTH_METADATA_ORG_KEY = "organization_id";
-
-function mapRole(raw: string | null | undefined): RoleType {
-  if (raw === "admin" || raw === "office" || raw === "technician") {
-    return raw;
-  }
-  if (raw === "monteur") {
-    return "technician";
-  }
-  return "office";
-}
 
 /** Fast-path for proxy when invite/bootstrap synced auth metadata. */
 export function readProxyAuthFromUserMetadata(

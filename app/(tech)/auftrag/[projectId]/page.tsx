@@ -1,5 +1,6 @@
 import dynamic from "next/dynamic";
 import { notFound, redirect } from "next/navigation";
+import { canAccessAuftragProject } from "@/lib/auth/auftrag-access";
 import { getLayoutSession } from "@/lib/auth/session";
 import { sanitizeTechReturnTo } from "@/lib/navigation/tech-field-navigation";
 import { isMonteurMontageContext } from "@/lib/tech/monteur-context";
@@ -35,23 +36,10 @@ export default async function MonteurAuftragPage({ params, searchParams }: PageP
     notFound();
   }
 
-  if (session.role === "technician") {
-    const isAssigned =
-      core.appointments.some((a) => a.assignedTechnicianId === session.userId) ||
-      core.project.nextOwnerUserId === session.userId;
-    if (!isAssigned) {
+  if (!canAccessAuftragProject(session, core)) {
+    if (session.role === "technician" || session.role === "admin" || session.role === "office") {
       notFound();
     }
-  } else if (session.role === "admin" || session.role === "office") {
-    const orgId = core.project.organizationId;
-    if (
-      !session.organizationId ||
-      !orgId ||
-      session.organizationId !== orgId
-    ) {
-      notFound();
-    }
-  } else {
     redirect("/");
   }
 

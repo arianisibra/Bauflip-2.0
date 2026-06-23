@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { MitarbeiterHydrationBoundary } from "@/components/app/mitarbeiter-hydration-boundary";
+import { QueryHydrationBoundary } from "@/components/app/query-hydration-boundary";
 import { MitarbeiterPageClient } from "@/components/app/mitarbeiter-page-client";
 import { BauflipLoading } from "@/components/ui/bauflip-loading";
 import { getLayoutSession } from "@/lib/auth/session";
@@ -20,7 +20,7 @@ export default async function MitarbeiterPage() {
   const dehydratedState = await buildMitarbeiterDehydratedState(session.organizationId);
 
   return (
-    <MitarbeiterHydrationBoundary state={dehydratedState}>
+    <QueryHydrationBoundary state={dehydratedState}>
       <Suspense
         fallback={
           <div className="flex justify-center py-16" role="status" aria-live="polite">
@@ -30,6 +30,6 @@ export default async function MitarbeiterPage() {
       >
         <MitarbeiterPageClient />
       </Suspense>
-    </MitarbeiterHydrationBoundary>
+    </QueryHydrationBoundary>
   );
 }

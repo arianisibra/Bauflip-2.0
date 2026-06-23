@@ -45,10 +45,7 @@ import {
 import { BauflipLoading, BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
 import { TechnicianReportEditOverlay } from "@/components/app/technician-report-edit-overlay";
 import { AppointmentBookingForm } from "@/components/app/appointment-booking-form";
-function getFilledOrderFormFields(of_: TechnicianReport["orderForms"][number]) {
-  return of_.fields.filter((f) => Boolean(of_.values[f.key]?.trim()));
-}
-
+import { getFilledOrderFormFields } from "@/lib/order-forms/filled-fields";
 function formatAppointmentRange(startsAtIso: string, endsAtIso: string): string {
   const startsAt = new Date(startsAtIso);
   const endsAt = new Date(endsAtIso);

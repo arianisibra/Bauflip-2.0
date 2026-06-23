@@ -3,7 +3,7 @@
 import { HydrationBoundary, type DehydratedState } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
-export function KalenderHydrationBoundary({
+export function QueryHydrationBoundary({
   state,
   children,
 }: Readonly<{

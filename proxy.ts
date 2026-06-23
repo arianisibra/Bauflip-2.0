@@ -1,9 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import type { RoleType } from "@/lib/domain/types";
+import { hasSupabaseAuthCookie } from "@/lib/auth/cookies";
+import { mapRole } from "@/lib/auth/map-role";
 import { applyProxyAuthContext } from "@/lib/auth/proxy-auth-headers";
 import { readProxyAuthFromUserMetadata } from "@/lib/auth/user-metadata-keys";
+import type { RoleType } from "@/lib/domain/types";
 
 const PUBLIC_PATHS = ["/anmeldung", "/onboarding", "/mfa/setup"];
 
@@ -55,22 +57,6 @@ function isTechnicianAllowedPath(pathname: string): boolean {
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-function mapRole(raw: string | null | undefined): RoleType {
-  if (raw === "admin" || raw === "office" || raw === "technician") {
-    return raw;
-  }
-  if (raw === "monteur") {
-    return "technician";
-  }
-  return "office";
-}
-
-function hasSupabaseAuthCookie(request: NextRequest): boolean {
-  return request.cookies
-    .getAll()
-    .some((c) => c.name.startsWith("sb-") && c.name.includes("auth-token"));
-}
-
 async function resolveMembershipRole(
   supabase: ReturnType<typeof createServerClient>,
   userId: string,
@@ -113,12 +99,12 @@ export async function proxy(request: NextRequest) {
   }
 
   // Public pages without auth cookie: skip Supabase auth API entirely.
-  if (isPublicPath && !hasSupabaseAuthCookie(request)) {
+  if (isPublicPath && !hasSupabaseAuthCookie(request.cookies.getAll())) {
     return withSecurityHeaders(NextResponse.next());
   }
 
   // Protected routes without session cookie: redirect without getUser() round-trip.
-  if (!isPublicPath && !hasSupabaseAuthCookie(request)) {
+  if (!isPublicPath && !hasSupabaseAuthCookie(request.cookies.getAll())) {
     if (pathname.startsWith("/api")) {
       return withSecurityHeaders(NextResponse.json({ error: "Nicht autorisiert." }, { status: 401 }));
     }

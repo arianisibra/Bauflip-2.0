@@ -18,11 +18,17 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { AuftragExtras } from "@/app/(tech)/auftrag-data-actions";
 import type { ProjectCore } from "@/lib/db/repository";
+import { swissYmdParts } from "@/lib/date/swiss";
+import { swissWeekReferenceIso } from "@/lib/date/swiss-week";
 import type { ProjectAttachment } from "@/lib/domain/types";
 import { queryKeys } from "./keys";
 
 export type RefetchType = "active" | "inactive" | "all" | "none";
 export type InvalidateOpts = { refetchType?: RefetchType };
+
+export type ProjectAdjacencyInvalidateOpts = InvalidateOpts & {
+  appointmentWindow?: { startsAt: string; endsAt: string };
+};
 
 function inv(qc: QueryClient, queryKey: readonly unknown[], opts: InvalidateOpts = {}): void {
   qc.invalidateQueries({ queryKey, refetchType: opts.refetchType });
@@ -39,18 +45,92 @@ export function invalidateProjectListCaches(
   inv(qc, queryKeys.projekteListAll(), opts);
 }
 
-export function invalidateProjectAdjacencies(
+function rangesOverlapIso(
+  aStart: string,
+  aEnd: string,
+  bStart: string,
+  bEnd: string,
+): boolean {
+  return aStart <= bEnd && bStart <= aEnd;
+}
+
+function invalidateSwissMonthCaches(
   qc: QueryClient,
-  _projectId: string,
+  year: number,
+  month: number,
   opts?: InvalidateOpts,
 ): void {
-  inv(qc, queryKeys.projekteBootstrapAll(), opts);
-  inv(qc, queryKeys.projekteListAll(), opts);
+  inv(qc, queryKeys.monthTasks.byYearMonth(year, month), opts);
+  inv(qc, queryKeys.techMonthTasks.byYearMonth(year, month), opts);
+}
+
+function invalidateAllCalendarRangeCaches(qc: QueryClient, opts?: InvalidateOpts): void {
   inv(qc, queryKeys.weekTasks.all(), opts);
   inv(qc, queryKeys.monthTasks.all(), opts);
   inv(qc, queryKeys.techMonthTasks.all(), opts);
   inv(qc, queryKeys.calendarRange.all(), opts);
   inv(qc, queryKeys.availabilityRange.all(), opts);
+}
+
+/** Invalidate week/month/range caches overlapping an appointment window only. */
+export function invalidateAppointmentRangeCaches(
+  qc: QueryClient,
+  window: { startsAt: string; endsAt: string },
+  opts?: InvalidateOpts,
+): void {
+  const { startsAt, endsAt } = window;
+
+  const startWeekRef = swissWeekReferenceIso(new Date(startsAt));
+  const endWeekRef = swissWeekReferenceIso(new Date(endsAt));
+  inv(qc, queryKeys.weekTasks.byDate(startWeekRef), opts);
+  if (endWeekRef !== startWeekRef) {
+    inv(qc, queryKeys.weekTasks.byDate(endWeekRef), opts);
+  }
+
+  const startMonth = swissYmdParts(new Date(startsAt));
+  const endMonth = swissYmdParts(new Date(endsAt));
+  invalidateSwissMonthCaches(qc, startMonth.y, startMonth.m, opts);
+  if (startMonth.y !== endMonth.y || startMonth.m !== endMonth.m) {
+    invalidateSwissMonthCaches(qc, endMonth.y, endMonth.m, opts);
+  }
+
+  for (const [queryKey] of qc.getQueriesData({ queryKey: queryKeys.calendarRange.all() })) {
+    const rangeStart = queryKey[1];
+    const rangeEnd = queryKey[2];
+    if (
+      typeof rangeStart === "string" &&
+      typeof rangeEnd === "string" &&
+      rangesOverlapIso(startsAt, endsAt, rangeStart, rangeEnd)
+    ) {
+      inv(qc, queryKey, opts);
+    }
+  }
+
+  for (const [queryKey] of qc.getQueriesData({ queryKey: queryKeys.availabilityRange.all() })) {
+    const rangeStart = queryKey[1];
+    const rangeEnd = queryKey[2];
+    if (
+      typeof rangeStart === "string" &&
+      typeof rangeEnd === "string" &&
+      rangesOverlapIso(startsAt, endsAt, rangeStart, rangeEnd)
+    ) {
+      inv(qc, queryKey, opts);
+    }
+  }
+}
+
+export function invalidateProjectAdjacencies(
+  qc: QueryClient,
+  _projectId: string,
+  opts?: ProjectAdjacencyInvalidateOpts,
+): void {
+  invalidateProjectListCaches(qc, opts);
+  const { appointmentWindow, ...invOpts } = opts ?? {};
+  if (appointmentWindow) {
+    invalidateAppointmentRangeCaches(qc, appointmentWindow, invOpts);
+  } else {
+    invalidateAllCalendarRangeCaches(qc, invOpts);
+  }
 }
 
 export function invalidateReportAdjacencies(
@@ -119,22 +199,48 @@ export function patchAttachmentAdded(
   projectId: string,
   attachment: ProjectAttachment,
 ): void {
+  patchAttachmentsInCaches(qc, projectId, (list) => appendAttachment(list, attachment));
+}
+
+function patchAttachmentsInCaches(
+  qc: QueryClient,
+  projectId: string,
+  patchList: (list: ProjectAttachment[] | undefined) => ProjectAttachment[],
+): void {
   qc.setQueryData<ProjectCore>(queryKeys.projects.core(projectId), (old) =>
-    old ? { ...old, attachments: appendAttachment(old.attachments, attachment) } : old,
+    old ? { ...old, attachments: patchList(old.attachments) } : old,
   );
   qc.setQueryData<{ attachments: ProjectAttachment[]; reports: ProjectCore["reports"] }>(
     queryKeys.projects.coreDetails(projectId),
-    (old) => (old ? { ...old, attachments: appendAttachment(old.attachments, attachment) } : old),
+    (old) => (old ? { ...old, attachments: patchList(old.attachments) } : old),
   );
   qc.setQueryData<ProjectCore>(queryKeys.projects.auftragCore(projectId), (old) =>
-    old ? { ...old, attachments: appendAttachment(old.attachments, attachment) } : old,
+    old ? { ...old, attachments: patchList(old.attachments) } : old,
   );
   qc.setQueriesData<AuftragExtras>(
     { queryKey: queryKeys.auftragExtrasPrefix(projectId) },
-    (old) =>
-      old
-        ? { ...old, signedAttachments: appendAttachment(old.signedAttachments, attachment) }
-        : old,
+    (old) => (old ? { ...old, signedAttachments: patchList(old.signedAttachments) } : old),
+  );
+}
+
+export function patchAttachmentNotesUpdated(
+  qc: QueryClient,
+  projectId: string,
+  attachmentId: string,
+  notes: string | null,
+): void {
+  patchAttachmentsInCaches(qc, projectId, (list) =>
+    (list ?? []).map((a) => (a.id === attachmentId ? { ...a, notes } : a)),
+  );
+}
+
+export function patchAttachmentRemoved(
+  qc: QueryClient,
+  projectId: string,
+  attachmentId: string,
+): void {
+  patchAttachmentsInCaches(qc, projectId, (list) =>
+    (list ?? []).filter((a) => a.id !== attachmentId),
   );
 }
 

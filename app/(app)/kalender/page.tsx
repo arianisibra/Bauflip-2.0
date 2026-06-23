@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { KalenderHydrationBoundary } from "@/components/app/kalender-hydration-boundary";
+import { QueryHydrationBoundary } from "@/components/app/query-hydration-boundary";
 import { KalenderPageClient } from "@/components/app/kalender-page-client";
 import { BauflipLoading } from "@/components/ui/bauflip-loading";
 import { getLayoutSession } from "@/lib/auth/session";
@@ -34,7 +34,7 @@ export default async function KalenderPage({ searchParams }: PageProps) {
   const dehydratedState = await buildKalenderDehydratedState(sp);
 
   return (
-    <KalenderHydrationBoundary state={dehydratedState}>
+    <QueryHydrationBoundary state={dehydratedState}>
       <Suspense
         fallback={
           <div className="flex justify-center py-16" role="status" aria-live="polite">
@@ -44,6 +44,6 @@ export default async function KalenderPage({ searchParams }: PageProps) {
       >
         <KalenderPageClient />
       </Suspense>
-    </KalenderHydrationBoundary>
+    </QueryHydrationBoundary>
   );
 }

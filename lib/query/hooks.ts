@@ -66,6 +66,7 @@ import {
   projekteBootstrapStatusKey,
   type ProjekteListFilter,
 } from "@/lib/projekte/list-filter";
+import { submitTechnicianReportAction } from "@/app/(tech)/actions";
 import { fetchAuftragProjectCoreAction } from "@/app/(tech)/auftrag-data-actions";
 import { fetchTechMonthTasksAction, fetchWeekTasksAction } from "@/app/(tech)/wochenplan/actions";
 import {
@@ -78,9 +79,11 @@ import {
 } from "@/app/(app)/order-form-template-actions";
 import {
   afterAbsenceChange,
+  afterProjectCoreChange,
   afterProjectDeleted,
-  afterAttachmentChange,
   patchAttachmentAdded,
+  patchAttachmentNotesUpdated,
+  patchAttachmentRemoved,
   invalidateProjectAdjacencies,
   invalidateProjectListCaches,
   invalidateReportAdjacencies,
@@ -89,6 +92,11 @@ import { notifyOtherTabs } from "./cross-tab-broadcast";
 import { queryKeys } from "./keys";
 import { availabilityRangeKeyBounds } from "./availability-range-bounds";
 import { getTabId } from "./tab-id";
+import { appointmentSchema, technicianReportSchema } from "@/lib/validations/forms";
+import type { z } from "zod";
+
+type AppointmentInput = z.infer<typeof appointmentSchema>;
+type TechnicianReportInput = z.infer<typeof technicianReportSchema>;
 
 type MutationSuccessResult = { success: true } | { success: false; error: string };
 type UploadResult =
@@ -438,24 +446,43 @@ export function useUpdateStammdaten() {
 
 export function useAddAppointment() {
   const qc = useQueryClient();
-  return useMutation<{ core: ProjectCore }, Error, Parameters<typeof addAppointmentAction>[0]>({
+  return useMutation<{ core: ProjectCore }, Error, AppointmentInput>({
     mutationFn: (input) => addAppointmentAction(input, getTabId()),
-    onSuccess: ({ core }) => {
+    onSuccess: ({ core }, variables) => {
       primeCore(qc, core.project.id, core);
-      invalidateProjectAdjacencies(qc, core.project.id);
+      invalidateProjectAdjacencies(qc, core.project.id, {
+        appointmentWindow: { startsAt: variables.startsAt, endsAt: variables.endsAt },
+      });
       notifyOtherTabs({ type: "appointment.changed", projectId: core.project.id });
     },
   });
 }
 
+type DeleteAppointmentContext = {
+  appointmentWindow?: { startsAt: string; endsAt: string };
+};
+
 export function useDeleteAppointment() {
   const qc = useQueryClient();
-  return useMutation<{ core: ProjectCore }, Error, { appointmentId: string; projectId: string }>({
+  return useMutation<
+    { core: ProjectCore },
+    Error,
+    { appointmentId: string; projectId: string },
+    DeleteAppointmentContext
+  >({
     mutationFn: ({ appointmentId, projectId }) =>
       deleteAppointmentAction(appointmentId, projectId, getTabId()),
-    onSuccess: ({ core }) => {
+    onMutate: ({ appointmentId, projectId }) => {
+      const core = qc.getQueryData<ProjectCore>(queryKeys.projects.core(projectId));
+      const appt = core?.appointments.find((a) => a.id === appointmentId);
+      if (!appt) return {};
+      return { appointmentWindow: { startsAt: appt.startsAt, endsAt: appt.endsAt } };
+    },
+    onSuccess: ({ core }, _variables, context) => {
       primeCore(qc, core.project.id, core);
-      invalidateProjectAdjacencies(qc, core.project.id);
+      invalidateProjectAdjacencies(qc, core.project.id, {
+        appointmentWindow: context?.appointmentWindow,
+      });
       notifyOtherTabs({ type: "appointment.changed", projectId: core.project.id });
     },
   });
@@ -574,8 +601,10 @@ export function useUpdateAttachmentNotes() {
   const qc = useQueryClient();
   return useMutation<MutationSuccessResult, Error, { attachmentId: string; notes: string; projectId: string }>({
     mutationFn: ({ attachmentId, notes }) => updateAttachmentNotesAction(attachmentId, notes, getTabId()),
-    onSuccess: (result, { projectId }) => {
-      if (result.success) afterAttachmentChange(qc, projectId);
+    onSuccess: (result, { projectId, attachmentId, notes }) => {
+      if (result.success) {
+        patchAttachmentNotesUpdated(qc, projectId, attachmentId, notes.trim() || null);
+      }
     },
   });
 }
@@ -584,8 +613,20 @@ export function useDeleteAttachment() {
   const qc = useQueryClient();
   return useMutation<MutationSuccessResult, Error, { attachmentId: string; filePath: string; projectId: string }>({
     mutationFn: ({ attachmentId, filePath }) => deleteAttachmentAction(attachmentId, filePath, getTabId()),
-    onSuccess: (result, { projectId }) => {
-      if (result.success) afterAttachmentChange(qc, projectId);
+    onSuccess: (result, { projectId, attachmentId }) => {
+      if (result.success) patchAttachmentRemoved(qc, projectId, attachmentId);
+    },
+  });
+}
+
+export function useSubmitTechnicianReport() {
+  const qc = useQueryClient();
+  return useMutation<MutationSuccessResult, Error, TechnicianReportInput>({
+    mutationFn: (values) => submitTechnicianReportAction(values, getTabId()),
+    onSuccess: (result, values) => {
+      if (result.success) {
+        afterProjectCoreChange(qc, values.projectId);
+      }
     },
   });
 }

@@ -1,2 +1,0 @@
-Commit test file — safe to delete after verifying Git/Netlify deploy.
-Created: 2026-04-20

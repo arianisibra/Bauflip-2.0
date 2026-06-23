@@ -1,3 +1,4 @@
+import { mapRole } from "@/lib/auth/map-role";
 import type { RoleType } from "@/lib/domain/types";
 
 /**
@@ -7,12 +8,6 @@ import type { RoleType } from "@/lib/domain/types";
 export const PROXY_AUTH_USER_ID_HEADER = "x-bauflip-proxy-auth-user-id";
 export const PROXY_AUTH_ROLE_HEADER = "x-bauflip-proxy-auth-role";
 export const PROXY_AUTH_ORG_ID_HEADER = "x-bauflip-proxy-auth-org-id";
-
-function mapRole(raw: string | null | undefined): RoleType {
-  if (raw === "admin" || raw === "office" || raw === "technician") return raw;
-  if (raw === "monteur") return "technician";
-  return "office";
-}
 
 export function applyProxyAuthContext(
   headers: Headers,

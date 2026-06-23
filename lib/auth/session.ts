@@ -4,6 +4,8 @@ import type { User } from "@supabase/supabase-js";
 import { cookies, headers } from "next/headers";
 import { cache } from "react";
 import type { RoleType, UserProfile } from "@/lib/domain/types";
+import { hasSupabaseAuthCookie } from "@/lib/auth/cookies";
+import { mapRole } from "@/lib/auth/map-role";
 import { mapUserProfileRow } from "@/lib/db/repository";
 import {
   readProxyAuthOrgId,
@@ -44,22 +46,6 @@ function mockLayoutSessionFromCookies(
   if (!mockAuthEnabled || !mockAuthenticated) return null;
   const mockRole = mapRole(cookieStore.get("bauflip_mock_role")?.value);
   return { userId: "mock-user", role: mockRole, organizationId: null };
-}
-
-function mapRole(raw: string | null | undefined): RoleType {
-  if (raw === "admin" || raw === "technician" || raw === "office") {
-    return raw;
-  }
-  if (raw === "monteur") {
-    return "technician";
-  }
-  return "office";
-}
-
-function hasSupabaseAuthCookie(cookieStore: Awaited<ReturnType<typeof cookies>>): boolean {
-  return cookieStore
-    .getAll()
-    .some((c) => c.name.startsWith("sb-") && c.name.includes("auth-token"));
 }
 
 /** Read email from the Supabase auth cookie JWT — no Auth API round-trip. */
@@ -143,7 +129,7 @@ export const getLayoutSession = cache(async function getLayoutSession(): Promise
     proxyUserId = null;
   }
 
-  if (proxyUserId && proxyRole && hasSupabaseAuthCookie(cookieStore)) {
+  if (proxyUserId && proxyRole && hasSupabaseAuthCookie(cookieStore.getAll())) {
     return {
       userId: proxyUserId,
       role: proxyRole,

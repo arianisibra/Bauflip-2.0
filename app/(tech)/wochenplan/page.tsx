@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { WochenplanHydrationBoundary } from "@/components/app/wochenplan-hydration-boundary";
+import { QueryHydrationBoundary } from "@/components/app/query-hydration-boundary";
 import { WochenplanPageClient } from "@/components/app/wochenplan-page-client";
 import { BauflipLoading } from "@/components/ui/bauflip-loading";
 import { getLayoutSession } from "@/lib/auth/session";
@@ -29,7 +29,7 @@ export default async function TechKalenderPage({ searchParams }: PageProps) {
   const dehydratedState = await buildWochenplanDehydratedState(session, urlState);
 
   return (
-    <WochenplanHydrationBoundary state={dehydratedState}>
+    <QueryHydrationBoundary state={dehydratedState}>
       <Suspense
         fallback={
           <div className="flex min-h-[min(50vh,24rem)] items-center justify-center py-12" role="status" aria-live="polite">
@@ -39,6 +39,6 @@ export default async function TechKalenderPage({ searchParams }: PageProps) {
       >
         <WochenplanPageClient />
       </Suspense>
-    </WochenplanHydrationBoundary>
+    </QueryHydrationBoundary>
   );
 }

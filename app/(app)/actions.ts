@@ -195,7 +195,7 @@ export async function uploadProjectReportFileAction(
     const [signedAttachment] = await signAttachmentUrls([attachment]);
     if (session.organizationId) {
       publish(session.organizationId, {
-        type: "project.core_changed",
+        type: "attachment.changed",
         projectId,
         originTabId: tabId,
       });
@@ -242,7 +242,7 @@ export async function updateAttachmentNotesAction(
   const pid = String(att.project_id);
   if (session.organizationId) {
     publish(session.organizationId, {
-      type: "project.core_changed",
+      type: "attachment.changed",
       projectId: pid,
       originTabId: tabId,
     });
@@ -285,7 +285,7 @@ export async function deleteAttachmentAction(
   const pid = String(att.project_id);
   if (session.organizationId) {
     publish(session.organizationId, {
-      type: "project.core_changed",
+      type: "attachment.changed",
       projectId: pid,
       originTabId: tabId,
     });

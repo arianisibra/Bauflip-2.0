@@ -70,17 +70,6 @@ export async function getProjectSheetDetailsAction(
   return { details: { ...details, attachments: signedAttachments } };
 }
 
-/** Volles Bundle — Mutations, Prefetch-Fallback, Legacy. */
-export async function getProjectSheetDataAction(projectId: string) {
-  await requireOfficeSession();
-  const bundle = await getProjectCore(projectId);
-  if (!bundle) {
-    throw new Error("Projekt nicht gefunden.");
-  }
-  const signedAttachments = await signAttachmentUrls(bundle.attachments);
-  return { bundle: { ...bundle, attachments: signedAttachments } };
-}
-
 export async function listAssignableProfilesAction(): Promise<UserProfile[]> {
   const session = await requireOfficeSession();
   return listAssignableProfiles(session.organizationId);

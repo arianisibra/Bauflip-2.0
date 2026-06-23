@@ -3,6 +3,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
+import { hasSupabaseAuthCookie } from "@/lib/auth/cookies";
 import { hasSupabaseConfig } from "@/lib/supabase/config";
 
 export { hasSupabaseConfig } from "@/lib/supabase/config";
@@ -25,11 +26,9 @@ export async function createSupabaseServerClient() {
   const mockAuthEnabled =
     process.env.NODE_ENV !== "production" || process.env.ALLOW_MOCK_AUTH === "true";
   const mockAuthenticated = cookieStore.get("bauflip_mock_auth")?.value === "1";
-  const hasSupabaseAuthCookie = cookieStore
-    .getAll()
-    .some((c) => c.name.startsWith("sb-") && c.name.includes("auth-token"));
+  const hasAuthCookie = hasSupabaseAuthCookie(cookieStore.getAll());
   const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (mockAuthEnabled && mockAuthenticated && !hasSupabaseAuthCookie && supabaseServiceRoleKey) {
+  if (mockAuthEnabled && mockAuthenticated && !hasAuthCookie && supabaseServiceRoleKey) {
     // Use service role only for explicit mock sessions.
     return createClient(supabaseUrl, supabaseServiceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },

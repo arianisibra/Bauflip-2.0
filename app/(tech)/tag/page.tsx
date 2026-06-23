@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { TagHydrationBoundary } from "@/components/app/tag-hydration-boundary";
+import { QueryHydrationBoundary } from "@/components/app/query-hydration-boundary";
 import { TagPageClient } from "@/components/app/tag-page-client";
 import { BauflipLoading } from "@/components/ui/bauflip-loading";
 import { getLayoutSession } from "@/lib/auth/session";
@@ -21,7 +21,7 @@ export default async function TodayPage() {
   const dehydratedState = await buildTagDehydratedState(session);
 
   return (
-    <TagHydrationBoundary state={dehydratedState}>
+    <QueryHydrationBoundary state={dehydratedState}>
       <Suspense
         fallback={
           <div className="flex min-h-[min(50vh,24rem)] items-center justify-center py-12" role="status" aria-live="polite">
@@ -31,6 +31,6 @@ export default async function TodayPage() {
       >
         <TagPageClient />
       </Suspense>
-    </TagHydrationBoundary>
+    </QueryHydrationBoundary>
   );
 }

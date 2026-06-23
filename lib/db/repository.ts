@@ -36,7 +36,6 @@ import type { TeamMemberListItem } from "@/lib/mitarbeiter/types";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { withSlowLog } from "@/lib/observability/slow-log";
-import { DEFAULT_PROJECT_LIST_MAX_ROWS } from "@/lib/constants/project-list";
 import type { ProjekteStatusCountsSnapshot } from "@/lib/projekte/bootstrap-types";
 import {
   DEFAULT_PROJEKTE_LIST_FILTER,
@@ -59,20 +58,6 @@ import {
   mockProjects,
   mockReports,
 } from "@/lib/db/mock-data";
-
-/** Safety cap for office project list. Env overrides; default from constants. */
-function projectListMaxRows(): number {
-  const raw = process.env.PROJECT_LIST_MAX_ROWS?.trim();
-  if (!raw) return DEFAULT_PROJECT_LIST_MAX_ROWS;
-  const n = Number.parseInt(raw, 10);
-  if (!Number.isFinite(n) || n < 1) return DEFAULT_PROJECT_LIST_MAX_ROWS;
-  return Math.min(n, 50_000);
-}
-
-/** Exposed for SSR/UI truncation hint. */
-export function getProjectListMaxRows(): number {
-  return projectListMaxRows();
-}
 
 export { mapUserProfileRow } from "./repository-map";
 
@@ -938,6 +923,30 @@ export const getProjectCoreHead = cache(async function getProjectCoreHead(
   });
 });
 
+export async function listProjectAttachmentsForProject(
+  projectId: string,
+): Promise<ProjectAttachment[]> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return mockProjectAttachments.filter((a) => a.projectId === projectId);
+  }
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (!project) return [];
+
+  const { data: attachments } = await supabase
+    .from("project_attachments")
+    .select(ATTACHMENT_DB_COLUMNS)
+    .eq("project_id", projectId)
+    .order("created_at");
+
+  return ((attachments as Record<string, unknown>[]) ?? []).map(mapProjectAttachmentRow);
+}
+
 export const getProjectCoreDetails = cache(async function getProjectCoreDetails(
   projectId: string,
 ): Promise<ProjectCoreDetails | null> {
@@ -959,17 +968,13 @@ export const getProjectCoreDetails = cache(async function getProjectCoreDetails(
       .maybeSingle();
     if (!project) return null;
 
-    const [{ data: attachments }, reports] = await Promise.all([
-      supabase
-        .from("project_attachments")
-        .select(ATTACHMENT_DB_COLUMNS)
-        .eq("project_id", projectId)
-        .order("created_at"),
+    const [attachments, reports] = await Promise.all([
+      listProjectAttachmentsForProject(projectId),
       loadProjectReportsWithOrderForms(supabase, projectId),
     ]);
 
     return {
-      attachments: ((attachments as Record<string, unknown>[]) ?? []).map(mapProjectAttachmentRow),
+      attachments,
       reports,
     };
   });

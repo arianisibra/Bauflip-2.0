@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { BestellformulareHydrationBoundary } from "@/components/app/bestellformulare-hydration-boundary";
+import { QueryHydrationBoundary } from "@/components/app/query-hydration-boundary";
 import { BestellformularePageClient } from "@/components/app/bestellformulare-page-client";
 import { BauflipLoading } from "@/components/ui/bauflip-loading";
 import { getLayoutSession } from "@/lib/auth/session";
@@ -20,7 +20,7 @@ export default async function BestellformularePage() {
   const dehydratedState = await buildBestellformulareDehydratedState(session.organizationId);
 
   return (
-    <BestellformulareHydrationBoundary state={dehydratedState}>
+    <QueryHydrationBoundary state={dehydratedState}>
       <Suspense
         fallback={
           <div className="flex justify-center py-16" role="status" aria-live="polite">
@@ -30,6 +30,6 @@ export default async function BestellformularePage() {
       >
         <BestellformularePageClient />
       </Suspense>
-    </BestellformulareHydrationBoundary>
+    </QueryHydrationBoundary>
   );
 }

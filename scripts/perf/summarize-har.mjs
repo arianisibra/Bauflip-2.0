@@ -194,6 +194,29 @@ function classifyAuftragPost(post) {
   if (/fetchAuftragExtrasAction/.test(text)) return "extras";
   if (/fetchAuftragProjectCoreAction/.test(text)) return "core";
   if (/submitTechnicianReportAction|updateTechnicianReportAction/.test(text)) return "rapport";
+
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) {
+      if (parsed.length === 2 && typeof parsed[0] === "string" && typeof parsed[1] === "boolean") {
+        return "extras";
+      }
+      if (parsed.length === 1 && typeof parsed[0] === "string" && parsed[0].includes("-")) {
+        return "core";
+      }
+      if (parsed.length === 3 && typeof parsed[0] === "string" && typeof parsed[1] === "string") {
+        return parsed[1].includes("/") ? "delete" : "notes";
+      }
+    }
+    if (parsed && typeof parsed === "object") {
+      if (parsed.outcome || parsed.reportId) return "rapport";
+    }
+  } catch {
+    // Next.js may wrap args; fall through to heuristics below.
+  }
+
+  if (/\boutcome\b/.test(text) && /\bprojectId\b/.test(text)) return "rapport";
+  if (/\breportId\b/.test(text)) return "rapport";
   return "other";
 }
 
