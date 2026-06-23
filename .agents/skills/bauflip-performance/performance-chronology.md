@@ -125,6 +125,7 @@ flowchart LR
 - «alles funktioniert bis PR E» — A through E verified
 - Later through **PR-G** — typecheck + build green after each PR
 - Kalender interaction HAR — gates PASS (0 early POST, sheet on `/kalender`)
+- **Post-audit prod (2026-06-23)** — PR-I sheet gates PASS (3× core POST); RPC EXPLAIN fast; Netlify slow spikes = compute path
 
 ---
 
@@ -136,7 +137,7 @@ flowchart LR
 | `availability_range_for_org` | Booking interaction; needs approval |
 | Abgemacht DB pagination | 500-row in-memory page |
 | Kalender year view slim | 132 KB / ~1.1 s per switch |
-| Prod HAR re-capture (PR-I sheet) | After `db:push` + deploy |
+| Interaction HAR Termin buchen | Not re-captured post-audit |
 
 ---
 

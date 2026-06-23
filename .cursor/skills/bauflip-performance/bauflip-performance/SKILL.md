@@ -85,7 +85,8 @@ After code changes: `npm run typecheck` and `npm run build`. For DB: run matchin
 | Prefetch noise | early `_rsc` GETs | **0** (see tag/kalender checklists) |
 
 Capture: [`scripts/perf/projekte-interaction-checklist.md`](../../../scripts/perf/projekte-interaction-checklist.md)  
-Summarize: `node scripts/perf/summarize-har.mjs ~/path/file.har`  
+Sheet warm: [`scripts/perf/sheet-open-checklist.md`](../../../scripts/perf/sheet-open-checklist.md)  
+Summarize: `node scripts/perf/summarize-har.mjs ~/path/file.har` — includes **Sheet gates (PR-I)** and interaction gates  
 Local host: `BAUFLIP_HAR_HOST=localhost node scripts/perf/summarize-har.mjs ~/localhost.har`
 
 ---
@@ -102,7 +103,7 @@ Local host: `BAUFLIP_HAR_HOST=localhost node scripts/perf/summarize-har.mjs ~/lo
 | Cache | [`lib/query/invalidations.ts`](../../../lib/query/invalidations.ts) | patch*, scoped invalidation |
 | Realtime | [`lib/query/realtime-bridge.tsx`](../../../lib/query/realtime-bridge.tsx) | Supabase broadcast — **no** `/api/events` |
 | DB | [`lib/db/repository.ts`](../../../lib/db/repository.ts) | RPC first when ≥2 round-trips |
-| Slow ops | [`lib/observability/slow-log.ts`](../../../lib/observability/slow-log.ts) | `SERVER_ACTION_SLOW_MS=800` |
+| Slow ops | [`lib/observability/slow-log.ts`](../../../lib/observability/slow-log.ts) | `SERVER_ACTION_SLOW_MS=800`; labels `loadProjectCoreBootstrap`, `signAttachmentUrls` (+ `attachmentCount`) |
 
 ---
 
@@ -115,7 +116,8 @@ Local host: `BAUFLIP_HAR_HOST=localhost node scripts/perf/summarize-har.mjs ~/lo
 | `projekte_office_bootstrap` | `20260626120000_perf_projekte_office_bootstrap_rpc.sql` |
 | `calendar_range_tasks_for_org` | `20260626200000_perf_calendar_range_rpc.sql` |
 | `mitarbeiter_office_bootstrap` | `20260627120000_perf_mitarbeiter_bootstrap_rpc.sql` |
-| `project_core_bootstrap` | `20260701120000_perf_project_core_bootstrap_rpc.sql` (PR-I) |
+| `project_core_bootstrap` | `20260701120000_perf_project_core_bootstrap_rpc.sql` (PR-I, prod verified) |
+| Drop duplicate FK indexes | `20260723140000_perf_drop_duplicate_fk_indexes.sql` (await `db:push`) |
 
 Detail: [supabase-database.md](./supabase-database.md)
 
@@ -142,7 +144,7 @@ Detail: [supabase-database.md](./supabase-database.md)
 | F | yes | Monteur mutations via hooks |
 | G | yes | Range-scoped calendar invalidation |
 | H | planned | Bootstrap + infinite page-1 dedupe |
-| I | yes (code) | `project_core_bootstrap` + single sheet action — **apply migration** |
+| I | yes (prod verified 2026-06-23) | `project_core_bootstrap` + single sheet action |
 
 Detail: [refactoring-pr-roadmap.md](./refactoring-pr-roadmap.md)
 

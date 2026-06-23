@@ -28,3 +28,7 @@ node scripts/perf/summarize-har.mjs path/to/export.har
 - Capture kann **ohne** Document-GET `/projekte` starten (Sheet schon offen) — Script zeigt dann POST-Timeline.
 - Browser-Extensions (z. B. Grammarly) erzeugen Noise — im HAR filtern oder Extension deaktivieren.
 - `openProjectId` sollte nach Sheet-Öffnen **nicht** mehr in POST-URLs erscheinen.
+
+## Sheet-only (warm, PR-I)
+
+Nur Sheet-Performance ohne Termin-Session: [`sheet-open-checklist.md`](./sheet-open-checklist.md)

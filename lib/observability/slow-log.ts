@@ -11,7 +11,11 @@ function parseThresholdMs(): number {
  * Logs JSON to stderr when the async work exceeds SERVER_ACTION_SLOW_MS (default 2000).
  * Use around heavy DB / IO paths to spot regressions in production logs.
  */
-export async function withSlowLog<T>(label: string, run: () => Promise<T>): Promise<T> {
+export async function withSlowLog<T>(
+  label: string,
+  run: () => Promise<T>,
+  meta?: Record<string, unknown>,
+): Promise<T> {
   const threshold = parseThresholdMs();
   const t0 = performance.now();
   try {
@@ -19,7 +23,7 @@ export async function withSlowLog<T>(label: string, run: () => Promise<T>): Prom
   } finally {
     const durationMs = Math.round(performance.now() - t0);
     if (durationMs >= threshold) {
-      console.warn(JSON.stringify({ type: "slow_operation", label, durationMs }));
+      console.warn(JSON.stringify({ type: "slow_operation", label, durationMs, ...meta }));
     }
   }
 }

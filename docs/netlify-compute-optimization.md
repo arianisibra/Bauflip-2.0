@@ -94,8 +94,19 @@ First request after idle can hit **~4–5 s** Netlify cold start (documented in 
 | B1 | Netlify Functions region **matches** Supabase region (e.g. EU) | Netlify Site settings → Functions |
 | B2 | Server DB uses **transaction pooler** (port **6543**) | Supabase Dashboard → Database → Connection string |
 | B3 | `SERVER_ACTION_SLOW_MS=800` in Netlify env | Site → Environment variables |
-| B4 | Optional: scheduled warmup `GET /projekte` every 5–10 min | Netlify scheduled function or external ping |
+| B4 | Optional: scheduled warmup | See [`scripts/perf/warmup-options.md`](../scripts/perf/warmup-options.md) (UptimeRobot → `/anmeldung`) |
 | B5 | Baseline: hard reload 2× — compare 1st vs 2nd document TTFB | HAR or DevTools; log in `performance-production-har.md` |
+
+### Region verification (manual)
+
+Netlify MCP does **not** expose Functions region — verify in dashboards:
+
+| Service | Path | Target |
+|---------|------|--------|
+| **Netlify** site `bauflipp` | [Project configuration → Functions](https://app.netlify.com/projects/bauflipp) | EU (e.g. `eu-central-1`) |
+| **Supabase** `pgcxmfkfvwhnbuqwzysc` | Project Settings → General → Region | EU (e.g. Frankfurt / `eu-central-1`) |
+
+**Verifiziert am:** ___
 
 Agent playbook: [`.agents/skills/bauflip-performance/massive-perf-roadmap.md`](../.agents/skills/bauflip-performance/massive-perf-roadmap.md) and [`netlify-auth-compute.md`](../.agents/skills/bauflip-performance/netlify-auth-compute.md).
 

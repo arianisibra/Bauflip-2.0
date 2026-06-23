@@ -719,6 +719,66 @@ Checkliste in [`docs/netlify-compute-optimization.md`](netlify-compute-optimizat
 
 ---
 
+## Post-Audit Prod (2026-06-23)
+
+Full audit after Tier-1 deploy + MCP verification (Supabase + Netlify).
+
+### HAR scorecard (`app.gross-storenbau.ch.har`)
+
+| Gate | Target | Result |
+|------|--------|--------|
+| `/projekte` Bootstrap POST | 0× | **0×** (Hybrid-SSR) |
+| Document TTFB | warm | ~529 ms |
+| RSC content | ~50 rows | ~325 KB |
+| `/api/events` | 0× | **0×** |
+| Sheet `core` POSTs (3 opens) | 1× each | **3×** (PR-I PASS) |
+| head→details burst | none &lt;300 ms | **PASS** |
+| Kalender early POST | 0× &lt;500 ms | **PASS** |
+
+```bash
+node scripts/perf/summarize-har.mjs ~/Desktop/app.gross-storenbau.ch.har
+# → Sheet gates (PR-I) PASS
+```
+
+Checklist: [`scripts/perf/sheet-open-checklist.md`](../scripts/perf/sheet-open-checklist.md)
+
+### Netlify function logs (same session)
+
+| Observation | Value |
+|---------------|-------|
+| Cold burst | ~2,4–2,6 s (4 parallel invocations) |
+| `loadProjectCoreBootstrap` slow | **834 ms**, **2056 ms** (threshold 800 ms) |
+| Faster opens | ~555–602 ms |
+| `SERVER_ACTION_SLOW_MS` | **800** (confirmed on site `bauflipp`) |
+
+After deploy: separate `signAttachmentUrls` in slow logs (`attachmentCount` meta).
+
+### Post-Audit DB — `project_core_bootstrap` EXPLAIN
+
+SQL Editor (`EXPLAIN ANALYZE`), service context — **not** identical to RLS + Netlify path:
+
+| Project | Data (appts/atts/reports) | Execution time |
+|---------|---------------------------|----------------|
+| `8fb56af5-…` | 1 / 1 / 2 | ~**83 ms** |
+| `c616a555-…` | 3 / 3 / 2 | ~**9 ms** (cached) |
+
+**Conclusion:** RPC SQL is fast; prod **834–2056 ms** `loadProjectCoreBootstrap` is dominated by **Netlify cold/warm**, PostgREST hop, RLS, and signing — not missing indexes on sheet FKs.
+
+### Ops still open
+
+| Item | Action |
+|------|--------|
+| Region match | Manual check — see [`netlify-compute-optimization.md`](netlify-compute-optimization.md#region-verification-manual) |
+| Warmup | Optional — [`scripts/perf/warmup-options.md`](../scripts/perf/warmup-options.md) |
+| Duplicate FK indexes | Migration ready — `20260723140000_perf_drop_duplicate_fk_indexes.sql` (**await `db:push`**) |
+| Interaction HAR Termin buchen | Not captured — [`projekte-interaction-checklist.md`](../scripts/perf/projekte-interaction-checklist.md) |
+
+### Phase 2b list slim
+
+Already shipped: `PROJECT_LIST_COLUMNS` = `id, title, type, status, tenant_name, created_at`. RSC ~325 KB is meta + status counts + TanStack dehydration — no further UI change in this pass.
+
+---
+
 ## Nächste Schritte (optional, Phase B)
 
 - `npm run analyze` für Listen-Chunk-Grösse

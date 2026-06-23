@@ -17,7 +17,17 @@ Also read: [supabase-postgres-best-practices](../supabase-postgres-best-practice
 | `projekte_office_bootstrap` | [`20260626120000_perf_projekte_office_bootstrap_rpc.sql`](../../../supabase/migrations/20260626120000_perf_projekte_office_bootstrap_rpc.sql) | `loadProjekteBootstrapData` | Page 1 + counts in **1** roundtrip |
 | `calendar_range_tasks_for_org` | [`20260626200000_perf_calendar_range_rpc.sql`](../../../supabase/migrations/20260626200000_perf_calendar_range_rpc.sql) | `weekTasksFromAppointmentRange` | Appointments + project + tech in **1** call |
 | `mitarbeiter_office_bootstrap` | [`20260627120000_perf_mitarbeiter_bootstrap_rpc.sql`](../../../supabase/migrations/20260627120000_perf_mitarbeiter_bootstrap_rpc.sql) | mitarbeiter server bootstrap | Team + absences in **1** call |
-| `project_core_bootstrap` | [`20260701120000_perf_project_core_bootstrap_rpc.sql`](../../../supabase/migrations/20260701120000_perf_project_core_bootstrap_rpc.sql) | `loadProjectCoreBootstrap` | Project + appointments + attachments + reports in **1** call (PR-I) |
+| `project_core_bootstrap` | [`20260701120000_perf_project_core_bootstrap_rpc.sql`](../../../supabase/migrations/20260701120000_perf_project_core_bootstrap_rpc.sql) | `loadProjectCoreBootstrap` | Project + appointments + attachments + reports in **1** call (PR-I, prod verified 2026-06-23) |
+
+### Index hygiene (post-audit)
+
+| Migration | Action |
+|-----------|--------|
+| [`20260723140000_perf_drop_duplicate_fk_indexes.sql`](../../../supabase/migrations/20260723140000_perf_drop_duplicate_fk_indexes.sql) | Drop redundant `*_project_id_fkey_idx` on `project_attachments`, `technician_reports` (keep `idx_*_project_id`) |
+
+Verify: [`scripts/perf/verify-drop-duplicate-fk-indexes.sql`](../../../scripts/perf/verify-drop-duplicate-fk-indexes.sql) — **await `db:push`**
+
+**PR-I latency note:** `EXPLAIN ANALYZE` on `project_core_bootstrap` is ~9–83 ms in SQL Editor; prod `slow_operation` 834–2056 ms is Netlify + RLS + signing path, not missing sheet FK indexes.
 
 ### `projekte_office_bootstrap` notes
 
@@ -69,6 +79,7 @@ psql "$DATABASE_URL" -f scripts/perf/verify-mitarbeiter-bootstrap-rpc.sql
 psql "$DATABASE_URL" -f scripts/perf/verify-next-appointment-rpc.sql
 psql "$DATABASE_URL" -f scripts/perf/verify-status-counts-rpc.sql
 psql "$DATABASE_URL" -f scripts/perf/verify-project-core-bootstrap-rpc.sql
+psql "$DATABASE_URL" -f scripts/perf/verify-drop-duplicate-fk-indexes.sql
 psql "$DATABASE_URL" -f scripts/perf/explain-top-queries.sql
 ```
 

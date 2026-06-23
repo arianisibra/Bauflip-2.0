@@ -36,12 +36,28 @@ Script: [`scripts/perf/summarize-har.mjs`](../../../scripts/perf/summarize-har.m
 | `availability` | `fetchAvailabilityRangeAction` |
 | `list` | Pagination / filter page |
 | `mutation` | Status, stammdaten, appointment CRUD |
-| `core` | `getProjectCore` / sheet head+details |
+| `core` | `getProjectSheetBootstrapAction` / sheet head+details |
+| `upload` | Multipart attachment upload (`projectId` in form) |
 | `extras` | Auftrag extras bundle |
 | `rapport` | Technician report |
 | `upload` | Attachment upload |
 
 Not every POST is bootstrap — use tags when diagnosing interaction sessions.
+
+### Next.js 16 action IDs
+
+Server Actions may post **`["<project-uuid>"]`** without function names in the HAR body. The script treats a single UUID v4 argument as **`core`** (sheet bootstrap). Multipart with `projectId` → **`upload`**.
+
+### Sheet gates (PR-I) — script output
+
+After summarize, look for **Sheet gates (PR-I)**:
+
+| Gate | PASS when |
+|------|-----------|
+| 1 core POST per open | Count matches sheet opens (not 2× waterfall) |
+| No burst | No two `core` POSTs within **300 ms** |
+
+Checklist: [`scripts/perf/sheet-open-checklist.md`](../../../scripts/perf/sheet-open-checklist.md)
 
 ---
 

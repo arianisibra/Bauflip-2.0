@@ -8,8 +8,8 @@ Tiered options after Hybrid-SSR, RPC bootstrap phases, and interaction gates. Wa
 
 | Item | Status | Effect |
 |------|--------|--------|
-| **`project_core_bootstrap` RPC** | Shipped (PR-I, code) — **await `db:push`** | Sheet: 2 POST → **1 POST**; DB **300–600 ms** vs 900ms–2.7s |
-| **Cold start checklist** | Ops (documented) | Region + pooler + optional warmup; cold **4–5s** → less frequent |
+| **`project_core_bootstrap` RPC** | Prod verified (2026-06-23) | Sheet: 1 POST; HAR gates PASS |
+| **Cold start checklist** | Ops (documented) | Region + [`warmup-options.md`](../../../scripts/perf/warmup-options.md) |
 
 Detail: this plan's implementation. Migration: `20260701120000_perf_project_core_bootstrap_rpc.sql`
 

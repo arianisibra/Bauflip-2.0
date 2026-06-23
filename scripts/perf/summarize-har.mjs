@@ -167,14 +167,57 @@ function shortKalenderUrl(url) {
   }
 }
 
+/** Next.js 16 Server Actions often post `["<project-uuid>"]` without function names. */
+const UUID_V4_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function postDataOf(post) {
+  return {
+    text: post.request.postData?.text ?? "",
+    mime: post.request.postData?.mimeType ?? "",
+  };
+}
+
+function isSingleUuidActionBody(text) {
+  try {
+    const parsed = JSON.parse(text);
+    return (
+      Array.isArray(parsed) &&
+      parsed.length === 1 &&
+      typeof parsed[0] === "string" &&
+      UUID_V4_RE.test(parsed[0])
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isMultipartProjectUpload(text, mime) {
+  return mime.includes("multipart/form-data") && /projectId/i.test(text);
+}
+
+function isEmptyArrayActionBody(text) {
+  try {
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) && parsed.length === 0;
+  } catch {
+    return false;
+  }
+}
+
 /** Classify POST /projekte Server-Action bodies (not all are bootstrap). */
-function classifyProjektePostBody(text) {
-  if (!text) return "unknown";
+function classifyProjektePostBody(text, mime = "") {
+  if (!text && !mime) return "unknown";
+  if (isMultipartProjectUpload(text, mime)) return "upload";
   if (/fetchAvailabilityRangeAction/.test(text)) return "availability";
   if (/fetchProjekteListPageAction/.test(text)) return "list";
   if (/fetchProjekteBootstrapAction/.test(text)) return "bootstrap";
   if (/addAppointmentAction|deleteAppointmentAction/.test(text)) return "mutation";
-  if (/getProjectSheetBootstrapAction|getProjectSheetHeadAction|getProjectSheetDetailsAction|getProjectCore/.test(text)) return "core";
+  if (/getProjectSheetBootstrapAction|getProjectSheetHeadAction|getProjectSheetDetailsAction|getProjectCore/.test(text)) {
+    return "core";
+  }
+  if (isSingleUuidActionBody(text)) return "core";
+  if (isEmptyArrayActionBody(text)) return "other";
   if (
     /\["20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(text) &&
     /,"20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(text)
@@ -227,10 +270,25 @@ function projektePostKindLabel(kind) {
     bootstrap: "bootstrap",
     mutation: "mutation",
     core: "core",
+    upload: "upload",
     other: "other",
     unknown: "unknown",
   };
   return labels[kind] ?? kind;
+}
+
+/** Classify POST /kalender Server-Action bodies (sheet bootstrap vs range fetch). */
+function classifyKalenderPostBody(post) {
+  const { text, mime } = postDataOf(post);
+  if (isMultipartProjectUpload(text, mime)) return "upload";
+  if (/getProjectSheetBootstrapAction|getProjectSheetHeadAction|getProjectSheetDetailsAction|getProjectCore/.test(text)) {
+    return "core";
+  }
+  if (isSingleUuidActionBody(text)) {
+    return kalenderPostKind(post.request.url) === "sheet" ? "core" : "range";
+  }
+  if (/fetchWeekTasksAction|fetchTechMonthTasksAction|weekTasks|calendar_range/.test(text)) return "range";
+  return kalenderPostKind(post.request.url) === "sheet" ? "core" : "range";
 }
 
 const totalTransferKb = Math.round(
@@ -281,10 +339,13 @@ if (doc) {
 }
 
 console.log("\nPOST /projekte (session):", bootstrapPosts.length);
-const projekteClassified = bootstrapPosts.map((p) => ({
-  post: p,
-  kind: classifyProjektePostBody(p.request.postData?.text ?? ""),
-}));
+const projekteClassified = bootstrapPosts.map((p) => {
+  const { text, mime } = postDataOf(p);
+  return {
+    post: p,
+    kind: classifyProjektePostBody(text, mime),
+  };
+});
 const projekteKindCounts = projekteClassified.reduce((acc, { kind }) => {
   acc[kind] = (acc[kind] ?? 0) + 1;
   return acc;
@@ -407,7 +468,10 @@ if (doc && bootstrapPosts[0]) {
   console.log("\nTimeline /projekte (ms from first request, no document GET in HAR)");
   console.log("  first POST start:", rel(bootstrapPosts[0]));
   console.log("  first POST end:", end(bootstrapPosts[0]));
-  const firstKind = classifyProjektePostBody(bootstrapPosts[0].request.postData?.text ?? "");
+  const firstKind = classifyProjektePostBody(
+    bootstrapPosts[0].request.postData?.text ?? "",
+    bootstrapPosts[0].request.postData?.mimeType ?? "",
+  );
   console.log("  first POST kind:", projektePostKindLabel(firstKind));
 }
 
@@ -845,6 +909,23 @@ const projekteMutationCount = projekteKindCounts.mutation ?? 0;
 const isProjekteBookingSession =
   projekteMutationCount > 0 || projekteAvailabilityCount > 2 || bootstrapPosts.length >= 6;
 
+function hasCorePostBurst(corePosts) {
+  const sorted = [...corePosts].sort((a, b) => rel(a) - rel(b));
+  for (let i = 1; i < sorted.length; i++) {
+    if (rel(sorted[i]) - rel(sorted[i - 1]) < 300) return true;
+  }
+  return false;
+}
+
+function burstDetail(corePosts) {
+  const sorted = [...corePosts].sort((a, b) => rel(a) - rel(b));
+  for (let i = 1; i < sorted.length; i++) {
+    const gap = rel(sorted[i]) - rel(sorted[i - 1]);
+    if (gap < 300) return gap + "ms between core POST #" + i + " and #" + (i + 1);
+  }
+  return "no burst <300ms";
+}
+
 if (isProjekteBookingSession) {
   console.log("\nProjekte interaction (Termin buchen session)");
   console.log("  POST /projekte total:", bootstrapPosts.length);
@@ -866,6 +947,47 @@ if (isProjekteBookingSession) {
   ];
   console.log("\nProjekte gates (interaction HAR)");
   for (const g of projekteGates) {
+    console.log(" ", g.pass ? "PASS" : "FAIL", "—", g.label, `(${g.detail})`);
+  }
+}
+
+const kalenderClassified = kalenderPosts.map((p) => ({
+  post: p,
+  kind: classifyKalenderPostBody(p),
+}));
+const projekteCorePosts = projekteClassified.filter((x) => x.kind === "core");
+const kalenderCorePosts = kalenderClassified.filter((x) => x.kind === "core");
+const totalCorePosts = projekteCorePosts.length + kalenderCorePosts.length;
+
+if (totalCorePosts > 0) {
+  console.log("\nSheet open summary (PR-I)");
+  console.log("  core POST /projekte:", projekteCorePosts.length);
+  console.log("  core POST /kalender:", kalenderCorePosts.length);
+  console.log("  core POST total:", totalCorePosts);
+  for (const { post: p } of [...projekteCorePosts, ...kalenderCorePosts].sort((a, b) => rel(a.post) - rel(b.post))) {
+    const route = p.request.url.includes("/kalender") ? "/kalender" : "/projekte";
+    console.log(
+      "   ",
+      route,
+      Math.round(p.time) + "ms",
+      Math.round((p.response._transferSize ?? 0) / 1024) + "KB",
+    );
+  }
+
+  const sheetGates = [
+    {
+      label: "Each sheet open = 1 core POST (PR-I; count = opens, not 2× head+details)",
+      pass: totalCorePosts > 0,
+      detail: totalCorePosts + " core POST(s) — expect 1 per sheet open",
+    },
+    {
+      label: "No legacy head→details waterfall (2 core POSTs within 300ms)",
+      pass: !hasCorePostBurst([...projekteCorePosts, ...kalenderCorePosts].map((x) => x.post)),
+      detail: burstDetail([...projekteCorePosts, ...kalenderCorePosts].map((x) => x.post)),
+    },
+  ];
+  console.log("\nSheet gates (PR-I)");
+  for (const g of sheetGates) {
     console.log(" ", g.pass ? "PASS" : "FAIL", "—", g.label, `(${g.detail})`);
   }
 }

@@ -31,6 +31,7 @@ import { publish } from "@/lib/realtime/publish";
 import { projectStammdatenUpdateSchema, appointmentSchema, technicianReportUpdateSchema } from "@/lib/validations/forms";
 import { validateOrderFormValues } from "@/lib/order-forms/validate-submission";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { withSlowLog } from "@/lib/observability/slow-log";
 
 // Note: mutation actions used to call `revalidatePath("/projekte")` via
 // `after()`. That's been removed — client cache is owned by TanStack Query,
@@ -40,7 +41,9 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 async function coreOrThrow(projectId: string): Promise<ProjectCore> {
   const bundle = await getProjectCore(projectId);
   if (!bundle) throw new Error("Projekt nicht gefunden.");
-  const signedAttachments = await signAttachmentUrls(bundle.attachments);
+  const signedAttachments = await withSlowLog("signAttachmentUrls", () => signAttachmentUrls(bundle.attachments), {
+    attachmentCount: bundle.attachments.length,
+  });
   return { ...bundle, attachments: signedAttachments };
 }
 
@@ -58,7 +61,9 @@ export async function getProjectSheetBootstrapAction(
   if (!bundle) {
     throw new Error("Projekt nicht gefunden.");
   }
-  const signedAttachments = await signAttachmentUrls(bundle.attachments);
+  const signedAttachments = await withSlowLog("signAttachmentUrls", () => signAttachmentUrls(bundle.attachments), {
+    attachmentCount: bundle.attachments.length,
+  });
   return { core: { ...bundle, attachments: signedAttachments } };
 }
 
@@ -79,7 +84,9 @@ export async function getProjectSheetDetailsAction(
   if (!details) {
     throw new Error("Projekt nicht gefunden.");
   }
-  const signedAttachments = await signAttachmentUrls(details.attachments);
+  const signedAttachments = await withSlowLog("signAttachmentUrls", () => signAttachmentUrls(details.attachments), {
+    attachmentCount: details.attachments.length,
+  });
   return { details: { ...details, attachments: signedAttachments } };
 }
 
