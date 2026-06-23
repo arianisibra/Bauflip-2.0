@@ -17,6 +17,7 @@ import {
   listAssignableProfiles,
   listActiveOrderFormTemplatesForOrg,
   listProjectsForOfficePage,
+  loadProjectCoreBootstrap,
   signAttachmentUrls,
   updateProject,
   updateTechnicianReport,
@@ -47,6 +48,18 @@ function nz(s: string | undefined | null): string | null {
   if (s == null) return null;
   const t = String(s).trim();
   return t === "" ? null : t;
+}
+
+export async function getProjectSheetBootstrapAction(
+  projectId: string,
+): Promise<{ core: ProjectCore }> {
+  await requireOfficeSession();
+  const bundle = await loadProjectCoreBootstrap(projectId);
+  if (!bundle) {
+    throw new Error("Projekt nicht gefunden.");
+  }
+  const signedAttachments = await signAttachmentUrls(bundle.attachments);
+  return { core: { ...bundle, attachments: signedAttachments } };
 }
 
 export async function getProjectSheetHeadAction(projectId: string): Promise<{ head: ProjectCoreHead }> {

@@ -84,3 +84,19 @@ Cross-Tab-Sync läuft über **Supabase Realtime Broadcast** ([`lib/realtime/publ
 - `getCurrentSession()` für Profil-Mutationen (Einstellungen)
 - Admin-MFA im App-Layout
 - Kein `force-static` auf `(app)` / `(tech)`
+
+## Cold start checklist (Tier 1 — Ops)
+
+First request after idle can hit **~4–5 s** Netlify cold start (documented in [`performance-production-har.md`](performance-production-har.md)). Warm reloads are ~800 ms — optimize cold separately from app logic.
+
+| Step | Action | Where |
+|------|--------|-------|
+| B1 | Netlify Functions region **matches** Supabase region (e.g. EU) | Netlify Site settings → Functions |
+| B2 | Server DB uses **transaction pooler** (port **6543**) | Supabase Dashboard → Database → Connection string |
+| B3 | `SERVER_ACTION_SLOW_MS=800` in Netlify env | Site → Environment variables |
+| B4 | Optional: scheduled warmup `GET /projekte` every 5–10 min | Netlify scheduled function or external ping |
+| B5 | Baseline: hard reload 2× — compare 1st vs 2nd document TTFB | HAR or DevTools; log in `performance-production-har.md` |
+
+Agent playbook: [`.agents/skills/bauflip-performance/massive-perf-roadmap.md`](../.agents/skills/bauflip-performance/massive-perf-roadmap.md) and [`netlify-auth-compute.md`](../.agents/skills/bauflip-performance/netlify-auth-compute.md).
+
+**No app code required** for B1–B3. B4 only if cold remains painful after region + pooler.

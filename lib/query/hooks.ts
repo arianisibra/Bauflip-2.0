@@ -10,7 +10,7 @@
  *   `setQueryData` before invalidating adjacent queries — no refetch of the
  *   just-mutated resource.
  */
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { useMutation, useInfiniteQuery, useQuery, useQueryClient, keepPreviousData, type QueryClient } from "@tanstack/react-query";
 import type { ProjectCore } from "@/lib/db/repository";
 import type {
@@ -28,6 +28,7 @@ import {
   deleteReportAction,
   fetchProjekteBootstrapAction,
   fetchProjekteListPageAction,
+  getProjectSheetBootstrapAction,
   getProjectSheetDetailsAction,
   getProjectSheetHeadAction,
   listAssignableProfilesAction,
@@ -119,45 +120,25 @@ export type ProjectCoreQueryResult = {
 export function useProjectCore(projectId: string | null, enabled = true): ProjectCoreQueryResult {
   const isEnabled = Boolean(projectId) && enabled;
 
-  const headQuery = useQuery({
-    queryKey: projectId ? queryKeys.projects.coreHead(projectId) : ["projects", "core-head", "__disabled"],
+  const coreQuery = useQuery({
+    queryKey: projectId ? queryKeys.projects.core(projectId) : ["projects", "core", "__disabled"],
     enabled: isEnabled,
     queryFn: async () => {
-      const { head } = await getProjectSheetHeadAction(projectId!);
-      return head;
+      const { core } = await getProjectSheetBootstrapAction(projectId!);
+      return core;
     },
     staleTime: 60_000,
     refetchOnMount: false,
   });
-
-  const detailsQuery = useQuery({
-    queryKey: projectId ? queryKeys.projects.coreDetails(projectId) : ["projects", "core-details", "__disabled"],
-    enabled: isEnabled && headQuery.isSuccess,
-    queryFn: async () => {
-      const { details } = await getProjectSheetDetailsAction(projectId!);
-      return details;
-    },
-    staleTime: 60_000,
-    refetchOnMount: false,
-  });
-
-  const merged = useMemo((): ProjectCore | undefined => {
-    if (!headQuery.data) return undefined;
-    return {
-      ...headQuery.data,
-      attachments: detailsQuery.data?.attachments ?? [],
-      reports: detailsQuery.data?.reports ?? [],
-    };
-  }, [headQuery.data, detailsQuery.data]);
 
   return {
-    data: merged,
-    isLoading: headQuery.isLoading,
-    isDetailsLoading: headQuery.isSuccess && detailsQuery.isFetching && !detailsQuery.data,
-    isFetching: headQuery.isFetching || detailsQuery.isFetching,
-    isError: headQuery.isError,
-    error: headQuery.error instanceof Error ? headQuery.error : null,
-    isSuccess: headQuery.isSuccess && detailsQuery.isSuccess,
+    data: coreQuery.data,
+    isLoading: coreQuery.isLoading,
+    isDetailsLoading: false,
+    isFetching: coreQuery.isFetching,
+    isError: coreQuery.isError,
+    error: coreQuery.error instanceof Error ? coreQuery.error : null,
+    isSuccess: coreQuery.isSuccess,
   };
 }
 

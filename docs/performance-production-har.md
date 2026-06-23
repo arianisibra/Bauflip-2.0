@@ -396,7 +396,7 @@ node scripts/perf/summarize-har.mjs ~/Desktop/app.gross-storenbau.ch.har
 | Prüfpunkt | Erwartung |
 |-----------|-----------|
 | POST `/kalender` innerhalb **500 ms** nach Document | **0×** (Hydration-Regression) |
-| POST `/kalender?sheet=` bei Sheet (getProjectCore) | **1–2×** kleine Payloads (6 KB), Server Action auf aktueller Route |
+| POST `/kalender?sheet=` bei Sheet (getProjectCore) | **1×** kleine Payload (PR-I; vorher 1–2×) |
 | POST `/projekte` bei Sheet auf Kalender | **0×** (Actions posten zu `/kalender`, nicht `/projekte`) |
 | POST `/kalender` bei View-Wechsel (neuer Range) | **1×** pro Ansicht (Client-Action) |
 | `GET /kalender?_rsc=` bei Tag/Sheet | **0×** (replaceState) |
@@ -631,7 +631,7 @@ node scripts/perf/summarize-har.mjs ~/Desktop/app.gross-storenbau.ch.har
 | Termin buchen | POST `/projekte` gesamt | 20 | **≤ 8** |
 | Termin buchen | `availability` POSTs | ~12 | **≤ 3** |
 | Auftrag Rapport+Fotos | POST `/auftrag` | 7 | **≤ 4** (ohne core refetch) |
-| Sheet öffnen | `getProjectCore` slow_operation | ~907 ms | ≤ 600 ms (optional RPC) |
+| Sheet öffnen | `getProjectCore` slow_operation | ~907 ms | ≤ 600 ms (`loadProjectCoreBootstrap`, PR-I) |
 
 `summarize-har.mjs` klassifiziert POST `/projekte` nach Body-Heuristik (`availability`, `list`, `mutation`, `core`) — nicht alles ist Bootstrap.
 
@@ -646,6 +646,76 @@ HAR ohne Document-GET `/projekte` (Capture nach Redirect): Timeline nutzt ersten
 | `openProjectId` aus URL beim Sheet-Öffnen | [`components/app/projekte-list-client.tsx`](../components/app/projekte-list-client.tsx) |
 | Availability: Debounce + ein Query + Tag-Keys | [`components/app/appointment-booking-form.tsx`](../components/app/appointment-booking-form.tsx), [`lib/query/availability-range-bounds.ts`](../lib/query/availability-range-bounds.ts) |
 | HAR-Klassifikation + Gates | [`scripts/perf/summarize-har.mjs`](../scripts/perf/summarize-har.mjs) |
+
+---
+
+## Tier 1 — Sheet RPC + cold start (PR-I, 2026-06-23)
+
+### Part A — `project_core_bootstrap` (code shipped)
+
+| Massnahme | Dateien |
+|-----------|---------|
+| RPC `project_core_bootstrap` | [`20260701120000_perf_project_core_bootstrap_rpc.sql`](supabase/migrations/20260701120000_perf_project_core_bootstrap_rpc.sql) |
+| Verify SQL | [`scripts/perf/verify-project-core-bootstrap-rpc.sql`](scripts/perf/verify-project-core-bootstrap-rpc.sql) |
+| Loader + PostgREST fallback | [`loadProjectCoreBootstrap`](lib/db/repository.ts) |
+| Single sheet action | [`getProjectSheetBootstrapAction`](app/(app)/projekte/actions.ts) |
+| `useProjectCore` → 1× query | [`lib/query/hooks.ts`](lib/query/hooks.ts) |
+| Hover prefetch full core | [`lib/query/prefetch-project-core.ts`](lib/query/prefetch-project-core.ts) |
+| HAR classifies bootstrap action | [`scripts/perf/summarize-har.mjs`](scripts/perf/summarize-har.mjs) |
+
+**Vor PR-I (Sheet open):**
+
+| Metrik | Wert |
+|--------|------|
+| Server Actions | **2×** (`getProjectSheetHeadAction` → `getProjectSheetDetailsAction`) |
+| `slow_operation` | `getProjectCoreHead` + `getProjectCoreDetails`, **900 ms–2.7 s** |
+| Kalender sheet | Gleiches 2× `core` POST-Muster |
+
+**Ziel nach Deploy + `db:push`:**
+
+| Metrik | Ziel |
+|--------|------|
+| Sheet open `core` POSTs | **1×** (`getProjectSheetBootstrapAction`) |
+| `slow_operation` | `loadProjectCoreBootstrap` **≤ 600 ms** typisch (+ `signAttachmentUrls`) |
+| Fallback | PostgREST head+details wenn RPC fehlt/fehlschlägt |
+
+**Deploy-Schritte:**
+
+```bash
+# 1. Migration anwenden (nach expliziter Freigabe)
+npm run db:push
+
+# 2. RPC verifizieren
+psql "$DATABASE_URL" -f scripts/perf/verify-project-core-bootstrap-rpc.sql
+
+# 3. Build (lokal grün 2026-06-23)
+npm run typecheck && npm run build
+```
+
+**HAR nach Deploy:**
+
+```bash
+# Projekte: Zeile klicken → Sheet → schliessen (3×)
+# Kalender: Termin → Sheet → schliessen (3×)
+node scripts/perf/summarize-har.mjs ~/sheet-open.har
+# Erwartung: 1× core POST pro Sheet-Öffnung (nicht 2×)
+```
+
+Head/Details-Actions bleiben als Fallback; nicht entfernen bis Prod-Logs stabil.
+
+### Part B — Cold start (Ops, kein Code)
+
+Checkliste in [`docs/netlify-compute-optimization.md`](netlify-compute-optimization.md#cold-start-checklist-tier-1--ops):
+
+| Step | Aktion |
+|------|--------|
+| B1 | Netlify Functions-Region = Supabase-Region (z. B. EU) |
+| B2 | Server-DB-URL: Transaction Pooler (Port **6543**) |
+| B3 | `SERVER_ACTION_SLOW_MS=800` auf Netlify |
+| B4 | Optional: Warmup `GET /projekte` alle 5–10 min |
+| B5 | 2× Hard Reload — 1. vs 2. TTFB dokumentieren |
+
+**Baseline (bestehend):** Unauth Redirect Run 1 ~1,7 s TTFB (cold), Run 2 ~244 ms (warm). Prod Document cold ~4,8 s Function-Log dokumentiert.
 
 ---
 

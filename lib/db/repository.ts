@@ -888,6 +888,101 @@ async function loadProjectReportsWithOrderForms(
   return reportRows.map((r) => ({ ...r, orderForms: byReport.get(r.id) ?? [] }));
 }
 
+function parseProjectCoreBootstrapOrderForm(raw: unknown): TechnicianReportOrderFormEntry | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const tplWrap = o.fields;
+  return {
+    templateId: String(o.templateId ?? o.template_id ?? ""),
+    templateName: String(o.templateName ?? o.template_name ?? ""),
+    fields: parseOrderFormFieldsJson(tplWrap),
+    values: valuesJsonToStringRecord(o.values ?? o.values_json),
+  };
+}
+
+function parseProjectCoreBootstrapRpc(payload: unknown): ProjectCore | null {
+  if (!payload || typeof payload !== "object") return null;
+  const root = payload as Record<string, unknown>;
+  const projectRaw = root.project;
+  if (!projectRaw || typeof projectRaw !== "object") return null;
+
+  const appointments = (Array.isArray(root.appointments) ? root.appointments : []).map((row) => {
+    const rec = row as Record<string, unknown>;
+    const appt = mapAppointmentRow(rec);
+    const techName = rec.technician_display_name;
+    if (techName != null && String(techName).trim()) {
+      appt.assignedTechnicianDisplayName = String(techName).trim();
+    }
+    return appt;
+  });
+
+  const attachments = (Array.isArray(root.attachments) ? root.attachments : []).map((row) =>
+    mapProjectAttachmentRow(row as Record<string, unknown>),
+  );
+
+  const reports = (Array.isArray(root.reports) ? root.reports : []).map((row) => {
+    const rec = row as Record<string, unknown>;
+    const report = mapTechnicianReportRow(rec);
+    const orderFormsRaw = rec.orderForms;
+    const orderForms = Array.isArray(orderFormsRaw)
+      ? orderFormsRaw
+          .map(parseProjectCoreBootstrapOrderForm)
+          .filter((e): e is TechnicianReportOrderFormEntry => e != null)
+      : [];
+    return { ...report, orderForms };
+  });
+
+  return {
+    project: mapProjectRow(projectRaw as Record<string, unknown>),
+    appointments,
+    attachments,
+    reports,
+  };
+}
+
+async function projectCorePostgrestFallback(projectId: string): Promise<ProjectCore | null> {
+  const [head, details] = await Promise.all([
+    getProjectCoreHead(projectId),
+    getProjectCoreDetails(projectId),
+  ]);
+  if (!head || !details) return null;
+  return { ...head, ...details };
+}
+
+export const loadProjectCoreBootstrap = cache(async function loadProjectCoreBootstrap(
+  projectId: string,
+): Promise<ProjectCore | null> {
+  return withSlowLog("loadProjectCoreBootstrap", async () => {
+    const supabase = await createSupabaseServerClient();
+    if (!supabase) {
+      const project = mockProjects.find((x) => x.id === projectId);
+      if (!project) return null;
+      return {
+        project,
+        appointments: enrichMockAppointmentsWithTechnicianNames(
+          mockAppointments.filter((a) => a.projectId === projectId),
+        ),
+        attachments: mockProjectAttachments.filter((a) => a.projectId === projectId),
+        reports: mockReports.filter((r) => r.projectId === projectId),
+      };
+    }
+
+    const { data, error } = await supabase.rpc("project_core_bootstrap", {
+      p_project_id: projectId,
+    });
+
+    if (!error && data != null) {
+      const parsed = parseProjectCoreBootstrapRpc(data);
+      if (parsed) return parsed;
+      console.warn("[bauflip] project_core_bootstrap_rpc_fallback parse");
+    } else if (error) {
+      console.warn("[bauflip] project_core_bootstrap_rpc_fallback", error.message);
+    }
+
+    return projectCorePostgrestFallback(projectId);
+  });
+});
+
 export const getProjectCoreHead = cache(async function getProjectCoreHead(
   projectId: string,
 ): Promise<ProjectCoreHead | null> {
@@ -981,14 +1076,7 @@ export const getProjectCoreDetails = cache(async function getProjectCoreDetails(
 });
 
 export const getProjectCore = cache(async function getProjectCore(projectId: string): Promise<ProjectCore | null> {
-  return withSlowLog("getProjectCore", async () => {
-    const [head, details] = await Promise.all([
-      getProjectCoreHead(projectId),
-      getProjectCoreDetails(projectId),
-    ]);
-    if (!head || !details) return null;
-    return { ...head, ...details };
-  });
+  return loadProjectCoreBootstrap(projectId);
 });
 
 type OfficeCalendarNestedProject = {

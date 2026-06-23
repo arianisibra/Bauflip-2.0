@@ -174,7 +174,7 @@ function classifyProjektePostBody(text) {
   if (/fetchProjekteListPageAction/.test(text)) return "list";
   if (/fetchProjekteBootstrapAction/.test(text)) return "bootstrap";
   if (/addAppointmentAction|deleteAppointmentAction/.test(text)) return "mutation";
-  if (/getProjectSheetHeadAction|getProjectSheetDetailsAction|getProjectCore/.test(text)) return "core";
+  if (/getProjectSheetBootstrapAction|getProjectSheetHeadAction|getProjectSheetDetailsAction|getProjectCore/.test(text)) return "core";
   if (
     /\["20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(text) &&
     /,"20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(text)
