@@ -803,7 +803,7 @@ After deploy `6a3a95a` (2026-06-23 ~14:18 UTC): separate `signAttachmentUrls` in
 |-------|-------|
 | Deploy ID | `6a3a95a056a80900088867fb` |
 | Commit | `b513c72` — Post-audit perf (HAR gates, signAttachmentUrls slow_log, FK index migration) |
-| Functions region | `us-east-2` / `cmh` — see region checklist |
+| Functions region | **`fra` / `eu-central-1`** (Pro, verified 2026-06-23 deploy `6a3a9d8a`) |
 | Pending after this doc | `await publish()` realtime fix, clean interaction HAR |
 
 ### Post-Audit DB — `project_core_bootstrap` EXPLAIN
@@ -817,11 +817,23 @@ SQL Editor (`EXPLAIN ANALYZE`), service context — **not** identical to RLS + N
 
 **Conclusion:** RPC SQL is fast; prod **834–2056 ms** `loadProjectCoreBootstrap` is dominated by **Netlify cold/warm**, PostgREST hop, RLS, and signing — not missing indexes on sheet FKs.
 
+### Post-Frankfurt smoke (2026-06-23, curl von Dev-Machine)
+
+| Endpoint | TTFB (warm) | Hinweis |
+|----------|-------------|---------|
+| `/anmeldung` | **~160–630 ms** (Run 5: 161 ms) | Edge/Durable Cache hit möglich |
+| `/anmeldung` (1. Run) | **~1,0 s** | Cold-ish nach Pause |
+| `/projekte` (ohne Cookie) | **~210–280 ms** | 307 → `/anmeldung` |
+
+**Authentifizierter Document-Test:** Incognito einloggen → 2× Hard Reload `/projekte` → HAR oder DevTools TTFB mit [`termin-buchen-clean-har.md`](../scripts/perf/termin-buchen-clean-har.md) vergleichen (Ziel Document &lt; ~1,5 s warm).
+
+---
+
 ### Ops still open
 
 | Item | Action |
 |------|--------|
-| Region match | Manual check — see [`netlify-compute-optimization.md`](netlify-compute-optimization.md#region-verification-manual) |
+| Region match | **Done** — `fra` / `eu-central-1` (2026-06-23) |
 | Warmup | Optional — [`scripts/perf/warmup-options.md`](../scripts/perf/warmup-options.md) |
 | Duplicate FK indexes | Migration ready — `20260723140000_perf_drop_duplicate_fk_indexes.sql` (**await `db:push`**) |
 | Interaction HAR Termin buchen | Clean capture — [`termin-buchen-clean-har.md`](../scripts/perf/termin-buchen-clean-har.md) |

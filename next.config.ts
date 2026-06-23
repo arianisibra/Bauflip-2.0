@@ -14,6 +14,10 @@ const withBundleAnalyzer = bundleAnalyzer({
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Netlify: static /public PNGs load (200) but `/_next/image` returns 404 — serve logos directly.
+  images: {
+    unoptimized: true,
+  },
   turbopack: {
     root: projectRoot,
   },

@@ -103,11 +103,28 @@ Netlify MCP does **not** expose Functions region — verify in dashboards:
 
 | Service | Path | Target |
 |---------|------|--------|
-| **Netlify** site `bauflipp` | [Project configuration → Functions](https://app.netlify.com/projects/bauflipp) | EU (e.g. `eu-central-1`) |
-| **Supabase** `pgcxmfkfvwhnbuqwzysc` | Project Settings → General → Region | EU (e.g. Frankfurt / `eu-central-1`) |
+| **Netlify** site `bauflipp` | [Project configuration → Functions](https://app.netlify.com/projects/bauflipp) | **`fra` (Frankfurt)** / runtime `eu-central-1` |
+| **Supabase** `pgcxmfkfvwhnbuqwzysc` | Project Settings → General → Region | EU (Frankfurt / `eu-central-1`) |
 
-**Verifiziert am:** ___
+**Verifiziert am:** 2026-06-23 (Netlify MCP deploy `6a3a9d8a`, Plan **Pro**, `functions_region=fra`, `blobs_region=eu-central-1`). Vorher: `cmh` / `us-east-2`.
 
 Agent playbook: [`.agents/skills/bauflip-performance/massive-perf-roadmap.md`](../.agents/skills/bauflip-performance/massive-perf-roadmap.md) and [`netlify-auth-compute.md`](../.agents/skills/bauflip-performance/netlify-auth-compute.md).
 
 **No app code required** for B1–B3. B4 only if cold remains painful after region + pooler.
+
+## Netlify Pro — relevante Optionen (ab 2026-06-23)
+
+Plan: **Pro** (`nf_team_pro`). Deploy: `6a3a9d8aa7217b2b6e76a437`.
+
+| Feature | Nutzen für Bauflip | Empfehlung |
+|---------|-------------------|------------|
+| **Functions region `fra`** | SSR/Actions nah an Supabase EU | **Aktiv** — grösster Cold-Start-Hebel |
+| **Function schedules** | Periodischer `GET` → Function warm halten | Optional — Alternative zu UptimeRobot |
+| **Observability / Function logs** | `slow_operation`, Duration pro Request | Bereits nutzen; Filter `loadProjectCoreBootstrap` |
+| **Shared environment variables** | Team-weite Secrets | Nur bei zweitem Site relevant |
+| **3+ concurrent builds** | Schnellere Deploys bei Team | Nice-to-have |
+| **Password-protected previews** | Preview-Deploys absichern | Optional für PR-Previews |
+| **Log drains** | Logs nach Datadog/Sentry | Erst bei Bedarf |
+| **Analytics / RUM** | Real User Monitoring | Optional — HAR bleibt Ground Truth |
+
+**Nicht nötig jetzt:** Private Connectivity (Enterprise), High-Performance Edge Add-on.
