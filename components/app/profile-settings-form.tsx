@@ -3,6 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { saveProfileSettingsAction } from "@/app/(app)/einstellungen/actions";
+import { usePatchSessionProfile } from "@/components/app/session-profile-provider";
 import { BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +31,7 @@ export function ProfileSettingsForm({
   organizationBilling,
 }: ProfileSettingsFormProps) {
   const qc = useQueryClient();
+  const patchSessionProfile = usePatchSessionProfile();
   const [pending, setPending] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState(profile.displayName);
@@ -63,6 +65,10 @@ export function ProfileSettingsForm({
       setDisplayName(result.profile.displayName);
       setAvatarUrl(result.profile.avatarUrl);
       setCalendarColor(resolveCalendarColor(result.profile.calendarColor, result.profile.id));
+      patchSessionProfile({
+        displayName: result.profile.displayName,
+        avatarUrl: result.profile.avatarUrl,
+      });
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Speichern fehlgeschlagen.");
     } finally {

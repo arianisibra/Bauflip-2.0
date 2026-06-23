@@ -1,9 +1,23 @@
 "use client";
 
-import { createContext, useContext, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import type { SessionProfileSnapshot } from "@/lib/auth/session";
 
-const SessionProfileContext = createContext<SessionProfileSnapshot | null>(null);
+export type SessionProfilePatch = Partial<Pick<SessionProfileSnapshot, "displayName" | "avatarUrl">>;
+
+type SessionProfileContextValue = SessionProfileSnapshot & {
+  patchSessionProfile: (patch: SessionProfilePatch) => void;
+};
+
+const SessionProfileContext = createContext<SessionProfileContextValue | null>(null);
 
 export function SessionProfileProvider({
   value,
@@ -12,7 +26,24 @@ export function SessionProfileProvider({
   value: SessionProfileSnapshot;
   children: ReactNode;
 }) {
-  return <SessionProfileContext.Provider value={value}>{children}</SessionProfileContext.Provider>;
+  const [profile, setProfile] = useState(value);
+
+  useEffect(() => {
+    setProfile(value);
+  }, [value.userId, value.displayName, value.avatarUrl, value.email, value.role]);
+
+  const patchSessionProfile = useCallback((patch: SessionProfilePatch) => {
+    setProfile((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  const contextValue = useMemo(
+    () => ({ ...profile, patchSessionProfile }),
+    [profile, patchSessionProfile],
+  );
+
+  return (
+    <SessionProfileContext.Provider value={contextValue}>{children}</SessionProfileContext.Provider>
+  );
 }
 
 export function useSessionProfile(): SessionProfileSnapshot {
@@ -20,5 +51,14 @@ export function useSessionProfile(): SessionProfileSnapshot {
   if (!ctx) {
     throw new Error("useSessionProfile must be used within SessionProfileProvider");
   }
-  return ctx;
+  const { patchSessionProfile: _patch, ...profile } = ctx;
+  return profile;
+}
+
+export function usePatchSessionProfile(): (patch: SessionProfilePatch) => void {
+  const ctx = useContext(SessionProfileContext);
+  if (!ctx) {
+    throw new Error("usePatchSessionProfile must be used within SessionProfileProvider");
+  }
+  return ctx.patchSessionProfile;
 }

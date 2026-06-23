@@ -164,41 +164,14 @@ export const getLayoutSession = cache(async function getLayoutSession(): Promise
 export const getCachedSessionProfile = cache(async function getCachedSessionProfile(
   layoutSession: LayoutSession,
 ): Promise<SessionProfileSnapshot> {
-  const { userId, role } = layoutSession;
-  const supabase = await createSupabaseServerClient();
-  let cookieStore: Awaited<ReturnType<typeof cookies>> | null = null;
-  try {
-    cookieStore = await cookies();
-  } catch {
-    cookieStore = null;
-  }
-  const emailFromCookie = cookieStore ? readEmailFromSupabaseAuthCookie(cookieStore) : null;
-
-  if (!supabase) {
-    return {
-      userId,
-      role,
-      displayName: role === "admin" ? "Admin" : role === "technician" ? "Monteur" : "Büro",
-      email: emailFromCookie,
-      avatarUrl: null,
-    };
-  }
-
-  const { data: row } = await supabase
-    .from("profiles")
-    .select("id, display_name, avatar_url")
-    .eq("id", userId)
-    .maybeSingle();
-
-  const displayName =
-    (row?.display_name != null && String(row.display_name).trim()
-      ? String(row.display_name).trim()
-      : null) ??
-    (emailFromCookie?.split("@")[0] ?? "Benutzer");
-  const avatarUrl =
-    row?.avatar_url != null && String(row.avatar_url).trim() ? String(row.avatar_url).trim() : null;
-
-  return { userId, role, displayName, email: emailFromCookie, avatarUrl };
+  const full = await getCachedUserProfile(layoutSession);
+  return {
+    userId: full.id,
+    role: full.role,
+    displayName: full.displayName,
+    email: full.email || null,
+    avatarUrl: full.avatarUrl,
+  };
 });
 
 /** Full profile row for settings — no membership query. */

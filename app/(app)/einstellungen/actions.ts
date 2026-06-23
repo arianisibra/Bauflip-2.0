@@ -192,7 +192,6 @@ export async function saveProfileSettingsAction(formData: FormData): Promise<Sav
     }
   }
 
-  revalidatePath("/einstellungen");
   revalidatePath("/projekte");
 
   const savedCompanyName =
