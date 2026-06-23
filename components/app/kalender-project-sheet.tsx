@@ -1,9 +1,21 @@
 "use client";
 
-import { ProjektSheetEditor } from "@/components/app/projekt-sheet-editor";
+import dynamic from "next/dynamic";
 import { useKalenderSheet } from "@/components/app/kalender-sheet-context";
 import { Sheet } from "@/components/ui/sheet";
+import { BauflipLoading } from "@/components/ui/bauflip-loading";
 import { useProjectCore } from "@/lib/query/hooks";
+
+const ProjektSheetEditor = dynamic(
+  () => import("@/components/app/projekt-sheet-editor").then((m) => ({ default: m.ProjektSheetEditor })),
+  {
+    loading: () => (
+      <div className="flex justify-center p-8" role="status" aria-live="polite">
+        <BauflipLoading size="sm" label="Projekt wird geladen …" />
+      </div>
+    ),
+  },
+);
 
 export function KalenderProjectSheet() {
   const { sheetProjectId, closeProjectSheet } = useKalenderSheet();

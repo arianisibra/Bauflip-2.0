@@ -165,6 +165,7 @@ function TechnicianDayPreviewStrip({
               <Link
                 key={b.key}
                 href={`/projekte?sheet=${t.projectId}`}
+                prefetch={false}
                 className="absolute top-1 bottom-1 flex min-h-[36px] min-w-[2px] items-center justify-center overflow-hidden rounded shadow-sm active:opacity-90 sm:top-0.5 sm:bottom-0.5 sm:min-h-0"
                 style={{ left: `${leftPct}%`, width: `${widthPct}%`, backgroundColor: col }}
                 title={timeOnly}
@@ -529,6 +530,7 @@ function AvailabilityHint({
                 <span className="hidden opacity-80 sm:inline">·</span>
                 <Link
                   href={`/projekte?sheet=${c.task.projectId}`}
+                  prefetch={false}
                   className="min-h-11 inline-flex items-center underline underline-offset-2 hover:no-underline sm:min-h-0"
                 >
                   {c.task.projectTitle}

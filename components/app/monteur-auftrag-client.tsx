@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { ProjectCore } from "@/lib/db/repository";
@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { telHref } from "@/lib/phone";
 import { formatServiceAddress, managementLabel, tenantLabel } from "@/lib/tech/bundle-display";
 import { submitTechnicianReportAction } from "@/app/(tech)/actions";
+import { fetchAuftragExtrasAction } from "@/app/(tech)/auftrag-data-actions";
 import { useAuftragProjectCore, useUpdateTechnicianReport, useUploadAttachment } from "@/lib/query/hooks";
 import { afterAttachmentChange } from "@/lib/query/invalidations";
 import { getTabId } from "@/lib/query/tab-id";
@@ -36,7 +37,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
+import { BauflipLoadingButtonLabel, BauflipLoadingInline } from "@/components/ui/bauflip-loading";
 import {
   AlertCircle,
   AlertTriangle,
@@ -424,13 +425,13 @@ function StatusContextBanner({ status }: { status: string }) {
 
 export function MonteurAuftragClient({
   core,
-  orderFormTemplates = [],
+  skipOrderFormTemplates = false,
   viewerRole,
   currentUserId,
   returnTo = null,
 }: {
   core: ProjectCore;
-  orderFormTemplates?: OrderFormTemplate[];
+  skipOrderFormTemplates?: boolean;
   viewerRole: RoleType;
   currentUserId: string;
   returnTo?: string | null;
@@ -439,10 +440,19 @@ export function MonteurAuftragClient({
   const backHref = sanitizeTechReturnTo(returnTo);
   const qc = useQueryClient();
   const { data: liveCore = core } = useAuftragProjectCore(core.project.id, core);
+  const extrasQuery = useQuery({
+    queryKey: ["auftrag-extras", core.project.id, skipOrderFormTemplates],
+    queryFn: () => fetchAuftragExtrasAction(core.project.id, skipOrderFormTemplates),
+    staleTime: 90_000,
+    refetchOnMount: false,
+  });
+  const orderFormTemplates = extrasQuery.data?.orderFormTemplates ?? [];
+  const bundle = useMemo(() => {
+    if (!extrasQuery.data?.signedAttachments) return liveCore;
+    return { ...liveCore, attachments: extrasQuery.data.signedAttachments };
+  }, [liveCore, extrasQuery.data?.signedAttachments]);
   const uploadAttachment = useUploadAttachment();
   const updateReport = useUpdateTechnicianReport();
-  const [editReport, setEditReport] = useState<TechnicianReport | null>(null);
-  const bundle = liveCore;
   const p = bundle.project;
   const tenantTelHref = telHref(p.tenantPhone);
 
@@ -459,6 +469,7 @@ export function MonteurAuftragClient({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [editReport, setEditReport] = useState<TechnicianReport | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   /** Verhindert doppeltes Absenden (Doppeltipp / Race vor React-Re-Render). */
   const rapportSubmitLockRef = useRef(false);
@@ -657,6 +668,9 @@ export function MonteurAuftragClient({
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Anhänge ({bundle.attachments.length})
               </p>
+              {extrasQuery.isPending ? (
+                <BauflipLoadingInline label="Anhänge werden geladen …" />
+              ) : null}
               {/* Image attachments as thumbnails */}
               {bundle.attachments.filter((a) => isLikelyProjectImage(a.fileType, a.fileName) && a.signedUrl).length >
                 0 && (

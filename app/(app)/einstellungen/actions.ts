@@ -1,7 +1,6 @@
 "use server";
 
 import { headers } from "next/headers";
-import { revalidatePath } from "next/cache";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { verifyTurnstileToken } from "@/lib/security/turnstile";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -191,8 +190,6 @@ export async function saveProfileSettingsAction(formData: FormData): Promise<Sav
       throw new Error(detail || "Firmeneinstellungen konnten nicht gespeichert werden.");
     }
   }
-
-  revalidatePath("/projekte");
 
   const savedCompanyName =
     session.role === "admin"

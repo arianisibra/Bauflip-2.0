@@ -53,16 +53,17 @@ export async function buildWochenplanDehydratedState(
   const referenceIso = swissWeekReferenceIsoFromDayKey(urlState.focusDayKey);
   const monthY = Number(urlState.focusDayKey.slice(0, 4));
   const monthM = Number(urlState.focusDayKey.slice(5, 7));
-  const { startIso, endIso } = monthRangeIso(monthY, monthM);
 
-  const [weekTasks, monthTasks] = await Promise.all([
-    listWeekTasks(new Date(referenceIso), assignedTechnicianId),
-    listCalendarRangeTasks(startIso, endIso, assignedTechnicianId),
-  ]);
+  const weekTasks = await listWeekTasks(new Date(referenceIso), assignedTechnicianId);
 
   const queryClient = createTechFieldQueryClient();
   queryClient.setQueryData(queryKeys.weekTasks.byDate(referenceIso), weekTasks);
-  queryClient.setQueryData(queryKeys.techMonthTasks.byYearMonth(monthY, monthM), monthTasks);
+
+  if (urlState.viewMode === "month") {
+    const { startIso, endIso } = monthRangeIso(monthY, monthM);
+    const monthTasks = await listCalendarRangeTasks(startIso, endIso, assignedTechnicianId);
+    queryClient.setQueryData(queryKeys.techMonthTasks.byYearMonth(monthY, monthM), monthTasks);
+  }
 
   return dehydrate(queryClient);
 }

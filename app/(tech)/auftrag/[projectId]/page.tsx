@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { getLayoutSession } from "@/lib/auth/session";
 import { sanitizeTechReturnTo } from "@/lib/navigation/tech-field-navigation";
 import { isMonteurMontageContext } from "@/lib/tech/monteur-context";
-import { getProjectCore, listActiveOrderFormTemplatesForOrg, signAttachmentUrls } from "@/lib/db/repository";
+import { getProjectCore } from "@/lib/db/repository";
 import { BauflipLoading } from "@/components/ui/bauflip-loading";
 
 const MonteurAuftragClient = dynamic(
@@ -60,19 +60,10 @@ export default async function MonteurAuftragPage({ params, searchParams }: PageP
     core.reports.length,
   );
 
-  const [orderFormTemplates, signedAttachments] = await Promise.all([
-    !skipOrderFormTemplates && core.project.organizationId != null
-      ? listActiveOrderFormTemplatesForOrg(core.project.organizationId)
-      : Promise.resolve([]),
-    signAttachmentUrls(core.attachments),
-  ]);
-
-  const coreWithSignedUrls = { ...core, attachments: signedAttachments };
-
   return (
     <MonteurAuftragClient
-      core={coreWithSignedUrls}
-      orderFormTemplates={orderFormTemplates}
+      core={core}
+      skipOrderFormTemplates={skipOrderFormTemplates}
       viewerRole={session.role}
       currentUserId={session.userId}
       returnTo={returnTo}

@@ -94,6 +94,15 @@ const wochenplanDoc = appEntries.find(
 const wochenplanPosts = appEntries.filter(
   (e) => e.request.method === "POST" && e.request.url.includes("/wochenplan"),
 );
+const auftragDoc = appEntries.find(
+  (e) =>
+    e.request.method === "GET" &&
+    !e.request.url.includes("_rsc=") &&
+    /\/auftrag\/[^/]+$/.test(e.request.url.replace(/\?.*$/, "").replace(/^https:\/\/[^/]+/, "")),
+);
+const auftragPosts = appEntries.filter(
+  (e) => e.request.method === "POST" && e.request.url.includes("/auftrag/"),
+);
 const einstellungenRscGets = appEntries.filter(
   (e) => e.request.method === "GET" && e.request.url.includes("/einstellungen") && e.request.url.includes("_rsc="),
 );
@@ -640,6 +649,9 @@ if (wochenplanDoc) {
   console.log("\nWochenplan interaction (after document load)");
   console.log("  POST /wochenplan total:", wochenplanPostsAfterDoc.length);
   console.log("    early (<" + HYDRATION_GAP_MS + "ms, regression):", wochenplanEarlyPosts.length);
+  if (wochenplanPostsAfterDoc.length > 0) {
+    console.log("  note: Month tab without ?view=month in URL may cause 1 POST (expected)");
+  }
 
   console.log("\nTimeline /wochenplan (ms from first request)");
   console.log("  document end:", wpDocEndMs);
@@ -659,13 +671,45 @@ if (wochenplanDoc) {
       detail: String(wochenplanEarlyPosts.length),
     },
     {
-      label: "Load POST /wochenplan = 0 (Hybrid-SSR week+month)",
+      label: "Load POST /wochenplan = 0 (Hybrid-SSR week; month only if ?view=month)",
       pass: wochenplanPostsAfterDoc.length === 0,
       detail: String(wochenplanPostsAfterDoc.length),
     },
   ];
   console.log("\nWochenplan gates (load-only HAR)");
   for (const g of wpGates) {
+    console.log(" ", g.pass ? "PASS" : "FAIL", "—", g.label, `(${g.detail})`);
+  }
+}
+
+if (auftragDoc) {
+  const auftragDocEndMs = end(auftragDoc);
+  const auftragPostsAfterDoc = auftragPosts.filter((p) => rel(p) >= auftragDocEndMs);
+  const auftragEarlyPosts = auftragPostsAfterDoc.filter(
+    (p) => rel(p) - auftragDocEndMs < HYDRATION_GAP_MS,
+  );
+
+  console.log("\nAuftrag interaction (after document load)");
+  console.log("  POST /auftrag total:", auftragPostsAfterDoc.length);
+  console.log("    early (<" + HYDRATION_GAP_MS + "ms):", auftragEarlyPosts.length);
+  console.log("  note: 1 POST after load = fetchAuftragExtrasAction (signed URLs + templates)");
+
+  console.log("\nTimeline /auftrag (ms from first request)");
+  console.log("  document end:", auftragDocEndMs);
+  if (auftragPostsAfterDoc[0]) {
+    console.log("  first extras POST:", rel(auftragPostsAfterDoc[0]));
+    console.log("  gap to extras POST:", rel(auftragPostsAfterDoc[0]) - auftragDocEndMs);
+  }
+
+  const auftragGates = [
+    {
+      label: "Load POST /auftrag <= 1 (extras defer, not duplicate bootstrap)",
+      pass: auftragPostsAfterDoc.length <= 1,
+      detail: String(auftragPostsAfterDoc.length),
+    },
+  ];
+  console.log("\nAuftrag gates (load HAR)");
+  for (const g of auftragGates) {
     console.log(" ", g.pass ? "PASS" : "FAIL", "—", g.label, `(${g.detail})`);
   }
 }

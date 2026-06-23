@@ -524,18 +524,44 @@ Shared Query-Key `weekTasks.byDate(refIso)` — `/wochenplan` profitiert beim er
 
 | Metrik | Vorher (Phase B) | Ziel |
 |--------|------------------|------|
-| Document GET `/wochenplan` | Shell + Client-Fetch | Week + Month im dehydrated JSON |
-| POST `/wochenplan` nach Load | **1×** Week (+ Month bei Tab) | **0×** |
-| Monats-Tab (gleicher Monat) | POST `fetchTechMonthTasksAction` | **0×** (SSR seeded) |
+| Document GET `/wochenplan` | Shell + Client-Fetch | Week im dehydrated JSON (Month nur bei `?view=month`) |
+| POST `/wochenplan` nach Load (view=day) | **1×** Week (+ Month bei Tab) | **0×** |
+| Monats-Tab ohne `?view=month` | — | **1×** POST (erwartet) |
+| Monats-Load `?view=month` | POST `fetchTechMonthTasksAction` | **0×** (SSR seeded) |
 | Anderer Monat (Pfeil) | POST | **1×** (erwartet) |
 
 Checkliste: [`scripts/perf/wochenplan-netlify-log-checklist.md`](../scripts/perf/wochenplan-netlify-log-checklist.md)
 
 | Aktion | Function-Invocations |
 |--------|---------------------|
-| Hard reload `/wochenplan` | **1×** (SSR Bootstrap, 2× RPC parallel) |
-| Monats-Tab ohne URL-Wechsel | **0×** |
+| Hard reload `/wochenplan` | **1×** (SSR Bootstrap, Week-RPC; +Month nur bei `?view=month`) |
+| Monats-Tab ohne URL-Wechsel | **1×** POST (Month defer) |
+| Load mit `?view=month` | **0×** POST Month |
 | Monat vor/zurück | **1×** pro neuem Monat |
+
+---
+
+## Phase Auftrag — Extras defer (Prod-Baseline)
+
+| Metrik | Vorher | Ziel |
+|--------|--------|------|
+| Document GET `/auftrag/[id]` | `getProjectCore` + sign URLs + Templates | **nur** `getProjectCore` + Guard |
+| POST nach Load | 0 | **1×** `fetchAuftragExtrasAction` (signierte URLs + Templates) |
+| TTFB | blockiert auf Storage | schneller; Galerie/Form kurz «lädt» |
+
+| Aktion | Function-Invocations |
+|--------|---------------------|
+| Hard reload `/auftrag/[id]` | **1×** Document + **1×** Extras POST |
+| Rapport speichern | Realtime `project.core_changed` (kein `revalidatePath`) |
+
+---
+
+## Phase Kal-Sheet — Lazy Editor
+
+| Massnahme | Wirkung |
+|-----------|---------|
+| `ProjektSheetEditor` per `dynamic()` in `kalender-project-sheet.tsx` | Kleineres initiales JS auf `/kalender` |
+| `useProjectCore` `refetchOnMount: false` | Kein doppelter head+details POST nach Hover-Prefetch |
 
 ---
 

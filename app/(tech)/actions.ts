@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { requireTechFieldSession } from "@/lib/auth/organization";
 import { addTechnicianReport, listActiveOrderFormTemplatesForOrg } from "@/lib/db/repository";
 import { validateOrderFormValues } from "@/lib/order-forms/validate-submission";
@@ -86,9 +85,6 @@ export async function submitTechnicianReportAction(
       error: dbErr instanceof Error ? dbErr.message : "Speichern fehlgeschlagen.",
     };
   }
-
-  revalidatePath("/tag");
-  revalidatePath(`/auftrag/${v.projectId}`);
 
   // Notify admin/office in this org. Use `project.core_changed` (not
   // `report.changed`) because submitting a report also mutates the project's

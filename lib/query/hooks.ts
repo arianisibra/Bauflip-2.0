@@ -113,6 +113,7 @@ export function useProjectCore(projectId: string | null, enabled = true): Projec
       return head;
     },
     staleTime: 60_000,
+    refetchOnMount: false,
   });
 
   const detailsQuery = useQuery({
@@ -123,6 +124,7 @@ export function useProjectCore(projectId: string | null, enabled = true): Projec
       return details;
     },
     staleTime: 60_000,
+    refetchOnMount: false,
   });
 
   const merged = useMemo((): ProjectCore | undefined => {
