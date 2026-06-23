@@ -23,6 +23,7 @@ import { submitTechnicianReportAction } from "@/app/(tech)/actions";
 import { fetchAuftragExtrasAction } from "@/app/(tech)/auftrag-data-actions";
 import { useAuftragProjectCore, useUpdateTechnicianReport, useUploadAttachment } from "@/lib/query/hooks";
 import { afterAttachmentChange } from "@/lib/query/invalidations";
+import { queryKeys } from "@/lib/query/keys";
 import { getTabId } from "@/lib/query/tab-id";
 import { pickMonteurAppointmentDisplay } from "@/lib/tech/auftrag-appointments";
 import { updateAttachmentNotesAction, deleteAttachmentAction } from "@/app/(app)/actions";
@@ -441,15 +442,24 @@ export function MonteurAuftragClient({
   const qc = useQueryClient();
   const { data: liveCore = core } = useAuftragProjectCore(core.project.id, core);
   const extrasQuery = useQuery({
-    queryKey: ["auftrag-extras", core.project.id, skipOrderFormTemplates],
+    queryKey: queryKeys.auftragExtras(core.project.id, skipOrderFormTemplates),
     queryFn: () => fetchAuftragExtrasAction(core.project.id, skipOrderFormTemplates),
     staleTime: 90_000,
     refetchOnMount: false,
   });
   const orderFormTemplates = extrasQuery.data?.orderFormTemplates ?? [];
   const bundle = useMemo(() => {
-    if (!extrasQuery.data?.signedAttachments) return liveCore;
-    return { ...liveCore, attachments: extrasQuery.data.signedAttachments };
+    const extrasAtt = extrasQuery.data?.signedAttachments;
+    if (!extrasAtt) return liveCore;
+    const useLive =
+      liveCore.attachments.length > extrasAtt.length ||
+      (liveCore.attachments.length === extrasAtt.length &&
+        liveCore.attachments.some((a) => a.signedUrl) &&
+        !extrasAtt.some((a) => a.signedUrl));
+    return {
+      ...liveCore,
+      attachments: useLive ? liveCore.attachments : extrasAtt,
+    };
   }, [liveCore, extrasQuery.data?.signedAttachments]);
   const uploadAttachment = useUploadAttachment();
   const updateReport = useUpdateTechnicianReport();

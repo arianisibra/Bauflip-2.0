@@ -608,6 +608,47 @@ psql "$DATABASE_URL" -f scripts/perf/explain-top-queries.sql
 
 ---
 
+## Phase Interaction — Termin buchen + Auftrag Rapport
+
+**Ziel:** Weniger Server-Action-POSTs bei wiederholten UI-Interaktionen (nicht nur Erstladung).
+
+### Aufnahme (3-Minuten-Session)
+
+Siehe [`scripts/perf/projekte-interaction-checklist.md`](../scripts/perf/projekte-interaction-checklist.md).
+
+1. Neues Projekt / Sheet öffnen, 2 Termine buchen (Datum tweaken), PDF ansehen
+2. Kalender → Tag → zurück Projekte (soft-nav)
+3. Auftrag öffnen: Rapport + 2 Fotos hochladen
+
+```bash
+node scripts/perf/summarize-har.mjs ~/Desktop/app.gross-storenbau.ch.har
+```
+
+### Gates (nach Fix-Deploy)
+
+| Session | Metrik | Vorher (Prod-HAR) | Ziel |
+|---------|--------|-------------------|------|
+| Termin buchen | POST `/projekte` gesamt | 20 | **≤ 8** |
+| Termin buchen | `availability` POSTs | ~12 | **≤ 3** |
+| Auftrag Rapport+Fotos | POST `/auftrag` | 7 | **≤ 4** (ohne core refetch) |
+| Sheet öffnen | `getProjectCore` slow_operation | ~907 ms | ≤ 600 ms (optional RPC) |
+
+`summarize-har.mjs` klassifiziert POST `/projekte` nach Body-Heuristik (`availability`, `list`, `mutation`, `core`) — nicht alles ist Bootstrap.
+
+HAR ohne Document-GET `/projekte` (Capture nach Redirect): Timeline nutzt ersten POST statt Document-Ende.
+
+### Umgesetzt
+
+| Massnahme | Dateien |
+|-----------|---------|
+| Upload liefert signierten Anhang + Cache-Patch | [`app/(app)/actions.ts`](../app/(app)/actions.ts), [`lib/query/hooks.ts`](../lib/query/hooks.ts), [`lib/query/invalidations.ts`](../lib/query/invalidations.ts) |
+| Auftrag extras-Merge + invalidation | [`components/app/monteur-auftrag-client.tsx`](../components/app/monteur-auftrag-client.tsx) |
+| `openProjectId` aus URL beim Sheet-Öffnen | [`components/app/projekte-list-client.tsx`](../components/app/projekte-list-client.tsx) |
+| Availability: Debounce + ein Query + Tag-Keys | [`components/app/appointment-booking-form.tsx`](../components/app/appointment-booking-form.tsx), [`lib/query/availability-range-bounds.ts`](../lib/query/availability-range-bounds.ts) |
+| HAR-Klassifikation + Gates | [`scripts/perf/summarize-har.mjs`](../scripts/perf/summarize-har.mjs) |
+
+---
+
 ## Nächste Schritte (optional, Phase B)
 
 - `npm run analyze` für Listen-Chunk-Grösse

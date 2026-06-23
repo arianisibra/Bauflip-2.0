@@ -167,6 +167,49 @@ function shortKalenderUrl(url) {
   }
 }
 
+/** Classify POST /projekte Server-Action bodies (not all are bootstrap). */
+function classifyProjektePostBody(text) {
+  if (!text) return "unknown";
+  if (/fetchAvailabilityRangeAction/.test(text)) return "availability";
+  if (/fetchProjekteListPageAction/.test(text)) return "list";
+  if (/fetchProjekteBootstrapAction/.test(text)) return "bootstrap";
+  if (/addAppointmentAction|deleteAppointmentAction/.test(text)) return "mutation";
+  if (/getProjectSheetHeadAction|getProjectSheetDetailsAction|getProjectCore/.test(text)) return "core";
+  if (
+    /\["20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(text) &&
+    /,"20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(text)
+  ) {
+    return "availability";
+  }
+  if (/\["active"|"all"|"archived"/.test(text)) return "list";
+  if (/projectId/.test(text) && /startsAt/.test(text)) return "mutation";
+  if (/appointmentId/.test(text) && /projectId/.test(text)) return "mutation";
+  return "other";
+}
+
+function classifyAuftragPost(post) {
+  const text = post.request.postData?.text ?? "";
+  const mime = post.request.postData?.mimeType ?? "";
+  if (mime.includes("multipart/form-data") || /uploadProjectReportFileAction/.test(text)) return "upload";
+  if (/fetchAuftragExtrasAction/.test(text)) return "extras";
+  if (/fetchAuftragProjectCoreAction/.test(text)) return "core";
+  if (/submitTechnicianReportAction|updateTechnicianReportAction/.test(text)) return "rapport";
+  return "other";
+}
+
+function projektePostKindLabel(kind) {
+  const labels = {
+    availability: "availability",
+    list: "list",
+    bootstrap: "bootstrap",
+    mutation: "mutation",
+    core: "core",
+    other: "other",
+    unknown: "unknown",
+  };
+  return labels[kind] ?? kind;
+}
+
 const totalTransferKb = Math.round(
   appEntries.reduce((s, e) => s + (e.response._transferSize ?? 0), 0) / 1024,
 );
@@ -214,12 +257,24 @@ if (doc) {
   console.log("  URL search param:", searchParam);
 }
 
-console.log("\nBootstrap POST /projekte:", bootstrapPosts.length);
-for (const p of bootstrapPosts) {
+console.log("\nPOST /projekte (session):", bootstrapPosts.length);
+const projekteClassified = bootstrapPosts.map((p) => ({
+  post: p,
+  kind: classifyProjektePostBody(p.request.postData?.text ?? ""),
+}));
+const projekteKindCounts = projekteClassified.reduce((acc, { kind }) => {
+  acc[kind] = (acc[kind] ?? 0) + 1;
+  return acc;
+}, {});
+for (const [kind, count] of Object.entries(projekteKindCounts).sort((a, b) => b[1] - a[1])) {
+  console.log("  ", projektePostKindLabel(kind) + ":", count);
+}
+for (const { post: p, kind } of projekteClassified) {
   console.log(
     "  ",
     Math.round(p.time) + "ms",
     Math.round((p.response._transferSize ?? 0) / 1024) + "KB",
+    projektePostKindLabel(kind),
     "status",
     p.response.status,
   );
@@ -325,6 +380,12 @@ if (doc && bootstrapPosts[0]) {
   console.log("\nTimeline /projekte (ms from first request)");
   console.log("  document end:", end(doc));
   console.log("  data ready (Hybrid-SSR):", end(doc));
+} else if (bootstrapPosts[0]) {
+  console.log("\nTimeline /projekte (ms from first request, no document GET in HAR)");
+  console.log("  first POST start:", rel(bootstrapPosts[0]));
+  console.log("  first POST end:", end(bootstrapPosts[0]));
+  const firstKind = classifyProjektePostBody(bootstrapPosts[0].request.postData?.text ?? "");
+  console.log("  first POST kind:", projektePostKindLabel(firstKind));
 }
 
 if (kalenderDoc) {
@@ -710,6 +771,78 @@ if (auftragDoc) {
   ];
   console.log("\nAuftrag gates (load HAR)");
   for (const g of auftragGates) {
+    console.log(" ", g.pass ? "PASS" : "FAIL", "—", g.label, `(${g.detail})`);
+  }
+}
+
+const auftragClassified = auftragPosts.map((p) => ({
+  post: p,
+  kind: classifyAuftragPost(p),
+}));
+const auftragUploadCount = auftragClassified.filter((x) => x.kind === "upload").length;
+const auftragRapportCount = auftragClassified.filter((x) => x.kind === "rapport").length;
+const auftragCoreRefetchCount = auftragClassified.filter((x) => x.kind === "core").length;
+const isAuftragRapportSession = auftragUploadCount >= 2 && auftragRapportCount >= 1;
+
+if (isAuftragRapportSession || auftragPosts.length >= 4) {
+  console.log("\nAuftrag interaction (rapport + photos session)");
+  console.log("  POST /auftrag total:", auftragPosts.length);
+  for (const [kind, count] of Object.entries(
+    auftragClassified.reduce((acc, { kind }) => {
+      acc[kind] = (acc[kind] ?? 0) + 1;
+      return acc;
+    }, {}),
+  )) {
+    console.log("   ", kind + ":", count);
+  }
+
+  const rapportGates = [
+    {
+      label: "Rapport + 2 photos: POST /auftrag <= 4 (no duplicate core refetch)",
+      pass: auftragPosts.length <= 4 && auftragCoreRefetchCount === 0,
+      detail:
+        auftragPosts.length +
+        " POST(s), " +
+        auftragCoreRefetchCount +
+        " core refetch, " +
+        auftragUploadCount +
+        " upload(s), " +
+        auftragRapportCount +
+        " rapport",
+    },
+  ];
+  console.log("\nAuftrag gates (interaction HAR)");
+  for (const g of rapportGates) {
+    console.log(" ", g.pass ? "PASS" : "FAIL", "—", g.label, `(${g.detail})`);
+  }
+}
+
+const projekteAvailabilityCount = projekteKindCounts.availability ?? 0;
+const projekteMutationCount = projekteKindCounts.mutation ?? 0;
+const isProjekteBookingSession =
+  projekteMutationCount > 0 || projekteAvailabilityCount > 2 || bootstrapPosts.length >= 6;
+
+if (isProjekteBookingSession) {
+  console.log("\nProjekte interaction (Termin buchen session)");
+  console.log("  POST /projekte total:", bootstrapPosts.length);
+  console.log("    availability:", projekteAvailabilityCount);
+  console.log("    list refetch:", projekteKindCounts.list ?? 0);
+  console.log("    mutations:", projekteMutationCount);
+
+  const projekteGates = [
+    {
+      label: "Availability POST /projekte <= 3 (after slot tweaks)",
+      pass: projekteAvailabilityCount <= 3,
+      detail: String(projekteAvailabilityCount),
+    },
+    {
+      label: "Projekt + Termine: total POST /projekte <= 8",
+      pass: bootstrapPosts.length <= 8,
+      detail: String(bootstrapPosts.length),
+    },
+  ];
+  console.log("\nProjekte gates (interaction HAR)");
+  for (const g of projekteGates) {
     console.log(" ", g.pass ? "PASS" : "FAIL", "—", g.label, `(${g.detail})`);
   }
 }

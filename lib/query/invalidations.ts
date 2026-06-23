@@ -16,6 +16,9 @@
  * them.
  */
 import type { QueryClient } from "@tanstack/react-query";
+import type { AuftragExtras } from "@/app/(tech)/auftrag-data-actions";
+import type { ProjectCore } from "@/lib/db/repository";
+import type { ProjectAttachment } from "@/lib/domain/types";
 import { queryKeys } from "./keys";
 
 export type RefetchType = "active" | "inactive" | "all" | "none";
@@ -101,6 +104,40 @@ export function afterReportChange(
   invalidateReportAdjacencies(qc, projectId, opts);
 }
 
+function appendAttachment(
+  list: ProjectAttachment[] | undefined,
+  attachment: ProjectAttachment,
+): ProjectAttachment[] {
+  const existing = list ?? [];
+  if (existing.some((a) => a.id === attachment.id)) return existing;
+  return [...existing, attachment];
+}
+
+/** Patch caches after upload — avoids refetching full project core. */
+export function patchAttachmentAdded(
+  qc: QueryClient,
+  projectId: string,
+  attachment: ProjectAttachment,
+): void {
+  qc.setQueryData<ProjectCore>(queryKeys.projects.core(projectId), (old) =>
+    old ? { ...old, attachments: appendAttachment(old.attachments, attachment) } : old,
+  );
+  qc.setQueryData<{ attachments: ProjectAttachment[]; reports: ProjectCore["reports"] }>(
+    queryKeys.projects.coreDetails(projectId),
+    (old) => (old ? { ...old, attachments: appendAttachment(old.attachments, attachment) } : old),
+  );
+  qc.setQueryData<ProjectCore>(queryKeys.projects.auftragCore(projectId), (old) =>
+    old ? { ...old, attachments: appendAttachment(old.attachments, attachment) } : old,
+  );
+  qc.setQueriesData<AuftragExtras>(
+    { queryKey: queryKeys.auftragExtrasPrefix(projectId) },
+    (old) =>
+      old
+        ? { ...old, signedAttachments: appendAttachment(old.signedAttachments, attachment) }
+        : old,
+  );
+}
+
 export function afterAttachmentChange(
   qc: QueryClient,
   projectId: string,
@@ -108,6 +145,7 @@ export function afterAttachmentChange(
 ): void {
   invalidateProjectCoreSplit(qc, projectId, opts);
   inv(qc, queryKeys.projects.auftragCore(projectId), opts);
+  inv(qc, queryKeys.auftragExtrasPrefix(projectId), opts);
   invalidateAttachmentAdjacencies(qc, projectId, opts);
 }
 

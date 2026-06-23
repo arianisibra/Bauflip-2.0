@@ -16,6 +16,10 @@ export const queryKeys = {
     /** Auftragsseite Monteur/Admin-Preview: eigener Key wegen anderer Server-Action als Büro-Sheet. */
     auftragCore: (projectId: string) => ["projects", "auftrag-core", projectId] as const,
   },
+  /** Deferred Auftrag extras (signed URLs + order-form templates). */
+  auftragExtras: (projectId: string, skipOrderFormTemplates = false) =>
+    ["auftrag-extras", projectId, skipOrderFormTemplates] as const,
+  auftragExtrasPrefix: (projectId: string) => ["auftrag-extras", projectId] as const,
   weekTasks: {
     all: () => ["week-tasks"] as const,
     byDate: (isoDate: string) => ["week-tasks", isoDate] as const,

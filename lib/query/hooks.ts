@@ -11,10 +11,11 @@
  *   just-mutated resource.
  */
 import { useEffect, useMemo } from "react";
-import { useMutation, useInfiniteQuery, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useMutation, useInfiniteQuery, useQuery, useQueryClient, keepPreviousData, type QueryClient } from "@tanstack/react-query";
 import type { ProjectCore } from "@/lib/db/repository";
 import type {
   OrderFormTemplate,
+  ProjectAttachment,
   ProjectStatus,
   TechnicianAbsence,
   UserProfile,
@@ -79,15 +80,20 @@ import {
   afterAbsenceChange,
   afterProjectDeleted,
   afterAttachmentChange,
+  patchAttachmentAdded,
   invalidateProjectAdjacencies,
   invalidateProjectListCaches,
   invalidateReportAdjacencies,
 } from "./invalidations";
 import { notifyOtherTabs } from "./cross-tab-broadcast";
 import { queryKeys } from "./keys";
+import { availabilityRangeKeyBounds } from "./availability-range-bounds";
 import { getTabId } from "./tab-id";
 
-type UploadResult = { success: true } | { success: false; error: string };
+type MutationSuccessResult = { success: true } | { success: false; error: string };
+type UploadResult =
+  | { success: true; attachment: ProjectAttachment }
+  | { success: false; error: string };
 
 // ───────── Queries ─────────
 
@@ -331,15 +337,19 @@ export function useAvailabilityRange(
   queryEnabled = true,
 ) {
   const enabled = Boolean(rangeStartIso && rangeEndIso) && queryEnabled;
+  const keyBounds =
+    enabled && rangeStartIso && rangeEndIso
+      ? availabilityRangeKeyBounds(rangeStartIso, rangeEndIso)
+      : null;
   return useQuery<AvailabilityBundle>({
-    queryKey:
-      enabled && rangeStartIso && rangeEndIso
-        ? queryKeys.availabilityRange.byStartEnd(rangeStartIso, rangeEndIso)
-        : ["availability-range", "__disabled"],
+    queryKey: keyBounds
+      ? queryKeys.availabilityRange.byStartEnd(keyBounds.startIso, keyBounds.endIso)
+      : ["availability-range", "__disabled"],
     queryFn: () => fetchAvailabilityRangeAction(rangeStartIso!, rangeEndIso!),
     enabled,
     staleTime: 60_000,
     refetchOnMount: false,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -555,14 +565,14 @@ export function useUploadAttachment() {
   return useMutation<UploadResult, Error, { formData: FormData; projectId: string }>({
     mutationFn: ({ formData }) => uploadProjectReportFileAction(formData, getTabId()),
     onSuccess: (result, { projectId }) => {
-      if (result.success) afterAttachmentChange(qc, projectId);
+      if (result.success) patchAttachmentAdded(qc, projectId, result.attachment);
     },
   });
 }
 
 export function useUpdateAttachmentNotes() {
   const qc = useQueryClient();
-  return useMutation<UploadResult, Error, { attachmentId: string; notes: string; projectId: string }>({
+  return useMutation<MutationSuccessResult, Error, { attachmentId: string; notes: string; projectId: string }>({
     mutationFn: ({ attachmentId, notes }) => updateAttachmentNotesAction(attachmentId, notes, getTabId()),
     onSuccess: (result, { projectId }) => {
       if (result.success) afterAttachmentChange(qc, projectId);
@@ -572,7 +582,7 @@ export function useUpdateAttachmentNotes() {
 
 export function useDeleteAttachment() {
   const qc = useQueryClient();
-  return useMutation<UploadResult, Error, { attachmentId: string; filePath: string; projectId: string }>({
+  return useMutation<MutationSuccessResult, Error, { attachmentId: string; filePath: string; projectId: string }>({
     mutationFn: ({ attachmentId, filePath }) => deleteAttachmentAction(attachmentId, filePath, getTabId()),
     onSuccess: (result, { projectId }) => {
       if (result.success) afterAttachmentChange(qc, projectId);

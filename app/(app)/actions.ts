@@ -4,11 +4,13 @@ import {
   requireOrgLayoutSession,
   requireTechFieldSession,
 } from "@/lib/auth/organization";
+import type { ProjectAttachment } from "@/lib/domain/types";
 import type { LayoutSession } from "@/lib/auth/session";
 import {
   createProject,
   addProjectAttachment,
   getProjectCore,
+  signAttachmentUrls,
   updateAttachmentNotes,
   deleteProjectAttachment,
   type ProjectCore,
@@ -143,7 +145,7 @@ export async function createIntakeAction(formData: FormData, tabId?: string) {
 export async function uploadProjectReportFileAction(
   formData: FormData,
   tabId?: string,
-): Promise<{ success: true } | { success: false; error: string }> {
+): Promise<{ success: true; attachment: ProjectAttachment } | { success: false; error: string }> {
   let session;
   try {
     session = await requireTechFieldSession();
@@ -181,7 +183,7 @@ export async function uploadProjectReportFileAction(
     if (uploadError) return { success: false, error: uploadError.message };
 
     const notes = String(formData.get("notes") ?? "").trim() || null;
-    await addProjectAttachment({
+    const attachment = await addProjectAttachment({
       projectId,
       filePath: storagePath,
       fileName: file.name,
@@ -190,6 +192,7 @@ export async function uploadProjectReportFileAction(
       uploadedBy: session.userId,
       notes,
     });
+    const [signedAttachment] = await signAttachmentUrls([attachment]);
     if (session.organizationId) {
       publish(session.organizationId, {
         type: "project.core_changed",
@@ -197,12 +200,10 @@ export async function uploadProjectReportFileAction(
         originTabId: tabId,
       });
     }
+    return { success: true, attachment: signedAttachment };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "Upload fehlgeschlagen." };
   }
-
-  // Client-side cache invalidation is owned by TanStack via `useUploadAttachment.onSuccess`.
-  return { success: true };
 }
 
 export async function updateAttachmentNotesAction(

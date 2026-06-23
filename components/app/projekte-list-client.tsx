@@ -68,6 +68,21 @@ const IntakeForm = dynamic(() => import("@/components/app/intake-form").then((m)
   ),
 });
 
+/** Remove sheet deep-link params from the URL without triggering an RSC refetch. */
+function stripProjekteSheetParamsFromUrl() {
+  const params = new URLSearchParams(globalThis.location.search);
+  let changed = false;
+  for (const key of ["openProjectId", "sheet", "from", "returnTo"]) {
+    if (params.has(key)) {
+      params.delete(key);
+      changed = true;
+    }
+  }
+  if (!changed) return;
+  const suffix = params.toString();
+  globalThis.history.replaceState(null, "", suffix ? `/projekte?${suffix}` : "/projekte");
+}
+
 /** Reihenfolge wie im Workflow (`projectStatuses`); unbekannte Werte ans Ende. */
 function statusWorkflowIndex(status: ProjectStatus): number {
   const i = projectStatuses.indexOf(status);
@@ -288,6 +303,10 @@ export function ProjekteListClient({
     };
   }, [pendingOpenProjectId, loadedProjects]);
 
+  useEffect(() => {
+    if (open) stripProjekteSheetParamsFromUrl();
+  }, [open]);
+
   const sorted = useMemo(() => {
     const copy = [...projects];
     copy.sort((a, b) => compareOfficeListRows(a, b, listSort, statusFilter));
@@ -343,12 +362,6 @@ export function ProjekteListClient({
       setSelected(p);
       setOpen(true);
       setOpenSource(null);
-      // Sync URL for deep-linking WITHOUT triggering an RSC refetch of the list.
-      const params = new URLSearchParams(globalThis.location.search);
-      params.delete("sheet");
-      params.delete("from");
-      params.set("openProjectId", p.id);
-      globalThis.history.replaceState(null, "", `/projekte?${params.toString()}`);
     },
     [],
   );
@@ -671,29 +684,7 @@ export function ProjekteListClient({
               router.push("/kalender");
               return;
             }
-            // Strip ?openProjectId without triggering an RSC refetch.
-            const params = new URLSearchParams(globalThis.location.search);
-            let changed = false;
-            if (params.has("openProjectId")) {
-              params.delete("openProjectId");
-              changed = true;
-            }
-            if (params.has("sheet")) {
-              params.delete("sheet");
-              changed = true;
-            }
-            if (params.has("from")) {
-              params.delete("from");
-              changed = true;
-            }
-            if (params.has("returnTo")) {
-              params.delete("returnTo");
-              changed = true;
-            }
-            if (changed) {
-              const suffix = params.toString();
-              globalThis.history.replaceState(null, "", suffix ? `/projekte?${suffix}` : "/projekte");
-            }
+            stripProjekteSheetParamsFromUrl();
           }
         }}
         className="max-w-6xl w-[min(100vw-1.5rem,80rem)]"

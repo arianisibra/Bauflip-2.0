@@ -32,6 +32,15 @@ function rangesOverlap(aStart: number, aEnd: number, bStart: number, bEnd: numbe
   return aStart < bEnd && bStart < aEnd;
 }
 
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebounced(value), delayMs);
+    return () => window.clearTimeout(id);
+  }, [value, delayMs]);
+  return debounced;
+}
+
 function fmtRange(startsAt: string, endsAt: string): string {
   const s = new Date(startsAt);
   const e = new Date(endsAt);
@@ -216,6 +225,9 @@ export function AppointmentBookingForm({
 
   const addAppointment = useAddAppointment();
 
+  const debouncedStartsAtLocal = useDebouncedValue(startsAtLocal, 300);
+  const debouncedEndsAtLocal = useDebouncedValue(endsAtLocal, 300);
+
   const previewDayBounds = useMemo(() => {
     const ref = ymdKeyToReferenceDate(previewDayKey);
     if (!ref) return null;
@@ -229,23 +241,10 @@ export function AppointmentBookingForm({
     };
   }, [previewDayKey]);
 
-  const { data: previewAvailability, isFetching: previewPending } = useAvailabilityRange(
-    previewDayBounds?.fetchStartIso ?? null,
-    previewDayBounds?.fetchEndIso ?? null,
-    Boolean(assignedTechnicianId && previewDayBounds),
-  );
-
-  // „Jetzt“-Linie in der Vorschau einmal pro Minute aktualisieren.
-  useEffect(() => {
-    setPreviewNowMs(Date.now());
-    const id = window.setInterval(() => setPreviewNowMs(Date.now()), 60_000);
-    return () => window.clearInterval(id);
-  }, []);
-
   // Verfügbarkeit für ±1 Tag um die geplante Spanne herum laden — kleines, gecachtes Fenster.
   const availabilityRange = useMemo(() => {
-    const startIso = localInputToIso(startsAtLocal);
-    const endIso = localInputToIso(endsAtLocal);
+    const startIso = localInputToIso(debouncedStartsAtLocal);
+    const endIso = localInputToIso(debouncedEndsAtLocal);
     if (!startIso || !endIso) return null;
     const sMs = Date.parse(startIso);
     const eMs = Date.parse(endIso);
@@ -257,19 +256,47 @@ export function AppointmentBookingForm({
       slotStart: sMs,
       slotEnd: eMs,
     };
-  }, [startsAtLocal, endsAtLocal]);
+  }, [debouncedStartsAtLocal, debouncedEndsAtLocal]);
 
-  const { data: availability, isFetching: availabilityPending } = useAvailabilityRange(
-    availabilityRange?.startIso ?? null,
-    availabilityRange?.endIso ?? null,
+  const availabilityFetchRange = useMemo(() => {
+    let minStart = Infinity;
+    let maxEnd = -Infinity;
+
+    if (assignedTechnicianId && previewDayBounds) {
+      minStart = Math.min(minStart, Date.parse(previewDayBounds.fetchStartIso));
+      maxEnd = Math.max(maxEnd, Date.parse(previewDayBounds.fetchEndIso));
+    }
+    if (availabilityRange) {
+      minStart = Math.min(minStart, Date.parse(availabilityRange.startIso));
+      maxEnd = Math.max(maxEnd, Date.parse(availabilityRange.endIso));
+    }
+
+    if (!Number.isFinite(minStart) || !Number.isFinite(maxEnd)) return null;
+    return {
+      startIso: new Date(minStart).toISOString(),
+      endIso: new Date(maxEnd).toISOString(),
+    };
+  }, [previewDayBounds, availabilityRange, assignedTechnicianId]);
+
+  const { data: availabilityBundle, isFetching: availabilityPending } = useAvailabilityRange(
+    availabilityFetchRange?.startIso ?? null,
+    availabilityFetchRange?.endIso ?? null,
+    Boolean(availabilityFetchRange),
   );
+
+  // „Jetzt“-Linie in der Vorschau einmal pro Minute aktualisieren.
+  useEffect(() => {
+    setPreviewNowMs(Date.now());
+    const id = window.setInterval(() => setPreviewNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const previewRefDate = useMemo(() => ymdKeyToReferenceDate(previewDayKey), [previewDayKey]);
 
   const conflicts: Conflict[] = useMemo(() => {
-    if (!availability || !availabilityRange || !assignedTechnicianId) return [];
+    if (!availabilityBundle || !availabilityRange || !assignedTechnicianId) return [];
     const out: Conflict[] = [];
-    for (const t of availability.appointments) {
+    for (const t of availabilityBundle.appointments) {
       if (t.assignedTechnicianId !== assignedTechnicianId) continue;
       const s = Date.parse(t.startsAt);
       const e = Date.parse(t.endsAt);
@@ -278,7 +305,7 @@ export function AppointmentBookingForm({
         out.push({ type: "appointment", task: t });
       }
     }
-    for (const a of availability.absences) {
+    for (const a of availabilityBundle.absences) {
       if (a.technicianId !== assignedTechnicianId) continue;
       const s = Date.parse(a.startsAt);
       const e = Date.parse(a.endsAt);
@@ -288,7 +315,7 @@ export function AppointmentBookingForm({
       }
     }
     return out;
-  }, [availability, availabilityRange, assignedTechnicianId]);
+  }, [availabilityBundle, availabilityRange, assignedTechnicianId]);
 
   const formReady = Boolean(availabilityRange);
   const status: "idle" | "free" | "conflict" | "absence" =
@@ -418,14 +445,14 @@ export function AppointmentBookingForm({
               Alle Monteure: Kalender → Verfügbarkeit
             </Link>
           </div>
-          {previewPending ? (
+          {availabilityPending && !availabilityBundle ? (
             <BauflipLoadingInline label="Tagesübersicht wird geladen …" />
-          ) : previewAvailability ? (
+          ) : availabilityBundle ? (
             <TechnicianDayPreviewStrip
               technicianId={assignedTechnicianId}
               technicians={technicians}
-              appointments={previewAvailability.appointments}
-              absences={previewAvailability.absences}
+              appointments={availabilityBundle.appointments}
+              absences={availabilityBundle.absences}
               dayStartMs={previewDayBounds.dayStartMs}
               dayEndMs={previewDayBounds.dayEndMs}
               dayLabel={
