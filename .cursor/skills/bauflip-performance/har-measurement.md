@@ -36,12 +36,28 @@ Script: [`scripts/perf/summarize-har.mjs`](../../../scripts/perf/summarize-har.m
 | `availability` | `fetchAvailabilityRangeAction` |
 | `list` | Pagination / filter page |
 | `mutation` | Status, stammdaten, appointment CRUD |
-| `core` | `getProjectCore` / sheet head+details |
+| `core` | `getProjectSheetBootstrapAction` / sheet head+details |
+| `upload` | Multipart attachment upload (`projectId` in form) |
 | `extras` | Auftrag extras bundle |
 | `rapport` | Technician report |
 | `upload` | Attachment upload |
 
 Not every POST is bootstrap — use tags when diagnosing interaction sessions.
+
+### Next.js 16 action IDs
+
+Server Actions may post **`["<project-uuid>"]`** without function names in the HAR body. The script treats a single UUID v4 argument as **`core`** (sheet bootstrap). Multipart with `projectId` → **`upload`**.
+
+### Sheet gates (PR-I) — script output
+
+After summarize, look for **Sheet gates (PR-I)**:
+
+| Gate | PASS when |
+|------|-----------|
+| 1 core POST per open | Count matches sheet opens (not 2× waterfall) |
+| No burst | No two `core` POSTs within **300 ms** |
+
+Checklist: [`scripts/perf/sheet-open-checklist.md`](../../../scripts/perf/sheet-open-checklist.md)
 
 ---
 
@@ -64,7 +80,9 @@ Not every POST is bootstrap — use tags when diagnosing interaction sessions.
 
 ### Projekte — Termin buchen + Auftrag
 
-Checklist: [`scripts/perf/projekte-interaction-checklist.md`](../../../scripts/perf/projekte-interaction-checklist.md)
+**Minimal interaction gate (one project, one appointment):** [`termin-buchen-clean-har.md`](../../../scripts/perf/termin-buchen-clean-har.md)
+
+Full stress session: [`projekte-interaction-checklist.md`](../../../scripts/perf/projekte-interaction-checklist.md)
 
 | Session | Metric | Target |
 |---------|--------|--------|
@@ -97,7 +115,8 @@ Checklist: [`scripts/perf/kalender-netlify-log-checklist.md`](../../../scripts/p
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| ~118 requests, 6 MB | Browser extensions (`inject.bundle.js`) | Incognito; filter `gross-storenbau` |
+| ~118–299 requests, 6–14 MB | Browser extensions (`inject.bundle.js`, Grammarly) | Incognito; filter `gross-storenbau` |
+| Interaction gate FAIL with PR-I PASS | Polluted session (multi-project, search, sidebar tour) | Use [`termin-buchen-clean-har.md`](../../../scripts/perf/termin-buchen-clean-har.md) |
 | `Failed to find Server Action` | Deploy mismatch | Hard reload after deploy |
 | No document GET in HAR | Captured mid-session | Timeline uses first POST as anchor |
 | 5× identical bootstrap in dev | React strict mode / double mount | Compare prod HAR, not dev alone |

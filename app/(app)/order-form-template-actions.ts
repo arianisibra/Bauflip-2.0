@@ -20,7 +20,7 @@ export async function deleteOrderFormTemplateAction(templateId: string, tabId?: 
   }
   await deleteOrderFormTemplate(templateId);
 
-  publish(session.organizationId, {
+  await publish(session.organizationId, {
     type: "order_form_template.changed",
     originTabId: tabId,
   });

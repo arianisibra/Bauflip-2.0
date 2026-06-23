@@ -723,7 +723,7 @@ Checkliste in [`docs/netlify-compute-optimization.md`](netlify-compute-optimizat
 
 Full audit after Tier-1 deploy + MCP verification (Supabase + Netlify).
 
-### HAR scorecard (`app.gross-storenbau.ch.har`)
+### Session A — Sheet-only HAR (morning)
 
 | Gate | Target | Result |
 |------|--------|--------|
@@ -742,7 +742,51 @@ node scripts/perf/summarize-har.mjs ~/Desktop/app.gross-storenbau.ch.har
 
 Checklist: [`scripts/perf/sheet-open-checklist.md`](../scripts/perf/sheet-open-checklist.md)
 
-### Netlify function logs (same session)
+### Session B — Long prod session (~16:23–16:28, polluted HAR)
+
+Same day, ~2,7 min DevTools capture with extensions (Grammarly, HubSpot inject). **123 app entries** after HAR filter (299 raw with extension noise).
+
+```bash
+node scripts/perf/summarize-har.mjs ~/Desktop/app.gross-storenbau.ch.har
+```
+
+| Gate | Target | Result |
+|------|--------|--------|
+| Document `/projekte` | — | 2225 ms, TTFB **726 ms**, RSC **327 KB** |
+| Bootstrap POST after document | 0× | **PASS** |
+| Sheet PR-I `core` POSTs | 1× per open | **4×** (3 projects + duplicate open) **PASS** |
+| head→details burst | none &lt;300 ms | **PASS** |
+| Availability POSTs | ≤ 3 | **2×** **PASS** |
+| Interaction POST `/projekte` total | ≤ 8 | **12×** **FAIL** (polluted session) |
+| WebSocket | 1× typical | **6×** (long nav + reconnects) |
+| Sidebar `_rsc` prefetches | — | **12×** (active nav, not Link prefetch) |
+
+**POST `/projekte` breakdown (why interaction FAIL):**
+
+| Typ | Anzahl | Ursache |
+|-----|--------|---------|
+| `core` | 4 | 3 Projekte geöffnet (`ad15…`, `a4ea…`, `b4bde…` 2×) |
+| `list` | 2 | Status-Refetch `["active",""]` |
+| `availability` | 2 | Slot-Tweaks (ok) |
+| `mutation` | 1 | Termin buchen (ok) |
+| `upload` | 1 | Multipart |
+| `other` | 2 | Assignable-Profiles `[]` + Form-Multipart |
+
+Zusätzlich: Suche `?q=test`, Navigation tag → wochenplan → kalender → auftrag. **Kein Architektur-Regression** — für Interaction-Gate: [`termin-buchen-clean-har.md`](../scripts/perf/termin-buchen-clean-har.md).
+
+**Netlify function logs (Session B, duration view):**
+
+| Observation | Value |
+|---------------|-------|
+| Cold burst (16:23:22) | **1663–1793 ms** |
+| Steady state | meist **400–700 ms** (besser als frühere ~2 s) |
+| Ausreißer | **1070 ms**, **1403 ms**, **1644 ms** |
+| Memory | **194–218 MB** |
+| `realtime publish failed: AbortError` | 1× WARN (16:24:33) — fire-and-forget `httpSend` abgebrochen wenn Function endet; Fix: `await publish()` (Code, noch nicht deployed) |
+
+**DevTools-Rohdaten (nicht für Gates):** 299 requests, 13,9 MB, Finish 2,7 min, **193 Console-Errors** (überwiegend Extensions). Incognito ohne Extensions verwenden.
+
+### Netlify function logs (Session A reference)
 
 | Observation | Value |
 |---------------|-------|
@@ -751,7 +795,16 @@ Checklist: [`scripts/perf/sheet-open-checklist.md`](../scripts/perf/sheet-open-c
 | Faster opens | ~555–602 ms |
 | `SERVER_ACTION_SLOW_MS` | **800** (confirmed on site `bauflipp`) |
 
-After deploy: separate `signAttachmentUrls` in slow logs (`attachmentCount` meta).
+After deploy `6a3a95a` (2026-06-23 ~14:18 UTC): separate `signAttachmentUrls` in slow logs (`attachmentCount` meta). Session B duration-only logs showed no `slow_operation` lines — see [`verify-signAttachmentUrls-netlify.md`](../scripts/perf/verify-signAttachmentUrls-netlify.md).
+
+**Current production deploy (MCP, 2026-06-23):**
+
+| Field | Value |
+|-------|-------|
+| Deploy ID | `6a3a95a056a80900088867fb` |
+| Commit | `b513c72` — Post-audit perf (HAR gates, signAttachmentUrls slow_log, FK index migration) |
+| Functions region | `us-east-2` / `cmh` — see region checklist |
+| Pending after this doc | `await publish()` realtime fix, clean interaction HAR |
 
 ### Post-Audit DB — `project_core_bootstrap` EXPLAIN
 
@@ -771,7 +824,8 @@ SQL Editor (`EXPLAIN ANALYZE`), service context — **not** identical to RLS + N
 | Region match | Manual check — see [`netlify-compute-optimization.md`](netlify-compute-optimization.md#region-verification-manual) |
 | Warmup | Optional — [`scripts/perf/warmup-options.md`](../scripts/perf/warmup-options.md) |
 | Duplicate FK indexes | Migration ready — `20260723140000_perf_drop_duplicate_fk_indexes.sql` (**await `db:push`**) |
-| Interaction HAR Termin buchen | Not captured — [`projekte-interaction-checklist.md`](../scripts/perf/projekte-interaction-checklist.md) |
+| Interaction HAR Termin buchen | Clean capture — [`termin-buchen-clean-har.md`](../scripts/perf/termin-buchen-clean-har.md) |
+| Realtime AbortError on Netlify | `await publish()` in [`lib/realtime/publish.ts`](../lib/realtime/publish.ts) — deploy after merge |
 
 ### Phase 2b list slim
 

@@ -90,7 +90,7 @@ export async function submitTechnicianReportAction(
   // `report.changed`) because submitting a report also mutates the project's
   // status via `nextStatus`, so the office list's status badge needs to
   // refresh — `project.core_changed` invalidates core + list + calendars.
-  publish(organizationId, {
+  await publish(organizationId, {
     type: "project.core_changed",
     projectId: v.projectId,
     originTabId: tabId,

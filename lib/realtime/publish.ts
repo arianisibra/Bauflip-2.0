@@ -22,6 +22,13 @@ function getPublishAdminClient(): SupabaseClient | null {
   return cachedAdmin;
 }
 
+function isAbortError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  if (err.name === "AbortError") return true;
+  const code = (err as Error & { code?: number }).code;
+  return code === 20;
+}
+
 async function publishAsync(orgId: string, event: PublishedEvent): Promise<void> {
   const admin = getPublishAdminClient();
   if (!admin) return;
@@ -38,9 +45,15 @@ async function publishAsync(orgId: string, event: PublishedEvent): Promise<void>
   }
 }
 
-/** Fire-and-forget org broadcast via Supabase Realtime REST (no WebSocket subscribe). */
-export function publish(orgId: string, event: PublishedEvent): void {
-  void publishAsync(orgId, event).catch((err) => {
+/**
+ * Org broadcast via Supabase Realtime REST (no WebSocket subscribe).
+ * Awaited so Netlify/serverless does not abort httpSend when the action returns.
+ */
+export async function publish(orgId: string, event: PublishedEvent): Promise<void> {
+  try {
+    await publishAsync(orgId, event);
+  } catch (err) {
+    if (isAbortError(err)) return;
     console.warn("[bauflip] realtime publish failed:", err);
-  });
+  }
 }

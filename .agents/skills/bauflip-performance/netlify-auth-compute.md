@@ -60,7 +60,7 @@ Files: `lib/auth/user-metadata-keys.ts`, `scripts/sync-user-auth-metadata.mts`
 
 | Component | Role |
 |-----------|------|
-| `lib/realtime/publish.ts` | Publish events after mutations |
+| `lib/realtime/publish.ts` | Publish events after mutations — **`await publish()`** so Netlify does not abort `httpSend` |
 | `lib/query/realtime-bridge.tsx` | Subscribe; invalidate TanStack queries |
 | `lib/realtime/connect-routes.ts` | Connect only on data routes |
 | `components/app/authenticated-realtime.tsx` | Wrapper in layouts |
@@ -86,7 +86,8 @@ Common slow paths in logs:
 | Operation | Typical duration | Notes |
 |-----------|------------------|-------|
 | `weekTasksFromAppointmentRange` | 500–1500 ms | Kal-DB RPC reduces roundtrips |
-| `getProjectCore` | 500–900 ms | 1× per sheet open |
+| `getProjectCore` / `loadProjectCoreBootstrap` | 500–900 ms | 1× per sheet open |
+| `signAttachmentUrls` | varies | Separate `slow_operation` line with `attachmentCount` (deploy `6a3a95a+`) |
 | `listProjectsForOfficePage` | varies | trgm search + pagination |
 | Cold layout invocation | up to ~5 s | Netlify cold start |
 
@@ -128,7 +129,7 @@ Used in `proxy.ts`, `lib/auth/session.ts`, `lib/supabase/server.ts`.
 
 ## Debugging checklist
 
-1. Filter Netlify logs: `slow_operation`, `weekTasksFromAppointmentRange`, `getProjectCore`
+1. Filter Netlify logs: `slow_operation`, `signAttachmentUrls`, `loadProjectCoreBootstrap`, `weekTasksFromAppointmentRange`
 2. Confirm no `/api/events`
 3. Count POSTs after document with `summarize-har.mjs`
 4. Check for `_rsc` prefetch storms → `prefetch={false}` on sidebar, bottom nav, `TechAuftragLink`

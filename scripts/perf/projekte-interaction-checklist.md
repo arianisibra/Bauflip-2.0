@@ -1,5 +1,7 @@
 # Projekte interaction checklist (HAR capture)
 
+**Minimal gate check (Termin buchen only):** [`termin-buchen-clean-har.md`](./termin-buchen-clean-har.md) — use when interaction gate failed on a long polluted session.
+
 Reproduziert die Production-Session aus der HAR-Analyse (~3 Min). DevTools → Network → **Disable cache** → HAR exportieren mit Content.
 
 ## Schritte

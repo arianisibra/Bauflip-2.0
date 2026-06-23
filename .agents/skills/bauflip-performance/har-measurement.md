@@ -80,7 +80,9 @@ Checklist: [`scripts/perf/sheet-open-checklist.md`](../../../scripts/perf/sheet-
 
 ### Projekte — Termin buchen + Auftrag
 
-Checklist: [`scripts/perf/projekte-interaction-checklist.md`](../../../scripts/perf/projekte-interaction-checklist.md)
+**Minimal interaction gate (one project, one appointment):** [`termin-buchen-clean-har.md`](../../../scripts/perf/termin-buchen-clean-har.md)
+
+Full stress session: [`projekte-interaction-checklist.md`](../../../scripts/perf/projekte-interaction-checklist.md)
 
 | Session | Metric | Target |
 |---------|--------|--------|
@@ -113,7 +115,8 @@ Checklist: [`scripts/perf/kalender-netlify-log-checklist.md`](../../../scripts/p
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| ~118 requests, 6 MB | Browser extensions (`inject.bundle.js`) | Incognito; filter `gross-storenbau` |
+| ~118–299 requests, 6–14 MB | Browser extensions (`inject.bundle.js`, Grammarly) | Incognito; filter `gross-storenbau` |
+| Interaction gate FAIL with PR-I PASS | Polluted session (multi-project, search, sidebar tour) | Use [`termin-buchen-clean-har.md`](../../../scripts/perf/termin-buchen-clean-har.md) |
 | `Failed to find Server Action` | Deploy mismatch | Hard reload after deploy |
 | No document GET in HAR | Captured mid-session | Timeline uses first POST as anchor |
 | 5× identical bootstrap in dev | React strict mode / double mount | Compare prod HAR, not dev alone |

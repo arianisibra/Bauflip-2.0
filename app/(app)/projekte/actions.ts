@@ -171,7 +171,7 @@ export async function updateProjectStammdatenAction(
 
   const core = await coreOrThrow(v.projectId);
   if (session.organizationId) {
-    publish(session.organizationId, {
+    await publish(session.organizationId, {
       type: "project.core_changed",
       projectId: v.projectId,
       originTabId: tabId,
@@ -200,7 +200,7 @@ export async function addAppointmentAction(
   });
   const core = await coreOrThrow(v.projectId);
   if (session.organizationId) {
-    publish(session.organizationId, {
+    await publish(session.organizationId, {
       type: "appointment.changed",
       projectId: v.projectId,
       originTabId: tabId,
@@ -218,7 +218,7 @@ export async function deleteAppointmentAction(
   await deleteAppointment(appointmentId);
   const core = await coreOrThrow(projectId);
   if (session.organizationId) {
-    publish(session.organizationId, {
+    await publish(session.organizationId, {
       type: "appointment.changed",
       projectId,
       originTabId: tabId,
@@ -234,7 +234,7 @@ export async function deleteProjectAction(projectId: string, tabId?: string) {
   }
   await deleteProject(projectId);
   if (session.organizationId) {
-    publish(session.organizationId, {
+    await publish(session.organizationId, {
       type: "project.deleted",
       projectId,
       originTabId: tabId,
@@ -251,7 +251,7 @@ export async function updateProjectStatusAction(
   await updateProject(projectId, { status, statusUpdateSource: "manual" });
   const core = await coreOrThrow(projectId);
   if (session.organizationId) {
-    publish(session.organizationId, {
+    await publish(session.organizationId, {
       type: "project.core_changed",
       projectId,
       originTabId: tabId,
@@ -352,7 +352,7 @@ export async function updateTechnicianReportAction(
   });
 
   const core = await coreOrThrow(v.projectId);
-  publish(organizationId, {
+  await publish(organizationId, {
     type: "project.core_changed",
     projectId: v.projectId,
     originTabId: tabId,

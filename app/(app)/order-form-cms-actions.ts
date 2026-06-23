@@ -48,7 +48,7 @@ export async function createOrderFormCmsAction(
     isActive: v.isActive,
   });
 
-  publish(session.organizationId, {
+  await publish(session.organizationId, {
     type: "order_form_template.changed",
     originTabId: tabId,
   });
@@ -87,7 +87,7 @@ export async function updateOrderFormCmsAction(
     isActive: v.isActive,
   });
 
-  publish(session.organizationId, {
+  await publish(session.organizationId, {
     type: "order_form_template.changed",
     originTabId: tabId,
   });
