@@ -65,6 +65,19 @@ const einstellungenPosts = appEntries.filter(
 const bestellformularePosts = appEntries.filter(
   (e) => e.request.method === "POST" && e.request.url.includes("/bestellformulare"),
 );
+const tagDoc = appEntries.find(
+  (e) =>
+    e.request.method === "GET" &&
+    !e.request.url.includes("_rsc=") &&
+    e.request.url.replace(/\?.*$/, "").endsWith("/tag"),
+);
+const tagPosts = appEntries.filter((e) => e.request.method === "POST" && e.request.url.includes("/tag"));
+const wochenplanRscGets = appEntries.filter(
+  (e) => e.request.method === "GET" && e.request.url.includes("/wochenplan") && e.request.url.includes("_rsc="),
+);
+const profilRscGets = appEntries.filter(
+  (e) => e.request.method === "GET" && e.request.url.includes("/profil") && e.request.url.includes("_rsc="),
+);
 const einstellungenRscGets = appEntries.filter(
   (e) => e.request.method === "GET" && e.request.url.includes("/einstellungen") && e.request.url.includes("_rsc="),
 );
@@ -509,6 +522,72 @@ if (bestellformulareDoc) {
   ];
   console.log("\nBestellformulare gates (load-only HAR)");
   for (const g of bfGates) {
+    console.log(" ", g.pass ? "PASS" : "FAIL", "—", g.label, `(${g.detail})`);
+  }
+}
+
+if (tagDoc) {
+  const tagDocEndMs = end(tagDoc);
+  const tagPostsAfterDoc = tagPosts.filter((p) => rel(p) >= tagDocEndMs);
+  const tagEarlyPosts = tagPostsAfterDoc.filter((p) => rel(p) - tagDocEndMs < HYDRATION_GAP_MS);
+  const wochenplanRscAfterDoc = wochenplanRscGets.filter((p) => rel(p) >= tagDocEndMs);
+  const profilRscAfterDoc = profilRscGets.filter((p) => rel(p) >= tagDocEndMs);
+
+  console.log("\nTag interaction (after document load)");
+  console.log("  POST /tag total:", tagPostsAfterDoc.length);
+  console.log("    early (<" + HYDRATION_GAP_MS + "ms, regression):", tagEarlyPosts.length);
+  console.log("  GET /wochenplan?_rsc= after load:", wochenplanRscAfterDoc.length);
+  console.log("  GET /profil?_rsc= after load:", profilRscAfterDoc.length);
+
+  if (tagPostsAfterDoc.length > 0) {
+    console.log("\n  POST /tag timeline:");
+    for (const p of [...tagPostsAfterDoc].sort((a, b) => rel(a) - rel(b))) {
+      const gap = rel(p) - tagDocEndMs;
+      console.log(
+        "   ",
+        "t+" + gap + "ms",
+        Math.round(p.time) + "ms",
+        Math.round((p.response._transferSize ?? 0) / 1024) + "KB",
+      );
+    }
+  }
+
+  console.log("\nTimeline /tag (ms from first request)");
+  console.log("  document end:", tagDocEndMs);
+  if (tagEarlyPosts[0]) {
+    console.log("  early POST start:", rel(tagEarlyPosts[0]));
+    console.log("  hydration gap:", rel(tagEarlyPosts[0]) - tagDocEndMs);
+  } else if (tagPostsAfterDoc[0]) {
+    console.log("  first POST start:", rel(tagPostsAfterDoc[0]));
+    console.log("  gap to first POST:", rel(tagPostsAfterDoc[0]) - tagDocEndMs);
+  } else {
+    console.log("  data ready (Hybrid-SSR):", tagDocEndMs);
+  }
+
+  const tagGates = [
+    {
+      label: "No POST /tag within " + HYDRATION_GAP_MS + "ms of document (hydration)",
+      pass: tagEarlyPosts.length === 0,
+      detail: String(tagEarlyPosts.length),
+    },
+    {
+      label: "Load POST /tag = 0 (Hybrid-SSR)",
+      pass: tagPostsAfterDoc.length === 0,
+      detail: String(tagPostsAfterDoc.length),
+    },
+    {
+      label: "GET /wochenplan?_rsc= after load = 0 (bottom-nav prefetch)",
+      pass: wochenplanRscAfterDoc.length === 0,
+      detail: String(wochenplanRscAfterDoc.length),
+    },
+    {
+      label: "GET /profil?_rsc= after load = 0 (bottom-nav prefetch)",
+      pass: profilRscAfterDoc.length === 0,
+      detail: String(profilRscAfterDoc.length),
+    },
+  ];
+  console.log("\nTag gates (load-only HAR)");
+  for (const g of tagGates) {
     console.log(" ", g.pass ? "PASS" : "FAIL", "—", g.label, `(${g.detail})`);
   }
 }

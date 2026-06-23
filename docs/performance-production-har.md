@@ -7,7 +7,8 @@ Stand: 2026-05-26 (Phase C)
 | Route | Server-Action POSTs (kalt) | Profil-POST |
 |-------|---------------------------|-------------|
 | `/projekte` | **1×** `fetchProjekteBootstrapAction` | **0** (Layout) |
-| `/tag`, `/wochenplan`, `/profil` | Wochen-/Tagesdaten nur | **0** |
+| `/tag` | Week-Tasks (Hybrid-SSR) | **0** (Layout) |
+| `/wochenplan`, `/profil` | Wochen-/Tagesdaten (Client) | **0** |
 | `/mitarbeiter`, `/bestellformulare` | Team/Templates (Hybrid-SSR) | **0** (dehydrated + Layout) |
 | `/einstellungen` | Profil + Org (Hybrid-SSR) | **0** (dehydrated + Layout) |
 
@@ -493,6 +494,27 @@ Checkliste: [`scripts/perf/bestellformulare-netlify-log-checklist.md`](../script
 |--------|---------------------|
 | Hard reload `/bestellformulare` | **1×** (SSR Bootstrap) |
 | Template erstellen/speichern/löschen | **1×** pro Aktion |
+
+---
+
+## Phase Tag — Mein Tag Hybrid-SSR (Prod-Baseline)
+
+| Metrik | Vorher (Phase B) | Ziel |
+|--------|------------------|------|
+| Document GET `/tag` | Shell + Spinner-Gap | Week-Tasks im dehydrated JSON |
+| POST `/tag` nach Load | **1×** `fetchWeekTasksAction` (~800 ms) | **0×** |
+| Profil-POST | **0** (Layout) | **0** |
+| Bottom-Nav `_rsc` Prefetch | `/wochenplan` + `/profil` je 2× | **0×** (`prefetch={false}`) |
+| Realtime | `appointment.changed` → `weekTasks` invalidate | unverändert |
+
+Checkliste: [`scripts/perf/tag-netlify-log-checklist.md`](../scripts/perf/tag-netlify-log-checklist.md)
+
+| Aktion | Function-Invocations |
+|--------|---------------------|
+| Hard reload `/tag` | **1×** (SSR Bootstrap + `calendar_range_tasks_for_org`) |
+| Rapport speichern auf `/auftrag` | Realtime invalidiert Cache; optional Refetch |
+
+Shared Query-Key `weekTasks.byDate(refIso)` — `/wochenplan` profitiert beim ersten Besuch derselben Woche.
 
 ---
 

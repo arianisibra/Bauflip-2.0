@@ -288,6 +288,7 @@ export function useWeekTasks(isoDate: string, enabled = true) {
     queryFn: () => fetchWeekTasksAction(isoDate),
     enabled,
     staleTime: 90_000,
+    refetchOnMount: false,
   });
 }
 

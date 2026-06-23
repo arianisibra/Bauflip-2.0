@@ -155,7 +155,7 @@ function MonteurUpcomingGroupCard({ group }: { group: WeekTaskProjectDayGroup })
 }
 
 export function TechDayView({
-  initialTasks,
+  initialTasks = [],
   referenceIso,
   greeting,
   displayName,
@@ -163,7 +163,7 @@ export function TechDayView({
   isTechnicianView,
   currentUserId,
 }: {
-  initialTasks: WeekTaskItem[];
+  initialTasks?: WeekTaskItem[];
   referenceIso: string;
   greeting: string;
   displayName: string;
@@ -183,7 +183,9 @@ export function TechDayView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { data: tasks = initialTasks, isFetching } = useWeekTasks(referenceIso);
+  const { data: tasks = initialTasks, isFetching, isPending } = useWeekTasks(referenceIso);
+
+  const showRefreshIndicator = isFetching && !isPending && tasks.length > 0;
 
   const { todayGroups, todayTasks, upcomingGroups, upcomingTasks, openRapportProjects } = useMemo(() => {
     const now = new Date();
@@ -271,7 +273,7 @@ export function TechDayView({
             <p className="text-xs text-muted-foreground">Heutige Einsätze. Für den Auftrag antippen.</p>
           </div>
         </div>
-        {isFetching ? (
+        {showRefreshIndicator ? (
           <div className="pt-0.5">
             <BauflipLoadingInline label="Termine werden aktualisiert …" />
           </div>

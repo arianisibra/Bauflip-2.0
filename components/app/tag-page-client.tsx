@@ -19,7 +19,6 @@ export function TagPageClient() {
 
   return (
     <TechDayView
-      initialTasks={[]}
       referenceIso={referenceIso}
       greeting={timeOfDayGreeting()}
       displayName={profile.displayName}
