@@ -36,5 +36,6 @@ Erwartung im Block **Tag gates (load-only HAR)** — alle `PASS`:
 
 - `early (<500ms)` = **0**
 - `Load POST /tag` = **0**
-- `GET /wochenplan?_rsc=` = **0**
-- `GET /profil?_rsc=` = **0**
+- `GET /wochenplan?_rsc=` early (<2s) = **0**
+- `GET /profil?_rsc=` early (<2s) = **0**
+- `GET /auftrag/*?_rsc=` early (<3s) = **0**

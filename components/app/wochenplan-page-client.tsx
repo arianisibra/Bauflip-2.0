@@ -14,7 +14,7 @@ export function WochenplanPageClient() {
           Termine nach Tag, Woche oder Monat (Europe/Zurich).
         </p>
       </header>
-      <TechCalendar initialTasks={[]} isTechnicianView={profile.role === "technician"} />
+      <TechCalendar isTechnicianView={profile.role === "technician"} />
     </section>
   );
 }

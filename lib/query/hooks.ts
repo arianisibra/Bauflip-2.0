@@ -298,6 +298,7 @@ export function useTechMonthTasks(year: number, month: number, enabled = true) {
     queryFn: () => fetchTechMonthTasksAction(year, month),
     enabled,
     staleTime: 90_000,
+    refetchOnMount: false,
   });
 }
 

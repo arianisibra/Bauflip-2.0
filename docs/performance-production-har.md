@@ -8,7 +8,8 @@ Stand: 2026-05-26 (Phase C)
 |-------|---------------------------|-------------|
 | `/projekte` | **1×** `fetchProjekteBootstrapAction` | **0** (Layout) |
 | `/tag` | Week-Tasks (Hybrid-SSR) | **0** (Layout) |
-| `/wochenplan`, `/profil` | Wochen-/Tagesdaten (Client) | **0** |
+| `/wochenplan` | Week + Month (Hybrid-SSR) | **0** (Layout) |
+| `/profil` | Nur Session-Context | **0** |
 | `/mitarbeiter`, `/bestellformulare` | Team/Templates (Hybrid-SSR) | **0** (dehydrated + Layout) |
 | `/einstellungen` | Profil + Org (Hybrid-SSR) | **0** (dehydrated + Layout) |
 
@@ -505,6 +506,7 @@ Checkliste: [`scripts/perf/bestellformulare-netlify-log-checklist.md`](../script
 | POST `/tag` nach Load | **1×** `fetchWeekTasksAction` (~800 ms) | **0×** |
 | Profil-POST | **0** (Layout) | **0** |
 | Bottom-Nav `_rsc` Prefetch | `/wochenplan` + `/profil` je 2× | **0×** (`prefetch={false}`) |
+| Auftrag-Karten `_rsc` Prefetch | viele `GET /auftrag/*?_rsc=` | **0×** (`TechAuftragLink`) |
 | Realtime | `appointment.changed` → `weekTasks` invalidate | unverändert |
 
 Checkliste: [`scripts/perf/tag-netlify-log-checklist.md`](../scripts/perf/tag-netlify-log-checklist.md)
@@ -515,6 +517,25 @@ Checkliste: [`scripts/perf/tag-netlify-log-checklist.md`](../scripts/perf/tag-ne
 | Rapport speichern auf `/auftrag` | Realtime invalidiert Cache; optional Refetch |
 
 Shared Query-Key `weekTasks.byDate(refIso)` — `/wochenplan` profitiert beim ersten Besuch derselben Woche.
+
+---
+
+## Phase Wochenplan — Kalender Hybrid-SSR (Prod-Baseline)
+
+| Metrik | Vorher (Phase B) | Ziel |
+|--------|------------------|------|
+| Document GET `/wochenplan` | Shell + Client-Fetch | Week + Month im dehydrated JSON |
+| POST `/wochenplan` nach Load | **1×** Week (+ Month bei Tab) | **0×** |
+| Monats-Tab (gleicher Monat) | POST `fetchTechMonthTasksAction` | **0×** (SSR seeded) |
+| Anderer Monat (Pfeil) | POST | **1×** (erwartet) |
+
+Checkliste: [`scripts/perf/wochenplan-netlify-log-checklist.md`](../scripts/perf/wochenplan-netlify-log-checklist.md)
+
+| Aktion | Function-Invocations |
+|--------|---------------------|
+| Hard reload `/wochenplan` | **1×** (SSR Bootstrap, 2× RPC parallel) |
+| Monats-Tab ohne URL-Wechsel | **0×** |
+| Monat vor/zurück | **1×** pro neuem Monat |
 
 ---
 

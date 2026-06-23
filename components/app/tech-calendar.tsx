@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import type { WeekTaskItem } from "@/lib/domain/types";
@@ -11,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { BauflipLoadingInline } from "@/components/ui/bauflip-loading";
+import { TechAuftragLink } from "@/components/app/tech-auftrag-link";
 import { ChevronLeft, ChevronRight, Clock, MapPin, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -23,7 +23,6 @@ import { todayKeySwiss } from "@/lib/date/swiss";
 import { useTechMonthTasks, useWeekTasks } from "@/lib/query/hooks";
 import { queryKeys } from "@/lib/query/keys";
 import {
-  buildAuftragHref,
   buildTechCalendarHref,
   calendarQueriesEqual,
   parseTechCalendarUrlState,
@@ -72,10 +71,10 @@ function isoWeekInputValueFromDayKey(dayKey: string): string {
 }
 
 export function TechCalendar({
-  initialTasks,
+  initialTasks = [],
   isTechnicianView,
 }: {
-  initialTasks: WeekTaskItem[];
+  initialTasks?: WeekTaskItem[];
   isTechnicianView: boolean;
 }) {
   const qc = useQueryClient();
@@ -151,11 +150,22 @@ export function TechCalendar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { data: weekTasks = [], isFetching: weekPending } = useWeekTasks(refDateIso, viewMode !== "month");
-  const { data: monthTasks = [], isFetching: monthPending } = useTechMonthTasks(monthY, monthM, viewMode === "month");
+  const {
+    data: weekTasks = [],
+    isFetching: weekFetching,
+    isPending: weekIsPending,
+  } = useWeekTasks(refDateIso, viewMode !== "month");
+  const {
+    data: monthTasks = [],
+    isFetching: monthFetching,
+    isPending: monthIsPending,
+  } = useTechMonthTasks(monthY, monthM, viewMode === "month");
 
   const tasks = viewMode === "month" ? monthTasks : weekTasks;
-  const pending = viewMode === "month" ? monthPending : weekPending;
+  const isFetching = viewMode === "month" ? monthFetching : weekFetching;
+  const isPending = viewMode === "month" ? monthIsPending : weekIsPending;
+  const loading = isPending && tasks.length === 0;
+  const showRefreshIndicator = isFetching && !isPending && tasks.length > 0;
 
   const technicianOptions = useMemo(() => {
     if (isTechnicianView) return [];
@@ -277,7 +287,7 @@ export function TechCalendar({
   const weekPickerValue = useMemo(() => isoWeekInputValueFromDayKey(focusDayKey), [focusDayKey]);
 
   return (
-    <div className={cn("space-y-4", pending && "opacity-60 transition-opacity")}>
+    <div className={cn("space-y-4", loading && "opacity-60 transition-opacity")}>
       <div className="relative w-full">
         <Search className="pointer-events-none absolute left-2 top-1/2 z-10 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
         <Input
@@ -296,21 +306,25 @@ export function TechCalendar({
           size="icon"
           className="size-9 shrink-0"
           onClick={() => navigate(-1)}
-          disabled={pending}
+          disabled={loading}
           aria-label={navAria.prev}
         >
           <ChevronLeft className="size-4" />
         </Button>
         <div className="flex min-h-9 min-w-0 flex-1 flex-col items-center justify-center gap-1 text-center">
           <p className="text-sm font-semibold leading-snug text-foreground">{headerLabel}</p>
-          {pending ? <BauflipLoadingInline label="Wird geladen …" /> : null}
+          {loading ? (
+            <BauflipLoadingInline label="Wird geladen …" />
+          ) : showRefreshIndicator ? (
+            <BauflipLoadingInline label="Termine werden aktualisiert …" />
+          ) : null}
         </div>
         <Button
           variant="outline"
           size="icon"
           className="size-9 shrink-0"
           onClick={() => navigate(1)}
-          disabled={pending}
+          disabled={loading}
           aria-label={navAria.next}
         >
           <ChevronRight className="size-4" />
@@ -463,9 +477,10 @@ export function TechCalendar({
                     const isBesichtigung = task.kind === "besichtigung";
                     const isDone = task.projectStatus === "abgeschlossen";
                     return (
-                      <Link
+                      <TechAuftragLink
                         key={group.key}
-                        href={buildAuftragHref(task.projectId, calendarReturnHref)}
+                        projectId={task.projectId}
+                        returnTo={calendarReturnHref}
                         className={cn(
                           "flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-transform active:scale-[0.98]",
                           isDone
@@ -526,7 +541,7 @@ export function TechCalendar({
                             {isBesichtigung ? "Besichtigung" : "Ausführung"}
                           </Badge>
                         ) : null}
-                      </Link>
+                      </TechAuftragLink>
                     );
                   })}
                 </div>

@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 import { todayKeySwiss } from "@/lib/date/swiss";
 import { Badge } from "@/components/ui/badge";
 import { MapsNavButton } from "@/components/app/maps-nav-button";
-import { buildAuftragHref } from "@/lib/navigation/tech-field-navigation";
+import { TechAuftragLink } from "@/components/app/tech-auftrag-link";
 
 const TAG_AUFTRAG_RETURN = "/tag";
 
@@ -55,8 +55,9 @@ function MonteurTodayGroupCard({ group }: { group: WeekTaskProjectDayGroup }) {
   const isBesichtigung = task.kind === "besichtigung";
   const isDone = task.projectStatus === "abgeschlossen";
   return (
-    <Link
-      href={buildAuftragHref(task.projectId, TAG_AUFTRAG_RETURN)}
+    <TechAuftragLink
+      projectId={task.projectId}
+      returnTo={TAG_AUFTRAG_RETURN}
       className={`flex items-center gap-3 rounded-2xl border border-border border-l-4 bg-card px-4 py-4 shadow-sm transition-transform active:scale-[0.98] ${
         isDone
           ? "border-l-muted-foreground/30 opacity-60"
@@ -116,15 +117,16 @@ function MonteurTodayGroupCard({ group }: { group: WeekTaskProjectDayGroup }) {
         ) : null}
       </div>
       <ChevronRight className="size-5 shrink-0 text-muted-foreground/40" />
-    </Link>
+    </TechAuftragLink>
   );
 }
 
 function MonteurUpcomingGroupCard({ group }: { group: WeekTaskProjectDayGroup }) {
   const task = group.primary;
   return (
-    <Link
-      href={buildAuftragHref(task.projectId, TAG_AUFTRAG_RETURN)}
+    <TechAuftragLink
+      projectId={task.projectId}
+      returnTo={TAG_AUFTRAG_RETURN}
       className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 shadow-sm transition-transform active:scale-[0.98]"
     >
       <div className="min-w-0 flex-1">
@@ -150,7 +152,7 @@ function MonteurUpcomingGroupCard({ group }: { group: WeekTaskProjectDayGroup })
         </div>
       </div>
       <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
-    </Link>
+    </TechAuftragLink>
   );
 }
 
@@ -302,9 +304,10 @@ export function TechDayView({
                   {isTechnicianView
                     ? upcomingGroups!.map((group) => <MonteurUpcomingGroupCard key={group.key} group={group} />)
                     : upcomingTasks!.map((task) => (
-                        <Link
+                        <TechAuftragLink
                           key={task.appointmentId}
-                          href={buildAuftragHref(task.projectId, TAG_AUFTRAG_RETURN)}
+                          projectId={task.projectId}
+                          returnTo={TAG_AUFTRAG_RETURN}
                           className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 shadow-sm transition-transform active:scale-[0.98]"
                         >
                           <div className="min-w-0 flex-1">
@@ -330,7 +333,7 @@ export function TechDayView({
                             </p>
                           </div>
                           <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
-                        </Link>
+                        </TechAuftragLink>
                       ))}
                 </div>
               </div>
@@ -344,9 +347,10 @@ export function TechDayView({
                   const isBesichtigung = task.kind === "besichtigung";
                   const isDone = task.projectStatus === "abgeschlossen";
                   return (
-                    <Link
+                    <TechAuftragLink
                       key={task.appointmentId}
-                      href={buildAuftragHref(task.projectId, TAG_AUFTRAG_RETURN)}
+                      projectId={task.projectId}
+                      returnTo={TAG_AUFTRAG_RETURN}
                       className={`flex items-center gap-3 rounded-2xl border border-border border-l-4 bg-card px-4 py-4 shadow-sm transition-transform active:scale-[0.98] ${
                         isDone
                           ? "border-l-muted-foreground/30 opacity-60"
@@ -417,7 +421,7 @@ export function TechDayView({
                         ) : null}
                       </div>
                       <ChevronRight className="size-5 shrink-0 text-muted-foreground/40" />
-                    </Link>
+                    </TechAuftragLink>
                   );
                 })}
           </div>
@@ -434,9 +438,10 @@ export function TechDayView({
           </p>
           <div className="space-y-2">
             {openRapportProjects.map((item) => (
-              <Link
+              <TechAuftragLink
                 key={item.projectId}
-                href={buildAuftragHref(item.projectId, TAG_AUFTRAG_RETURN)}
+                projectId={item.projectId}
+                returnTo={TAG_AUFTRAG_RETURN}
                 className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-sm transition-transform active:scale-[0.98]"
               >
                 <span className="line-clamp-1 text-sm text-foreground">{item.projectTitle}</span>
@@ -451,7 +456,7 @@ export function TechDayView({
                   )}
                   <ChevronRight className="size-4 text-muted-foreground/40" />
                 </div>
-              </Link>
+              </TechAuftragLink>
             ))}
           </div>
         </section>

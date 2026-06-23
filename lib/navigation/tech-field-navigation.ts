@@ -16,14 +16,37 @@ export function parseTechCalendarUrlState(
   searchParams: Pick<ReadonlyURLSearchParams, "get">,
   defaultDayKey: string,
 ): TechCalendarUrlState {
-  const rawView = searchParams.get("view");
+  return parseTechCalendarUrlStateFromGetter(
+    (key) => searchParams.get(key) ?? undefined,
+    defaultDayKey,
+  );
+}
+
+/** Server Components: `searchParams` record from the page. */
+export function parseTechCalendarUrlStateFromRecord(
+  searchParams: Record<string, string | string[] | undefined>,
+  defaultDayKey: string,
+): TechCalendarUrlState {
+  const get = (key: string) => {
+    const value = searchParams[key];
+    if (Array.isArray(value)) return value[0];
+    return value;
+  };
+  return parseTechCalendarUrlStateFromGetter(get, defaultDayKey);
+}
+
+function parseTechCalendarUrlStateFromGetter(
+  get: (key: string) => string | undefined,
+  defaultDayKey: string,
+): TechCalendarUrlState {
+  const rawView = get("view");
   const viewMode: TechCalendarView =
     rawView === "week" || rawView === "month" ? rawView : "day";
-  const rawDay = searchParams.get("day");
+  const rawDay = get("day");
   const focusDayKey = rawDay && DAY_KEY_RE.test(rawDay) ? rawDay : defaultDayKey;
-  const tech = searchParams.get("tech");
+  const tech = get("tech");
   const selectedTechnicianId = tech && tech !== "all" ? tech : "all";
-  const searchQuery = searchParams.get("q") ?? "";
+  const searchQuery = get("q") ?? "";
   return { viewMode, focusDayKey, selectedTechnicianId, searchQuery };
 }
 

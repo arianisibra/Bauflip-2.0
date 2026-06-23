@@ -13,6 +13,10 @@ if (!harPath) {
 
 /** POST /kalender within this window after document end = hydration regression. */
 const HYDRATION_GAP_MS = 500;
+/** Bottom-nav / link prefetch noise vs. deliberate tab navigation. */
+const NAV_PREFETCH_GAP_MS = 2000;
+/** Auftrag card RSC prefetch after /tag document. */
+const AUFTRAG_PREFETCH_GAP_MS = 3000;
 
 const har = JSON.parse(fs.readFileSync(harPath, "utf8"));
 const entries = har.log.entries ?? [];
@@ -77,6 +81,18 @@ const wochenplanRscGets = appEntries.filter(
 );
 const profilRscGets = appEntries.filter(
   (e) => e.request.method === "GET" && e.request.url.includes("/profil") && e.request.url.includes("_rsc="),
+);
+const auftragRscGets = appEntries.filter(
+  (e) => e.request.method === "GET" && e.request.url.includes("/auftrag/") && e.request.url.includes("_rsc="),
+);
+const wochenplanDoc = appEntries.find(
+  (e) =>
+    e.request.method === "GET" &&
+    !e.request.url.includes("_rsc=") &&
+    e.request.url.replace(/\?.*$/, "").split("?")[0].endsWith("/wochenplan"),
+);
+const wochenplanPosts = appEntries.filter(
+  (e) => e.request.method === "POST" && e.request.url.includes("/wochenplan"),
 );
 const einstellungenRscGets = appEntries.filter(
   (e) => e.request.method === "GET" && e.request.url.includes("/einstellungen") && e.request.url.includes("_rsc="),
@@ -530,14 +546,31 @@ if (tagDoc) {
   const tagDocEndMs = end(tagDoc);
   const tagPostsAfterDoc = tagPosts.filter((p) => rel(p) >= tagDocEndMs);
   const tagEarlyPosts = tagPostsAfterDoc.filter((p) => rel(p) - tagDocEndMs < HYDRATION_GAP_MS);
-  const wochenplanRscAfterDoc = wochenplanRscGets.filter((p) => rel(p) >= tagDocEndMs);
-  const profilRscAfterDoc = profilRscGets.filter((p) => rel(p) >= tagDocEndMs);
+  const wochenplanRscAfterDoc = wochenplanRscGets.filter(
+    (p) => rel(p) >= tagDocEndMs && rel(p) - tagDocEndMs < NAV_PREFETCH_GAP_MS,
+  );
+  const profilRscAfterDoc = profilRscGets.filter(
+    (p) => rel(p) >= tagDocEndMs && rel(p) - tagDocEndMs < NAV_PREFETCH_GAP_MS,
+  );
+  const auftragRscEarlyPrefetch = auftragRscGets.filter(
+    (p) => rel(p) >= tagDocEndMs && rel(p) - tagDocEndMs < AUFTRAG_PREFETCH_GAP_MS,
+  );
 
   console.log("\nTag interaction (after document load)");
   console.log("  POST /tag total:", tagPostsAfterDoc.length);
   console.log("    early (<" + HYDRATION_GAP_MS + "ms, regression):", tagEarlyPosts.length);
-  console.log("  GET /wochenplan?_rsc= after load:", wochenplanRscAfterDoc.length);
-  console.log("  GET /profil?_rsc= after load:", profilRscAfterDoc.length);
+  console.log(
+    "  GET /auftrag/*?_rsc= early (<" + AUFTRAG_PREFETCH_GAP_MS + "ms, card prefetch):",
+    auftragRscEarlyPrefetch.length,
+  );
+  console.log(
+    "  GET /wochenplan?_rsc= early (<" + NAV_PREFETCH_GAP_MS + "ms, bottom-nav prefetch):",
+    wochenplanRscAfterDoc.length,
+  );
+  console.log(
+    "  GET /profil?_rsc= early (<" + NAV_PREFETCH_GAP_MS + "ms, bottom-nav prefetch):",
+    profilRscAfterDoc.length,
+  );
 
   if (tagPostsAfterDoc.length > 0) {
     console.log("\n  POST /tag timeline:");
@@ -576,18 +609,63 @@ if (tagDoc) {
       detail: String(tagPostsAfterDoc.length),
     },
     {
-      label: "GET /wochenplan?_rsc= after load = 0 (bottom-nav prefetch)",
+      label: "GET /wochenplan?_rsc= early (<" + NAV_PREFETCH_GAP_MS + "ms) = 0 (bottom-nav prefetch)",
       pass: wochenplanRscAfterDoc.length === 0,
       detail: String(wochenplanRscAfterDoc.length),
     },
     {
-      label: "GET /profil?_rsc= after load = 0 (bottom-nav prefetch)",
+      label: "GET /profil?_rsc= early (<" + NAV_PREFETCH_GAP_MS + "ms) = 0 (bottom-nav prefetch)",
       pass: profilRscAfterDoc.length === 0,
       detail: String(profilRscAfterDoc.length),
+    },
+    {
+      label: "GET /auftrag/*?_rsc= early (<" + AUFTRAG_PREFETCH_GAP_MS + "ms) = 0 (card prefetch)",
+      pass: auftragRscEarlyPrefetch.length === 0,
+      detail: String(auftragRscEarlyPrefetch.length),
     },
   ];
   console.log("\nTag gates (load-only HAR)");
   for (const g of tagGates) {
+    console.log(" ", g.pass ? "PASS" : "FAIL", "—", g.label, `(${g.detail})`);
+  }
+}
+
+if (wochenplanDoc) {
+  const wpDocEndMs = end(wochenplanDoc);
+  const wochenplanPostsAfterDoc = wochenplanPosts.filter((p) => rel(p) >= wpDocEndMs);
+  const wochenplanEarlyPosts = wochenplanPostsAfterDoc.filter(
+    (p) => rel(p) - wpDocEndMs < HYDRATION_GAP_MS,
+  );
+
+  console.log("\nWochenplan interaction (after document load)");
+  console.log("  POST /wochenplan total:", wochenplanPostsAfterDoc.length);
+  console.log("    early (<" + HYDRATION_GAP_MS + "ms, regression):", wochenplanEarlyPosts.length);
+
+  console.log("\nTimeline /wochenplan (ms from first request)");
+  console.log("  document end:", wpDocEndMs);
+  if (wochenplanEarlyPosts[0]) {
+    console.log("  early POST start:", rel(wochenplanEarlyPosts[0]));
+  } else if (wochenplanPostsAfterDoc[0]) {
+    console.log("  first POST start:", rel(wochenplanPostsAfterDoc[0]));
+    console.log("  gap to first POST:", rel(wochenplanPostsAfterDoc[0]) - wpDocEndMs);
+  } else {
+    console.log("  data ready (Hybrid-SSR):", wpDocEndMs);
+  }
+
+  const wpGates = [
+    {
+      label: "No POST /wochenplan within " + HYDRATION_GAP_MS + "ms of document (hydration)",
+      pass: wochenplanEarlyPosts.length === 0,
+      detail: String(wochenplanEarlyPosts.length),
+    },
+    {
+      label: "Load POST /wochenplan = 0 (Hybrid-SSR week+month)",
+      pass: wochenplanPostsAfterDoc.length === 0,
+      detail: String(wochenplanPostsAfterDoc.length),
+    },
+  ];
+  console.log("\nWochenplan gates (load-only HAR)");
+  for (const g of wpGates) {
     console.log(" ", g.pass ? "PASS" : "FAIL", "—", g.label, `(${g.detail})`);
   }
 }
