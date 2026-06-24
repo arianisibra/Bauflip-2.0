@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 import { REALTIME_BROADCAST_EVENT, orgChannelName } from "@/lib/realtime/constants";
@@ -41,36 +41,36 @@ export function RealtimeBridge({ orgId }: { orgId: string | null }): null {
   const qc = useQueryClient();
   const pathname = usePathname();
   const routeWantsRealtime = isRealtimeDataRoute(pathname);
+  const dedupeRef = useRef({ lastKey: "", lastAt: 0 });
 
-  useEffect(() => {
-    if (!routeWantsRealtime) return;
-
+  const dispatchPeerEvent = useCallback((event: PeerSyncEvent) => {
     const myTabId = getTabId();
-    let lastIncomingKey = "";
-    let lastIncomingAt = 0;
+    if (event.originTabId && event.originTabId === myTabId) return;
 
-    const handleIncoming = (event: PeerSyncEvent) => {
-      if (event.originTabId && event.originTabId === myTabId) return;
-      const key = incomingEventKey(event);
-      const now = Date.now();
-      if (key === lastIncomingKey && now - lastIncomingAt < INCOMING_EVENT_DEDUPE_MS) {
-        return;
-      }
-      lastIncomingKey = key;
-      lastIncomingAt = now;
-      dispatchRealtimeEvent(qc, event, { refetchType: "active" });
-    };
-
-    const unsubscribePeers = subscribeOtherTabs(handleIncoming);
-
-    if (!orgId) {
-      return unsubscribePeers;
+    const key = incomingEventKey(event);
+    const now = Date.now();
+    const dedupe = dedupeRef.current;
+    if (key === dedupe.lastKey && now - dedupe.lastAt < INCOMING_EVENT_DEDUPE_MS) {
+      return;
     }
+    dedupe.lastKey = key;
+    dedupe.lastAt = now;
+
+    // Cross-tab / Realtime: refetch inactive caches too (see invalidations.ts).
+    // refetchOnWindowFocus is off globally; background tabs must refresh silently.
+    dispatchRealtimeEvent(qc, event, { refetchType: "all" });
+  }, [qc]);
+
+  // Same-origin tabs: always listen so cache invalidation works even when this
+  // tab is on /einstellungen or another non-data route (Kalender/Projekte open elsewhere).
+  useEffect(() => subscribeOtherTabs(dispatchPeerEvent), [dispatchPeerEvent]);
+
+  // Supabase org channel: only on list/calendar routes to limit WebSocket cost.
+  useEffect(() => {
+    if (!routeWantsRealtime || !orgId) return;
 
     const supabase = createSupabaseBrowserClient();
-    if (!supabase) {
-      return unsubscribePeers;
-    }
+    if (!supabase) return;
 
     let channel: RealtimeChannel | null = null;
     let reconnectTimeoutId: number | null = null;
@@ -106,7 +106,7 @@ export function RealtimeBridge({ orgId }: { orgId: string | null }): null {
       channel.on("broadcast", { event: REALTIME_BROADCAST_EVENT }, (msg) => {
         const payload = parseBroadcastPayload(msg);
         if (!payload) return;
-        handleIncoming(payload);
+        dispatchPeerEvent(payload);
       });
 
       channel.subscribe((status) => {
@@ -127,9 +127,8 @@ export function RealtimeBridge({ orgId }: { orgId: string | null }): null {
       cancelled = true;
       clearReconnectTimeout();
       disconnect();
-      unsubscribePeers();
     };
-  }, [qc, routeWantsRealtime, orgId]);
+  }, [dispatchPeerEvent, routeWantsRealtime, orgId]);
 
   return null;
 }

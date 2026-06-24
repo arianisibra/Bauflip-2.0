@@ -36,6 +36,16 @@ export const appointmentSchema = z.object({
   planningNotes: z.string().nullish(),
 });
 
+/** Nur zuständige Person am bestehenden Termin ändern (Zeitfenster bleibt). */
+export const reassignAppointmentTechnicianSchema = z.object({
+  appointmentId: z.string().min(1),
+  projectId: z.string().min(1),
+  assignedTechnicianId: z
+    .string()
+    .trim()
+    .min(1, "Bitte eine zuständige Person wählen."),
+});
+
 export const technicianReportSchema = z.object({
   projectId: z.string().min(1),
   outcome: z.enum(["schaden_behoben", "schaden_aufgenommen"]),

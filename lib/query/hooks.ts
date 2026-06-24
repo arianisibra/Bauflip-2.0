@@ -24,6 +24,7 @@ import type {
 import {
   addAppointmentAction,
   deleteAppointmentAction,
+  reassignAppointmentTechnicianAction,
   deleteProjectAction,
   deleteReportAction,
   fetchProjekteBootstrapAction,
@@ -93,10 +94,11 @@ import { notifyOtherTabs } from "./cross-tab-broadcast";
 import { queryKeys } from "./keys";
 import { availabilityRangeKeyBounds } from "./availability-range-bounds";
 import { getTabId } from "./tab-id";
-import { appointmentSchema, technicianReportSchema } from "@/lib/validations/forms";
+import { appointmentSchema, reassignAppointmentTechnicianSchema, technicianReportSchema } from "@/lib/validations/forms";
 import type { z } from "zod";
 
 type AppointmentInput = z.infer<typeof appointmentSchema>;
+type ReassignAppointmentTechnicianInput = z.infer<typeof reassignAppointmentTechnicianSchema>;
 type TechnicianReportInput = z.infer<typeof technicianReportSchema>;
 
 type MutationSuccessResult = { success: true } | { success: false; error: string };
@@ -286,6 +288,7 @@ export function useWeekTasks(isoDate: string, enabled = true) {
     enabled,
     staleTime: 90_000,
     refetchOnMount: false,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -296,6 +299,7 @@ export function useTechMonthTasks(year: number, month: number, enabled = true) {
     enabled,
     staleTime: 90_000,
     refetchOnMount: false,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -315,6 +319,7 @@ export function useCalendarRangeTasks(
     enabled,
     staleTime: 90_000,
     refetchOnMount: false,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -338,6 +343,7 @@ export function useAvailabilityRange(
     enabled,
     staleTime: 60_000,
     refetchOnMount: false,
+    refetchOnWindowFocus: true,
     placeholderData: keepPreviousData,
   });
 }
@@ -442,6 +448,31 @@ export function useAddAppointment() {
 type DeleteAppointmentContext = {
   appointmentWindow?: { startsAt: string; endsAt: string };
 };
+
+export function useReassignAppointmentTechnician() {
+  const qc = useQueryClient();
+  return useMutation<
+    { core: ProjectCore },
+    Error,
+    ReassignAppointmentTechnicianInput,
+    DeleteAppointmentContext
+  >({
+    mutationFn: (input) => reassignAppointmentTechnicianAction(input, getTabId()),
+    onMutate: ({ appointmentId, projectId }) => {
+      const core = qc.getQueryData<ProjectCore>(queryKeys.projects.core(projectId));
+      const appt = core?.appointments.find((a) => a.id === appointmentId);
+      if (!appt) return {};
+      return { appointmentWindow: { startsAt: appt.startsAt, endsAt: appt.endsAt } };
+    },
+    onSuccess: ({ core }, _variables, context) => {
+      primeCore(qc, core.project.id, core);
+      invalidateProjectAdjacencies(qc, core.project.id, {
+        appointmentWindow: context?.appointmentWindow,
+      });
+      notifyOtherTabs({ type: "appointment.changed", projectId: core.project.id });
+    },
+  });
+}
 
 export function useDeleteAppointment() {
   const qc = useQueryClient();

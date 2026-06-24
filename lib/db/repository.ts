@@ -1974,6 +1974,34 @@ export async function addAppointment(input: Omit<Appointment, "id" | "createdAt"
   return mapAppointmentRow(data as Record<string, unknown>);
 }
 
+export async function reassignAppointmentTechnician(
+  appointmentId: string,
+  projectId: string,
+  assignedTechnicianId: string,
+): Promise<void> {
+  if (!assignedTechnicianId.trim()) {
+    throw new Error("Bitte eine zuständige Person wählen.");
+  }
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const appt = mockAppointments.find((a) => a.id === appointmentId && a.projectId === projectId);
+    if (!appt) throw new Error("Termin nicht gefunden.");
+    appt.assignedTechnicianId = assignedTechnicianId;
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("appointments")
+    .update({ assigned_technician_id: assignedTechnicianId })
+    .eq("id", appointmentId)
+    .eq("project_id", projectId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Termin nicht gefunden.");
+}
+
 export async function deleteAppointment(appointmentId: string): Promise<void> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {

@@ -9,6 +9,7 @@ import {
   addAppointment,
   deleteProject,
   deleteAppointment,
+  reassignAppointmentTechnician,
   deleteTechnicianReport,
   getOfficeProjectListItemById,
   getProjectCore,
@@ -28,7 +29,12 @@ import { DEFAULT_PROJEKTE_LIST_FILTER, type ProjekteListFilter } from "@/lib/pro
 import { parseProjekteSearchQuery } from "@/lib/projekte/list-page";
 import { loadProjekteBootstrapData } from "@/lib/projekte/server-bootstrap";
 import { publish } from "@/lib/realtime/publish";
-import { projectStammdatenUpdateSchema, appointmentSchema, technicianReportUpdateSchema } from "@/lib/validations/forms";
+import {
+  projectStammdatenUpdateSchema,
+  appointmentSchema,
+  reassignAppointmentTechnicianSchema,
+  technicianReportUpdateSchema,
+} from "@/lib/validations/forms";
 import { validateOrderFormValues } from "@/lib/order-forms/validate-submission";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { withSlowLog } from "@/lib/observability/slow-log";
@@ -198,6 +204,32 @@ export async function addAppointmentAction(
     assignedTechnicianId: v.assignedTechnicianId,
     planningNotes: v.planningNotes ?? null,
   });
+  const core = await coreOrThrow(v.projectId);
+  if (session.organizationId) {
+    await publish(session.organizationId, {
+      type: "appointment.changed",
+      projectId: v.projectId,
+      originTabId: tabId,
+    });
+  }
+  return { core };
+}
+
+export async function reassignAppointmentTechnicianAction(
+  input: unknown,
+  tabId?: string,
+): Promise<{ core: ProjectCore }> {
+  const session = await requireOfficeSession();
+  const parsed = reassignAppointmentTechnicianSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Ungültige Eingabe.");
+  }
+  const v = parsed.data;
+  const assignable = await listAssignableProfiles(session.organizationId);
+  if (!assignable.some((p) => p.id === v.assignedTechnicianId)) {
+    throw new Error("Die gewählte Person ist in dieser Organisation nicht zuweisbar.");
+  }
+  await reassignAppointmentTechnician(v.appointmentId, v.projectId, v.assignedTechnicianId);
   const core = await coreOrThrow(v.projectId);
   if (session.organizationId) {
     await publish(session.organizationId, {

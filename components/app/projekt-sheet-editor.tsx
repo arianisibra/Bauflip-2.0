@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { Appointment, TechnicianReport, ProjectStatus } from "@/lib/domain/types";
 import {
@@ -19,6 +19,7 @@ import {
   useDeleteReport,
   useOrderFormTemplates,
   useProjectCore,
+  useReassignAppointmentTechnician,
   useUpdateProjectStatus,
   useUpdateStammdaten,
   useUpdateTechnicianReport,
@@ -454,6 +455,7 @@ export function ProjektSheetEditor({
   const { data: technicians = [] } = useAssignableProfiles(open && loadTechnicians);
   const updateStammdaten = useUpdateStammdaten();
   const deleteAppointment = useDeleteAppointment();
+  const reassignAppointment = useReassignAppointmentTechnician();
   const deleteAttachment = useDeleteAttachment();
   const deleteReport = useDeleteReport();
   const updateReport = useUpdateTechnicianReport();
@@ -467,6 +469,12 @@ export function ProjektSheetEditor({
     multiline: boolean;
     target: HTMLInputElement | HTMLTextAreaElement;
   } | null>(null);
+
+  useEffect(() => {
+    if (open && canEdit && (coreQuery.data?.appointments.length ?? 0) > 0) {
+      setLoadTechnicians(true);
+    }
+  }, [open, canEdit, coreQuery.data?.appointments.length]);
 
   const imageAttachments = useMemo(() => {
     const c = coreQuery.data;
@@ -503,6 +511,7 @@ export function ProjektSheetEditor({
   const pending =
     updateStammdaten.isPending ||
     deleteAppointment.isPending ||
+    reassignAppointment.isPending ||
     deleteAttachment.isPending ||
     deleteReport.isPending ||
     updateReport.isPending ||
@@ -706,16 +715,16 @@ export function ProjektSheetEditor({
                   ? technicians.find((t) => t.id === a.assignedTechnicianId)?.displayName?.trim()
                   : null) ||
                 null;
+              const reassigningThis =
+                reassignAppointment.isPending &&
+                reassignAppointment.variables?.appointmentId === a.id;
               return (
                 <li key={a.id} className="rounded-lg border border-border bg-muted/20 px-3 py-2">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 space-y-0.5">
+                    <div className="min-w-0 space-y-1">
                       <p className="text-xs font-semibold text-foreground">{formatAppointmentRange(a.startsAt, a.endsAt)}</p>
                       <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-muted-foreground">
-                        <span>
-                          {a.kind === "besichtigung" ? "Besichtigung" : "Ausführung"}
-                          {assignedName ? ` · ${assignedName}` : " · Keine Person zugewiesen"}
-                        </span>
+                        <span>{a.kind === "besichtigung" ? "Besichtigung" : "Ausführung"}</span>
                         <span className="rounded-md bg-primary/10 px-1.5 py-0 text-[10px] font-medium text-primary">
                           {appointmentIndex + 1}. Termin
                         </span>
@@ -725,6 +734,56 @@ export function ProjektSheetEditor({
                           </span>
                         ) : null}
                       </p>
+                      <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                        <Label htmlFor={`appt-tech-${a.id}`} className="sr-only">
+                          Zuständige Person für Termin {appointmentIndex + 1}
+                        </Label>
+                        <select
+                          id={`appt-tech-${a.id}`}
+                          className="h-8 max-w-full min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs sm:max-w-[14rem]"
+                          value={a.assignedTechnicianId ?? ""}
+                          disabled={pending}
+                          onChange={(e) => {
+                            const nextId = e.target.value;
+                            if (!nextId || nextId === (a.assignedTechnicianId ?? "")) return;
+                            reassignAppointment.mutate(
+                              {
+                                appointmentId: a.id,
+                                projectId,
+                                assignedTechnicianId: nextId,
+                              },
+                              {
+                                onSuccess: () => toast.success("Zuständige Person geändert"),
+                                onError: (err) =>
+                                  toast.error(
+                                    err instanceof Error
+                                      ? err.message
+                                      : "Zuweisung fehlgeschlagen.",
+                                  ),
+                              },
+                            );
+                          }}
+                        >
+                          {!a.assignedTechnicianId ? (
+                            <option value="" disabled>
+                              Person wählen …
+                            </option>
+                          ) : null}
+                          {a.assignedTechnicianId &&
+                          assignedName &&
+                          !technicians.some((t) => t.id === a.assignedTechnicianId) ? (
+                            <option value={a.assignedTechnicianId}>{assignedName}</option>
+                          ) : null}
+                          {technicians.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.displayName}
+                            </option>
+                          ))}
+                        </select>
+                        {reassigningThis ? (
+                          <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" aria-label="Wird gespeichert" />
+                        ) : null}
+                      </div>
                       {a.planningNotes?.trim() ? (
                         <p className="text-[11px] text-muted-foreground italic">{a.planningNotes}</p>
                       ) : null}
