@@ -410,9 +410,38 @@ export function AdminCalendar() {
   }, [tasks]);
 
   const visibleTasks = useMemo(() => {
-    if (selectedTechnicianId === "all") return tasks;
-    return tasks.filter((task) => task.assignedTechnicianId === selectedTechnicianId);
-  }, [selectedTechnicianId, tasks]);
+    const filtered =
+      selectedTechnicianId === "all"
+        ? tasks
+        : tasks.filter((task) => task.assignedTechnicianId === selectedTechnicianId);
+    if (viewMode !== "day") return filtered;
+    return filtered.filter((task) => swissDayKeyFromTaskStart(task.startsAt) === dayKey);
+  }, [selectedTechnicianId, tasks, viewMode, dayKey]);
+
+  const sortAppointmentGroups = useCallback(
+    (groups: ReturnType<typeof groupWeekTasksByProjectDay>) =>
+      groups.sort((a, b) => {
+        if (sortMode === "technician") {
+          const byName = (a.primary.technicianName ?? "").localeCompare(
+            b.primary.technicianName ?? "",
+            "de-CH",
+          );
+          if (byName !== 0) return byName;
+        }
+        return a.primary.startsAt.localeCompare(b.primary.startsAt);
+      }),
+    [sortMode],
+  );
+
+  const dayViewGroups = useMemo(() => {
+    if (viewMode !== "day") return null;
+    const upcoming = visibleTasks.filter((t) => new Date(t.endsAt).getTime() >= calendarNowTs);
+    const past = visibleTasks.filter((t) => new Date(t.endsAt).getTime() < calendarNowTs);
+    return {
+      upcoming: sortAppointmentGroups(groupWeekTasksByProjectDay(upcoming)),
+      past: sortAppointmentGroups(groupWeekTasksByProjectDay(past)).reverse(),
+    };
+  }, [viewMode, visibleTasks, calendarNowTs, sortAppointmentGroups]);
 
   const { upcomingByWeek, pastByWeek } = useMemo(() => {
     const upcoming = visibleTasks.filter((t) => new Date(t.endsAt).getTime() >= calendarNowTs);
@@ -492,7 +521,7 @@ export function AdminCalendar() {
       setYear(y);
       setMonth(m);
     }
-    if (next === "week" || next === "day" || next === "availability") {
+    if (next === "week") {
       applyDayKey(dayKeyFromDate(anchorDateForYearMonth(year, month)));
     }
   }, [anchorDate, year, month, applyDayKey]);
@@ -682,7 +711,55 @@ export function AdminCalendar() {
       </div>
       )}
 
-      {viewMode === "availability" ? null : (
+      {viewMode === "availability" ? null : viewMode === "day" ? (
+      <div className="space-y-3">
+        {dayViewGroups && dayViewGroups.upcoming.length === 0 && dayViewGroups.past.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
+            <p className="font-medium text-foreground">Keine Termine an diesem Tag.</p>
+          </div>
+        ) : dayViewGroups ? (
+          <>
+            {dayViewGroups.upcoming.length === 0 ? (
+              <p className="px-1 text-xs text-muted-foreground">Keine bevorstehenden Termine an diesem Tag.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {dayViewGroups.upcoming.map((group) => (
+                  <AppointmentCard
+                    key={group.key}
+                    group={group}
+                    dimmed={false}
+                    onOpenProject={openProjectSheet}
+                    onProjectHover={handleProjectHover}
+                  />
+                ))}
+              </div>
+            )}
+            {dayViewGroups.past.length > 0 ? (
+              <>
+                <div className="flex items-center gap-3 py-1">
+                  <div className="h-px flex-1 bg-border/60" />
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/60">
+                    Vergangene Termine
+                  </span>
+                  <div className="h-px flex-1 bg-border/60" />
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {dayViewGroups.past.map((group) => (
+                    <AppointmentCard
+                      key={group.key}
+                      group={group}
+                      dimmed={true}
+                      onOpenProject={openProjectSheet}
+                      onProjectHover={handleProjectHover}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : null}
+          </>
+        ) : null}
+      </div>
+      ) : (
       <div className="space-y-3">
         {upcomingByWeek.length === 0 && pastByWeek.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">

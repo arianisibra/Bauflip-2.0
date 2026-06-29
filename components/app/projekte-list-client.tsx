@@ -21,6 +21,7 @@ import {
 } from "@/lib/navigation/projekte-list-navigation";
 import {
   isProjectStatus,
+  matchesProjekteListFilter,
   parseProjekteListFilter,
   totalProjectsForListFilter,
   type ProjekteListFilter,
@@ -269,11 +270,19 @@ export function ProjekteListClient({
     [listData],
   );
 
+  useEffect(() => {
+    setPrefetchedOpenProject(null);
+  }, [statusFilter]);
+
   const projects = useMemo(() => {
-    if (!prefetchedOpenProject) return loadedProjects;
-    if (loadedProjects.some((item) => item.id === prefetchedOpenProject.id)) return loadedProjects;
-    return [prefetchedOpenProject, ...loadedProjects];
-  }, [loadedProjects, prefetchedOpenProject]);
+    const base = loadedProjects.filter((item) =>
+      matchesProjekteListFilter(item.status, statusFilter),
+    );
+    if (!prefetchedOpenProject) return base;
+    if (base.some((item) => item.id === prefetchedOpenProject.id)) return base;
+    if (!matchesProjekteListFilter(prefetchedOpenProject.status, statusFilter)) return base;
+    return [prefetchedOpenProject, ...base];
+  }, [loadedProjects, prefetchedOpenProject, statusFilter]);
 
   useEffect(() => {
     if (!pendingOpenProjectId) {

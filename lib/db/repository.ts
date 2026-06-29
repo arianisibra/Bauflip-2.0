@@ -1839,14 +1839,20 @@ export async function updateProject(projectId: string, patch: ProjectPatch): Pro
   if (!supabase) {
     const p = mockProjects.find((x) => x.id === projectId);
     if (!p) throw new Error("Projekt nicht gefunden.");
+    const priorStatus = p.status;
     if (patch.status !== undefined && patch.status !== p.status) {
       assertAllowedProjectStatusTransition(p.status, patch.status);
     }
     Object.assign(p, patch);
     p.updatedAt = new Date().toISOString();
+    if (patch.status !== undefined && patch.status !== priorStatus) {
+      const promoted = await promoteToAbgemachtIfUpcomingAppointment(projectId, p.status);
+      if (promoted) return promoted;
+    }
     return p;
   }
 
+  let priorStatus: ProjectStatus | undefined;
   if (patch.status !== undefined) {
     const { data: currentRow, error: currentErr } = await supabase
       .from("projects")
@@ -1855,9 +1861,9 @@ export async function updateProject(projectId: string, patch: ProjectPatch): Pro
       .maybeSingle();
     if (currentErr) throw new Error(currentErr.message);
     if (!currentRow) throw new Error("Projekt nicht gefunden.");
-    const currentStatus = (currentRow.status as ProjectStatus | undefined) ?? "offen";
-    if (patch.status !== currentStatus) {
-      assertAllowedProjectStatusTransition(currentStatus, patch.status);
+    priorStatus = (currentRow.status as ProjectStatus | undefined) ?? "offen";
+    if (patch.status !== priorStatus) {
+      assertAllowedProjectStatusTransition(priorStatus, patch.status);
     }
   }
 
@@ -1900,7 +1906,55 @@ export async function updateProject(projectId: string, patch: ProjectPatch): Pro
     throw new Error(error.message);
   }
   if (!data) throw new Error("Projekt nicht gefunden.");
-  return mapProjectRow(data as Record<string, unknown>);
+  const result = mapProjectRow(data as Record<string, unknown>);
+  if (patch.status !== undefined && priorStatus !== undefined && patch.status !== priorStatus) {
+    const promoted = await promoteToAbgemachtIfUpcomingAppointment(projectId, result.status);
+    if (promoted) return promoted;
+  }
+  return result;
+}
+
+async function projectHasUpcomingAppointment(
+  supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
+  projectId: string,
+): Promise<boolean> {
+  const now = new Date().toISOString();
+  const { count } = await supabase
+    .from("appointments")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", projectId)
+    .gte("ends_at", now);
+  return (count ?? 0) > 0;
+}
+
+async function promoteToAbgemachtIfUpcomingAppointment(
+  projectId: string,
+  currentStatus: ProjectStatus,
+  appointmentIsUpcoming?: boolean,
+): Promise<Project | null> {
+  let hasUpcoming = appointmentIsUpcoming;
+  if (hasUpcoming === undefined) {
+    const supabase = await createSupabaseServerClient();
+    if (!supabase) {
+      const now = new Date().toISOString();
+      hasUpcoming = mockAppointments.some(
+        (a) => a.projectId === projectId && a.endsAt >= now,
+      );
+    } else {
+      hasUpcoming = await projectHasUpcomingAppointment(supabase, projectId);
+    }
+  }
+  const nextStatus = nextProjectStatusAfterAppointmentBooked(currentStatus, {
+    appointmentIsUpcoming: hasUpcoming,
+  });
+  if (nextStatus === null || nextStatus === currentStatus) {
+    return null;
+  }
+  return updateProject(projectId, {
+    status: nextStatus,
+    statusUpdateSource: "appointment_automation",
+    statusRevertOnAppointmentClear: currentStatus,
+  });
 }
 
 export async function updateProjectStatus(projectId: string, status: ProjectStatus): Promise<Project> {
@@ -1929,15 +1983,11 @@ export async function addAppointment(input: Omit<Appointment, "id" | "createdAt"
     mockAppointments.push(a);
     const mockP = mockProjects.find((p) => p.id === input.projectId);
     if (mockP) {
-      const next = nextProjectStatusAfterAppointmentBooked(mockP.status, {
+      await promoteToAbgemachtIfUpcomingAppointment(
+        input.projectId,
+        mockP.status,
         appointmentIsUpcoming,
-      });
-      if (next !== null && next !== mockP.status) {
-        mockP.statusRevertOnAppointmentClear = mockP.status;
-        mockP.status = next;
-        mockP.statusUpdateSource = "appointment_automation";
-        mockP.updatedAt = new Date().toISOString();
-      }
+      );
     }
     return a;
   }
@@ -1960,16 +2010,7 @@ export async function addAppointment(input: Omit<Appointment, "id" | "createdAt"
 
   const { data: statusRow } = await supabase.from("projects").select("status").eq("id", input.projectId).maybeSingle();
   const currentStatus = (statusRow?.status as ProjectStatus | undefined) ?? "offen";
-  const nextStatus = nextProjectStatusAfterAppointmentBooked(currentStatus, {
-    appointmentIsUpcoming,
-  });
-  if (nextStatus !== null && nextStatus !== currentStatus) {
-    await updateProject(input.projectId, {
-      status: nextStatus,
-      statusUpdateSource: "appointment_automation",
-      statusRevertOnAppointmentClear: currentStatus,
-    });
-  }
+  await promoteToAbgemachtIfUpcomingAppointment(input.projectId, currentStatus, appointmentIsUpcoming);
 
   return mapAppointmentRow(data as Record<string, unknown>);
 }
