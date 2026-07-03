@@ -1,0 +1,37 @@
+name: Decision
+description: Entscheidung nötig — Hintergrund in Outline
+title: "[Decision] "
+labels: ["type:decision"]
+body:
+  - type: dropdown
+    id: product
+    attributes:
+      label: Product
+      options:
+        - BauFlip
+        - CiaoSepp
+        - Velixar
+        - Shared
+    validations:
+      required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: Entscheidungsfrage
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Optionen
+      value: |
+        - Option A:
+        - Option B:
+    validations:
+      required: true
+  - type: input
+    id: outline
+    attributes:
+      label: Outline Link (RFC / Notizen)
+    validations:
+      required: true

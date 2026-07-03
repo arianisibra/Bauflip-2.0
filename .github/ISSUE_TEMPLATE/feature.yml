@@ -1,0 +1,46 @@
+name: Feature
+description: Neues Produkt-Feature oder Verbesserung
+title: "[Feature] "
+labels: ["type:feature"]
+body:
+  - type: dropdown
+    id: product
+    attributes:
+      label: Product
+      options:
+        - BauFlip
+        - CiaoSepp
+        - Velixar
+        - Shared
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Development
+        - AI
+        - Sales
+        - Marketing
+        - Design
+        - Strategy
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / Nutzen
+      description: Warum brauchen wir das?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+    validations:
+      required: true
+  - type: input
+    id: outline
+    attributes:
+      label: Outline Spec Link

@@ -1,0 +1,70 @@
+name: Task
+description: Standard-Arbeit für Arianis OS
+title: "[Product/Area] "
+labels: ["type:task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Arianis OS** — Konkrete Aufgabe mit klarem Outcome. Details in Outline verlinken.
+  - type: dropdown
+    id: product
+    attributes:
+      label: Product
+      options:
+        - BauFlip
+        - CiaoSepp
+        - Velixar
+        - Shared
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Development
+        - AI
+        - Sales
+        - Marketing
+        - Operations
+        - Finance
+        - Partnerships
+        - Support
+        - Legal
+        - Design
+        - Strategy
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - P0 Critical
+        - P1 High
+        - P2 Normal
+        - P3 Low
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: Was bedeutet «done»? Ein Satz.
+    validations:
+      required: true
+  - type: input
+    id: outline
+    attributes:
+      label: Outline Link
+      description: URL zur Spec/SOP in Outline (optional)
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance
+      description: Checkliste für Abnahme
+      value: |
+        - [ ]
+    validations:
+      required: true

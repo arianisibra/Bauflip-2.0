@@ -1,0 +1,13 @@
+---
+description: Arianis OS — GitHub Issues als Source of Truth für Arbeit
+globs:
+alwaysApply: true
+---
+
+# Arianis OS (GitHub)
+
+- Arbeit >2h: zuerst GitHub Issue (Template Task/Bug/Feature).
+- Branch: `issue/<nummer>-<kurz-titel>`
+- PR-Body: `Closes #<nummer>` + Outline-Link wenn Spec existiert.
+- Specs und SOPs gehören in **Outline**, nicht in lange Issue-Bodies.
+- Product: BauFlip | CiaoSepp | Velixar | Shared — im Issue-Template setzen.

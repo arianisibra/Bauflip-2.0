@@ -1,0 +1,39 @@
+name: Ops Request
+description: Finance, Legal, Admin, Operations — ohne Code
+title: "[Ops] "
+labels: ["type:ops"]
+body:
+  - type: dropdown
+    id: product
+    attributes:
+      label: Product
+      options:
+        - BauFlip
+        - CiaoSepp
+        - Velixar
+        - Shared
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Operations
+        - Finance
+        - Legal
+        - Partnerships
+        - Support
+        - Strategy
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+    validations:
+      required: true
+  - type: input
+    id: due
+    attributes:
+      label: Fällig bis (YYYY-MM-DD)
