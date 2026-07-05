@@ -3,9 +3,10 @@ import type { OrderFormFieldDef } from "@/lib/order-forms/schema";
 export const projectTypes = ["reparatur", "ersatz", "neuinstallation"] as const;
 export type ProjectType = (typeof projectTypes)[number];
 
-/** Vollständiger Auftrags-Lebenszyklus (analog Monday.com Workflow) */
+/** Vollständiger Auftrags-Lebenszyklus (analog Monday.com Workflow) — Reihenfolge = Kunden-Priorität. */
 export const projectStatuses = [
   "offen",
+  "montagebereit",
   "abgemacht",
   "einsatz_offen",
   "offerte_senden",
@@ -13,12 +14,11 @@ export const projectStatuses = [
   "offerte_genehmigt",
   "bestellen",
   "bestellt",
-  "montagebereit",
-  "abholbereit",
   "werkstatt",
+  "abholbereit",
   "abklaeren",
-  "abrechnen",
   "subunternehmer",
+  "abrechnen",
   "abgeschlossen",
   "garantiefall",
 ] as const;
