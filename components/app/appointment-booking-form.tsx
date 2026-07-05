@@ -17,7 +17,7 @@ import {
 import { getSwissDayBounds } from "@/lib/date/week-bounds";
 import { todayKeySwiss } from "@/lib/date/swiss";
 import { resolveCalendarColor } from "@/lib/calendar/team-colors";
-import { computeConflicts, conflictStatus, type Conflict } from "@/lib/calendar/availability-conflicts";
+import { computeConflicts, conflictStatus, hasFerienConflict, type Conflict } from "@/lib/calendar/availability-conflicts";
 import { AlertTriangle, CalendarOff, CheckCircle2, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -311,6 +311,7 @@ export function AppointmentBookingForm({
   const formReady = Boolean(availabilityRange);
   const status = conflictStatus(formReady, assignedTechnicianId, conflicts);
   const status2 = conflictStatus(formReady, assignedTechnicianId2, conflicts2);
+  const ferienBlocked = hasFerienConflict(conflicts) || hasFerienConflict(conflicts2);
 
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -331,6 +332,10 @@ export function AppointmentBookingForm({
     }
     if (assignedTechnicianId2 && assignedTechnicianId2 === assignedTechnicianId) {
       setError("Monteur 2 muss sich von Monteur 1 unterscheiden.");
+      return;
+    }
+    if (ferienBlocked) {
+      setError("Diese Person ist in diesem Zeitraum in den Ferien — Termin kann nicht gebucht werden.");
       return;
     }
     addAppointment.mutate(
@@ -567,7 +572,7 @@ export function AppointmentBookingForm({
       <Button
         type="submit"
         size="sm"
-        disabled={addAppointment.isPending || !assignedTechnicianId || !formReady}
+        disabled={addAppointment.isPending || !assignedTechnicianId || !formReady || ferienBlocked}
         className="min-h-11 w-full sm:col-span-2 sm:min-h-10 sm:w-auto sm:justify-self-start"
       >
         {addAppointment.isPending ? (
@@ -606,6 +611,7 @@ function AvailabilityHint({
     );
   }
   const isAbsence = status === "absence";
+  const blocksBooking = hasFerienConflict(conflicts);
   return (
     <div
       className={cn(
@@ -623,7 +629,11 @@ function AvailabilityHint({
         )}
         <span>
           {technicianName ? `${technicianName}: ` : ""}
-          {isAbsence ? "Achtung: Abwesend" : "Überschneidung mit anderem Termin"}
+          {blocksBooking
+            ? "In den Ferien — Buchung nicht möglich"
+            : isAbsence
+              ? "Achtung: Abwesend"
+              : "Überschneidung mit anderem Termin"}
         </span>
       </div>
       <ul className="space-y-1.5 pl-0 sm:pl-1">
@@ -658,7 +668,9 @@ function AvailabilityHint({
         })}
       </ul>
       <p className="pt-0.5 text-[11px] opacity-80">
-        Speichern bleibt aktiv. Bei Bedarf kann der Termin trotzdem angelegt werden.
+        {blocksBooking
+          ? "Termin kann in diesem Zeitraum nicht gespeichert werden."
+          : "Speichern bleibt aktiv. Bei Bedarf kann der Termin trotzdem angelegt werden."}
       </p>
     </div>
   );

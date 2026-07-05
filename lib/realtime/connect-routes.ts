@@ -7,6 +7,8 @@ const REALTIME_ROUTE_PREFIXES = [
   "/tag",
   "/wochenplan",
   "/auftrag",
+  "/zeiterfassung",
+  "/zeit",
 ] as const;
 
 export function isRealtimeDataRoute(pathname: string): boolean {

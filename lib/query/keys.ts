@@ -49,6 +49,12 @@ export const queryKeys = {
   absences: {
     all: () => ["technician-absences"] as const,
   },
+  /** Zeiterfassung: eigene Einträge + Team-Übersicht (Büro/Admin). */
+  timeEntries: {
+    all: () => ["time-entries"] as const,
+    mine: (startDate: string, endDate: string) => ["time-entries", "mine", startDate, endDate] as const,
+    org: (startDate: string, endDate: string) => ["time-entries", "org", startDate, endDate] as const,
+  },
   assignableProfiles: () => ["assignable-profiles"] as const,
   projekteBootstrap: (status = "all", search = "") => ["projekte-bootstrap", status, search] as const,
   /** Prefix — invalidates every status-specific bootstrap cache. */

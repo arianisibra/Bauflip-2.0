@@ -51,3 +51,8 @@ export function conflictStatus(
   if (conflicts.length > 0) return "conflict";
   return "free";
 }
+
+/** Ferien blockiert die Buchung hart — Krank/Blocker bleiben nur eine Warnung. */
+export function hasFerienConflict(conflicts: Conflict[]): boolean {
+  return conflicts.some((c) => c.type === "absence" && c.absence.kind === "ferien");
+}

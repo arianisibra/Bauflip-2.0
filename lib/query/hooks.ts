@@ -18,6 +18,7 @@ import type {
   ProjectAttachment,
   ProjectStatus,
   TechnicianAbsence,
+  TimeEntry,
   UserProfile,
   WeekTaskItem,
 } from "@/lib/domain/types";
@@ -44,6 +45,13 @@ import {
   deleteAbsenceAction,
   listAbsencesAction,
 } from "@/app/(app)/mitarbeiter/absence-actions";
+import {
+  createTimeEntryAction,
+  deleteTimeEntryAction,
+  listMyTimeEntriesAction,
+  listOrgTimeEntriesAction,
+  updateTimeEntryAction,
+} from "@/app/(app)/zeiterfassung/actions";
 import {
   createIntakeAction,
   deleteAttachmentAction,
@@ -84,6 +92,7 @@ import {
   afterAbsenceChange,
   afterProjectCoreChange,
   afterProjectDeleted,
+  afterTimeEntryChange,
   patchAttachmentAdded,
   patchAttachmentNotesUpdated,
   patchAttachmentRemoved,
@@ -382,6 +391,76 @@ export function useDeleteAbsence() {
     mutationFn: ({ absenceId }) => deleteAbsenceAction(absenceId),
     onSuccess: () => {
       afterAbsenceChange(qc);
+    },
+  });
+}
+
+/** Eigene Zeiterfassungs-Einträge im Datumsbereich (jede Rolle). */
+export function useMyTimeEntries(startDate: string, endDate: string, enabled = true) {
+  return useQuery<TimeEntry[]>({
+    queryKey: queryKeys.timeEntries.mine(startDate, endDate),
+    queryFn: () => listMyTimeEntriesAction(startDate, endDate),
+    enabled,
+    staleTime: 30_000,
+    refetchOnMount: false,
+  });
+}
+
+/** Team-Übersicht: alle Einträge der Organisation (nur Büro/Admin). */
+export function useOrgTimeEntries(startDate: string, endDate: string, enabled = true) {
+  return useQuery<TimeEntry[]>({
+    queryKey: queryKeys.timeEntries.org(startDate, endDate),
+    queryFn: () => listOrgTimeEntriesAction(startDate, endDate),
+    enabled,
+    staleTime: 30_000,
+    refetchOnMount: false,
+  });
+}
+
+export function useCreateTimeEntry() {
+  const qc = useQueryClient();
+  return useMutation<
+    TimeEntry,
+    Error,
+    { entryDate: string; startsAt?: string | null; endsAt?: string | null; hours: number; note?: string | null }
+  >({
+    mutationFn: (input) => createTimeEntryAction(input, getTabId()),
+    onSuccess: () => {
+      afterTimeEntryChange(qc, { refetchType: "all" });
+      notifyOtherTabs({ type: "time_entry.changed" });
+    },
+  });
+}
+
+export function useUpdateTimeEntry() {
+  const qc = useQueryClient();
+  return useMutation<
+    TimeEntry,
+    Error,
+    {
+      id: string;
+      entryDate: string;
+      startsAt?: string | null;
+      endsAt?: string | null;
+      hours: number;
+      note?: string | null;
+    }
+  >({
+    mutationFn: (input) => updateTimeEntryAction(input, getTabId()),
+    onSuccess: () => {
+      afterTimeEntryChange(qc, { refetchType: "all" });
+      notifyOtherTabs({ type: "time_entry.changed" });
+    },
+  });
+}
+
+export function useDeleteTimeEntry() {
+  const qc = useQueryClient();
+  return useMutation<{ ok: true }, Error, { timeEntryId: string }>({
+    mutationFn: ({ timeEntryId }) => deleteTimeEntryAction(timeEntryId, getTabId()),
+    onSuccess: () => {
+      afterTimeEntryChange(qc, { refetchType: "all" });
+      notifyOtherTabs({ type: "time_entry.changed" });
     },
   });
 }

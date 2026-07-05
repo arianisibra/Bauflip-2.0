@@ -151,6 +151,7 @@ export const appPageKeys = [
   "kalender",
   "mitarbeiter",
   "bestellformulare",
+  "zeiterfassung",
   "einstellungen",
   "mein_tag",
   "monteur_profil",
@@ -239,6 +240,20 @@ export type TechnicianAbsence = {
   kind: TechnicianAbsenceKind;
   note: string | null;
   createdAt: string;
+};
+
+/** Eintrag in `time_entries`: manuell erfasste Arbeitszeit eines Mitarbeiters an einem Tag. */
+export type TimeEntry = {
+  id: string;
+  userId: string;
+  userDisplayName: string | null;
+  entryDate: string;
+  startsAt: string | null;
+  endsAt: string | null;
+  hours: number;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 /** Nur Felder für die Büro-Liste; Stammdaten-Detail lädt das Sheet separat. */

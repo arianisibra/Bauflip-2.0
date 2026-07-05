@@ -17,6 +17,7 @@ import type {
   TechnicianReport,
   TechnicianReportOrderFormEntry,
   TechnicianReportOutcome,
+  TimeEntry,
   UserProfile,
   WeekTaskItem,
 } from "@/lib/domain/types";
@@ -1677,6 +1678,175 @@ export async function deleteTechnicianAbsence(absenceId: string): Promise<void> 
   if (error) throw new Error(error.message);
 }
 
+const TIME_ENTRY_DB_COLUMNS =
+  "id, organization_id, user_id, entry_date, starts_at, ends_at, hours, note, created_at, updated_at";
+
+function normalizeTimeOfDay(v: unknown): string | null {
+  if (v == null) return null;
+  const s = String(v);
+  return s.length >= 5 ? s.slice(0, 5) : s;
+}
+
+function mapTimeEntryRow(
+  row: Record<string, unknown>,
+  nameById: Map<string, string | null>,
+): TimeEntry {
+  const uid = String(row.user_id);
+  return {
+    id: String(row.id),
+    userId: uid,
+    userDisplayName: nameById.get(uid) ?? null,
+    entryDate: String(row.entry_date),
+    startsAt: normalizeTimeOfDay(row.starts_at),
+    endsAt: normalizeTimeOfDay(row.ends_at),
+    hours: Number(row.hours ?? 0),
+    note: row.note != null ? String(row.note) : null,
+    createdAt: String(row.created_at ?? new Date().toISOString()),
+    updatedAt: String(row.updated_at ?? new Date().toISOString()),
+  };
+}
+
+async function nameMapForUserIds(
+  supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
+  userIds: string[],
+): Promise<Map<string, string | null>> {
+  const nameMap = new Map<string, string | null>();
+  if (userIds.length === 0) return nameMap;
+  const { data: profs } = await supabase.from("profiles").select("id, display_name").in("id", userIds);
+  for (const p of profs ?? []) {
+    const r = p as { id: string; display_name: string | null };
+    nameMap.set(r.id, r.display_name ?? null);
+  }
+  return nameMap;
+}
+
+/** Eigene Zeiterfassungs-Einträge im Datumsbereich [startDate, endDate] (inklusive, YYYY-MM-DD). */
+export const listTimeEntriesForUser = cache(async function listTimeEntriesForUser(
+  userId: string,
+  startDate: string,
+  endDate: string,
+): Promise<TimeEntry[]> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return [];
+  const orgId = await getCachedCurrentOrganizationId();
+  if (!orgId) return [];
+
+  const { data, error } = await supabase
+    .from("time_entries")
+    .select(TIME_ENTRY_DB_COLUMNS)
+    .eq("organization_id", orgId)
+    .eq("user_id", userId)
+    .gte("entry_date", startDate)
+    .lte("entry_date", endDate)
+    .order("entry_date", { ascending: false });
+  if (error || !data) return [];
+
+  const rows = data as Record<string, unknown>[];
+  const nameMap = await nameMapForUserIds(supabase, [userId]);
+  return rows.map((r) => mapTimeEntryRow(r, nameMap));
+});
+
+/** Alle Zeiterfassungs-Einträge der Organisation im Datumsbereich (Team-Übersicht, Office/Admin). */
+export const listTimeEntriesForOrg = cache(async function listTimeEntriesForOrg(
+  organizationId: string,
+  startDate: string,
+  endDate: string,
+): Promise<TimeEntry[]> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from("time_entries")
+    .select(TIME_ENTRY_DB_COLUMNS)
+    .eq("organization_id", organizationId)
+    .gte("entry_date", startDate)
+    .lte("entry_date", endDate)
+    .order("entry_date", { ascending: false });
+  if (error || !data) return [];
+
+  const rows = data as Record<string, unknown>[];
+  const userIds = [...new Set(rows.map((r) => String(r.user_id)).filter(Boolean))];
+  const nameMap = await nameMapForUserIds(supabase, userIds);
+  return rows.map((r) => mapTimeEntryRow(r, nameMap));
+});
+
+export type TimeEntryCreateInput = {
+  entryDate: string;
+  startsAt: string | null;
+  endsAt: string | null;
+  hours: number;
+  note: string | null;
+};
+
+export async function createTimeEntry(
+  input: TimeEntryCreateInput,
+  userId: string,
+  createdByProfileId: string | null,
+): Promise<TimeEntry> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) throw new Error("Supabase nicht verfügbar.");
+  const orgId = await getCachedCurrentOrganizationId();
+  if (!orgId) throw new Error("Keine Organisation.");
+
+  const { data, error } = await supabase
+    .from("time_entries")
+    .insert({
+      organization_id: orgId,
+      user_id: userId,
+      entry_date: input.entryDate,
+      starts_at: input.startsAt,
+      ends_at: input.endsAt,
+      hours: input.hours,
+      note: input.note ?? null,
+      created_by: createdByProfileId,
+    })
+    .select(TIME_ENTRY_DB_COLUMNS)
+    .single();
+  if (error || !data) {
+    throw new Error(error?.message ?? "Eintrag konnte nicht gespeichert werden.");
+  }
+
+  const nameMap = await nameMapForUserIds(supabase, [userId]);
+  return mapTimeEntryRow(data as Record<string, unknown>, nameMap);
+}
+
+export type TimeEntryUpdateInput = Partial<TimeEntryCreateInput>;
+
+export async function updateTimeEntry(
+  timeEntryId: string,
+  patch: TimeEntryUpdateInput,
+): Promise<TimeEntry> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) throw new Error("Supabase nicht verfügbar.");
+
+  const row: Record<string, unknown> = {};
+  if (patch.entryDate !== undefined) row.entry_date = patch.entryDate;
+  if (patch.startsAt !== undefined) row.starts_at = patch.startsAt;
+  if (patch.endsAt !== undefined) row.ends_at = patch.endsAt;
+  if (patch.hours !== undefined) row.hours = patch.hours;
+  if (patch.note !== undefined) row.note = patch.note;
+
+  const { data, error } = await supabase
+    .from("time_entries")
+    .update(row)
+    .eq("id", timeEntryId)
+    .select(TIME_ENTRY_DB_COLUMNS)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Eintrag nicht gefunden.");
+
+  const userId = String((data as Record<string, unknown>).user_id);
+  const nameMap = await nameMapForUserIds(supabase, [userId]);
+  return mapTimeEntryRow(data as Record<string, unknown>, nameMap);
+}
+
+export async function deleteTimeEntry(timeEntryId: string): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return;
+  const { error } = await supabase.from("time_entries").delete().eq("id", timeEntryId);
+  if (error) throw new Error(error.message);
+}
+
 /** Verfügbarkeits-Ansicht: Termine + Abwesenheiten + Monteur-Stammdaten in einem Roundtrip-Bündel. */
 export const listAvailabilityForRange = cache(async function listAvailabilityForRange(
   rangeStartIso: string,
@@ -2021,10 +2191,25 @@ export async function deleteProject(projectId: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+/** Ferien blockiert eine Terminbuchung hart — Krank/Blocker bleiben nur eine Warnung (UI). */
+async function assertNoFerienConflict(
+  technicianId: string | null | undefined,
+  startsAt: string,
+  endsAt: string,
+): Promise<void> {
+  if (!technicianId) return;
+  const absences = await listTechnicianAbsencesInRange(startsAt, endsAt, technicianId);
+  if (absences.some((a) => a.kind === "ferien")) {
+    throw new Error("Diese Person ist in diesem Zeitraum in den Ferien.");
+  }
+}
+
 export async function addAppointment(input: Omit<Appointment, "id" | "createdAt">): Promise<Appointment> {
   if (!input.assignedTechnicianId?.trim()) {
     throw new Error("Bitte eine zuständige Person wählen.");
   }
+  await assertNoFerienConflict(input.assignedTechnicianId, input.startsAt, input.endsAt);
+  await assertNoFerienConflict(input.assignedTechnicianId2, input.startsAt, input.endsAt);
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
     const appointmentIsUpcoming = appointmentEndsInFutureOrNow(input.endsAt);
@@ -2079,9 +2264,24 @@ export async function reassignAppointmentTechnician(
   if (!supabase) {
     const appt = mockAppointments.find((a) => a.id === appointmentId && a.projectId === projectId);
     if (!appt) throw new Error("Termin nicht gefunden.");
+    await assertNoFerienConflict(assignedTechnicianId, appt.startsAt, appt.endsAt);
     appt[column] = assignedTechnicianId;
     return;
   }
+
+  const { data: apptRow, error: apptError } = await supabase
+    .from("appointments")
+    .select("starts_at, ends_at")
+    .eq("id", appointmentId)
+    .eq("project_id", projectId)
+    .maybeSingle();
+  if (apptError) throw new Error(apptError.message);
+  if (!apptRow) throw new Error("Termin nicht gefunden.");
+  await assertNoFerienConflict(
+    assignedTechnicianId,
+    String(apptRow.starts_at),
+    String(apptRow.ends_at),
+  );
 
   const dbColumn = slot === 2 ? "assigned_technician_id_2" : "assigned_technician_id";
   const { data, error } = await supabase

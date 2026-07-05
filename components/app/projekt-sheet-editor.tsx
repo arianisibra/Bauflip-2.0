@@ -10,7 +10,7 @@ import {
   projectStatusLabels,
   projectStatuses,
 } from "@/lib/domain/types";
-import { computeConflicts, conflictStatus, type Conflict } from "@/lib/calendar/availability-conflicts";
+import { computeConflicts, conflictStatus, hasFerienConflict, type Conflict } from "@/lib/calendar/availability-conflicts";
 import { cn } from "@/lib/utils";
 import { telHref } from "@/lib/phone";
 import {
@@ -648,6 +648,10 @@ function AppointmentRow({
               onChange={(e) => {
                 const nextId = e.target.value;
                 if (!nextId || nextId === (a.assignedTechnicianId ?? "")) return;
+                if (hasFerienConflict(computeConflicts(nextId, availabilityBundle, range, a.id))) {
+                  toast.error("Diese Person ist in diesem Zeitraum in den Ferien.");
+                  return;
+                }
                 setPreviewId1(nextId);
                 reassignAppointment.mutate(
                   {
@@ -700,6 +704,10 @@ function AppointmentRow({
               onChange={(e) => {
                 const nextId = e.target.value;
                 if (nextId === (a.assignedTechnicianId2 ?? "")) return;
+                if (nextId && hasFerienConflict(computeConflicts(nextId, availabilityBundle, range, a.id))) {
+                  toast.error("Diese Person ist in diesem Zeitraum in den Ferien.");
+                  return;
+                }
                 setPreviewId2(nextId);
                 reassignAppointment.mutate(
                   {

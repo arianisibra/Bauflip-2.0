@@ -111,6 +111,20 @@ export const technicianAbsenceCreateSchema = z
     { message: "Endzeit muss nach Beginn liegen." },
   );
 
+const HHMM_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export const timeEntrySchema = z.object({
+  entryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ungültiges Datum."),
+  startsAt: z.string().regex(HHMM_REGEX, "Ungültige Uhrzeit.").nullish(),
+  endsAt: z.string().regex(HHMM_REGEX, "Ungültige Uhrzeit.").nullish(),
+  hours: z.coerce.number().gt(0, "Bitte Stunden angeben.").lte(24, "Maximal 24 Stunden pro Eintrag."),
+  note: z.string().optional().nullable(),
+});
+
+export const timeEntryUpdateSchema = timeEntrySchema.extend({
+  id: z.string().uuid(),
+});
+
 export const profileSettingsSchema = z.object({
   displayName: z.string().min(2, "Name zu kurz."),
   calendarPosition: z.coerce.number().int().min(0).max(999),

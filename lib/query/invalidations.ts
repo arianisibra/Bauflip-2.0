@@ -288,3 +288,7 @@ export function afterMembershipChange(qc: QueryClient, opts?: InvalidateOpts): v
 export function afterOrderFormTemplateChange(qc: QueryClient, opts?: InvalidateOpts): void {
   inv(qc, queryKeys.orderFormTemplates.all(), opts);
 }
+
+export function afterTimeEntryChange(qc: QueryClient, opts?: InvalidateOpts): void {
+  inv(qc, queryKeys.timeEntries.all(), opts);
+}
