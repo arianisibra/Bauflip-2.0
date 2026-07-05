@@ -214,6 +214,9 @@ export function ProjekteListClient({
   const deleteProject = useDeleteProject();
   const [listSort, setListSort] = useState<ProjectsListSort>("default");
   const [q, setQ] = useState(() => searchParams.get("q") ?? "");
+  /** Letzter von diesem Tab selbst geschriebener `q`-Wert — unterscheidet ein Echo unseres
+   * eigenen debounced router.replace() von einer echten externen Änderung (z. B. Zurück/Vor). */
+  const lastPushedQRef = useRef(q);
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<OfficeProjectListItem | null>(null);
   const [intakeOpen, setIntakeOpen] = useState(false);
@@ -225,7 +228,15 @@ export function ProjekteListClient({
   selectedRef.current = selected;
 
   useEffect(() => {
-    setQ(searchParams.get("q") ?? "");
+    const urlQ = searchParams.get("q") ?? "";
+    // Nur übernehmen, wenn die URL nicht schon unser eigener letzter Push ist — sonst
+    // überschreibt ein verzögert ankommendes router.replace() frischer getippten Text
+    // (Race, besonders sichtbar bei zusammengesetzten Zeichen wie „ü", die länger zum
+    // Tippen brauchen als das 300ms-Debounce-Fenster).
+    if (urlQ !== lastPushedQRef.current) {
+      lastPushedQRef.current = urlQ;
+      setQ(urlQ);
+    }
   }, [searchParams]);
 
   useEffect(() => {
@@ -235,6 +246,7 @@ export function ProjekteListClient({
     const timer = globalThis.setTimeout(() => {
       const href = buildProjekteListHref(statusFilter, searchParams, normalized);
       if (!projekteListQueriesEqual(searchParams.toString(), href)) {
+        lastPushedQRef.current = normalized;
         router.replace(href, { scroll: false });
       }
     }, 300);
@@ -245,6 +257,7 @@ export function ProjekteListClient({
     (next: ProjekteListFilter) => {
       const href = buildProjekteListHref(next, searchParams);
       if (!projekteListQueriesEqual(searchParams.toString(), href)) {
+        lastPushedQRef.current = normalizeSearchQuery(searchParams.get("q"));
         router.replace(href, { scroll: false });
       }
     },
@@ -253,6 +266,7 @@ export function ProjekteListClient({
 
   const handleClearSearch = useCallback(() => {
     setQ("");
+    lastPushedQRef.current = "";
     const href = buildProjekteListHref(statusFilter, searchParams, "");
     if (!projekteListQueriesEqual(searchParams.toString(), href)) {
       router.replace(href, { scroll: false });
