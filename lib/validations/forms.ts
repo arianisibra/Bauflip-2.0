@@ -24,27 +24,37 @@ export const intakeSchema = z.object({
   hintsAndNotes: z.string().optional(),
 });
 
-export const appointmentSchema = z.object({
-  projectId: z.string().min(1),
-  kind: z.enum(["besichtigung", "ausfuehrung"]),
-  startsAt: z.string().min(1),
-  endsAt: z.string().min(1),
-  assignedTechnicianId: z
-    .string()
-    .trim()
-    .min(1, "Bitte eine zuständige Person wählen."),
-  planningNotes: z.string().nullish(),
-});
+export const appointmentSchema = z
+  .object({
+    projectId: z.string().min(1),
+    kind: z.enum(["besichtigung", "ausfuehrung"]),
+    startsAt: z.string().min(1),
+    endsAt: z.string().min(1),
+    assignedTechnicianId: z
+      .string()
+      .trim()
+      .min(1, "Bitte eine zuständige Person wählen."),
+    /** Optionaler zweiter Monteur am selben Termin. */
+    assignedTechnicianId2: z.string().trim().nullish(),
+    planningNotes: z.string().nullish(),
+  })
+  .refine(
+    (v) => !v.assignedTechnicianId2 || v.assignedTechnicianId2 !== v.assignedTechnicianId,
+    { message: "Monteur 2 muss sich von Monteur 1 unterscheiden.", path: ["assignedTechnicianId2"] },
+  );
 
-/** Nur zuständige Person am bestehenden Termin ändern (Zeitfenster bleibt). */
-export const reassignAppointmentTechnicianSchema = z.object({
-  appointmentId: z.string().min(1),
-  projectId: z.string().min(1),
-  assignedTechnicianId: z
-    .string()
-    .trim()
-    .min(1, "Bitte eine zuständige Person wählen."),
-});
+/** Zuständige Person an einem Termin-Slot ändern (Zeitfenster bleibt). Slot 2 darf geleert werden. */
+export const reassignAppointmentTechnicianSchema = z
+  .object({
+    appointmentId: z.string().min(1),
+    projectId: z.string().min(1),
+    slot: z.union([z.literal(1), z.literal(2)]).default(1),
+    assignedTechnicianId: z.string().trim().nullable(),
+  })
+  .refine((v) => v.slot === 2 || Boolean(v.assignedTechnicianId?.length), {
+    message: "Bitte eine zuständige Person wählen.",
+    path: ["assignedTechnicianId"],
+  });
 
 export const technicianReportSchema = z.object({
   projectId: z.string().min(1),
@@ -125,4 +135,9 @@ export const projectStammdatenUpdateSchema = z.object({
   hintsAndNotes: z.string().optional(),
   accessNotes: z.string().optional(),
   nextOwnerUserId: z.union([z.string().uuid(), z.literal("")]).optional(),
+});
+
+export const garantiefallSchema = z.object({
+  projectId: z.string().uuid(),
+  note: z.string().trim().min(1, "Bitte Grund angeben.").max(2000),
 });

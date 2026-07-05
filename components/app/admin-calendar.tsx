@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
+import { projectStatusBadgeClassName, projectStatusLabels, taskAssignedTechnicianIds } from "@/lib/domain/types";
 import {
   groupWeekTasksByProjectDay,
   swissDayKeyFromTaskStart,
@@ -162,18 +162,24 @@ function AppointmentCard({
           >
             {projectStatusLabels[task.projectStatus] ?? task.projectStatus}
           </Badge>
-          {task.technicianName ? (
-            <span
-              className="inline-flex max-w-full truncate rounded border px-1 py-px text-[9px] font-medium leading-tight"
-              style={{
-                borderColor: `${task.calendarColor}55`,
-                backgroundColor: `${task.calendarColor}1f`,
-                color: task.calendarColor,
-              }}
-            >
-              {task.technicianName}
-            </span>
-          ) : null}
+          {[
+            { name: task.technicianName, color: task.calendarColor },
+            { name: task.technicianName2, color: task.calendarColor2 },
+          ]
+            .filter((t): t is { name: string; color: string } => Boolean(t.name && t.color))
+            .map((t, i) => (
+              <span
+                key={i}
+                className="inline-flex max-w-full truncate rounded border px-1 py-px text-[9px] font-medium leading-tight"
+                style={{
+                  borderColor: `${t.color}55`,
+                  backgroundColor: `${t.color}1f`,
+                  color: t.color,
+                }}
+              >
+                {t.name}
+              </span>
+            ))}
           {group.slots.length > 1 ? (
             <span className="text-[9px] text-muted-foreground">+{group.slots.length - 1}</span>
           ) : null}
@@ -401,9 +407,11 @@ export function AdminCalendar() {
   const technicianOptions = useMemo(() => {
     const map = new Map<string, { id: string; name: string }>();
     for (const task of tasks) {
-      if (!task.assignedTechnicianId || !task.technicianName) continue;
-      if (!map.has(task.assignedTechnicianId)) {
+      if (task.assignedTechnicianId && task.technicianName && !map.has(task.assignedTechnicianId)) {
         map.set(task.assignedTechnicianId, { id: task.assignedTechnicianId, name: task.technicianName });
+      }
+      if (task.assignedTechnicianId2 && task.technicianName2 && !map.has(task.assignedTechnicianId2)) {
+        map.set(task.assignedTechnicianId2, { id: task.assignedTechnicianId2, name: task.technicianName2 });
       }
     }
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, "de-CH"));
@@ -413,7 +421,7 @@ export function AdminCalendar() {
     const filtered =
       selectedTechnicianId === "all"
         ? tasks
-        : tasks.filter((task) => task.assignedTechnicianId === selectedTechnicianId);
+        : tasks.filter((task) => taskAssignedTechnicianIds(task).includes(selectedTechnicianId));
     if (viewMode !== "day") return filtered;
     return filtered.filter((task) => swissDayKeyFromTaskStart(task.startsAt) === dayKey);
   }, [selectedTechnicianId, tasks, viewMode, dayKey]);

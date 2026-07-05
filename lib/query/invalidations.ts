@@ -162,7 +162,8 @@ export function afterProjectCoreChange(
 ): void {
   invalidateProjectCoreSplit(qc, projectId, opts);
   inv(qc, queryKeys.projects.auftragCore(projectId), opts);
-  invalidateProjectListCaches(qc, opts);
+  // Core includes status, shown on calendar tiles — invalidate adjacencies too.
+  invalidateProjectAdjacencies(qc, projectId, opts);
 }
 
 export function afterAppointmentChange(

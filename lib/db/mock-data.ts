@@ -51,6 +51,10 @@ export const mockProjects: Project[] = [
     serviceCountry: "CH",
     statusUpdateSource: null,
     statusRevertOnAppointmentClear: null,
+    warrantyNote: null,
+    warrantyOpenedAt: null,
+    warrantyOpenedByUserId: null,
+    warrantyOpenedByDisplayName: null,
   },
 ];
 

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import type { WeekTaskItem } from "@/lib/domain/types";
-import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
+import { projectStatusBadgeClassName, projectStatusLabels, taskAssignedTechnicianIds } from "@/lib/domain/types";
 import { groupWeekTasksByProjectDay } from "@/lib/tech/group-week-tasks-by-project-day";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,7 +50,13 @@ function weekdayMon0FromDayKey(dayKey: string): number {
 function taskMatchesSearch(task: WeekTaskItem, raw: string): boolean {
   const q = raw.trim().toLowerCase();
   if (!q) return true;
-  const hay = [task.projectTitle, task.technicianName, task.serviceAddressShort, task.tenantDisplay]
+  const hay = [
+    task.projectTitle,
+    task.technicianName,
+    task.technicianName2,
+    task.serviceAddressShort,
+    task.tenantDisplay,
+  ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
@@ -171,11 +177,16 @@ export function TechCalendar({
     if (isTechnicianView) return [];
     const map = new Map<string, { id: string; name: string }>();
     for (const task of tasks) {
-      if (!task.assignedTechnicianId || !task.technicianName) continue;
-      if (!map.has(task.assignedTechnicianId)) {
+      if (task.assignedTechnicianId && task.technicianName && !map.has(task.assignedTechnicianId)) {
         map.set(task.assignedTechnicianId, {
           id: task.assignedTechnicianId,
           name: task.technicianName,
+        });
+      }
+      if (task.assignedTechnicianId2 && task.technicianName2 && !map.has(task.assignedTechnicianId2)) {
+        map.set(task.assignedTechnicianId2, {
+          id: task.assignedTechnicianId2,
+          name: task.technicianName2,
         });
       }
     }
@@ -184,7 +195,7 @@ export function TechCalendar({
 
   const visibleTasks = useMemo(() => {
     if (isTechnicianView || selectedTechnicianId === "all") return tasks;
-    return tasks.filter((task) => task.assignedTechnicianId === selectedTechnicianId);
+    return tasks.filter((task) => taskAssignedTechnicianIds(task).includes(selectedTechnicianId));
   }, [isTechnicianView, selectedTechnicianId, tasks]);
 
   const searchFilteredTasks = useMemo(

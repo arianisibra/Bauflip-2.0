@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { BauflipLoadingButtonLabel, BauflipLoadingInline } from "@/components/ui/bauflip-loading";
 import { useAddAppointment, useAvailabilityRange } from "@/lib/query/hooks";
 import {
+  taskAssignedTechnicianIds,
   technicianAbsenceKindLabels,
   type UserProfile,
   type WeekTaskItem,
@@ -16,7 +17,8 @@ import {
 import { getSwissDayBounds } from "@/lib/date/week-bounds";
 import { todayKeySwiss } from "@/lib/date/swiss";
 import { resolveCalendarColor } from "@/lib/calendar/team-colors";
-import { AlertTriangle, CalendarOff, CheckCircle2 } from "lucide-react";
+import { computeConflicts, conflictStatus, type Conflict } from "@/lib/calendar/availability-conflicts";
+import { AlertTriangle, CalendarOff, CheckCircle2, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TZ = "Europe/Zurich";
@@ -26,10 +28,6 @@ function localInputToIso(local: string): string | null {
   const t = Date.parse(local);
   if (!Number.isFinite(t)) return null;
   return new Date(t).toISOString();
-}
-
-function rangesOverlap(aStart: number, aEnd: number, bStart: number, bEnd: number): boolean {
-  return aStart < bEnd && bStart < aEnd;
 }
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -51,10 +49,6 @@ function fmtRange(startsAt: string, endsAt: string): string {
   if (day === dayE) return `${day} · ${fmt(s)}–${fmt(e)}`;
   return `${day} ${fmt(s)} – ${dayE} ${fmt(e)}`;
 }
-
-type Conflict =
-  | { type: "appointment"; task: WeekTaskItem }
-  | { type: "absence"; absence: TechnicianAbsence };
 
 const STRIPE_BG =
   "repeating-linear-gradient(45deg, rgba(244, 63, 94, 0.18) 0, rgba(244, 63, 94, 0.18) 6px, rgba(244, 63, 94, 0.32) 6px, rgba(244, 63, 94, 0.32) 12px)";
@@ -103,7 +97,7 @@ function TechnicianDayPreviewStrip({
 
   const blocks: Block[] = [];
   for (const t of appointments) {
-    if (t.assignedTechnicianId !== technicianId) continue;
+    if (!taskAssignedTechnicianIds(t).includes(technicianId)) continue;
     const s = Date.parse(t.startsAt);
     const e = Date.parse(t.endsAt);
     if (!Number.isFinite(s) || !Number.isFinite(e)) continue;
@@ -130,7 +124,14 @@ function TechnicianDayPreviewStrip({
   return (
     <div className="rounded-md border border-border/60 bg-muted/20 px-2 py-2 sm:px-2">
       <div className="mb-1.5 flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-2">
-        <p className="text-xs font-semibold leading-snug text-foreground sm:text-[11px]">{dayLabel}</p>
+        <p className="flex items-center gap-1.5 text-xs font-semibold leading-snug text-foreground sm:text-[11px]">
+          <span
+            className="inline-block size-2.5 shrink-0 rounded-full"
+            style={{ backgroundColor: accent }}
+            aria-hidden
+          />
+          {tech?.displayName ?? "Unbekannt"} · {dayLabel}
+        </p>
         <p className="text-[10px] leading-snug text-muted-foreground sm:text-[10px]">
           {PREVIEW_HOUR_FROM}:00–{PREVIEW_HOUR_TO}:00 · Leer = frei
         </p>
@@ -219,8 +220,10 @@ export function AppointmentBookingForm({
   const [startsAtLocal, setStartsAtLocal] = useState("");
   const [endsAtLocal, setEndsAtLocal] = useState("");
   const [assignedTechnicianId, setAssignedTechnicianId] = useState("");
+  const [assignedTechnicianId2, setAssignedTechnicianId2] = useState("");
+  const [showSecondTechnician, setShowSecondTechnician] = useState(false);
   const [previewDayKey, setPreviewDayKey] = useState(() => todayKeySwiss());
-  const [previewNowMs, setPreviewNowMs] = useState(0);
+  const [previewNowMs, setPreviewNowMs] = useState(() => Date.now());
   const [error, setError] = useState<string | null>(null);
 
   const addAppointment = useAddAppointment();
@@ -284,48 +287,30 @@ export function AppointmentBookingForm({
     Boolean(availabilityFetchRange),
   );
 
-  // „Jetzt“-Linie in der Vorschau einmal pro Minute aktualisieren.
+  // „Jetzt“-Linie in der Vorschau einmal pro Minute aktualisieren (Startwert kommt aus useState-Initializer).
   useEffect(() => {
-    setPreviewNowMs(Date.now());
     const id = window.setInterval(() => setPreviewNowMs(Date.now()), 60_000);
     return () => window.clearInterval(id);
   }, []);
 
   const previewRefDate = useMemo(() => ymdKeyToReferenceDate(previewDayKey), [previewDayKey]);
+  const isPreviewDayTodaySwiss = previewDayKey === todayKeySwiss(new Date(previewNowMs));
 
-  const conflicts: Conflict[] = useMemo(() => {
-    if (!availabilityBundle || !availabilityRange || !assignedTechnicianId) return [];
-    const out: Conflict[] = [];
-    for (const t of availabilityBundle.appointments) {
-      if (t.assignedTechnicianId !== assignedTechnicianId) continue;
-      const s = Date.parse(t.startsAt);
-      const e = Date.parse(t.endsAt);
-      if (!Number.isFinite(s) || !Number.isFinite(e)) continue;
-      if (rangesOverlap(availabilityRange.slotStart, availabilityRange.slotEnd, s, e)) {
-        out.push({ type: "appointment", task: t });
-      }
-    }
-    for (const a of availabilityBundle.absences) {
-      if (a.technicianId !== assignedTechnicianId) continue;
-      const s = Date.parse(a.startsAt);
-      const e = Date.parse(a.endsAt);
-      if (!Number.isFinite(s) || !Number.isFinite(e)) continue;
-      if (rangesOverlap(availabilityRange.slotStart, availabilityRange.slotEnd, s, e)) {
-        out.push({ type: "absence", absence: a });
-      }
-    }
-    return out;
-  }, [availabilityBundle, availabilityRange, assignedTechnicianId]);
+  const conflicts: Conflict[] = useMemo(
+    () => computeConflicts(assignedTechnicianId, availabilityBundle, availabilityRange),
+    [availabilityBundle, availabilityRange, assignedTechnicianId],
+  );
+  const conflicts2: Conflict[] = useMemo(
+    () =>
+      assignedTechnicianId2
+        ? computeConflicts(assignedTechnicianId2, availabilityBundle, availabilityRange)
+        : [],
+    [availabilityBundle, availabilityRange, assignedTechnicianId2],
+  );
 
   const formReady = Boolean(availabilityRange);
-  const status: "idle" | "free" | "conflict" | "absence" =
-    !formReady || !assignedTechnicianId
-      ? "idle"
-      : conflicts.some((c) => c.type === "absence")
-        ? "absence"
-        : conflicts.length > 0
-          ? "conflict"
-          : "free";
+  const status = conflictStatus(formReady, assignedTechnicianId, conflicts);
+  const status2 = conflictStatus(formReady, assignedTechnicianId2, conflicts2);
 
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -344,6 +329,10 @@ export function AppointmentBookingForm({
       setError("Bitte eine zuständige Person wählen.");
       return;
     }
+    if (assignedTechnicianId2 && assignedTechnicianId2 === assignedTechnicianId) {
+      setError("Monteur 2 muss sich von Monteur 1 unterscheiden.");
+      return;
+    }
     addAppointment.mutate(
       {
         projectId,
@@ -351,6 +340,7 @@ export function AppointmentBookingForm({
         startsAt: startIso,
         endsAt: endIso,
         assignedTechnicianId,
+        assignedTechnicianId2: assignedTechnicianId2 || null,
       },
       {
         onError: (err) =>
@@ -359,6 +349,8 @@ export function AppointmentBookingForm({
           setStartsAtLocal("");
           setEndsAtLocal("");
           setAssignedTechnicianId("");
+          setAssignedTechnicianId2("");
+          setShowSecondTechnician(false);
         },
       },
     );
@@ -398,8 +390,8 @@ export function AppointmentBookingForm({
           }}
         />
       </div>
-      <div className="min-w-0 space-y-1 sm:col-span-2">
-        <Label htmlFor="bookingTechnician">Zuständige Person *</Label>
+      <div className="min-w-0 space-y-1">
+        <Label htmlFor="bookingTechnician">Monteur 1 *</Label>
         <select
           id="bookingTechnician"
           name="assignedTechnicianId"
@@ -407,7 +399,9 @@ export function AppointmentBookingForm({
           className="flex min-h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 text-base sm:min-h-10 sm:text-sm"
           value={assignedTechnicianId}
           onChange={(e) => {
-            setAssignedTechnicianId(e.target.value);
+            const nextId = e.target.value;
+            setAssignedTechnicianId(nextId);
+            if (nextId && nextId === assignedTechnicianId2) setAssignedTechnicianId2("");
             setError(null);
           }}
         >
@@ -419,6 +413,53 @@ export function AppointmentBookingForm({
           ))}
         </select>
       </div>
+      {showSecondTechnician ? (
+        <div className="min-w-0 space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <Label htmlFor="bookingTechnician2">Monteur 2</Label>
+            <button
+              type="button"
+              className="text-[11px] font-medium text-muted-foreground underline-offset-2 hover:text-destructive hover:underline"
+              onClick={() => {
+                setShowSecondTechnician(false);
+                setAssignedTechnicianId2("");
+              }}
+            >
+              Entfernen
+            </button>
+          </div>
+          <select
+            id="bookingTechnician2"
+            name="assignedTechnicianId2"
+            className="flex min-h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 text-base sm:min-h-10 sm:text-sm"
+            value={assignedTechnicianId2}
+            onChange={(e) => {
+              setAssignedTechnicianId2(e.target.value);
+              setError(null);
+            }}
+          >
+            <option value="">Bitte wählen …</option>
+            {technicians
+              .filter((t) => t.id !== assignedTechnicianId)
+              .map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.displayName}
+                </option>
+              ))}
+          </select>
+        </div>
+      ) : (
+        <div className="flex min-w-0 items-end pb-0.5">
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 text-sm font-medium text-primary underline-offset-2 hover:underline sm:text-xs"
+            onClick={() => setShowSecondTechnician(true)}
+          >
+            <Plus className="size-3.5 shrink-0" aria-hidden />
+            Zweiten Monteur hinzufügen
+          </button>
+        </div>
+      )}
 
       {assignedTechnicianId && previewDayBounds ? (
         <div className="min-w-0 space-y-2 sm:col-span-2">
@@ -466,20 +507,56 @@ export function AppointmentBookingForm({
                     }).format(previewRefDate)
                   : previewDayKey
               }
-              isTodaySwiss={previewDayKey === todayKeySwiss(new Date(previewNowMs || Date.now()))}
-              nowMs={previewNowMs || Date.now()}
+              isTodaySwiss={isPreviewDayTodaySwiss}
+              nowMs={previewNowMs}
+            />
+          ) : null}
+          {assignedTechnicianId2 && availabilityBundle ? (
+            <TechnicianDayPreviewStrip
+              technicianId={assignedTechnicianId2}
+              technicians={technicians}
+              appointments={availabilityBundle.appointments}
+              absences={availabilityBundle.absences}
+              dayStartMs={previewDayBounds.dayStartMs}
+              dayEndMs={previewDayBounds.dayEndMs}
+              dayLabel={
+                previewRefDate
+                  ? new Intl.DateTimeFormat("de-CH", {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                      timeZone: TZ,
+                    }).format(previewRefDate)
+                  : previewDayKey
+              }
+              isTodaySwiss={isPreviewDayTodaySwiss}
+              nowMs={previewNowMs}
             />
           ) : null}
         </div>
       ) : null}
 
       {assignedTechnicianId && formReady ? (
-        <div className="sm:col-span-2">
+        <div className="space-y-2 sm:col-span-2">
           <AvailabilityHint
+            technicianName={
+              assignedTechnicianId2
+                ? technicians.find((t) => t.id === assignedTechnicianId)?.displayName
+                : undefined
+            }
             status={status}
             conflicts={conflicts}
             pending={availabilityPending}
           />
+          {assignedTechnicianId2 ? (
+            <AvailabilityHint
+              technicianName={technicians.find((t) => t.id === assignedTechnicianId2)?.displayName}
+              status={status2}
+              conflicts={conflicts2}
+              pending={availabilityPending}
+            />
+          ) : null}
         </div>
       ) : null}
 
@@ -504,10 +581,13 @@ export function AppointmentBookingForm({
 }
 
 function AvailabilityHint({
+  technicianName,
   status,
   conflicts,
   pending,
 }: {
+  /** Nur gesetzt, wenn zwei Monteure geprüft werden — sonst eindeutig ohne Label. */
+  technicianName?: string;
   status: "idle" | "free" | "conflict" | "absence";
   conflicts: Conflict[];
   pending: boolean;
@@ -518,7 +598,7 @@ function AvailabilityHint({
       <div className="flex items-start gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5 text-sm text-emerald-900 sm:py-2 sm:text-xs dark:text-emerald-100">
         <CheckCircle2 className="mt-0.5 size-5 shrink-0 sm:size-4" aria-hidden />
         <div className="min-w-0 space-y-0.5">
-          <p className="font-semibold">Frei</p>
+          <p className="font-semibold">{technicianName ? `${technicianName}: Frei` : "Frei"}</p>
           <p className="break-words opacity-90">Keine Überschneidung im gewählten Zeitraum.</p>
           {pending ? <BauflipLoadingInline label="Prüfung läuft …" /> : null}
         </div>
@@ -542,6 +622,7 @@ function AvailabilityHint({
           <AlertTriangle className="size-5 shrink-0 sm:size-4" aria-hidden />
         )}
         <span>
+          {technicianName ? `${technicianName}: ` : ""}
           {isAbsence ? "Achtung: Abwesend" : "Überschneidung mit anderem Termin"}
         </span>
       </div>

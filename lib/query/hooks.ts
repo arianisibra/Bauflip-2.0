@@ -33,6 +33,7 @@ import {
   getProjectSheetDetailsAction,
   getProjectSheetHeadAction,
   listAssignableProfilesAction,
+  setGarantiefallAction,
   updateProjectStammdatenAction,
   updateProjectStatusAction,
   updateTechnicianReportAction,
@@ -439,6 +440,7 @@ export function useAddAppointment() {
       primeCore(qc, core.project.id, core);
       invalidateProjectAdjacencies(qc, core.project.id, {
         appointmentWindow: { startsAt: variables.startsAt, endsAt: variables.endsAt },
+        refetchType: "all",
       });
       notifyOtherTabs({ type: "appointment.changed", projectId: core.project.id });
     },
@@ -468,6 +470,7 @@ export function useReassignAppointmentTechnician() {
       primeCore(qc, core.project.id, core);
       invalidateProjectAdjacencies(qc, core.project.id, {
         appointmentWindow: context?.appointmentWindow,
+        refetchType: "all",
       });
       notifyOtherTabs({ type: "appointment.changed", projectId: core.project.id });
     },
@@ -494,6 +497,7 @@ export function useDeleteAppointment() {
       primeCore(qc, core.project.id, core);
       invalidateProjectAdjacencies(qc, core.project.id, {
         appointmentWindow: context?.appointmentWindow,
+        refetchType: "all",
       });
       notifyOtherTabs({ type: "appointment.changed", projectId: core.project.id });
     },
@@ -507,7 +511,20 @@ export function useUpdateProjectStatus() {
       updateProjectStatusAction(projectId, status, getTabId()),
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
-      invalidateProjectListCaches(qc);
+      // Status shows on calendar tiles — invalidate adjacencies, not just the list.
+      invalidateProjectAdjacencies(qc, core.project.id, { refetchType: "all" });
+      notifyOtherTabs({ type: "project.core_changed", projectId: core.project.id });
+    },
+  });
+}
+
+export function useSetGarantiefall() {
+  const qc = useQueryClient();
+  return useMutation<{ core: ProjectCore }, Error, { projectId: string; note: string }>({
+    mutationFn: ({ projectId, note }) => setGarantiefallAction(projectId, note, getTabId()),
+    onSuccess: ({ core }) => {
+      primeCore(qc, core.project.id, core);
+      invalidateProjectAdjacencies(qc, core.project.id, { refetchType: "all" });
       notifyOtherTabs({ type: "project.core_changed", projectId: core.project.id });
     },
   });
@@ -637,7 +654,7 @@ export function useSubmitTechnicianReport() {
     mutationFn: (values) => submitTechnicianReportAction(values, getTabId()),
     onSuccess: (result, values) => {
       if (result.success) {
-        afterProjectCoreChange(qc, values.projectId);
+        afterProjectCoreChange(qc, values.projectId, { refetchType: "all" });
       }
     },
   });

@@ -14,7 +14,7 @@ import {
 import type { WeekTaskItem } from "@/lib/domain/types";
 import type { WeekTaskProjectDayGroup } from "@/lib/tech/group-week-tasks-by-project-day";
 import { groupWeekTasksByProjectDay } from "@/lib/tech/group-week-tasks-by-project-day";
-import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
+import { projectStatusBadgeClassName, projectStatusLabels, taskAssignedTechnicianIds } from "@/lib/domain/types";
 import { useWeekTasks } from "@/lib/query/hooks";
 import { BauflipLoadingInline } from "@/components/ui/bauflip-loading";
 import { queryKeys } from "@/lib/query/keys";
@@ -193,7 +193,7 @@ export function TechDayView({
     const now = new Date();
     const todayKey = todayKeySwiss(now);
     const taskDateKey = (iso: string) => todayKeySwiss(new Date(iso));
-    const visibleTask = (t: WeekTaskItem) => t.assignedTechnicianId === currentUserId;
+    const visibleTask = (t: WeekTaskItem) => taskAssignedTechnicianIds(t).includes(currentUserId);
 
     const todaysFlat = tasks
       .filter((t) => visibleTask(t) && taskDateKey(t.startsAt) === todayKey)
@@ -366,18 +366,24 @@ export function TechDayView({
                             {formatTimeRange(task.startsAt, task.endsAt)}
                           </p>
                           <div className="flex flex-col items-end gap-1">
-                            {task.technicianName ? (
-                              <span
-                                className="rounded-md border px-1.5 py-0 text-[10px] font-medium"
-                                style={{
-                                  borderColor: `${task.calendarColor}55`,
-                                  backgroundColor: `${task.calendarColor}1f`,
-                                  color: task.calendarColor,
-                                }}
-                              >
-                                {task.technicianName}
-                              </span>
-                            ) : null}
+                            {[
+                              { name: task.technicianName, color: task.calendarColor },
+                              { name: task.technicianName2, color: task.calendarColor2 },
+                            ]
+                              .filter((t): t is { name: string; color: string } => Boolean(t.name && t.color))
+                              .map((t, i) => (
+                                <span
+                                  key={i}
+                                  className="rounded-md border px-1.5 py-0 text-[10px] font-medium"
+                                  style={{
+                                    borderColor: `${t.color}55`,
+                                    backgroundColor: `${t.color}1f`,
+                                    color: t.color,
+                                  }}
+                                >
+                                  {t.name}
+                                </span>
+                              ))}
                             {isDone ? (
                               <Badge
                                 variant="outline"

@@ -63,10 +63,10 @@ export { mapUserProfileRow } from "./repository-map";
 
 /** DB-Spaltenliste — kein select('*') für Projektkern. */
 const PROJECT_DB_COLUMNS =
-  "id, organization_id, title, type, status, status_updated_source, status_revert_on_appointment_clear, next_owner_role, next_owner_user_id, source, intake_original_text, access_notes, created_at, updated_at, closed_at, reference_code, hints_and_notes, tenant_name, tenant_phone, tenant_email, management_name, management_phone, management_email, cost_ceiling_text, service_street, service_postal_code, service_city, service_country";
+  "id, organization_id, title, type, status, status_updated_source, status_revert_on_appointment_clear, next_owner_role, next_owner_user_id, source, intake_original_text, access_notes, created_at, updated_at, closed_at, reference_code, hints_and_notes, tenant_name, tenant_phone, tenant_email, management_name, management_phone, management_email, cost_ceiling_text, service_street, service_postal_code, service_city, service_country, warranty_note, warranty_opened_at, warranty_opened_by, warranty_opened_by_display_name";
 
 const APPOINTMENT_DB_COLUMNS =
-  "id, project_id, kind, starts_at, ends_at, assigned_technician_id, planning_notes, created_at";
+  "id, project_id, kind, starts_at, ends_at, assigned_technician_id, assigned_technician_id_2, planning_notes, created_at";
 
 const PROJECT_LIST_COLUMNS =
   "id, title, type, status, tenant_name, created_at";
@@ -132,6 +132,11 @@ function mapProjectRow(row: Record<string, unknown>): Project {
       projectStatuses.includes(row.status_revert_on_appointment_clear as ProjectStatus)
         ? (row.status_revert_on_appointment_clear as ProjectStatus)
         : null,
+    warrantyNote: row.warranty_note != null ? String(row.warranty_note) : null,
+    warrantyOpenedAt: row.warranty_opened_at ? String(row.warranty_opened_at) : null,
+    warrantyOpenedByUserId: row.warranty_opened_by != null ? String(row.warranty_opened_by) : null,
+    warrantyOpenedByDisplayName:
+      row.warranty_opened_by_display_name != null ? String(row.warranty_opened_by_display_name) : null,
   };
 }
 
@@ -143,6 +148,7 @@ function mapAppointmentRow(row: Record<string, unknown>): Appointment {
     startsAt: String(row.starts_at ?? ""),
     endsAt: String(row.ends_at ?? ""),
     assignedTechnicianId: (row.assigned_technician_id as string | null) ?? null,
+    assignedTechnicianId2: (row.assigned_technician_id_2 as string | null) ?? null,
     planningNotes: (row.planning_notes as string | null) ?? null,
     createdAt: String(row.created_at ?? new Date().toISOString()),
   };
@@ -1096,6 +1102,7 @@ type OfficeCalendarAppointmentRow = {
   starts_at: string;
   ends_at: string;
   assigned_technician_id: string | null;
+  assigned_technician_id_2: string | null;
   projects: OfficeCalendarNestedProject | OfficeCalendarNestedProject[] | null;
 };
 
@@ -1130,6 +1137,9 @@ async function weekTasksFromAppointmentRange(
         assignedTechnicianId: string | null;
         technicianName: string | null;
         calendarColor: string | null;
+        assignedTechnicianId2: string | null;
+        technicianName2: string | null;
+        calendarColor2: string | null;
         tenantDisplay: string | null;
         serviceStreet: string | null;
         servicePostalCode: string | null;
@@ -1141,6 +1151,7 @@ async function weekTasksFromAppointmentRange(
           const displayTitle = String(row.projectTitle ?? "").trim();
           if (!displayTitle) return null;
           const tid = row.assignedTechnicianId;
+          const tid2 = row.assignedTechnicianId2;
           const addrShort = formatServiceAddressFields({
             serviceStreet: row.serviceStreet,
             servicePostalCode: row.servicePostalCode,
@@ -1157,6 +1168,9 @@ async function weekTasksFromAppointmentRange(
             assignedTechnicianId: tid,
             technicianName: row.technicianName ?? null,
             calendarColor: resolveCalendarColor(row.calendarColor ?? null, tid),
+            assignedTechnicianId2: tid2,
+            technicianName2: row.technicianName2 ?? null,
+            calendarColor2: tid2 ? resolveCalendarColor(row.calendarColor2 ?? null, tid2) : null,
             tenantDisplay: row.tenantDisplay ?? null,
             serviceAddressShort: addrShort === "—" ? null : addrShort,
           };
@@ -1183,6 +1197,7 @@ async function weekTasksFromAppointmentRange(
       starts_at,
       ends_at,
       assigned_technician_id,
+      assigned_technician_id_2,
       projects (
         id,
         title,
@@ -1198,7 +1213,9 @@ async function weekTasksFromAppointmentRange(
       .gte("starts_at", rangeStartIso)
       .lte("starts_at", rangeEndIso);
     if (assignedTechnicianId) {
-      q = q.eq("assigned_technician_id", assignedTechnicianId);
+      q = q.or(
+        `assigned_technician_id.eq.${assignedTechnicianId},assigned_technician_id_2.eq.${assignedTechnicianId}`,
+      );
     }
     const { data, error } = await q.order("starts_at", { ascending: true });
 
@@ -1206,7 +1223,11 @@ async function weekTasksFromAppointmentRange(
 
     const rows = data as OfficeCalendarAppointmentRow[];
 
-    const techIds = [...new Set(rows.map((r) => r.assigned_technician_id).filter(Boolean))] as string[];
+    const techIds = [
+      ...new Set(
+        rows.flatMap((r) => [r.assigned_technician_id, r.assigned_technician_id_2]).filter(Boolean),
+      ),
+    ] as string[];
     const techMap = new Map<string, { display_name: string | null; calendar_color: string | null }>();
     if (techIds.length > 0) {
       const { data: profs } = await supabase
@@ -1226,6 +1247,8 @@ async function weekTasksFromAppointmentRange(
         if (!pr) return null;
         const tid = row.assigned_technician_id;
         const tp = tid ? techMap.get(tid) : undefined;
+        const tid2 = row.assigned_technician_id_2;
+        const tp2 = tid2 ? techMap.get(tid2) : undefined;
         const tenantRaw = pr.tenant_name != null ? String(pr.tenant_name).trim() : "";
         const displayTitle = tenantRaw || String(pr.title ?? "").trim();
         if (!displayTitle) return null;
@@ -1245,6 +1268,9 @@ async function weekTasksFromAppointmentRange(
           assignedTechnicianId: tid,
           technicianName: tp?.display_name ?? null,
           calendarColor: resolveCalendarColor(tp?.calendar_color ?? null, tid),
+          assignedTechnicianId2: tid2,
+          technicianName2: tp2?.display_name ?? null,
+          calendarColor2: tid2 ? resolveCalendarColor(tp2?.calendar_color ?? null, tid2) : null,
           tenantDisplay: tenantRaw || null,
           serviceAddressShort: addrShort === "—" ? null : addrShort,
         };
@@ -1748,6 +1774,10 @@ export type ProjectCreateInput = Omit<
   | "referenceCode"
   | "statusUpdateSource"
   | "statusRevertOnAppointmentClear"
+  | "warrantyNote"
+  | "warrantyOpenedAt"
+  | "warrantyOpenedByUserId"
+  | "warrantyOpenedByDisplayName"
 > & { referenceCode?: string | null };
 
 export async function createProject(input: ProjectCreateInput): Promise<Project> {
@@ -1763,6 +1793,10 @@ export async function createProject(input: ProjectCreateInput): Promise<Project>
       closedAt: null,
       statusUpdateSource: null,
       statusRevertOnAppointmentClear: null,
+      warrantyNote: null,
+      warrantyOpenedAt: null,
+      warrantyOpenedByUserId: null,
+      warrantyOpenedByDisplayName: null,
     };
     mockProjects.push(p);
     return p;
@@ -1831,6 +1865,10 @@ export type ProjectPatch = Partial<
     | "serviceCountry"
     | "statusUpdateSource"
     | "statusRevertOnAppointmentClear"
+    | "warrantyNote"
+    | "warrantyOpenedAt"
+    | "warrantyOpenedByUserId"
+    | "warrantyOpenedByDisplayName"
   >
 >;
 
@@ -1845,6 +1883,9 @@ export async function updateProject(projectId: string, patch: ProjectPatch): Pro
     }
     Object.assign(p, patch);
     p.updatedAt = new Date().toISOString();
+    if (patch.status !== undefined && patch.status !== "abgeschlossen" && priorStatus === "abgeschlossen") {
+      p.closedAt = null;
+    }
     if (patch.status !== undefined && patch.status !== priorStatus) {
       const promoted = await promoteToAbgemachtIfUpcomingAppointment(projectId, p.status);
       if (promoted) return promoted;
@@ -1889,11 +1930,19 @@ export async function updateProject(projectId: string, patch: ProjectPatch): Pro
   if (patch.statusRevertOnAppointmentClear !== undefined) {
     row.status_revert_on_appointment_clear = patch.statusRevertOnAppointmentClear;
   }
+  if (patch.warrantyNote !== undefined) row.warranty_note = patch.warrantyNote;
+  if (patch.warrantyOpenedAt !== undefined) row.warranty_opened_at = patch.warrantyOpenedAt;
+  if (patch.warrantyOpenedByUserId !== undefined) row.warranty_opened_by = patch.warrantyOpenedByUserId;
+  if (patch.warrantyOpenedByDisplayName !== undefined) {
+    row.warranty_opened_by_display_name = patch.warrantyOpenedByDisplayName;
+  }
   if (patch.statusUpdateSource === "manual") {
     row.status_revert_on_appointment_clear = null;
   }
   if (patch.status === "abgeschlossen") {
     row.closed_at = new Date().toISOString();
+  } else if (patch.status !== undefined && priorStatus === "abgeschlossen") {
+    row.closed_at = null;
   }
 
   const { data, error } = await supabase
@@ -2002,6 +2051,7 @@ export async function addAppointment(input: Omit<Appointment, "id" | "createdAt"
       starts_at: input.startsAt,
       ends_at: input.endsAt,
       assigned_technician_id: input.assignedTechnicianId,
+      assigned_technician_id_2: input.assignedTechnicianId2,
       planning_notes: input.planningNotes,
     })
     .select(APPOINTMENT_DB_COLUMNS)
@@ -2018,22 +2068,25 @@ export async function addAppointment(input: Omit<Appointment, "id" | "createdAt"
 export async function reassignAppointmentTechnician(
   appointmentId: string,
   projectId: string,
-  assignedTechnicianId: string,
+  assignedTechnicianId: string | null,
+  slot: 1 | 2 = 1,
 ): Promise<void> {
-  if (!assignedTechnicianId.trim()) {
+  if (slot === 1 && !assignedTechnicianId?.trim()) {
     throw new Error("Bitte eine zuständige Person wählen.");
   }
+  const column = slot === 2 ? "assignedTechnicianId2" : "assignedTechnicianId";
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
     const appt = mockAppointments.find((a) => a.id === appointmentId && a.projectId === projectId);
     if (!appt) throw new Error("Termin nicht gefunden.");
-    appt.assignedTechnicianId = assignedTechnicianId;
+    appt[column] = assignedTechnicianId;
     return;
   }
 
+  const dbColumn = slot === 2 ? "assigned_technician_id_2" : "assigned_technician_id";
   const { data, error } = await supabase
     .from("appointments")
-    .update({ assigned_technician_id: assignedTechnicianId })
+    .update({ [dbColumn]: assignedTechnicianId })
     .eq("id", appointmentId)
     .eq("project_id", projectId)
     .select("id")

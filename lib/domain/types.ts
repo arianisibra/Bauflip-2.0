@@ -20,6 +20,7 @@ export const projectStatuses = [
   "abrechnen",
   "subunternehmer",
   "abgeschlossen",
+  "garantiefall",
 ] as const;
 export type ProjectStatus = (typeof projectStatuses)[number];
 
@@ -64,6 +65,7 @@ export const projectStatusesToAbgemachtOnAppointmentBooked = [
   "bestellt",
   "abholbereit",
   "werkstatt",
+  "garantiefall",
 ] as const satisfies readonly ProjectStatus[];
 
 /**
@@ -116,12 +118,12 @@ export const RAPPORT_NEXT_STEP_BEHOBEN = "abrechnen" as const satisfies ProjectS
 
 /** Hinweis im Büro-Sheet, wenn «Abgeschlossen» noch nicht wählbar ist. */
 export const PROJECT_STATUS_ABGESCHLOSSEN_REQUIRES_ABRECHNEN_MESSAGE =
-  "Abschluss nur möglich, wenn der Auftrag auf «Abrechnen» steht. Bitte zuerst auf «Abrechnen» setzen (Buchhaltung extern).";
+  "Abschluss nur möglich, wenn der Auftrag auf «Abrechnen» oder «Garantiefall» steht. Bitte zuerst passenden Zwischenstatus setzen.";
 
 /** Darf `to` aus `from` gesetzt werden? (Büro manuell + Server-Validierung) */
 export function canSetProjectStatus(from: ProjectStatus, to: ProjectStatus): boolean {
   if (to === from) return true;
-  if (to === "abgeschlossen") return from === "abrechnen";
+  if (to === "abgeschlossen") return from === "abrechnen" || from === "garantiefall";
   return true;
 }
 
@@ -195,6 +197,11 @@ export type Project = {
   statusUpdateSource: ProjectStatusUpdateSource | null;
   /** Vorheriger Status vor automatischem Sprung auf «abgemacht» (Termin-Löschung). */
   statusRevertOnAppointmentClear: ProjectStatus | null;
+  /** Grund/Beschreibung des Garantiefalls — gesetzt beim Wechsel auf Status «garantiefall». */
+  warrantyNote: string | null;
+  warrantyOpenedAt: string | null;
+  warrantyOpenedByUserId: string | null;
+  warrantyOpenedByDisplayName: string | null;
 };
 
 export type Appointment = {
@@ -206,6 +213,9 @@ export type Appointment = {
   assignedTechnicianId: string | null;
   /** Anzeigename aus profiles — ohne separate Monteur-Liste im Sheet. */
   assignedTechnicianDisplayName?: string | null;
+  /** Optionaler zweiter Monteur am selben Termin. */
+  assignedTechnicianId2: string | null;
+  assignedTechnicianDisplayName2?: string | null;
   planningNotes: string | null;
   createdAt: string;
 };
@@ -257,10 +267,23 @@ export type WeekTaskItem = {
   assignedTechnicianId: string | null;
   technicianName: string | null;
   calendarColor: string;
+  /** Optionaler zweiter Monteur am selben Termin. */
+  assignedTechnicianId2: string | null;
+  technicianName2: string | null;
+  calendarColor2: string | null;
   /** Aus `projects`-Join; vermeidet N+1 `getProjectCore` auf /tag */
   tenantDisplay: string | null;
   serviceAddressShort: string | null;
 };
+
+/** IDs aller zugewiesenen Monteure (1 oder 2) — zentrale Stelle statt verstreuter `=== id`-Checks. */
+export function taskAssignedTechnicianIds(
+  task: Pick<WeekTaskItem, "assignedTechnicianId" | "assignedTechnicianId2">,
+): string[] {
+  return [task.assignedTechnicianId, task.assignedTechnicianId2].filter(
+    (id): id is string => Boolean(id),
+  );
+}
 
 export const technicianReportOutcomes = ["schaden_behoben", "schaden_aufgenommen"] as const;
 export type TechnicianReportOutcome = (typeof technicianReportOutcomes)[number];
@@ -339,6 +362,7 @@ export const projectStatusLabels: Record<ProjectStatus, string> = {
   abrechnen: "ABRECHNEN",
   subunternehmer: "SUBUNTERNEHMER",
   abgeschlossen: "ABGESCHLOSSEN",
+  garantiefall: "GARANTIEFALL",
 };
 
 /** Tailwind-Klassen pro Status — jeder Schritt eigene Farbe (Liste, Sheet, Monteur). */
@@ -372,6 +396,8 @@ export const projectStatusBadgeClassNames: Record<ProjectStatus, string> = {
     "border-stone-500/55 bg-stone-500/35 text-stone-950 dark:border-stone-400/55 dark:bg-stone-500/45 dark:text-stone-50",
   abgeschlossen:
     "border-green-600/60 bg-green-600/40 text-green-950 dark:border-green-400/60 dark:bg-green-600/50 dark:text-green-50",
+  garantiefall:
+    "border-rose-600/60 bg-rose-600/45 text-rose-950 dark:border-rose-400/60 dark:bg-rose-600/55 dark:text-rose-50",
 };
 
 export function projectStatusBadgeClassName(status: string): string {

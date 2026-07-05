@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { Appointment, TechnicianReport, ProjectStatus } from "@/lib/domain/types";
+import type { Appointment, TechnicianReport, ProjectStatus, UserProfile } from "@/lib/domain/types";
 import {
   PROJECT_STATUS_ABGESCHLOSSEN_REQUIRES_ABRECHNEN_MESSAGE,
   canSetProjectStatus,
@@ -10,16 +10,19 @@ import {
   projectStatusLabels,
   projectStatuses,
 } from "@/lib/domain/types";
+import { computeConflicts, conflictStatus, type Conflict } from "@/lib/calendar/availability-conflicts";
 import { cn } from "@/lib/utils";
 import { telHref } from "@/lib/phone";
 import {
   useAssignableProfiles,
+  useAvailabilityRange,
   useDeleteAppointment,
   useDeleteAttachment,
   useDeleteReport,
   useOrderFormTemplates,
   useProjectCore,
   useReassignAppointmentTechnician,
+  useSetGarantiefall,
   useUpdateProjectStatus,
   useUpdateStammdaten,
   useUpdateTechnicianReport,
@@ -32,6 +35,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  AlertTriangle,
   ArrowRight,
   CheckCircle2,
   ChevronDown,
@@ -46,6 +50,7 @@ import {
 import { BauflipLoading, BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
 import { TechnicianReportEditOverlay } from "@/components/app/technician-report-edit-overlay";
 import { AppointmentBookingForm } from "@/components/app/appointment-booking-form";
+import type { AvailabilityBundle } from "@/app/(app)/kalender/availability-actions";
 import { getFilledOrderFormFields } from "@/lib/order-forms/filled-fields";
 function formatAppointmentRange(startsAtIso: string, endsAtIso: string): string {
   const startsAt = new Date(startsAtIso);
@@ -310,6 +315,8 @@ const STATUS_PIPELINE: Partial<Record<ProjectStatus, PipelineAction[]>> = {
   abklaeren:         [{ label: "OFFERTE SENDEN", nextStatus: "offerte_senden" }, { label: "MATERIAL BESTELLEN", nextStatus: "bestellen" }],
   subunternehmer:    [{ label: "ABRECHNEN", nextStatus: "abrechnen" }],
   abrechnen:         [{ label: "ABGESCHLOSSEN", nextStatus: "abgeschlossen" }],
+  abgeschlossen:     [{ label: "GARANTIEFALL MELDEN", nextStatus: "garantiefall" }],
+  garantiefall:      [{ label: "ABGESCHLOSSEN", nextStatus: "abgeschlossen" }],
 };
 
 const STATUS_ACTION_TONE: Partial<Record<ProjectStatus, string>> = {
@@ -321,6 +328,7 @@ const STATUS_ACTION_TONE: Partial<Record<ProjectStatus, string>> = {
   werkstatt: "border-orange-500/35 bg-orange-500/10 text-orange-700 dark:text-orange-200",
   abrechnen: "border-yellow-500/40 bg-yellow-500/15 text-yellow-800 dark:text-yellow-200",
   abgeschlossen: "border-green-600/40 bg-green-600/15 text-green-800 dark:text-green-200",
+  garantiefall: "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-200",
 };
 
 function StatusPipeline({
@@ -336,8 +344,11 @@ function StatusPipeline({
   statusCounts?: ReadonlyMap<ProjectStatus, number>;
 }) {
   const updateStatus = useUpdateProjectStatus();
+  const setGarantiefall = useSetGarantiefall();
   const actions = STATUS_PIPELINE[currentStatus] ?? [];
   const label = projectStatusLabels[currentStatus] ?? currentStatus;
+  const [garantiefallOpen, setGarantiefallOpen] = useState(false);
+  const [garantiefallNote, setGarantiefallNote] = useState("");
 
   const advance = (nextStatus: ProjectStatus) => {
     if (!canSetProjectStatus(currentStatus, nextStatus)) {
@@ -351,7 +362,35 @@ function StatusPipeline({
       },
     });
   };
-  const pending = updateStatus.isPending;
+
+  const requestStatusChange = (nextStatus: ProjectStatus) => {
+    if (nextStatus === "garantiefall") {
+      setGarantiefallNote("");
+      setGarantiefallOpen(true);
+      return;
+    }
+    advance(nextStatus);
+  };
+
+  const submitGarantiefall = () => {
+    const note = garantiefallNote.trim();
+    if (!note) {
+      toast.error("Bitte Grund für den Garantiefall angeben.");
+      return;
+    }
+    setGarantiefall.mutate({ projectId, note }, {
+      onSuccess: () => {
+        setGarantiefallOpen(false);
+        setGarantiefallNote("");
+      },
+      onError: (e) => {
+        console.error(e);
+        toast.error(e instanceof Error ? e.message : "Garantiefall konnte nicht gespeichert werden.");
+      },
+    });
+  };
+
+  const pending = updateStatus.isPending || setGarantiefall.isPending;
 
   return (
     <div className="rounded-lg border border-border bg-muted/20 px-3 py-2.5">
@@ -367,7 +406,7 @@ function StatusPipeline({
                 key={action.nextStatus}
                 type="button"
                 disabled={pending}
-                onClick={() => advance(action.nextStatus)}
+                onClick={() => requestStatusChange(action.nextStatus)}
                 className={cn(
                   "flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium transition-colors disabled:opacity-50",
                   STATUS_ACTION_TONE[action.nextStatus] ?? "border-primary/30 bg-primary/5 text-primary hover:bg-primary/10",
@@ -384,6 +423,50 @@ function StatusPipeline({
           </div>
         )}
       </div>
+      {canEdit && garantiefallOpen ? (
+        <div className="mt-2 space-y-1.5 rounded-md border border-rose-500/40 bg-rose-500/10 p-2.5">
+          <Label htmlFor={`garantiefall-note-${projectId}`} className="text-[11px] font-medium text-rose-800 dark:text-rose-200">
+            Grund für den Garantiefall
+          </Label>
+          <Textarea
+            id={`garantiefall-note-${projectId}`}
+            value={garantiefallNote}
+            onChange={(e) => setGarantiefallNote(e.target.value)}
+            placeholder="Was ist das Problem?"
+            className="min-h-16 text-xs"
+            disabled={pending}
+          />
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={pending}
+              onClick={submitGarantiefall}
+              className="gap-1.5 text-xs"
+            >
+              {pending ? (
+                <BauflipLoadingButtonLabel variant="onSurface">Speichert …</BauflipLoadingButtonLabel>
+              ) : (
+                "Garantiefall speichern"
+              )}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={pending}
+              onClick={() => {
+                setGarantiefallOpen(false);
+                setGarantiefallNote("");
+              }}
+              className="text-xs"
+            >
+              Abbrechen
+            </Button>
+          </div>
+        </div>
+      ) : null}
       {canEdit ? (
         <form
           className="mt-2 flex flex-wrap items-end gap-2"
@@ -398,7 +481,7 @@ function StatusPipeline({
               toast.error(PROJECT_STATUS_ABGESCHLOSSEN_REQUIRES_ABRECHNEN_MESSAGE);
               return;
             }
-            advance(nextStatus);
+            requestStatusChange(nextStatus);
           }}
         >
           <div className="min-w-[13rem] flex-1">
@@ -424,9 +507,9 @@ function StatusPipeline({
                 );
               })}
             </select>
-            {currentStatus !== "abrechnen" ? (
+            {currentStatus !== "abrechnen" && currentStatus !== "garantiefall" ? (
               <p className="mt-1 text-[10px] text-muted-foreground">
-                «Abgeschlossen» erst nach manuellem Wechsel auf «Abrechnen» (externe Buchhaltung).
+                «Abgeschlossen» erst nach manuellem Wechsel auf «Abrechnen» (externe Buchhaltung) — ausser bei «Garantiefall», dort direkt möglich.
               </p>
             ) : null}
           </div>
@@ -436,6 +519,256 @@ function StatusPipeline({
         </form>
       ) : null}
     </div>
+  );
+}
+
+function TechnicianAvailabilityBadge({
+  status,
+}: {
+  status: "idle" | "free" | "conflict" | "absence";
+}) {
+  if (status === "idle") return null;
+  const tone =
+    status === "free"
+      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
+      : status === "absence"
+        ? "border-rose-500/30 bg-rose-500/10 text-rose-800 dark:text-rose-200"
+        : "border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-200";
+  const label = status === "free" ? "Frei" : status === "absence" ? "Abwesend" : "Konflikt";
+  return (
+    <span className={cn("shrink-0 rounded-md border px-1.5 py-0 text-[10px] font-medium leading-tight", tone)}>
+      {label}
+    </span>
+  );
+}
+
+function AppointmentRow({
+  appointment: a,
+  appointmentIndex,
+  projectId,
+  technicians,
+  showMontageBadge,
+  pending,
+  availabilityBundle,
+  reassignAppointment,
+  deleteAppointment,
+}: {
+  appointment: Appointment;
+  appointmentIndex: number;
+  projectId: string;
+  technicians: UserProfile[];
+  showMontageBadge: boolean;
+  pending: boolean;
+  availabilityBundle: AvailabilityBundle | undefined;
+  reassignAppointment: ReturnType<typeof useReassignAppointmentTechnician>;
+  deleteAppointment: ReturnType<typeof useDeleteAppointment>;
+}) {
+  const assignedName =
+    a.assignedTechnicianDisplayName?.trim() ||
+    (a.assignedTechnicianId
+      ? technicians.find((t) => t.id === a.assignedTechnicianId)?.displayName?.trim()
+      : null) ||
+    null;
+  const assignedName2 =
+    a.assignedTechnicianDisplayName2?.trim() ||
+    (a.assignedTechnicianId2
+      ? technicians.find((t) => t.id === a.assignedTechnicianId2)?.displayName?.trim()
+      : null) ||
+    null;
+  const reassigningThis =
+    reassignAppointment.isPending &&
+    reassignAppointment.variables?.appointmentId === a.id &&
+    reassignAppointment.variables?.slot !== 2;
+  const reassigningThis2 =
+    reassignAppointment.isPending &&
+    reassignAppointment.variables?.appointmentId === a.id &&
+    reassignAppointment.variables?.slot === 2;
+
+  // Lokale "gerade gewählte Person" pro Slot — für sofortiges Feedback ohne auf den
+  // Server-Roundtrip zu warten. Sobald der Server eine andere Zuweisung bestätigt
+  // (`a.assignedTechnicianId*` ändert sich), während des Renders nachziehen (kein
+  // useEffect nötig — das wäre ein Render zu spät).
+  const [lastServerId1, setLastServerId1] = useState(a.assignedTechnicianId ?? "");
+  const [previewId1, setPreviewId1] = useState(a.assignedTechnicianId ?? "");
+  if ((a.assignedTechnicianId ?? "") !== lastServerId1) {
+    setLastServerId1(a.assignedTechnicianId ?? "");
+    setPreviewId1(a.assignedTechnicianId ?? "");
+  }
+  const [lastServerId2, setLastServerId2] = useState(a.assignedTechnicianId2 ?? "");
+  const [previewId2, setPreviewId2] = useState(a.assignedTechnicianId2 ?? "");
+  if ((a.assignedTechnicianId2 ?? "") !== lastServerId2) {
+    setLastServerId2(a.assignedTechnicianId2 ?? "");
+    setPreviewId2(a.assignedTechnicianId2 ?? "");
+  }
+
+  const slotStart = Date.parse(a.startsAt);
+  const slotEnd = Date.parse(a.endsAt);
+  const range = useMemo(
+    () => (Number.isFinite(slotStart) && Number.isFinite(slotEnd) ? { slotStart, slotEnd } : null),
+    [slotStart, slotEnd],
+  );
+  const ready = Boolean(availabilityBundle) && Boolean(range);
+
+  const conflicts1: Conflict[] = useMemo(
+    () => computeConflicts(previewId1, availabilityBundle, range, a.id),
+    [previewId1, availabilityBundle, range, a.id],
+  );
+  const conflicts2: Conflict[] = useMemo(
+    () => computeConflicts(previewId2, availabilityBundle, range, a.id),
+    [previewId2, availabilityBundle, range, a.id],
+  );
+  const status1 = conflictStatus(ready, previewId1, conflicts1);
+  const status2 = conflictStatus(ready, previewId2, conflicts2);
+
+  return (
+    <li className="rounded-lg border border-border bg-muted/20 px-3 py-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 space-y-1">
+          <p className="text-xs font-semibold text-foreground">{formatAppointmentRange(a.startsAt, a.endsAt)}</p>
+          <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-muted-foreground">
+            <span>{a.kind === "besichtigung" ? "Besichtigung" : "Ausführung"}</span>
+            <span className="rounded-md bg-primary/10 px-1.5 py-0 text-[10px] font-medium text-primary">
+              {appointmentIndex + 1}. Termin
+            </span>
+            {showMontageBadge ? (
+              <span className="rounded-md bg-emerald-500/10 px-1.5 py-0 text-[10px] font-medium text-emerald-800 dark:text-emerald-200">
+                Montage
+              </span>
+            ) : null}
+          </p>
+          <div className="flex flex-wrap items-center gap-2 pt-0.5">
+            <Label htmlFor={`appt-tech-${a.id}`} className="sr-only">
+              Zuständige Person für Termin {appointmentIndex + 1}
+            </Label>
+            <select
+              id={`appt-tech-${a.id}`}
+              className="h-8 max-w-full min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs sm:max-w-[14rem]"
+              value={a.assignedTechnicianId ?? ""}
+              disabled={pending}
+              onChange={(e) => {
+                const nextId = e.target.value;
+                if (!nextId || nextId === (a.assignedTechnicianId ?? "")) return;
+                setPreviewId1(nextId);
+                reassignAppointment.mutate(
+                  {
+                    appointmentId: a.id,
+                    projectId,
+                    slot: 1,
+                    assignedTechnicianId: nextId,
+                  },
+                  {
+                    onSuccess: () => toast.success("Zuständige Person geändert"),
+                    onError: (err) => {
+                      setPreviewId1(a.assignedTechnicianId ?? "");
+                      toast.error(err instanceof Error ? err.message : "Zuweisung fehlgeschlagen.");
+                    },
+                  },
+                );
+              }}
+            >
+              {!a.assignedTechnicianId ? (
+                <option value="" disabled>
+                  Person wählen …
+                </option>
+              ) : null}
+              {a.assignedTechnicianId &&
+              assignedName &&
+              !technicians.some((t) => t.id === a.assignedTechnicianId) ? (
+                <option value={a.assignedTechnicianId}>{assignedName}</option>
+              ) : null}
+              {technicians.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.displayName}
+                </option>
+              ))}
+            </select>
+            {reassigningThis ? (
+              <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" aria-label="Wird gespeichert" />
+            ) : (
+              <TechnicianAvailabilityBadge status={status1} />
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 pt-0.5">
+            <Label htmlFor={`appt-tech2-${a.id}`} className="sr-only">
+              Zweite zuständige Person für Termin {appointmentIndex + 1}
+            </Label>
+            <select
+              id={`appt-tech2-${a.id}`}
+              className="h-8 max-w-full min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs sm:max-w-[14rem]"
+              value={a.assignedTechnicianId2 ?? ""}
+              disabled={pending}
+              onChange={(e) => {
+                const nextId = e.target.value;
+                if (nextId === (a.assignedTechnicianId2 ?? "")) return;
+                setPreviewId2(nextId);
+                reassignAppointment.mutate(
+                  {
+                    appointmentId: a.id,
+                    projectId,
+                    slot: 2,
+                    assignedTechnicianId: nextId || null,
+                  },
+                  {
+                    onSuccess: () =>
+                      toast.success(nextId ? "Monteur 2 geändert" : "Monteur 2 entfernt"),
+                    onError: (err) => {
+                      setPreviewId2(a.assignedTechnicianId2 ?? "");
+                      toast.error(err instanceof Error ? err.message : "Zuweisung fehlgeschlagen.");
+                    },
+                  },
+                );
+              }}
+            >
+              <option value="">Monteur 2 (optional)</option>
+              {a.assignedTechnicianId2 &&
+              assignedName2 &&
+              !technicians.some((t) => t.id === a.assignedTechnicianId2) ? (
+                <option value={a.assignedTechnicianId2}>{assignedName2}</option>
+              ) : null}
+              {technicians
+                .filter((t) => t.id !== a.assignedTechnicianId)
+                .map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.displayName}
+                  </option>
+                ))}
+            </select>
+            {reassigningThis2 ? (
+              <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" aria-label="Wird gespeichert" />
+            ) : (
+              <TechnicianAvailabilityBadge status={status2} />
+            )}
+          </div>
+          {a.planningNotes?.trim() ? (
+            <p className="text-[11px] text-muted-foreground italic">{a.planningNotes}</p>
+          ) : null}
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="shrink-0 text-destructive hover:text-destructive"
+          disabled={pending}
+          onClick={() => {
+            if (!window.confirm("Termin löschen?")) return;
+            deleteAppointment.mutate(
+              { appointmentId: a.id, projectId },
+              {
+                onSuccess: () => toast.success("Termin gelöscht"),
+                onError: (err) =>
+                  toast.error(err instanceof Error ? err.message : "Löschen fehlgeschlagen."),
+              },
+            );
+          }}
+        >
+          {deleteAppointment.isPending && deleteAppointment.variables?.appointmentId === a.id ? (
+            <Loader2 className="size-3.5 animate-spin" aria-label="Wird gelöscht" />
+          ) : (
+            "×"
+          )}
+        </Button>
+      </div>
+    </li>
   );
 }
 
@@ -487,6 +820,33 @@ export function ProjektSheetEditor({
     if (!c) return [];
     return c.attachments.filter((a) => !isLikelyProjectImage(a.fileType, a.fileName));
   }, [coreQuery.data]);
+
+  // Verfügbarkeitsfenster über alle Termine des Projekts (±1 Tag) — vorab geladen, sobald
+  // "Termin planen" fokussiert wird, damit der Konfliktcheck beim Umbuchen sofort da ist.
+  const reassignAvailabilityRange = useMemo(() => {
+    const appointments = coreQuery.data?.appointments ?? [];
+    if (appointments.length === 0) return null;
+    let minStart = Infinity;
+    let maxEnd = -Infinity;
+    for (const appt of appointments) {
+      const s = Date.parse(appt.startsAt);
+      const e = Date.parse(appt.endsAt);
+      if (Number.isFinite(s)) minStart = Math.min(minStart, s);
+      if (Number.isFinite(e)) maxEnd = Math.max(maxEnd, e);
+    }
+    if (!Number.isFinite(minStart) || !Number.isFinite(maxEnd)) return null;
+    const dayMs = 24 * 60 * 60 * 1000;
+    return {
+      startIso: new Date(minStart - dayMs).toISOString(),
+      endIso: new Date(maxEnd + dayMs).toISOString(),
+    };
+  }, [coreQuery.data?.appointments]);
+
+  const { data: reassignAvailabilityBundle } = useAvailabilityRange(
+    reassignAvailabilityRange?.startIso ?? null,
+    reassignAvailabilityRange?.endIso ?? null,
+    open && loadTechnicians && Boolean(reassignAvailabilityRange),
+  );
 
   if (!open) {
     return null;
@@ -708,115 +1068,20 @@ export function ProjektSheetEditor({
           <AppointmentBookingForm projectId={projectId} technicians={technicians} />
 
           <ul className="mt-3 space-y-2 text-sm">
-            {core.appointments.map((a: Appointment, appointmentIndex: number) => {
-              const assignedName =
-                a.assignedTechnicianDisplayName?.trim() ||
-                (a.assignedTechnicianId
-                  ? technicians.find((t) => t.id === a.assignedTechnicianId)?.displayName?.trim()
-                  : null) ||
-                null;
-              const reassigningThis =
-                reassignAppointment.isPending &&
-                reassignAppointment.variables?.appointmentId === a.id;
-              return (
-                <li key={a.id} className="rounded-lg border border-border bg-muted/20 px-3 py-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 space-y-1">
-                      <p className="text-xs font-semibold text-foreground">{formatAppointmentRange(a.startsAt, a.endsAt)}</p>
-                      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-muted-foreground">
-                        <span>{a.kind === "besichtigung" ? "Besichtigung" : "Ausführung"}</span>
-                        <span className="rounded-md bg-primary/10 px-1.5 py-0 text-[10px] font-medium text-primary">
-                          {appointmentIndex + 1}. Termin
-                        </span>
-                        {appointmentIndex === 0 && p.status === "montagebereit" ? (
-                          <span className="rounded-md bg-emerald-500/10 px-1.5 py-0 text-[10px] font-medium text-emerald-800 dark:text-emerald-200">
-                            Montage
-                          </span>
-                        ) : null}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                        <Label htmlFor={`appt-tech-${a.id}`} className="sr-only">
-                          Zuständige Person für Termin {appointmentIndex + 1}
-                        </Label>
-                        <select
-                          id={`appt-tech-${a.id}`}
-                          className="h-8 max-w-full min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs sm:max-w-[14rem]"
-                          value={a.assignedTechnicianId ?? ""}
-                          disabled={pending}
-                          onChange={(e) => {
-                            const nextId = e.target.value;
-                            if (!nextId || nextId === (a.assignedTechnicianId ?? "")) return;
-                            reassignAppointment.mutate(
-                              {
-                                appointmentId: a.id,
-                                projectId,
-                                assignedTechnicianId: nextId,
-                              },
-                              {
-                                onSuccess: () => toast.success("Zuständige Person geändert"),
-                                onError: (err) =>
-                                  toast.error(
-                                    err instanceof Error
-                                      ? err.message
-                                      : "Zuweisung fehlgeschlagen.",
-                                  ),
-                              },
-                            );
-                          }}
-                        >
-                          {!a.assignedTechnicianId ? (
-                            <option value="" disabled>
-                              Person wählen …
-                            </option>
-                          ) : null}
-                          {a.assignedTechnicianId &&
-                          assignedName &&
-                          !technicians.some((t) => t.id === a.assignedTechnicianId) ? (
-                            <option value={a.assignedTechnicianId}>{assignedName}</option>
-                          ) : null}
-                          {technicians.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.displayName}
-                            </option>
-                          ))}
-                        </select>
-                        {reassigningThis ? (
-                          <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" aria-label="Wird gespeichert" />
-                        ) : null}
-                      </div>
-                      {a.planningNotes?.trim() ? (
-                        <p className="text-[11px] text-muted-foreground italic">{a.planningNotes}</p>
-                      ) : null}
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="shrink-0 text-destructive hover:text-destructive"
-                      disabled={pending}
-                      onClick={() => {
-                        if (!window.confirm("Termin löschen?")) return;
-                        deleteAppointment.mutate(
-                          { appointmentId: a.id, projectId },
-                          {
-                            onSuccess: () => toast.success("Termin gelöscht"),
-                            onError: (err) =>
-                              toast.error(err instanceof Error ? err.message : "Löschen fehlgeschlagen."),
-                          },
-                        );
-                      }}
-                    >
-                      {deleteAppointment.isPending &&
-                      deleteAppointment.variables?.appointmentId === a.id ? (
-                        <Loader2 className="size-3.5 animate-spin" aria-label="Wird gelöscht" />
-                      ) : (
-                        "×"
-                      )}
-                    </Button>
-                  </div>
-                </li>
-              );
-            })}
+            {core.appointments.map((a: Appointment, appointmentIndex: number) => (
+              <AppointmentRow
+                key={a.id}
+                appointment={a}
+                appointmentIndex={appointmentIndex}
+                projectId={projectId}
+                technicians={technicians}
+                showMontageBadge={appointmentIndex === 0 && p.status === "montagebereit"}
+                pending={pending}
+                availabilityBundle={reassignAvailabilityBundle}
+                reassignAppointment={reassignAppointment}
+                deleteAppointment={deleteAppointment}
+              />
+            ))}
           </ul>
         </section>
       ) : null}
@@ -993,6 +1258,23 @@ export function ProjektSheetEditor({
           </>
         )}
       </section>
+
+      {core.project.warrantyOpenedAt ? (
+        <section className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2.5">
+          <div className="flex items-center gap-2 text-sm font-semibold text-rose-800 dark:text-rose-200">
+            <AlertTriangle className="size-4" aria-hidden />
+            Garantiefall
+          </div>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Eröffnet am{" "}
+            {new Date(core.project.warrantyOpenedAt).toLocaleString("de-CH", { timeZone: "Europe/Zurich" })}
+            {core.project.warrantyOpenedByDisplayName ? ` von ${core.project.warrantyOpenedByDisplayName}` : ""}
+          </p>
+          {core.project.warrantyNote ? (
+            <p className="mt-2 whitespace-pre-wrap text-sm">{core.project.warrantyNote}</p>
+          ) : null}
+        </section>
+      ) : null}
 
       {!coreQuery.isDetailsLoading && core.reports.length > 0 && (
         <section className="border-t pt-4">

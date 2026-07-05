@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  taskAssignedTechnicianIds,
   technicianAbsenceKindLabels,
   type TechnicianAbsence,
   type UserProfile,
@@ -112,20 +113,23 @@ export function CalendarAvailabilityRail({
     const absences = data?.absences ?? [];
     const map = new Map<string, RailBlock[]>();
     for (const t of appointments) {
-      if (!t.assignedTechnicianId) continue;
+      const technicianIds = taskAssignedTechnicianIds(t);
+      if (technicianIds.length === 0) continue;
       const startMs = Date.parse(t.startsAt);
       const endMs = Date.parse(t.endsAt);
       if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) continue;
       if (endMs <= range.dayStartMs || startMs >= range.dayEndMs) continue;
-      const list = map.get(t.assignedTechnicianId) ?? [];
-      list.push({
-        kind: "appointment",
-        key: `a-${t.appointmentId}`,
-        task: t,
-        startMs,
-        endMs,
-      });
-      map.set(t.assignedTechnicianId, list);
+      for (const technicianId of technicianIds) {
+        const list = map.get(technicianId) ?? [];
+        list.push({
+          kind: "appointment",
+          key: `a-${t.appointmentId}`,
+          task: t,
+          startMs,
+          endMs,
+        });
+        map.set(technicianId, list);
+      }
     }
     for (const a of absences) {
       const startMs = Date.parse(a.startsAt);
@@ -316,7 +320,9 @@ function RailRow({
         const widthPct = Math.max(1.2, ((endClamped - startClamped) / span) * 100);
         if (b.kind === "appointment") {
           const t = b.task;
-          const colour = t.calendarColor || accent;
+          // Immer die Farbe DIESER Zeile (Row-Monteur) verwenden — bei zwei Monteuren pro
+          // Termin trägt `t.calendarColor` nur die Farbe von Monteur 1.
+          const colour = accent;
           return (
             <button
               key={b.key}

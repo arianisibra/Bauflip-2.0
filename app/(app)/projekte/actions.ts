@@ -5,6 +5,7 @@ import {
   requireOfficeSession,
   requireTechFieldSession,
 } from "@/lib/auth/organization";
+import { getCachedSessionProfile } from "@/lib/auth/session";
 import {
   addAppointment,
   deleteProject,
@@ -32,6 +33,7 @@ import { publish } from "@/lib/realtime/publish";
 import {
   projectStammdatenUpdateSchema,
   appointmentSchema,
+  garantiefallSchema,
   reassignAppointmentTechnicianSchema,
   technicianReportUpdateSchema,
 } from "@/lib/validations/forms";
@@ -202,6 +204,7 @@ export async function addAppointmentAction(
     startsAt: v.startsAt,
     endsAt: v.endsAt,
     assignedTechnicianId: v.assignedTechnicianId,
+    assignedTechnicianId2: v.assignedTechnicianId2?.trim() || null,
     planningNotes: v.planningNotes ?? null,
   });
   const core = await coreOrThrow(v.projectId);
@@ -225,11 +228,19 @@ export async function reassignAppointmentTechnicianAction(
     throw new Error(parsed.error.issues[0]?.message ?? "Ungültige Eingabe.");
   }
   const v = parsed.data;
-  const assignable = await listAssignableProfiles(session.organizationId);
-  if (!assignable.some((p) => p.id === v.assignedTechnicianId)) {
-    throw new Error("Die gewählte Person ist in dieser Organisation nicht zuweisbar.");
+  if (v.assignedTechnicianId) {
+    const assignable = await listAssignableProfiles(session.organizationId);
+    if (!assignable.some((p) => p.id === v.assignedTechnicianId)) {
+      throw new Error("Die gewählte Person ist in dieser Organisation nicht zuweisbar.");
+    }
+    const bundle = await getProjectCore(v.projectId);
+    const appt = bundle?.appointments.find((a) => a.id === v.appointmentId);
+    const otherSlotId = v.slot === 2 ? appt?.assignedTechnicianId : appt?.assignedTechnicianId2;
+    if (otherSlotId && otherSlotId === v.assignedTechnicianId) {
+      throw new Error("Diese Person ist bereits als andere zuständige Person an diesem Termin zugewiesen.");
+    }
   }
-  await reassignAppointmentTechnician(v.appointmentId, v.projectId, v.assignedTechnicianId);
+  await reassignAppointmentTechnician(v.appointmentId, v.projectId, v.assignedTechnicianId, v.slot);
   const core = await coreOrThrow(v.projectId);
   if (session.organizationId) {
     await publish(session.organizationId, {
@@ -281,6 +292,36 @@ export async function updateProjectStatusAction(
 ): Promise<{ core: ProjectCore }> {
   const session = await requireOfficeSession();
   await updateProject(projectId, { status, statusUpdateSource: "manual" });
+  const core = await coreOrThrow(projectId);
+  if (session.organizationId) {
+    await publish(session.organizationId, {
+      type: "project.core_changed",
+      projectId,
+      originTabId: tabId,
+    });
+  }
+  return { core };
+}
+
+export async function setGarantiefallAction(
+  projectId: string,
+  note: string,
+  tabId?: string,
+): Promise<{ core: ProjectCore }> {
+  const session = await requireOfficeSession();
+  const parsed = garantiefallSchema.safeParse({ projectId, note });
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Ungültige Eingabe.");
+  }
+  const profile = await getCachedSessionProfile(session);
+  await updateProject(projectId, {
+    status: "garantiefall",
+    statusUpdateSource: "manual",
+    warrantyNote: parsed.data.note,
+    warrantyOpenedAt: new Date().toISOString(),
+    warrantyOpenedByUserId: profile.userId,
+    warrantyOpenedByDisplayName: profile.displayName,
+  });
   const core = await coreOrThrow(projectId);
   if (session.organizationId) {
     await publish(session.organizationId, {
