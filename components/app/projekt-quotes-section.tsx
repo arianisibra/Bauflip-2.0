@@ -4,13 +4,21 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { FileText, Loader2, Pencil, Plus, Send, Trash2 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button-variants";
-import type { Quote, QuoteStatus } from "@/lib/domain/types";
+import type { PriceBookItem, Quote, QuoteStatus, TechnicianReport } from "@/lib/domain/types";
 import { quoteStatusBadgeClassNames, quoteStatusLabels } from "@/lib/domain/types";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { computeQuoteTotals } from "@/lib/quotes/totals";
 import { quoteCreateSchema } from "@/lib/validations/forms";
 import {
   useCreateQuote,
   useDeleteQuote,
+  usePriceBookItems,
   useProjectQuotes,
   useQuoteMailConfig,
   useSendQuote,
@@ -102,15 +110,22 @@ type SendFormState = {
   message: string;
 };
 
+function isLineEmpty(line: EditableLineItem): boolean {
+  return !line.description.trim() && !line.unitPrice.trim();
+}
+
 export function ProjektQuotesSection({
   projectId,
   canEdit,
   defaultRecipientEmail,
+  latestReport,
 }: {
   projectId: string;
   canEdit: boolean;
   /** Vorbefüllung «Senden an» — Mieter- oder Verwaltungs-Mail des Projekts. */
   defaultRecipientEmail?: string | null;
+  /** Neuester Rapport — für «Aus Rapport übernehmen» im Offert-Editor. */
+  latestReport?: Pick<TechnicianReport, "workDescription" | "summary" | "timeSpentMinutes"> | null;
 }) {
   const quotesQuery = useProjectQuotes(projectId);
   const createQuote = useCreateQuote();
@@ -122,6 +137,48 @@ export function ProjektQuotesSection({
   const mailConfigured = mailConfig.data?.mailConfigured ?? false;
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [sendForm, setSendForm] = useState<SendFormState | null>(null);
+  const priceBookQuery = usePriceBookItems(canEdit && Boolean(editor));
+  const priceBookItems = (priceBookQuery.data ?? []).filter((i: PriceBookItem) => i.isActive);
+
+  /** Fügt eine Position an; ersetzt eine einzelne noch leere Zeile. */
+  const appendLine = (line: EditableLineItem) => {
+    setEditor((prev) => {
+      if (!prev) return prev;
+      const lineItems =
+        prev.lineItems.length === 1 && isLineEmpty(prev.lineItems[0])
+          ? [line]
+          : [...prev.lineItems, line];
+      return { ...prev, lineItems };
+    });
+  };
+
+  const addFromPriceBook = (itemId: string) => {
+    const item = priceBookItems.find((i) => i.id === itemId);
+    if (!item) return;
+    appendLine({
+      description: item.name,
+      quantity: "1",
+      unit: item.unit ?? "",
+      unitPrice: String(item.unitPrice),
+    });
+  };
+
+  /** Einleitung + Arbeitszeit-Position aus dem neuesten Rapport übernehmen. */
+  const prefillFromReport = () => {
+    if (!latestReport) return;
+    const text = latestReport.workDescription.trim() || latestReport.summary.trim();
+    setEditor((prev) => (prev ? { ...prev, introText: prev.introText || text } : prev));
+    if (latestReport.timeSpentMinutes && latestReport.timeSpentMinutes > 0) {
+      const hours = Math.round((latestReport.timeSpentMinutes / 60) * 100) / 100;
+      const workItem = priceBookItems.find((i) => i.name.toLowerCase().includes("arbeitszeit"));
+      appendLine({
+        description: workItem?.name ?? "Arbeitszeit Monteur",
+        quantity: String(hours),
+        unit: workItem?.unit ?? "h",
+        unitPrice: workItem ? String(workItem.unitPrice) : "",
+      });
+    }
+  };
 
   const submitSend = async () => {
     if (!sendForm) return;
@@ -437,19 +494,41 @@ export function ProjektQuotesSection({
                 </Button>
               </div>
             ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                setEditor((prev) =>
-                  prev ? { ...prev, lineItems: [...prev.lineItems, { ...EMPTY_LINE }] } : prev,
-                )
-              }
-            >
-              <Plus className="size-4" aria-hidden />
-              Position hinzufügen
-            </Button>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setEditor((prev) =>
+                    prev ? { ...prev, lineItems: [...prev.lineItems, { ...EMPTY_LINE }] } : prev,
+                  )
+                }
+              >
+                <Plus className="size-4" aria-hidden />
+                Position hinzufügen
+              </Button>
+              {priceBookItems.length > 0 ? (
+                <Select value="" onValueChange={(v) => addFromPriceBook(String(v))}>
+                  <SelectTrigger className="h-8 w-56 text-sm">
+                    <SelectValue placeholder="Aus Preisstamm hinzufügen …" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {priceBookItems.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.name} ({chf.format(item.unitPrice)}
+                        {item.unit ? ` / ${item.unit}` : ""})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
+              {latestReport && !editor.quoteId ? (
+                <Button type="button" variant="ghost" size="sm" onClick={prefillFromReport}>
+                  Aus Rapport übernehmen
+                </Button>
+              ) : null}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-2">

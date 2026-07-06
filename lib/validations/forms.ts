@@ -188,6 +188,18 @@ export const quoteStatusSchema = z.object({
   status: z.enum(quoteStatuses),
 });
 
+export const priceBookItemSchema = z.object({
+  name: z.string().trim().min(1, "Bitte Bezeichnung angeben.").max(300),
+  unit: z.string().trim().max(20).optional().nullable(),
+  unitPrice: z.coerce.number().min(0, "Preis darf nicht negativ sein."),
+  isActive: z.boolean().optional(),
+  sortOrder: z.coerce.number().int().min(0).max(9999).optional(),
+});
+
+export const priceBookItemUpdateSchema = priceBookItemSchema.extend({
+  id: z.string().uuid(),
+});
+
 /** Offerte per E-Mail versenden (PDF im Anhang). */
 export const quoteSendSchema = z.object({
   quoteId: z.string().uuid(),

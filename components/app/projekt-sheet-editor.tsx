@@ -1315,6 +1315,11 @@ export function ProjektSheetEditor({
         projectId={projectId}
         canEdit={canEdit}
         defaultRecipientEmail={core.project.tenantEmail ?? core.project.managementEmail}
+        latestReport={
+          core.reports.length > 0
+            ? core.reports.reduce((a, b) => (a.createdAt >= b.createdAt ? a : b))
+            : null
+        }
       />
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}

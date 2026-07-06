@@ -15,6 +15,7 @@ import { useMutation, useInfiniteQuery, useQuery, useQueryClient, keepPreviousDa
 import type { ProjectCore } from "@/lib/db/repository";
 import type {
   OrderFormTemplate,
+  PriceBookItem,
   ProjectAttachment,
   ProjectStatus,
   Quote,
@@ -50,6 +51,12 @@ import {
   setQuoteStatusAction,
   updateQuoteAction,
 } from "@/app/(app)/projekte/quote-actions";
+import {
+  createPriceBookItemAction,
+  deletePriceBookItemAction,
+  listPriceBookItemsAction,
+  updatePriceBookItemAction,
+} from "@/app/(app)/projekte/price-book-actions";
 import { listTeamMembersAction } from "@/app/(app)/einstellungen/actions";
 import {
   createAbsenceAction,
@@ -101,6 +108,7 @@ import {
 } from "@/app/(app)/order-form-template-actions";
 import {
   afterAbsenceChange,
+  afterPriceBookChange,
   afterProjectCoreChange,
   afterProjectDeleted,
   afterQuoteChange,
@@ -554,6 +562,50 @@ export function useDeleteQuote() {
     onSuccess: (_res, { projectId }) => {
       afterQuoteChange(qc, projectId, { refetchType: "all" });
       notifyOtherTabs({ type: "quote.changed", projectId });
+    },
+  });
+}
+
+/** Preisstamm der Organisation (Offert-Editor + Verwaltung in Einstellungen). */
+export function usePriceBookItems(enabled = true) {
+  return useQuery<PriceBookItem[]>({
+    queryKey: queryKeys.priceBook(),
+    queryFn: () => listPriceBookItemsAction(),
+    enabled,
+    staleTime: 60_000,
+    refetchOnMount: false,
+  });
+}
+
+export function useCreatePriceBookItem() {
+  const qc = useQueryClient();
+  return useMutation<PriceBookItem, Error, Parameters<typeof createPriceBookItemAction>[0]>({
+    mutationFn: (input) => createPriceBookItemAction(input, getTabId()),
+    onSuccess: () => {
+      afterPriceBookChange(qc, { refetchType: "all" });
+      notifyOtherTabs({ type: "price_book.changed" });
+    },
+  });
+}
+
+export function useUpdatePriceBookItem() {
+  const qc = useQueryClient();
+  return useMutation<PriceBookItem, Error, Parameters<typeof updatePriceBookItemAction>[0]>({
+    mutationFn: (input) => updatePriceBookItemAction(input, getTabId()),
+    onSuccess: () => {
+      afterPriceBookChange(qc, { refetchType: "all" });
+      notifyOtherTabs({ type: "price_book.changed" });
+    },
+  });
+}
+
+export function useDeletePriceBookItem() {
+  const qc = useQueryClient();
+  return useMutation<{ ok: true }, Error, { itemId: string }>({
+    mutationFn: ({ itemId }) => deletePriceBookItemAction(itemId, getTabId()),
+    onSuccess: () => {
+      afterPriceBookChange(qc, { refetchType: "all" });
+      notifyOtherTabs({ type: "price_book.changed" });
     },
   });
 }

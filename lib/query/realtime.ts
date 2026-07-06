@@ -20,7 +20,8 @@ export type RealtimeEvent =
   | { type: "membership.changed" }
   | { type: "order_form_template.changed" }
   | { type: "time_entry.changed" }
-  | { type: "quote.changed"; projectId: string };
+  | { type: "quote.changed"; projectId: string }
+  | { type: "price_book.changed" };
 
 export type DispatchOpts = inv.InvalidateOpts;
 
@@ -62,6 +63,9 @@ export function dispatchRealtimeEvent(
       return;
     case "quote.changed":
       inv.afterQuoteChange(qc, event.projectId, opts);
+      return;
+    case "price_book.changed":
+      inv.afterPriceBookChange(qc, opts);
       return;
   }
 }

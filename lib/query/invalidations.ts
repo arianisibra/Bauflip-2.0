@@ -293,6 +293,10 @@ export function afterTimeEntryChange(qc: QueryClient, opts?: InvalidateOpts): vo
   inv(qc, queryKeys.timeEntries.all(), opts);
 }
 
+export function afterPriceBookChange(qc: QueryClient, opts?: InvalidateOpts): void {
+  inv(qc, queryKeys.priceBook(), opts);
+}
+
 export function afterQuoteChange(
   qc: QueryClient,
   projectId: string,

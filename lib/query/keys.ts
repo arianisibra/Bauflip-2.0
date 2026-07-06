@@ -56,6 +56,8 @@ export const queryKeys = {
   },
   /** SMTP konfiguriert? (statisch pro Deployment). */
   quoteMailConfig: () => ["quote-mail-config"] as const,
+  /** Preisstamm der Organisation (Offert-Editor + Verwaltung). */
+  priceBook: () => ["price-book"] as const,
   /** Zeiterfassung: eigene Einträge + Team-Übersicht (Büro/Admin). */
   timeEntries: {
     all: () => ["time-entries"] as const,

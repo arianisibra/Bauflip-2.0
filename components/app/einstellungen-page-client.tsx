@@ -1,6 +1,7 @@
 "use client";
 
 import { useOrganizationBrandingContext } from "@/components/app/organization-branding-provider";
+import { PriceBookManager } from "@/components/app/price-book-manager";
 import { ProfileSettingsForm } from "@/components/app/profile-settings-form";
 import { useEinstellungenPage, useOrganizationBranding } from "@/lib/query/hooks";
 
@@ -33,6 +34,8 @@ export function EinstellungenPageClient() {
         canEditCompanySettings={data.canEditCompanySettings}
         organizationBilling={organizationBilling}
       />
+
+      <PriceBookManager />
     </section>
   );
 }

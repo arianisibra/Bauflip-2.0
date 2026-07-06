@@ -406,6 +406,17 @@ export type Quote = {
   lineItems: QuoteLineItem[];
 };
 
+/** Eintrag in `price_book_items`: wiederverwendbare Offert-Position je Organisation. */
+export type PriceBookItem = {
+  id: string;
+  organizationId: string;
+  name: string;
+  unit: string | null;
+  unitPrice: number;
+  isActive: boolean;
+  sortOrder: number;
+};
+
 export type ProjectAttachment = {
   id: string;
   projectId: string;
