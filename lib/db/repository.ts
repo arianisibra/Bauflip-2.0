@@ -76,7 +76,7 @@ const ATTACHMENT_DB_COLUMNS =
   "id, project_id, file_path, file_name, mime_type, size_bytes, uploaded_by, notes, created_at";
 
 const TECH_REPORT_DB_COLUMNS =
-  "id, project_id, outcome, summary, measurements_json, work_description, time_spent_minutes, created_at, created_by, created_by_display_name";
+  "id, project_id, outcome, summary, measurements_json, work_description, time_spent_minutes, created_at, created_by, created_by_display_name, signature_data_url, signed_by_name";
 
 /** Ein `current_organization_id`-RPC pro Request — mehrere Repo-Aufrufe teilen sich das Ergebnis. */
 export const getCachedCurrentOrganizationId = cache(async function getCachedCurrentOrganizationId(): Promise<string | null> {
@@ -201,6 +201,14 @@ function mapTechnicianReportRow(row: Record<string, unknown>): TechnicianReport 
     createdAt: String(row.created_at ?? new Date().toISOString()),
     createdByProfileId: row.created_by != null ? String(row.created_by) : null,
     createdByDisplayName,
+    signatureDataUrl:
+      row.signature_data_url != null && String(row.signature_data_url).startsWith("data:image/")
+        ? String(row.signature_data_url)
+        : null,
+    signedByName:
+      row.signed_by_name != null && String(row.signed_by_name).trim()
+        ? String(row.signed_by_name).trim()
+        : null,
     orderForms: [],
   };
 }
@@ -2495,6 +2503,8 @@ export async function addTechnicianReport(
       time_spent_minutes: input.timeSpentMinutes,
       created_by: authorId,
       created_by_display_name: createdByDisplayName,
+      signature_data_url: input.signatureDataUrl,
+      signed_by_name: input.signedByName,
     });
   if (error) throw new Error(error.message);
 

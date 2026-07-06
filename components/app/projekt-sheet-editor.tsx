@@ -183,6 +183,20 @@ function ReportCard({
             </div>
           ) : null}
 
+          {r.signatureDataUrl ? (
+            <div className="mb-3">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Kundensignatur{r.signedByName ? ` — ${r.signedByName}` : ""}
+              </p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={r.signatureDataUrl}
+                alt={`Signatur${r.signedByName ? ` von ${r.signedByName}` : ""}`}
+                className="max-h-24 rounded-md border border-border/60 bg-white p-1"
+              />
+            </div>
+          ) : null}
+
           {r.orderForms.length > 0 && (
             <div className="mb-3 space-y-2">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">

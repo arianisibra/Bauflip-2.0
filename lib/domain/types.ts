@@ -338,6 +338,10 @@ export type TechnicianReport = {
   createdByProfileId: string | null;
   /** Snapshot von `profiles.display_name` bei Erfassung (für alle sichtbar). */
   createdByDisplayName: string | null;
+  /** Kundenunterschrift als data:image/png-URL (Canvas-Export) — optional. */
+  signatureDataUrl: string | null;
+  /** Name der unterzeichnenden Person. */
+  signedByName: string | null;
   orderForms: TechnicianReportOrderFormEntry[];
 };
 

@@ -36,6 +36,7 @@ import { TechMobileBackBar } from "@/components/app/tech-mobile-back-bar";
 import { MonteurOrderFormSections } from "@/components/app/monteur-order-form-sections";
 import { sanitizeTechReturnTo } from "@/lib/navigation/tech-field-navigation";
 import { TechnicianReportEditOverlay } from "@/components/app/technician-report-edit-overlay";
+import { SignaturePad, type SignaturePadHandle } from "@/components/app/signature-pad";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -483,6 +484,7 @@ export function MonteurAuftragClient({
   const [uploading, setUploading] = useState(false);
   const [editReport, setEditReport] = useState<TechnicianReport | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const signaturePadRef = useRef<SignaturePadHandle>(null);
   /** Verhindert doppeltes Absenden (Doppeltipp / Race vor React-Re-Render). */
   const rapportSubmitLockRef = useRef(false);
 
@@ -840,6 +842,8 @@ export function MonteurAuftragClient({
                     summary: String(fd.get("reportNotes") ?? "").trim(),
                     measurementsJson: "{}",
                     workDescription: String(fd.get("reportNotes") ?? "").trim(),
+                    signatureDataUrl: signaturePadRef.current?.toDataUrl() ?? null,
+                    signedByName: String(fd.get("signedByName") ?? "").trim() || null,
                     orderForms: isMontageContext
                       ? []
                       : orderFormsPayloadFromFormData(fd, orderFormTemplates, orderFormLines),
@@ -959,6 +963,14 @@ export function MonteurAuftragClient({
                   </div>
                 </section>
               ) : null}
+
+              <section className="space-y-2">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  KUNDENSIGNATUR (OPTIONAL)
+                </h2>
+                <SignaturePad handleRef={signaturePadRef} />
+                <Input name="signedByName" placeholder="Name der unterzeichnenden Person" />
+              </section>
 
               {/* Error */}
               {error ? (

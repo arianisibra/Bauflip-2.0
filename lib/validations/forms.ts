@@ -65,6 +65,14 @@ export const technicianReportSchema = z.object({
   summary: z.string().optional(),
   measurementsJson: z.string().optional(),
   workDescription: z.string().optional(),
+  /** Kundenunterschrift als PNG-Data-URL (Canvas), max. ~400 KB. */
+  signatureDataUrl: z
+    .string()
+    .startsWith("data:image/png;base64,", "Ungültige Signatur.")
+    .max(400_000, "Signatur zu gross.")
+    .optional()
+    .nullable(),
+  signedByName: z.string().trim().max(200).optional().nullable(),
   orderForms: z
     .array(
       z.object({

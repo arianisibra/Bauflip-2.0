@@ -72,6 +72,8 @@ export async function submitTechnicianReportAction(
         measurementsJson: (v.measurementsJson?.trim() || "{}") as string,
         workDescription: v.workDescription?.trim() ?? "",
         timeSpentMinutes: null,
+        signatureDataUrl: v.signatureDataUrl ?? null,
+        signedByName: v.signedByName?.trim() || null,
       },
       {
         createdByProfileId: session.userId,
