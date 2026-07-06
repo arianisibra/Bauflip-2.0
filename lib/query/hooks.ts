@@ -57,6 +57,7 @@ import {
   listPriceBookItemsAction,
   updatePriceBookItemAction,
 } from "@/app/(app)/projekte/price-book-actions";
+import { sendAppointmentConfirmationAction } from "@/app/(app)/projekte/appointment-mail-actions";
 import { listTeamMembersAction } from "@/app/(app)/einstellungen/actions";
 import {
   createAbsenceAction,
@@ -526,6 +527,17 @@ export function useSetQuoteStatus() {
       afterQuoteChange(qc, quote.projectId, { refetchType: "all" });
       notifyOtherTabs({ type: "quote.changed", projectId: quote.projectId });
     },
+  });
+}
+
+/** Terminbestätigung per Mail — kein Cache-Effekt (ändert keine Daten). */
+export function useSendAppointmentConfirmation() {
+  return useMutation<
+    { ok: true },
+    Error,
+    { appointmentId: string; projectId: string; recipientEmail: string }
+  >({
+    mutationFn: (input) => sendAppointmentConfirmationAction(input),
   });
 }
 

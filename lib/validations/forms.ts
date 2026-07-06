@@ -208,6 +208,13 @@ export const priceBookItemUpdateSchema = priceBookItemSchema.extend({
   id: z.string().uuid(),
 });
 
+/** Terminbestätigung per E-Mail an Mieter/Verwaltung. */
+export const appointmentConfirmationSendSchema = z.object({
+  appointmentId: z.string().uuid(),
+  projectId: z.string().uuid(),
+  recipientEmail: z.string().trim().email("Ungültige E-Mail-Adresse."),
+});
+
 /** Offerte per E-Mail versenden (PDF im Anhang). */
 export const quoteSendSchema = z.object({
   quoteId: z.string().uuid(),

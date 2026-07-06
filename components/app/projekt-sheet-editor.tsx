@@ -21,7 +21,9 @@ import {
   useDeleteReport,
   useOrderFormTemplates,
   useProjectCore,
+  useQuoteMailConfig,
   useReassignAppointmentTechnician,
+  useSendAppointmentConfirmation,
   useSetGarantiefall,
   useUpdateProjectStatus,
   useUpdateStammdaten,
@@ -43,6 +45,7 @@ import {
   Download,
   FileText,
   Loader2,
+  Mail,
   Pencil,
   Phone,
   Trash2,
@@ -567,6 +570,7 @@ function AppointmentRow({
   availabilityBundle,
   reassignAppointment,
   deleteAppointment,
+  confirmationRecipientEmail,
 }: {
   appointment: Appointment;
   appointmentIndex: number;
@@ -577,7 +581,10 @@ function AppointmentRow({
   availabilityBundle: AvailabilityBundle | undefined;
   reassignAppointment: ReturnType<typeof useReassignAppointmentTechnician>;
   deleteAppointment: ReturnType<typeof useDeleteAppointment>;
+  /** Mieter-/Verwaltungs-Mail; null = kein Bestätigungs-Button (keine Adresse oder kein SMTP). */
+  confirmationRecipientEmail: string | null;
 }) {
+  const sendConfirmation = useSendAppointmentConfirmation();
   const assignedName =
     a.assignedTechnicianDisplayName?.trim() ||
     (a.assignedTechnicianId
@@ -765,6 +772,35 @@ function AppointmentRow({
           {a.planningNotes?.trim() ? (
             <p className="text-[11px] text-muted-foreground italic">{a.planningNotes}</p>
           ) : null}
+          {confirmationRecipientEmail ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 px-2 text-xs"
+              disabled={sendConfirmation.isPending}
+              onClick={async () => {
+                if (!window.confirm(`Terminbestätigung an ${confirmationRecipientEmail} senden?`)) return;
+                try {
+                  await sendConfirmation.mutateAsync({
+                    appointmentId: a.id,
+                    projectId,
+                    recipientEmail: confirmationRecipientEmail,
+                  });
+                  toast.success("Terminbestätigung versendet");
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "Versand fehlgeschlagen.");
+                }
+              }}
+            >
+              {sendConfirmation.isPending ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden />
+              ) : (
+                <Mail className="size-3.5" aria-hidden />
+              )}
+              Bestätigung senden
+            </Button>
+          ) : null}
         </div>
         <Button
           type="button"
@@ -816,6 +852,8 @@ export function ProjektSheetEditor({
   const deleteReport = useDeleteReport();
   const updateReport = useUpdateTechnicianReport();
   const uploadAttachment = useUploadAttachment();
+  const mailConfigQuery = useQuoteMailConfig(open && canEdit);
+  const mailConfigured = mailConfigQuery.data?.mailConfigured ?? false;
   const [editReport, setEditReport] = useState<TechnicianReport | null>(null);
   const { data: orderFormTemplates = [] } = useOrderFormTemplates(undefined, editReport != null);
   const [error, setError] = useState<string | null>(null);
@@ -1103,6 +1141,11 @@ export function ProjektSheetEditor({
                 availabilityBundle={reassignAvailabilityBundle}
                 reassignAppointment={reassignAppointment}
                 deleteAppointment={deleteAppointment}
+                confirmationRecipientEmail={
+                  canEdit && mailConfigured
+                    ? (p.tenantEmail ?? p.managementEmail)
+                    : null
+                }
               />
             ))}
           </ul>
