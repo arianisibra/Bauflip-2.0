@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { TriangleAlert } from "lucide-react";
+import { Download, TriangleAlert } from "lucide-react";
+import { toast } from "sonner";
+import { fetchAbrechnungExportAction } from "@/app/(app)/projekte/export-actions";
+import { downloadCsv } from "@/lib/csv/download";
 import { todayKeySwiss } from "@/lib/date/swiss";
 import { sanitizeAppReturnTo } from "@/lib/navigation/app-return-to";
 import {
@@ -60,6 +63,9 @@ export function ProjektePageClient({
           </div>
         </div>
       ) : null}
+      <div className="flex justify-end">
+        <AbrechnungExportButton />
+      </div>
       <ProjekteListClient
         canEditProjectSheet
         initialOpenProjectId={openProjectId}
@@ -67,5 +73,50 @@ export function ProjektePageClient({
         initialReturnTo={returnTo}
       />
     </section>
+  );
+}
+
+/** Exportiert alle Projekte im Status «abrechnen» als CSV (inkl. Rapportzeit + Offerte). */
+function AbrechnungExportButton() {
+  const [exporting, setExporting] = useState(false);
+
+  return (
+    <button
+      type="button"
+      disabled={exporting}
+      onClick={async () => {
+        setExporting(true);
+        try {
+          const rows = await fetchAbrechnungExportAction();
+          if (rows.length === 0) {
+            toast.info("Keine Projekte im Status «Abrechnen».");
+            return;
+          }
+          downloadCsv(`abrechnungs-export-${todayKeySwiss()}`, rows.map((r) => ({
+            "Projekt-Nr.": r.referenceCode ?? "",
+            Titel: r.title,
+            Mieter: r.tenantName ?? "",
+            Telefon: r.tenantPhone ?? "",
+            "E-Mail": r.tenantEmail ?? "",
+            Adresse: r.address,
+            "Erstellt am": r.createdAt
+              ? new Date(r.createdAt).toLocaleDateString("de-CH", { timeZone: "Europe/Zurich" })
+              : "",
+            "Rapportzeit (Std.)": Math.round((r.reportMinutes / 60) * 100) / 100,
+            Offerte: r.approvedQuoteNumber ?? "",
+            "Offerte Total (CHF)": r.approvedQuoteGross ?? "",
+          })));
+          toast.success(`${rows.length} Projekte exportiert`);
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : "Export fehlgeschlagen.");
+        } finally {
+          setExporting(false);
+        }
+      }}
+      className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-50"
+    >
+      <Download className="size-3.5" aria-hidden />
+      {exporting ? "Exportiert …" : "Abrechnungs-Export (CSV)"}
+    </button>
   );
 }

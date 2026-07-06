@@ -1,10 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Download } from "lucide-react";
 import { TimeEntriesManager } from "@/components/app/time-entries-manager";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { downloadCsv } from "@/lib/csv/download";
 import { useOrgTimeEntries } from "@/lib/query/hooks";
 import { todayKeySwiss } from "@/lib/date/swiss";
 import type { TimeEntry } from "@/lib/domain/types";
@@ -114,6 +116,30 @@ function TeamOverview() {
           className="h-8 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-muted/40"
         >
           Dieser Monat
+        </button>
+        <button
+          type="button"
+          disabled={entries.length === 0}
+          onClick={() =>
+            downloadCsv(`lohnexport-${start}-bis-${end}`, [...entries]
+              .sort(
+                (a, b) =>
+                  (a.userDisplayName ?? "").localeCompare(b.userDisplayName ?? "", "de-CH") ||
+                  a.entryDate.localeCompare(b.entryDate),
+              )
+              .map((e) => ({
+                Mitarbeiter: e.userDisplayName ?? "Unbekannt",
+                Datum: e.entryDate,
+                Von: e.startsAt ?? "",
+                Bis: e.endsAt ?? "",
+                Stunden: e.hours,
+                Notiz: e.note ?? "",
+              })))
+          }
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-50"
+        >
+          <Download className="size-3.5" aria-hidden />
+          CSV exportieren
         </button>
       </div>
 
