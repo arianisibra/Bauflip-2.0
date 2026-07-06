@@ -54,6 +54,8 @@ export const queryKeys = {
     all: () => ["quotes"] as const,
     byProject: (projectId: string) => ["quotes", projectId] as const,
   },
+  /** SMTP konfiguriert? (statisch pro Deployment). */
+  quoteMailConfig: () => ["quote-mail-config"] as const,
   /** Zeiterfassung: eigene Einträge + Team-Übersicht (Büro/Admin). */
   timeEntries: {
     all: () => ["time-entries"] as const,

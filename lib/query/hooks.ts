@@ -44,7 +44,9 @@ import {
 import {
   createQuoteAction,
   deleteQuoteAction,
+  getQuoteMailConfigAction,
   listQuotesAction,
+  sendQuoteAction,
   setQuoteStatusAction,
   updateQuoteAction,
 } from "@/app/(app)/projekte/quote-actions";
@@ -512,6 +514,32 @@ export function useSetQuoteStatus() {
   const qc = useQueryClient();
   return useMutation<Quote, Error, { quoteId: string; projectId: string; status: QuoteStatus }>({
     mutationFn: (input) => setQuoteStatusAction(input, getTabId()),
+    onSuccess: (quote) => {
+      afterQuoteChange(qc, quote.projectId, { refetchType: "all" });
+      notifyOtherTabs({ type: "quote.changed", projectId: quote.projectId });
+    },
+  });
+}
+
+/** Ist SMTP konfiguriert? Steuert die Sichtbarkeit des Senden-Formulars. */
+export function useQuoteMailConfig(enabled = true) {
+  return useQuery<{ mailConfigured: boolean }>({
+    queryKey: queryKeys.quoteMailConfig(),
+    queryFn: () => getQuoteMailConfigAction(),
+    enabled,
+    staleTime: Infinity,
+    refetchOnMount: false,
+  });
+}
+
+export function useSendQuote() {
+  const qc = useQueryClient();
+  return useMutation<
+    Quote,
+    Error,
+    { quoteId: string; projectId: string; recipientEmail: string; message?: string | null }
+  >({
+    mutationFn: (input) => sendQuoteAction(input, getTabId()),
     onSuccess: (quote) => {
       afterQuoteChange(qc, quote.projectId, { refetchType: "all" });
       notifyOtherTabs({ type: "quote.changed", projectId: quote.projectId });

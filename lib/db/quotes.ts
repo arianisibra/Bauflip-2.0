@@ -329,6 +329,7 @@ export async function setQuoteStatus(
   quoteId: string,
   projectId: string,
   status: QuoteStatus,
+  opts?: { sentToEmail?: string },
 ): Promise<Quote> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) throw new Error("Supabase nicht verfügbar.");
@@ -336,6 +337,9 @@ export async function setQuoteStatus(
   const patch: Record<string, unknown> = { status };
   if (status === "sent") {
     patch.sent_at = new Date().toISOString();
+    if (opts?.sentToEmail) {
+      patch.sent_to_email = opts.sentToEmail;
+    }
   }
 
   const { data, error } = await supabase

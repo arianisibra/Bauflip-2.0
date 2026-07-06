@@ -181,9 +181,18 @@ export const quoteUpdateSchema = quoteCreateSchema.extend({
   quoteId: z.string().uuid(),
 });
 
-/** Offerten-Status manuell setzen (Versand-Automation folgt in Phase 3). */
+/** Offerten-Status manuell setzen (Annahme/Ablehnung; Versand läuft über quoteSendSchema). */
 export const quoteStatusSchema = z.object({
   quoteId: z.string().uuid(),
   projectId: z.string().uuid(),
   status: z.enum(quoteStatuses),
+});
+
+/** Offerte per E-Mail versenden (PDF im Anhang). */
+export const quoteSendSchema = z.object({
+  quoteId: z.string().uuid(),
+  projectId: z.string().uuid(),
+  recipientEmail: z.string().trim().email("Ungültige E-Mail-Adresse."),
+  /** Optionaler persönlicher Text über dem Standard-Mailtext. */
+  message: z.string().trim().max(2000).optional().nullable(),
 });

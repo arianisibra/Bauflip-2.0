@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { FileText, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { FileText, Loader2, Pencil, Plus, Send, Trash2 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button-variants";
 import type { Quote, QuoteStatus } from "@/lib/domain/types";
 import { quoteStatusBadgeClassNames, quoteStatusLabels } from "@/lib/domain/types";
@@ -12,6 +12,8 @@ import {
   useCreateQuote,
   useDeleteQuote,
   useProjectQuotes,
+  useQuoteMailConfig,
+  useSendQuote,
   useSetQuoteStatus,
   useUpdateQuote,
 } from "@/lib/query/hooks";
@@ -94,19 +96,48 @@ const QUOTE_STATUS_ACTION_LABELS: Record<QuoteStatus, string> = {
   rejected: "Abgelehnt",
 };
 
+type SendFormState = {
+  quoteId: string;
+  recipientEmail: string;
+  message: string;
+};
+
 export function ProjektQuotesSection({
   projectId,
   canEdit,
+  defaultRecipientEmail,
 }: {
   projectId: string;
   canEdit: boolean;
+  /** Vorbefüllung «Senden an» — Mieter- oder Verwaltungs-Mail des Projekts. */
+  defaultRecipientEmail?: string | null;
 }) {
   const quotesQuery = useProjectQuotes(projectId);
   const createQuote = useCreateQuote();
   const updateQuote = useUpdateQuote();
   const setStatus = useSetQuoteStatus();
   const deleteQuote = useDeleteQuote();
+  const sendQuote = useSendQuote();
+  const mailConfig = useQuoteMailConfig(canEdit);
+  const mailConfigured = mailConfig.data?.mailConfigured ?? false;
   const [editor, setEditor] = useState<EditorState | null>(null);
+  const [sendForm, setSendForm] = useState<SendFormState | null>(null);
+
+  const submitSend = async () => {
+    if (!sendForm) return;
+    try {
+      await sendQuote.mutateAsync({
+        quoteId: sendForm.quoteId,
+        projectId,
+        recipientEmail: sendForm.recipientEmail.trim(),
+        message: sendForm.message.trim() || null,
+      });
+      toast.success("Offerte versendet");
+      setSendForm(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Versand fehlgeschlagen.");
+    }
+  };
 
   const quotes = quotesQuery.data ?? [];
   const pending = createQuote.isPending || updateQuote.isPending;
@@ -203,6 +234,28 @@ export function ProjektQuotesSection({
                 <FileText className="size-4" aria-hidden />
                 PDF
               </a>
+              {canEdit && mailConfigured && (quote.status === "draft" || quote.status === "sent") ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={sendQuote.isPending}
+                  onClick={() =>
+                    setSendForm((prev) =>
+                      prev?.quoteId === quote.id
+                        ? null
+                        : {
+                            quoteId: quote.id,
+                            recipientEmail: quote.sentToEmail ?? defaultRecipientEmail ?? "",
+                            message: "",
+                          },
+                    )
+                  }
+                >
+                  <Send className="size-4" aria-hidden />
+                  {quote.status === "sent" ? "Erneut senden" : "Senden"}
+                </Button>
+              ) : null}
               {canEdit ? (
                 <>
                 {NEXT_QUOTE_STATUSES[quote.status].map((next) => (
@@ -258,6 +311,40 @@ export function ProjektQuotesSection({
                 </>
               ) : null}
             </div>
+            {sendForm?.quoteId === quote.id ? (
+              <div className="mt-2 space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+                <div>
+                  <Label className="text-[11px]">Senden an</Label>
+                  <Input
+                    type="email"
+                    value={sendForm.recipientEmail}
+                    placeholder="kunde@example.com"
+                    onChange={(e) =>
+                      setSendForm((prev) => (prev ? { ...prev, recipientEmail: e.target.value } : prev))
+                    }
+                  />
+                </div>
+                <div>
+                  <Label className="text-[11px]">Persönliche Nachricht (optional)</Label>
+                  <Textarea
+                    rows={2}
+                    value={sendForm.message}
+                    onChange={(e) =>
+                      setSendForm((prev) => (prev ? { ...prev, message: e.target.value } : prev))
+                    }
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" size="sm" disabled={sendQuote.isPending} onClick={() => setSendForm(null)}>
+                    Abbrechen
+                  </Button>
+                  <Button type="button" size="sm" disabled={sendQuote.isPending || !sendForm.recipientEmail.trim()} onClick={submitSend}>
+                    {sendQuote.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Send className="size-4" aria-hidden />}
+                    Mit PDF versenden
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </div>
         ))}
       </div>

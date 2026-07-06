@@ -1311,7 +1311,11 @@ export function ProjektSheetEditor({
         </section>
       )}
 
-      <ProjektQuotesSection projectId={projectId} canEdit={canEdit} />
+      <ProjektQuotesSection
+        projectId={projectId}
+        canEdit={canEdit}
+        defaultRecipientEmail={core.project.tenantEmail ?? core.project.managementEmail}
+      />
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       {editReport ? (
