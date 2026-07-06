@@ -49,6 +49,11 @@ export const queryKeys = {
   absences: {
     all: () => ["technician-absences"] as const,
   },
+  /** Offerten je Projekt (Büro-Sheet). */
+  quotes: {
+    all: () => ["quotes"] as const,
+    byProject: (projectId: string) => ["quotes", projectId] as const,
+  },
   /** Zeiterfassung: eigene Einträge + Team-Übersicht (Büro/Admin). */
   timeEntries: {
     all: () => ["time-entries"] as const,

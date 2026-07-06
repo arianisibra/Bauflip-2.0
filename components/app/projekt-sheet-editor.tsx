@@ -49,6 +49,7 @@ import {
 } from "lucide-react";
 import { BauflipLoading, BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
 import { TechnicianReportEditOverlay } from "@/components/app/technician-report-edit-overlay";
+import { ProjektQuotesSection } from "@/components/app/projekt-quotes-section";
 import { AppointmentBookingForm } from "@/components/app/appointment-booking-form";
 import type { AvailabilityBundle } from "@/app/(app)/kalender/availability-actions";
 import { getFilledOrderFormFields } from "@/lib/order-forms/filled-fields";
@@ -1309,6 +1310,8 @@ export function ProjektSheetEditor({
           </div>
         </section>
       )}
+
+      <ProjektQuotesSection projectId={projectId} canEdit={canEdit} />
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       {editReport ? (

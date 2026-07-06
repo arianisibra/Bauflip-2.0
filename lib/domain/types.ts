@@ -341,6 +341,71 @@ export type TechnicianReport = {
   orderForms: TechnicianReportOrderFormEntry[];
 };
 
+export const quoteStatuses = ["draft", "sent", "approved", "rejected"] as const;
+export type QuoteStatus = (typeof quoteStatuses)[number];
+
+export const quoteStatusLabels: Record<QuoteStatus, string> = {
+  draft: "ENTWURF",
+  sent: "GESENDET",
+  approved: "ANGENOMMEN",
+  rejected: "ABGELEHNT",
+};
+
+export const quoteStatusBadgeClassNames: Record<QuoteStatus, string> = {
+  draft:
+    "border-zinc-500/45 bg-zinc-500/35 text-zinc-950 dark:border-zinc-400/50 dark:bg-zinc-500/40 dark:text-zinc-50",
+  sent:
+    "border-violet-500/55 bg-violet-500/35 text-violet-950 dark:border-violet-400/55 dark:bg-violet-500/45 dark:text-violet-50",
+  approved:
+    "border-green-600/60 bg-green-600/40 text-green-950 dark:border-green-400/60 dark:bg-green-600/50 dark:text-green-50",
+  rejected:
+    "border-rose-600/60 bg-rose-600/45 text-rose-950 dark:border-rose-400/60 dark:bg-rose-600/55 dark:text-rose-50",
+};
+
+/**
+ * Kopplung Offerten-Status → Projekt-Status.
+ * `null` = Projekt-Status nicht anfassen (draft/rejected: Büro entscheidet manuell).
+ */
+export function projectStatusAfterQuoteStatusChange(quoteStatus: QuoteStatus): ProjectStatus | null {
+  if (quoteStatus === "sent") return "offerte_gesendet";
+  if (quoteStatus === "approved") return "offerte_genehmigt";
+  return null;
+}
+
+export type QuoteLineItem = {
+  id: string;
+  quoteId: string;
+  position: number;
+  description: string;
+  quantity: number;
+  unit: string | null;
+  unitPrice: number;
+  lineTotal: number;
+};
+
+export type Quote = {
+  id: string;
+  organizationId: string;
+  projectId: string;
+  /** Per DB-Trigger vergeben (OF-Jahr-Sequenz je Organisation). */
+  quoteNumber: string | null;
+  status: QuoteStatus;
+  validUntil: string | null;
+  introText: string | null;
+  outroText: string | null;
+  vatRate: number;
+  totalNet: number;
+  totalGross: number;
+  sentAt: string | null;
+  sentToEmail: string | null;
+  /** Snapshot-Muster wie technician_reports. */
+  createdByProfileId: string | null;
+  createdByDisplayName: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lineItems: QuoteLineItem[];
+};
+
 export type ProjectAttachment = {
   id: string;
   projectId: string;

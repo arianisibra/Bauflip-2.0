@@ -17,6 +17,8 @@ import type {
   OrderFormTemplate,
   ProjectAttachment,
   ProjectStatus,
+  Quote,
+  QuoteStatus,
   TechnicianAbsence,
   TimeEntry,
   UserProfile,
@@ -39,6 +41,13 @@ import {
   updateProjectStatusAction,
   updateTechnicianReportAction,
 } from "@/app/(app)/projekte/actions";
+import {
+  createQuoteAction,
+  deleteQuoteAction,
+  listQuotesAction,
+  setQuoteStatusAction,
+  updateQuoteAction,
+} from "@/app/(app)/projekte/quote-actions";
 import { listTeamMembersAction } from "@/app/(app)/einstellungen/actions";
 import {
   createAbsenceAction,
@@ -92,6 +101,7 @@ import {
   afterAbsenceChange,
   afterProjectCoreChange,
   afterProjectDeleted,
+  afterQuoteChange,
   afterTimeEntryChange,
   patchAttachmentAdded,
   patchAttachmentNotesUpdated,
@@ -461,6 +471,61 @@ export function useDeleteTimeEntry() {
     onSuccess: () => {
       afterTimeEntryChange(qc, { refetchType: "all" });
       notifyOtherTabs({ type: "time_entry.changed" });
+    },
+  });
+}
+
+/** Offerten eines Projekts (Büro-Sheet). */
+export function useProjectQuotes(projectId: string | null, enabled = true) {
+  return useQuery<Quote[]>({
+    queryKey: queryKeys.quotes.byProject(projectId ?? "none"),
+    queryFn: () => listQuotesAction(projectId as string),
+    enabled: enabled && Boolean(projectId),
+    staleTime: 30_000,
+    refetchOnMount: false,
+  });
+}
+
+export function useCreateQuote() {
+  const qc = useQueryClient();
+  return useMutation<Quote, Error, Parameters<typeof createQuoteAction>[0]>({
+    mutationFn: (input) => createQuoteAction(input, getTabId()),
+    onSuccess: (quote) => {
+      afterQuoteChange(qc, quote.projectId, { refetchType: "all" });
+      notifyOtherTabs({ type: "quote.changed", projectId: quote.projectId });
+    },
+  });
+}
+
+export function useUpdateQuote() {
+  const qc = useQueryClient();
+  return useMutation<Quote, Error, Parameters<typeof updateQuoteAction>[0]>({
+    mutationFn: (input) => updateQuoteAction(input, getTabId()),
+    onSuccess: (quote) => {
+      afterQuoteChange(qc, quote.projectId, { refetchType: "all" });
+      notifyOtherTabs({ type: "quote.changed", projectId: quote.projectId });
+    },
+  });
+}
+
+export function useSetQuoteStatus() {
+  const qc = useQueryClient();
+  return useMutation<Quote, Error, { quoteId: string; projectId: string; status: QuoteStatus }>({
+    mutationFn: (input) => setQuoteStatusAction(input, getTabId()),
+    onSuccess: (quote) => {
+      afterQuoteChange(qc, quote.projectId, { refetchType: "all" });
+      notifyOtherTabs({ type: "quote.changed", projectId: quote.projectId });
+    },
+  });
+}
+
+export function useDeleteQuote() {
+  const qc = useQueryClient();
+  return useMutation<{ ok: true }, Error, { quoteId: string; projectId: string }>({
+    mutationFn: ({ quoteId, projectId }) => deleteQuoteAction(quoteId, projectId, getTabId()),
+    onSuccess: (_res, { projectId }) => {
+      afterQuoteChange(qc, projectId, { refetchType: "all" });
+      notifyOtherTabs({ type: "quote.changed", projectId });
     },
   });
 }

@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   projectStatuses,
   projectTypes,
+  quoteStatuses,
   RAPPORT_ALL_NEXT_STEPS,
   technicianAbsenceKinds,
 } from "@/lib/domain/types";
@@ -154,4 +155,35 @@ export const projectStammdatenUpdateSchema = z.object({
 export const garantiefallSchema = z.object({
   projectId: z.string().uuid(),
   note: z.string().trim().min(1, "Bitte Grund angeben.").max(2000),
+});
+
+export const quoteLineItemSchema = z.object({
+  description: z.string().trim().min(1, "Bitte Beschreibung angeben."),
+  quantity: z.coerce.number().gt(0, "Menge muss grösser 0 sein."),
+  unit: z.string().trim().max(20).optional().nullable(),
+  unitPrice: z.coerce.number().min(0, "Preis darf nicht negativ sein."),
+});
+
+export const quoteCreateSchema = z.object({
+  projectId: z.string().uuid(),
+  validUntil: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Ungültiges Datum.")
+    .optional()
+    .nullable(),
+  introText: z.string().max(4000).optional().nullable(),
+  outroText: z.string().max(4000).optional().nullable(),
+  vatRate: z.coerce.number().min(0).max(100),
+  lineItems: z.array(quoteLineItemSchema).min(1, "Mindestens eine Position erfassen."),
+});
+
+export const quoteUpdateSchema = quoteCreateSchema.extend({
+  quoteId: z.string().uuid(),
+});
+
+/** Offerten-Status manuell setzen (Versand-Automation folgt in Phase 3). */
+export const quoteStatusSchema = z.object({
+  quoteId: z.string().uuid(),
+  projectId: z.string().uuid(),
+  status: z.enum(quoteStatuses),
 });

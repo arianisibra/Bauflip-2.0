@@ -292,3 +292,14 @@ export function afterOrderFormTemplateChange(qc: QueryClient, opts?: InvalidateO
 export function afterTimeEntryChange(qc: QueryClient, opts?: InvalidateOpts): void {
   inv(qc, queryKeys.timeEntries.all(), opts);
 }
+
+export function afterQuoteChange(
+  qc: QueryClient,
+  projectId: string,
+  opts?: InvalidateOpts,
+): void {
+  inv(qc, queryKeys.quotes.byProject(projectId), opts);
+  // Status-Kopplung (sent/approved) ändert den Projekt-Status → Core + Liste.
+  invalidateProjectCoreSplit(qc, projectId, opts);
+  invalidateProjectListCaches(qc, opts);
+}
