@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { FileText, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button-variants";
 import type { Quote, QuoteStatus } from "@/lib/domain/types";
 import { quoteStatusBadgeClassNames, quoteStatusLabels } from "@/lib/domain/types";
 import { computeQuoteTotals } from "@/lib/quotes/totals";
@@ -192,8 +193,18 @@ export function ProjektQuotesSection({
                 : ""}
               {quote.createdByDisplayName ? ` · erstellt von ${quote.createdByDisplayName}` : ""}
             </p>
-            {canEdit ? (
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <a
+                href={`/api/quotes/${quote.id}/pdf`}
+                target="_blank"
+                rel="noreferrer"
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+              >
+                <FileText className="size-4" aria-hidden />
+                PDF
+              </a>
+              {canEdit ? (
+                <>
                 {NEXT_QUOTE_STATUSES[quote.status].map((next) => (
                   <Button
                     key={next}
@@ -244,8 +255,9 @@ export function ProjektQuotesSection({
                     Löschen
                   </Button>
                 ) : null}
-              </div>
-            ) : null}
+                </>
+              ) : null}
+            </div>
           </div>
         ))}
       </div>

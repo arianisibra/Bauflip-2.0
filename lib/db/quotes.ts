@@ -103,6 +103,69 @@ export const listQuotesForProject = cache(async function listQuotesForProject(
   return quotes.map((q) => ({ ...q, lineItems: byQuoteId.get(q.id) ?? [] }));
 });
 
+/** Einzelne Offerte inkl. Positionen (PDF, Detail). */
+export const getQuoteWithItems = cache(async function getQuoteWithItems(
+  quoteId: string,
+): Promise<Quote | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from("quotes")
+    .select(QUOTE_DB_COLUMNS)
+    .eq("id", quoteId)
+    .maybeSingle();
+  if (error || !data) return null;
+
+  const { data: items } = await supabase
+    .from("quote_line_items")
+    .select(QUOTE_LINE_ITEM_DB_COLUMNS)
+    .eq("quote_id", quoteId)
+    .order("position", { ascending: true });
+
+  return {
+    ...mapQuoteRow(data as Record<string, unknown>),
+    lineItems: ((items ?? []) as Record<string, unknown>[]).map(mapQuoteLineItemRow),
+  };
+});
+
+/** Schlanke Projekt-Kopfdaten für das Offerten-PDF (Adressblock). */
+export type QuotePdfProjectHead = {
+  title: string;
+  referenceCode: string | null;
+  tenantName: string | null;
+  managementName: string | null;
+  serviceStreet: string | null;
+  servicePostalCode: string | null;
+  serviceCity: string | null;
+};
+
+export const getQuotePdfProjectHead = cache(async function getQuotePdfProjectHead(
+  projectId: string,
+): Promise<QuotePdfProjectHead | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from("projects")
+    .select("title, reference_code, tenant_name, management_name, service_street, service_postal_code, service_city")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (error || !data) return null;
+
+  const row = data as Record<string, unknown>;
+  const s = (v: unknown) => (v != null && String(v).trim() ? String(v).trim() : null);
+  return {
+    title: String(row.title ?? ""),
+    referenceCode: s(row.reference_code),
+    tenantName: s(row.tenant_name),
+    managementName: s(row.management_name),
+    serviceStreet: s(row.service_street),
+    servicePostalCode: s(row.service_postal_code),
+    serviceCity: s(row.service_city),
+  };
+});
+
 export type QuoteCreateInput = {
   projectId: string;
   validUntil: string | null;
