@@ -41,6 +41,7 @@ for each row execute function public.touch_updated_at();
 alter table public.time_entries enable row level security;
 
 -- Lesen: eigene Einträge ODER Office/Admin der eigenen Organisation.
+drop policy if exists "time_entries_select_own_or_office_admin" on public.time_entries;
 create policy "time_entries_select_own_or_office_admin"
 on public.time_entries
 for select
@@ -58,6 +59,7 @@ using (
 );
 
 -- Erfassen: eigene Einträge ODER Office/Admin (z.B. Nacherfassung für Mitarbeiter).
+drop policy if exists "time_entries_insert_own_or_office_admin" on public.time_entries;
 create policy "time_entries_insert_own_or_office_admin"
 on public.time_entries
 for insert
@@ -83,6 +85,7 @@ with check (
 );
 
 -- Bearbeiten: eigene Einträge ODER Office/Admin der eigenen Organisation.
+drop policy if exists "time_entries_update_own_or_office_admin" on public.time_entries;
 create policy "time_entries_update_own_or_office_admin"
 on public.time_entries
 for update
@@ -112,6 +115,7 @@ with check (
 );
 
 -- Löschen: eigene Einträge ODER Office/Admin der eigenen Organisation.
+drop policy if exists "time_entries_delete_own_or_office_admin" on public.time_entries;
 create policy "time_entries_delete_own_or_office_admin"
 on public.time_entries
 for delete
