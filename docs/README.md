@@ -6,6 +6,7 @@
 |-----|--------|
 | [DEVELOPER_OVERVIEW.md](./DEVELOPER_OVERVIEW.md) | Produkt, Stack, Rollen, Code-Orientierung (Haupt-Einstieg für Devs) |
 | [CLIENT_WORKFLOW_AND_ROUTES.md](./CLIENT_WORKFLOW_AND_ROUTES.md) | Workflows und Routen aus Sicht Office/Tech |
+| [ROADMAP.md](./ROADMAP.md) | Ausbau-Analyse: Optionen, Priorisierung, Detailplan Offerten |
 
 ## Performance & Hosting
 
