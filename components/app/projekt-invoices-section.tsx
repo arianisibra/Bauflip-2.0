@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { FileText, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button-variants";
 import type { Invoice, InvoiceStatus, PriceBookItem, Quote } from "@/lib/domain/types";
 import {
   allowedInvoiceStatusTransitions,
@@ -270,8 +271,16 @@ export function ProjektInvoicesSection({
                 ? ` · Ref. ${formatPaymentReference(invoice.referenceType, invoice.paymentReference)}`
                 : ""}
             </p>
-            {/* PDF-Download folgt in R3 (Route /api/invoices/[id]/pdf). */}
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <a
+                href={`/api/invoices/${invoice.id}/pdf`}
+                target="_blank"
+                rel="noreferrer"
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+              >
+                <FileText className="size-4" aria-hidden />
+                PDF
+              </a>
               {canEdit ? (
                 <>
                   {allowedInvoiceStatusTransitions[invoice.status].map((next) => (
