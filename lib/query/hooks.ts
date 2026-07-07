@@ -65,7 +65,14 @@ import {
   getBillingSettingsAction,
   updateBillingSettingsAction,
 } from "@/app/(app)/einstellungen/billing-actions";
-import type { OrganizationBillingSettings } from "@/lib/domain/types";
+import {
+  createInvoiceAction,
+  deleteInvoiceAction,
+  listInvoicesAction,
+  setInvoiceStatusAction,
+  updateInvoiceAction,
+} from "@/app/(app)/projekte/invoice-actions";
+import type { Invoice, InvoiceStatus, OrganizationBillingSettings } from "@/lib/domain/types";
 import { listTeamMembersAction } from "@/app/(app)/einstellungen/actions";
 import {
   createAbsenceAction,
@@ -117,6 +124,7 @@ import {
 } from "@/app/(app)/order-form-template-actions";
 import {
   afterAbsenceChange,
+  afterInvoiceChange,
   afterPriceBookChange,
   afterProjectCoreChange,
   afterProjectDeleted,
@@ -556,6 +564,61 @@ export function useDashboardData() {
     queryFn: () => fetchDashboardDataAction(),
     staleTime: 60_000,
     refetchOnMount: false,
+  });
+}
+
+/** Rechnungen eines Projekts (Büro-Sheet). */
+export function useProjectInvoices(projectId: string | null, enabled = true) {
+  return useQuery<Invoice[]>({
+    queryKey: queryKeys.invoices.byProject(projectId ?? "none"),
+    queryFn: () => listInvoicesAction(projectId as string),
+    enabled: enabled && Boolean(projectId),
+    staleTime: 30_000,
+    refetchOnMount: false,
+  });
+}
+
+export function useCreateInvoice() {
+  const qc = useQueryClient();
+  return useMutation<Invoice, Error, Parameters<typeof createInvoiceAction>[0]>({
+    mutationFn: (input) => createInvoiceAction(input, getTabId()),
+    onSuccess: (invoice) => {
+      afterInvoiceChange(qc, invoice.projectId, { refetchType: "all" });
+      notifyOtherTabs({ type: "invoice.changed", projectId: invoice.projectId });
+    },
+  });
+}
+
+export function useUpdateInvoice() {
+  const qc = useQueryClient();
+  return useMutation<Invoice, Error, Parameters<typeof updateInvoiceAction>[0]>({
+    mutationFn: (input) => updateInvoiceAction(input, getTabId()),
+    onSuccess: (invoice) => {
+      afterInvoiceChange(qc, invoice.projectId, { refetchType: "all" });
+      notifyOtherTabs({ type: "invoice.changed", projectId: invoice.projectId });
+    },
+  });
+}
+
+export function useSetInvoiceStatus() {
+  const qc = useQueryClient();
+  return useMutation<Invoice, Error, { invoiceId: string; projectId: string; status: InvoiceStatus }>({
+    mutationFn: (input) => setInvoiceStatusAction(input, getTabId()),
+    onSuccess: (invoice) => {
+      afterInvoiceChange(qc, invoice.projectId, { refetchType: "all" });
+      notifyOtherTabs({ type: "invoice.changed", projectId: invoice.projectId });
+    },
+  });
+}
+
+export function useDeleteInvoice() {
+  const qc = useQueryClient();
+  return useMutation<{ ok: true }, Error, { invoiceId: string; projectId: string }>({
+    mutationFn: ({ invoiceId, projectId }) => deleteInvoiceAction(invoiceId, projectId, getTabId()),
+    onSuccess: (_res, { projectId }) => {
+      afterInvoiceChange(qc, projectId, { refetchType: "all" });
+      notifyOtherTabs({ type: "invoice.changed", projectId });
+    },
   });
 }
 

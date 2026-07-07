@@ -297,6 +297,16 @@ export function afterPriceBookChange(qc: QueryClient, opts?: InvalidateOpts): vo
   inv(qc, queryKeys.priceBook(), opts);
 }
 
+export function afterInvoiceChange(
+  qc: QueryClient,
+  projectId: string,
+  opts?: InvalidateOpts,
+): void {
+  inv(qc, queryKeys.invoices.byProject(projectId), opts);
+  // Dashboard zeigt später offene Rechnungen — mit invalidieren.
+  inv(qc, queryKeys.dashboard(), opts);
+}
+
 export function afterQuoteChange(
   qc: QueryClient,
   projectId: string,

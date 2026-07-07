@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isValidQrBillIban } from "@/lib/qr-bill/iban";
 import {
+  invoiceStatuses,
   projectStatuses,
   projectTypes,
   quoteStatuses,
@@ -241,6 +242,39 @@ export const priceBookItemSchema = z.object({
 
 export const priceBookItemUpdateSchema = priceBookItemSchema.extend({
   id: z.string().uuid(),
+});
+
+export const invoiceCreateSchema = z.object({
+  projectId: z.string().uuid(),
+  /** Angenommene Offerte als Quelle — Positionen werden serverseitig kopiert. */
+  fromQuoteId: z.string().uuid().optional().nullable(),
+  dueDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Ungültiges Datum.")
+    .optional()
+    .nullable(),
+  introText: z.string().max(4000).optional().nullable(),
+  vatRate: z.coerce.number().min(0).max(100),
+  /** Bei fromQuoteId ignoriert (Positionen kommen aus der Offerte). */
+  lineItems: z.array(quoteLineItemSchema),
+});
+
+export const invoiceUpdateSchema = z.object({
+  invoiceId: z.string().uuid(),
+  dueDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Ungültiges Datum.")
+    .optional()
+    .nullable(),
+  introText: z.string().max(4000).optional().nullable(),
+  vatRate: z.coerce.number().min(0).max(100),
+  lineItems: z.array(quoteLineItemSchema).min(1, "Mindestens eine Position erfassen."),
+});
+
+export const invoiceStatusSchema = z.object({
+  invoiceId: z.string().uuid(),
+  projectId: z.string().uuid(),
+  status: z.enum(invoiceStatuses),
 });
 
 /** Terminbestätigung per E-Mail an Mieter/Verwaltung. */

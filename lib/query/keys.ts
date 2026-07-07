@@ -54,6 +54,11 @@ export const queryKeys = {
     all: () => ["quotes"] as const,
     byProject: (projectId: string) => ["quotes", projectId] as const,
   },
+  /** Rechnungen je Projekt (Büro-Sheet). */
+  invoices: {
+    all: () => ["invoices"] as const,
+    byProject: (projectId: string) => ["invoices", projectId] as const,
+  },
   /** SMTP konfiguriert? (statisch pro Deployment). */
   quoteMailConfig: () => ["quote-mail-config"] as const,
   /** Preisstamm der Organisation (Offert-Editor + Verwaltung). */
