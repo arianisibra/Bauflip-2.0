@@ -147,6 +147,7 @@ export type OrganizationBranding = {
 };
 
 export const appPageKeys = [
+  "dashboard",
   "projekte",
   "kalender",
   "mitarbeiter",

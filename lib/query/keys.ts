@@ -60,6 +60,8 @@ export const queryKeys = {
   priceBook: () => ["price-book"] as const,
   /** Kundensignatur eines Rapports — on-demand beim Aufklappen der Karte. */
   reportSignature: (reportId: string) => ["report-signature", reportId] as const,
+  /** Auswertungen (Kennzahlen-Übersicht, Admin/Büro). */
+  dashboard: () => ["dashboard"] as const,
   /** Zeiterfassung: eigene Einträge + Team-Übersicht (Büro/Admin). */
   timeEntries: {
     all: () => ["time-entries"] as const,

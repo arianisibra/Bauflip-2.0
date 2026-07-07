@@ -359,6 +359,9 @@ export async function setQuoteStatus(
       patch.sent_to_email = opts.sentToEmail;
     }
   }
+  if (status === "approved" || status === "rejected") {
+    patch.decided_at = new Date().toISOString();
+  }
 
   const { data, error } = await supabase
     .from("quotes")

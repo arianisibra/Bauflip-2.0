@@ -4,11 +4,22 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ComponentType } from "react";
-import { Calendar, CalendarDays, ClipboardList, Clock, Cog, FolderKanban, UserRound, Users } from "lucide-react";
+import {
+  BarChart3,
+  Calendar,
+  CalendarDays,
+  ClipboardList,
+  Clock,
+  Cog,
+  FolderKanban,
+  UserRound,
+  Users,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SidebarItem } from "@/lib/domain/types";
 
 const iconByKey: Record<SidebarItem["key"], ComponentType<{ className?: string }>> = {
+  dashboard: BarChart3,
   projekte: FolderKanban,
   kalender: Calendar,
   mitarbeiter: Users,

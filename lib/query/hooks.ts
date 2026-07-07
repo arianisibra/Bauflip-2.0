@@ -59,6 +59,8 @@ import {
   updatePriceBookItemAction,
 } from "@/app/(app)/projekte/price-book-actions";
 import { sendAppointmentConfirmationAction } from "@/app/(app)/projekte/appointment-mail-actions";
+import { fetchDashboardDataAction } from "@/app/(app)/dashboard/actions";
+import type { DashboardData } from "@/lib/db/dashboard";
 import { listTeamMembersAction } from "@/app/(app)/einstellungen/actions";
 import {
   createAbsenceAction,
@@ -539,6 +541,16 @@ export function useSendAppointmentConfirmation() {
     { appointmentId: string; projectId: string; recipientEmail: string }
   >({
     mutationFn: (input) => sendAppointmentConfirmationAction(input),
+  });
+}
+
+/** Auswertungen — dehydrated vom Server geprimt; erneutes Laden per refetch(). */
+export function useDashboardData() {
+  return useQuery<DashboardData>({
+    queryKey: queryKeys.dashboard(),
+    queryFn: () => fetchDashboardDataAction(),
+    staleTime: 60_000,
+    refetchOnMount: false,
   });
 }
 
