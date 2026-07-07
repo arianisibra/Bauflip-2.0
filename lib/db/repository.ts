@@ -76,7 +76,7 @@ const ATTACHMENT_DB_COLUMNS =
   "id, project_id, file_path, file_name, mime_type, size_bytes, uploaded_by, notes, created_at";
 
 const TECH_REPORT_DB_COLUMNS =
-  "id, project_id, outcome, summary, measurements_json, work_description, time_spent_minutes, created_at, created_by, created_by_display_name, signature_data_url, signed_by_name";
+  "id, project_id, outcome, summary, measurements_json, work_description, time_spent_minutes, created_at, created_by, created_by_display_name, has_signature, signed_by_name";
 
 /** Ein `current_organization_id`-RPC pro Request — mehrere Repo-Aufrufe teilen sich das Ergebnis. */
 export const getCachedCurrentOrganizationId = cache(async function getCachedCurrentOrganizationId(): Promise<string | null> {
@@ -205,6 +205,7 @@ function mapTechnicianReportRow(row: Record<string, unknown>): TechnicianReport 
       row.signature_data_url != null && String(row.signature_data_url).startsWith("data:image/")
         ? String(row.signature_data_url)
         : null,
+    hasSignature: Boolean(row.has_signature) || row.signature_data_url != null,
     signedByName:
       row.signed_by_name != null && String(row.signed_by_name).trim()
         ? String(row.signed_by_name).trim()
@@ -2443,7 +2444,10 @@ export async function signAttachmentUrls(attachments: ProjectAttachment[]): Prom
 }
 
 export async function addTechnicianReport(
-  input: Omit<TechnicianReport, "id" | "createdAt" | "orderForms" | "createdByProfileId" | "createdByDisplayName">,
+  input: Omit<
+    TechnicianReport,
+    "id" | "createdAt" | "orderForms" | "createdByProfileId" | "createdByDisplayName" | "hasSignature"
+  >,
   options?: {
     createdByProfileId: string | null;
     orderFormSubmissions?: { templateId: string; valuesJson: Record<string, string> }[];
@@ -2465,6 +2469,7 @@ export async function addTechnicianReport(
       orderForms: [],
       createdByProfileId: authorId,
       createdByDisplayName: authorName,
+      hasSignature: Boolean(input.signatureDataUrl),
     };
     mockReports.push(r);
     return r;
@@ -2537,6 +2542,34 @@ export async function addTechnicianReport(
     orderForms: [],
     createdByProfileId: authorId,
     createdByDisplayName,
+    hasSignature: Boolean(input.signatureDataUrl),
+  };
+}
+
+/** Kundensignatur eines Rapports on-demand (nicht in Listen-Payloads). */
+export async function getReportSignature(
+  reportId: string,
+): Promise<{ signatureDataUrl: string | null; signedByName: string | null } | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from("technician_reports")
+    .select("signature_data_url, signed_by_name")
+    .eq("id", reportId)
+    .maybeSingle();
+  if (error || !data) return null;
+
+  const row = data as { signature_data_url?: string | null; signed_by_name?: string | null };
+  return {
+    signatureDataUrl:
+      row.signature_data_url != null && String(row.signature_data_url).startsWith("data:image/")
+        ? String(row.signature_data_url)
+        : null,
+    signedByName:
+      row.signed_by_name != null && String(row.signed_by_name).trim()
+        ? String(row.signed_by_name).trim()
+        : null,
   };
 }
 

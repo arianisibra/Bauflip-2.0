@@ -12,6 +12,7 @@ import {
   deleteAppointment,
   reassignAppointmentTechnician,
   deleteTechnicianReport,
+  getReportSignature,
   getOfficeProjectListItemById,
   getProjectCore,
   getProjectCoreDetails,
@@ -331,6 +332,16 @@ export async function setGarantiefallAction(
     });
   }
   return { core };
+}
+
+/** Kundensignatur on-demand (Rapport-Karte aufgeklappt) — nicht in Listen-Payloads. */
+export async function getReportSignatureAction(
+  reportId: string,
+): Promise<{ signatureDataUrl: string | null; signedByName: string | null }> {
+  await requireOfficeSession();
+  const signature = await getReportSignature(reportId);
+  if (!signature) throw new Error("Rapport nicht gefunden.");
+  return signature;
 }
 
 export async function deleteReportAction(

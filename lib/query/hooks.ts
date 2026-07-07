@@ -36,6 +36,7 @@ import {
   getProjectSheetBootstrapAction,
   getProjectSheetDetailsAction,
   getProjectSheetHeadAction,
+  getReportSignatureAction,
   listAssignableProfilesAction,
   setGarantiefallAction,
   updateProjectStammdatenAction,
@@ -542,6 +543,17 @@ export function useSendAppointmentConfirmation() {
 }
 
 /** Ist SMTP konfiguriert? Steuert die Sichtbarkeit des Senden-Formulars. */
+/** Kundensignatur on-demand (aufgeklappte Rapport-Karte); Signaturen sind unveränderlich → Infinity. */
+export function useReportSignature(reportId: string, enabled = true) {
+  return useQuery<{ signatureDataUrl: string | null; signedByName: string | null }>({
+    queryKey: queryKeys.reportSignature(reportId),
+    queryFn: () => getReportSignatureAction(reportId),
+    enabled,
+    staleTime: Infinity,
+    refetchOnMount: false,
+  });
+}
+
 export function useQuoteMailConfig(enabled = true) {
   return useQuery<{ mailConfigured: boolean }>({
     queryKey: queryKeys.quoteMailConfig(),

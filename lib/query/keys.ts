@@ -58,6 +58,8 @@ export const queryKeys = {
   quoteMailConfig: () => ["quote-mail-config"] as const,
   /** Preisstamm der Organisation (Offert-Editor + Verwaltung). */
   priceBook: () => ["price-book"] as const,
+  /** Kundensignatur eines Rapports — on-demand beim Aufklappen der Karte. */
+  reportSignature: (reportId: string) => ["report-signature", reportId] as const,
   /** Zeiterfassung: eigene Einträge + Team-Übersicht (Büro/Admin). */
   timeEntries: {
     all: () => ["time-entries"] as const,

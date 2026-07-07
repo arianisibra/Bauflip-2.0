@@ -92,7 +92,7 @@ function AbrechnungExportButton() {
             toast.info("Keine Projekte im Status «Abrechnen».");
             return;
           }
-          downloadCsv(`abrechnungs-export-${todayKeySwiss()}`, rows.map((r) => ({
+          await downloadCsv(`abrechnungs-export-${todayKeySwiss()}`, rows.map((r) => ({
             "Projekt-Nr.": r.referenceCode ?? "",
             Titel: r.title,
             Mieter: r.tenantName ?? "",

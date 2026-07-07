@@ -120,8 +120,8 @@ function TeamOverview() {
         <button
           type="button"
           disabled={entries.length === 0}
-          onClick={() =>
-            downloadCsv(`lohnexport-${start}-bis-${end}`, [...entries]
+          onClick={async () => {
+            await downloadCsv(`lohnexport-${start}-bis-${end}`, [...entries]
               .sort(
                 (a, b) =>
                   (a.userDisplayName ?? "").localeCompare(b.userDisplayName ?? "", "de-CH") ||
@@ -134,8 +134,8 @@ function TeamOverview() {
                 Bis: e.endsAt ?? "",
                 Stunden: e.hours,
                 Notiz: e.note ?? "",
-              })))
-          }
+              })));
+          }}
           className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-50"
         >
           <Download className="size-3.5" aria-hidden />

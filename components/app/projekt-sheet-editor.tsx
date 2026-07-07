@@ -22,6 +22,7 @@ import {
   useOrderFormTemplates,
   useProjectCore,
   useQuoteMailConfig,
+  useReportSignature,
   useReassignAppointmentTechnician,
   useSendAppointmentConfirmation,
   useSetGarantiefall,
@@ -132,6 +133,9 @@ function ReportCard({
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const isBehoben = r.outcome === "schaden_behoben";
+  // Signatur-Data-URL erst beim Aufklappen laden — nicht in der Listen-Payload.
+  const signatureQuery = useReportSignature(r.id, open && r.hasSignature);
+  const signatureDataUrl = r.signatureDataUrl ?? signatureQuery.data?.signatureDataUrl ?? null;
 
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
@@ -186,17 +190,23 @@ function ReportCard({
             </div>
           ) : null}
 
-          {r.signatureDataUrl ? (
+          {r.hasSignature ? (
             <div className="mb-3">
               <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Kundensignatur{r.signedByName ? ` — ${r.signedByName}` : ""}
               </p>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={r.signatureDataUrl}
-                alt={`Signatur${r.signedByName ? ` von ${r.signedByName}` : ""}`}
-                className="max-h-24 rounded-md border border-border/60 bg-white p-1"
-              />
+              {signatureDataUrl ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={signatureDataUrl}
+                  alt={`Signatur${r.signedByName ? ` von ${r.signedByName}` : ""}`}
+                  className="max-h-24 rounded-md border border-border/60 bg-white p-1"
+                />
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  {signatureQuery.isError ? "Signatur konnte nicht geladen werden." : "Signatur wird geladen …"}
+                </p>
+              )}
             </div>
           ) : null}
 

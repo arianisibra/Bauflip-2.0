@@ -338,8 +338,14 @@ export type TechnicianReport = {
   createdByProfileId: string | null;
   /** Snapshot von `profiles.display_name` bei Erfassung (für alle sichtbar). */
   createdByDisplayName: string | null;
-  /** Kundenunterschrift als data:image/png-URL (Canvas-Export) — optional. */
+  /**
+   * Kundenunterschrift als data:image/png-URL (Canvas-Export).
+   * In Listen-/Bootstrap-Payloads immer `null` — wird on-demand geladen
+   * (`getReportSignatureAction`), Indikator ist `hasSignature`.
+   */
   signatureDataUrl: string | null;
+  /** Signatur vorhanden (generated column, ohne Data-URL-Payload). */
+  hasSignature: boolean;
   /** Name der unterzeichnenden Person. */
   signedByName: string | null;
   orderForms: TechnicianReportOrderFormEntry[];
