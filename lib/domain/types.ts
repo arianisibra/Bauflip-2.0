@@ -454,6 +454,112 @@ export type PriceBookItem = {
   sortOrder: number;
 };
 
+// ─── Rechnungen (QR-Rechnung) ────────────────────────────────────────────────
+
+export const invoiceStatuses = ["draft", "sent", "paid", "cancelled"] as const;
+export type InvoiceStatus = (typeof invoiceStatuses)[number];
+
+export const invoiceStatusLabels: Record<InvoiceStatus, string> = {
+  draft: "ENTWURF",
+  sent: "GESENDET",
+  paid: "BEZAHLT",
+  cancelled: "STORNIERT",
+};
+
+export const invoiceStatusBadgeClassNames: Record<InvoiceStatus, string> = {
+  draft:
+    "border-zinc-500/45 bg-zinc-500/35 text-zinc-950 dark:border-zinc-400/50 dark:bg-zinc-500/40 dark:text-zinc-50",
+  sent:
+    "border-violet-500/55 bg-violet-500/35 text-violet-950 dark:border-violet-400/55 dark:bg-violet-500/45 dark:text-violet-50",
+  paid:
+    "border-green-600/60 bg-green-600/40 text-green-950 dark:border-green-400/60 dark:bg-green-600/50 dark:text-green-50",
+  cancelled:
+    "border-stone-500/55 bg-stone-500/35 text-stone-950 dark:border-stone-400/55 dark:bg-stone-500/45 dark:text-stone-50",
+};
+
+/**
+ * Erlaubte Rechnungs-Statusübergänge (UI + Server, Muster `allowedQuoteStatusTransitions`).
+ * Bezahlt und storniert sind final (Buchhaltungs-Integrität) — Entwürfe werden
+ * gelöscht statt storniert.
+ */
+export const allowedInvoiceStatusTransitions: Record<InvoiceStatus, readonly InvoiceStatus[]> = {
+  draft: ["sent"],
+  sent: ["paid", "cancelled"],
+  paid: [],
+  cancelled: [],
+};
+
+/** Darf `to` aus `from` gesetzt werden? Gleicher Status = erlaubt (z. B. erneuter Versand). */
+export function canSetInvoiceStatus(from: InvoiceStatus, to: InvoiceStatus): boolean {
+  if (to === from) return true;
+  return allowedInvoiceStatusTransitions[from].includes(to);
+}
+
+export function assertAllowedInvoiceStatusTransition(from: InvoiceStatus, to: InvoiceStatus): void {
+  if (!canSetInvoiceStatus(from, to)) {
+    throw new Error(
+      `Statuswechsel «${invoiceStatusLabels[from]}» → «${invoiceStatusLabels[to]}» ist nicht zulässig.`,
+    );
+  }
+}
+
+/** Referenztyp im Swiss QR Code — abgeleitet aus der IBAN, bei Erstellung eingefroren. */
+export const invoiceReferenceTypes = ["QRR", "SCOR", "NON"] as const;
+export type InvoiceReferenceType = (typeof invoiceReferenceTypes)[number];
+
+export type InvoiceLineItem = {
+  id: string;
+  invoiceId: string;
+  position: number;
+  description: string;
+  quantity: number;
+  unit: string | null;
+  unitPrice: number;
+  lineTotal: number;
+};
+
+export type Invoice = {
+  id: string;
+  organizationId: string;
+  projectId: string;
+  /** Herkunfts-Offerte (Positionen kopiert) — null bei freier Erfassung. */
+  quoteId: string | null;
+  /** Per DB-Trigger vergeben (RE-Jahr-Sequenz je Organisation). */
+  invoiceNumber: string | null;
+  status: InvoiceStatus;
+  /** Fälligkeit (YYYY-MM-DD), Default +30 Tage bei Erstellung. */
+  dueDate: string | null;
+  introText: string | null;
+  vatRate: number;
+  totalNet: number;
+  totalGross: number;
+  /**
+   * QR-Referenz — bei Erstellung aus der Org-IBAN abgeleitet und eingefroren
+   * (ändert sich nie mehr, auch wenn die Org-IBAN später wechselt).
+   */
+  referenceType: InvoiceReferenceType;
+  paymentReference: string | null;
+  sentAt: string | null;
+  sentToEmail: string | null;
+  paidAt: string | null;
+  createdByProfileId: string | null;
+  createdByDisplayName: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lineItems: InvoiceLineItem[];
+};
+
+/** Zahlungsdaten der Organisation (organizations.billing_*) für QR-Rechnungen. */
+export type OrganizationBillingSettings = {
+  iban: string | null;
+  creditorName: string | null;
+  creditorStreet: string | null;
+  creditorBuildingNumber: string | null;
+  creditorPostalCode: string | null;
+  creditorCity: string | null;
+  vatNumber: string | null;
+};
+
 export type ProjectAttachment = {
   id: string;
   projectId: string;

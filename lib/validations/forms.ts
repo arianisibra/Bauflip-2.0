@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isValidQrBillIban } from "@/lib/qr-bill/iban";
 import {
   projectStatuses,
   projectTypes,
@@ -195,6 +196,40 @@ export const quoteStatusSchema = z.object({
   projectId: z.string().uuid(),
   status: z.enum(quoteStatuses),
 });
+
+/**
+ * Zahlungsdaten für QR-Rechnungen. IBAN leer = Feature deaktiviert; ist sie
+ * gesetzt, verlangt die QR-Spec Gläubigername, PLZ und Ort (strukturierte Adresse).
+ */
+export const billingSettingsSchema = z
+  .object({
+    iban: z.string().trim().optional().nullable(),
+    creditorName: z.string().trim().max(70).optional().nullable(),
+    creditorStreet: z.string().trim().max(70).optional().nullable(),
+    creditorBuildingNumber: z.string().trim().max(16).optional().nullable(),
+    creditorPostalCode: z.string().trim().max(16).optional().nullable(),
+    creditorCity: z.string().trim().max(35).optional().nullable(),
+    vatNumber: z.string().trim().max(40).optional().nullable(),
+  })
+  .superRefine((v, ctx) => {
+    if (!v.iban) return;
+    if (!isValidQrBillIban(v.iban)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["iban"],
+        message: "Ungültige IBAN — QR-Rechnungen erlauben nur CH-/LI-IBANs (21 Zeichen).",
+      });
+    }
+    if (!v.creditorName) {
+      ctx.addIssue({ code: "custom", path: ["creditorName"], message: "Gläubigername ist mit IBAN Pflicht." });
+    }
+    if (!v.creditorPostalCode) {
+      ctx.addIssue({ code: "custom", path: ["creditorPostalCode"], message: "PLZ ist mit IBAN Pflicht." });
+    }
+    if (!v.creditorCity) {
+      ctx.addIssue({ code: "custom", path: ["creditorCity"], message: "Ort ist mit IBAN Pflicht." });
+    }
+  });
 
 export const priceBookItemSchema = z.object({
   name: z.string().trim().min(1, "Bitte Bezeichnung angeben.").max(300),

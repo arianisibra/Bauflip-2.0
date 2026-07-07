@@ -61,6 +61,11 @@ import {
 import { sendAppointmentConfirmationAction } from "@/app/(app)/projekte/appointment-mail-actions";
 import { fetchDashboardDataAction } from "@/app/(app)/dashboard/actions";
 import type { DashboardData } from "@/lib/db/dashboard";
+import {
+  getBillingSettingsAction,
+  updateBillingSettingsAction,
+} from "@/app/(app)/einstellungen/billing-actions";
+import type { OrganizationBillingSettings } from "@/lib/domain/types";
 import { listTeamMembersAction } from "@/app/(app)/einstellungen/actions";
 import {
   createAbsenceAction,
@@ -551,6 +556,27 @@ export function useDashboardData() {
     queryFn: () => fetchDashboardDataAction(),
     staleTime: 60_000,
     refetchOnMount: false,
+  });
+}
+
+/** Zahlungsdaten (QR-Rechnung) — Admin-Formular in Einstellungen. */
+export function useBillingSettings(enabled = true) {
+  return useQuery<OrganizationBillingSettings>({
+    queryKey: queryKeys.billingSettings(),
+    queryFn: () => getBillingSettingsAction(),
+    enabled,
+    staleTime: 60_000,
+    refetchOnMount: false,
+  });
+}
+
+export function useUpdateBillingSettings() {
+  const qc = useQueryClient();
+  return useMutation<OrganizationBillingSettings, Error, Parameters<typeof updateBillingSettingsAction>[0]>({
+    mutationFn: (input) => updateBillingSettingsAction(input),
+    onSuccess: (settings) => {
+      qc.setQueryData(queryKeys.billingSettings(), settings);
+    },
   });
 }
 

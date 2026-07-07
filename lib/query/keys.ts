@@ -62,6 +62,8 @@ export const queryKeys = {
   reportSignature: (reportId: string) => ["report-signature", reportId] as const,
   /** Auswertungen (Kennzahlen-Übersicht, Admin/Büro). */
   dashboard: () => ["dashboard"] as const,
+  /** Zahlungsdaten der Organisation (QR-Rechnung, Admin). */
+  billingSettings: () => ["billing-settings"] as const,
   /** Zeiterfassung: eigene Einträge + Team-Übersicht (Büro/Admin). */
   timeEntries: {
     all: () => ["time-entries"] as const,

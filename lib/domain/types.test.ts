@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { canSetQuoteStatus, nextProjectStatusAfterAppointmentBooked } from "@/lib/domain/types";
+import { canSetInvoiceStatus, canSetQuoteStatus, nextProjectStatusAfterAppointmentBooked } from "@/lib/domain/types";
 
 describe("nextProjectStatusAfterAppointmentBooked", () => {
   it("promotes bestellt to abgemacht when appointment is upcoming", () => {
@@ -70,5 +70,36 @@ describe("canSetQuoteStatus", () => {
 
   it("blocks sent back to draft", () => {
     assert.equal(canSetQuoteStatus("sent", "draft"), false);
+  });
+});
+
+describe("canSetInvoiceStatus", () => {
+  it("allows draft to sent", () => {
+    assert.equal(canSetInvoiceStatus("draft", "sent"), true);
+  });
+
+  it("allows sent to paid and cancelled", () => {
+    assert.equal(canSetInvoiceStatus("sent", "paid"), true);
+    assert.equal(canSetInvoiceStatus("sent", "cancelled"), true);
+  });
+
+  it("allows same-status (e.g. re-send)", () => {
+    assert.equal(canSetInvoiceStatus("sent", "sent"), true);
+  });
+
+  it("keeps paid invoices final", () => {
+    assert.equal(canSetInvoiceStatus("paid", "draft"), false);
+    assert.equal(canSetInvoiceStatus("paid", "sent"), false);
+    assert.equal(canSetInvoiceStatus("paid", "cancelled"), false);
+  });
+
+  it("keeps cancelled invoices final", () => {
+    assert.equal(canSetInvoiceStatus("cancelled", "draft"), false);
+    assert.equal(canSetInvoiceStatus("cancelled", "sent"), false);
+  });
+
+  it("blocks draft from skipping to paid/cancelled", () => {
+    assert.equal(canSetInvoiceStatus("draft", "paid"), false);
+    assert.equal(canSetInvoiceStatus("draft", "cancelled"), false);
   });
 });

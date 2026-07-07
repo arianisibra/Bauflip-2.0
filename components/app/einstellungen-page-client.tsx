@@ -1,5 +1,6 @@
 "use client";
 
+import { BillingSettingsForm } from "@/components/app/billing-settings-form";
 import { useOrganizationBrandingContext } from "@/components/app/organization-branding-provider";
 import { PriceBookManager } from "@/components/app/price-book-manager";
 import { ProfileSettingsForm } from "@/components/app/profile-settings-form";
@@ -36,6 +37,8 @@ export function EinstellungenPageClient() {
       />
 
       <PriceBookManager />
+
+      {data.canEditCompanySettings ? <BillingSettingsForm /> : null}
     </section>
   );
 }
