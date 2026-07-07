@@ -3,6 +3,7 @@
 import { requireOfficeSession } from "@/lib/auth/organization";
 import { getQuotePdfProjectHead } from "@/lib/db/quotes";
 import { getOrganizationBranding } from "@/lib/db/repository";
+import { assertMailRateLimit } from "@/lib/mail/rate-limit";
 import { isMailConfigured, sendMail } from "@/lib/mail/send";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { appointmentConfirmationSendSchema } from "@/lib/validations/forms";
@@ -33,7 +34,7 @@ function formatConfirmationTime(iso: string): string {
 export async function sendAppointmentConfirmationAction(
   values: unknown,
 ): Promise<{ ok: true }> {
-  await requireOfficeSession();
+  const session = await requireOfficeSession();
   const parsed = appointmentConfirmationSendSchema.safeParse(values);
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Ungültige Eingabe.");
@@ -41,6 +42,7 @@ export async function sendAppointmentConfirmationAction(
   if (!isMailConfigured()) {
     throw new Error("E-Mail-Versand ist nicht konfiguriert (SMTP_HOST/MAIL_FROM in .env setzen).");
   }
+  assertMailRateLimit(session.userId);
 
   const supabase = await createSupabaseServerClient();
   if (!supabase) throw new Error("Supabase nicht verfügbar.");

@@ -382,6 +382,32 @@ export function projectStatusAfterQuoteStatusChange(quoteStatus: QuoteStatus): P
   return null;
 }
 
+/**
+ * Erlaubte Offerten-Statusübergänge (UI-Buttons UND Server-Validierung —
+ * Muster analog `canSetProjectStatus`). Angenommene Offerten sind final;
+ * abgelehnte können zur Überarbeitung zurück in den Entwurf.
+ */
+export const allowedQuoteStatusTransitions: Record<QuoteStatus, readonly QuoteStatus[]> = {
+  draft: ["sent"],
+  sent: ["approved", "rejected"],
+  approved: [],
+  rejected: ["draft"],
+};
+
+/** Darf `to` aus `from` gesetzt werden? Gleicher Status = erlaubt (z. B. erneuter Versand). */
+export function canSetQuoteStatus(from: QuoteStatus, to: QuoteStatus): boolean {
+  if (to === from) return true;
+  return allowedQuoteStatusTransitions[from].includes(to);
+}
+
+export function assertAllowedQuoteStatusTransition(from: QuoteStatus, to: QuoteStatus): void {
+  if (!canSetQuoteStatus(from, to)) {
+    throw new Error(
+      `Statuswechsel «${quoteStatusLabels[from]}» → «${quoteStatusLabels[to]}» ist nicht zulässig.`,
+    );
+  }
+}
+
 export type QuoteLineItem = {
   id: string;
   quoteId: string;

@@ -13,6 +13,7 @@ import {
 } from "@/lib/db/quotes";
 import { getOrganizationBranding } from "@/lib/db/repository";
 import type { Quote } from "@/lib/domain/types";
+import { assertMailRateLimit } from "@/lib/mail/rate-limit";
 import { isMailConfigured, sendMail } from "@/lib/mail/send";
 import { buildQuotePdf, fetchLogoBytes, formatChf } from "@/lib/pdf/quote-pdf";
 import { publish } from "@/lib/realtime/publish";
@@ -101,6 +102,7 @@ export async function sendQuoteAction(values: unknown, tabId?: string): Promise<
   if (!isMailConfigured()) {
     throw new Error("E-Mail-Versand ist nicht konfiguriert (SMTP_HOST/MAIL_FROM in .env setzen).");
   }
+  assertMailRateLimit(session.userId);
 
   const quote = await getQuoteWithItems(parsed.data.quoteId);
   if (!quote || quote.projectId !== parsed.data.projectId) {

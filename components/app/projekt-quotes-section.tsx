@@ -5,7 +5,11 @@ import { toast } from "sonner";
 import { FileText, Loader2, Pencil, Plus, Send, Trash2 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button-variants";
 import type { PriceBookItem, Quote, QuoteStatus, TechnicianReport } from "@/lib/domain/types";
-import { quoteStatusBadgeClassNames, quoteStatusLabels } from "@/lib/domain/types";
+import {
+  allowedQuoteStatusTransitions,
+  quoteStatusBadgeClassNames,
+  quoteStatusLabels,
+} from "@/lib/domain/types";
 import {
   Select,
   SelectContent,
@@ -88,14 +92,6 @@ function parsedLineItems(state: EditorState) {
     unitPrice: Number(item.unitPrice.replace(",", ".")),
   }));
 }
-
-/** Nächste sinnvolle Status-Schritte je aktuellem Offerten-Status (Phase 1: manuell). */
-const NEXT_QUOTE_STATUSES: Record<QuoteStatus, QuoteStatus[]> = {
-  draft: ["sent"],
-  sent: ["approved", "rejected"],
-  approved: [],
-  rejected: ["draft"],
-};
 
 const QUOTE_STATUS_ACTION_LABELS: Record<QuoteStatus, string> = {
   draft: "Zurück zu Entwurf",
@@ -315,7 +311,7 @@ export function ProjektQuotesSection({
               ) : null}
               {canEdit ? (
                 <>
-                {NEXT_QUOTE_STATUSES[quote.status].map((next) => (
+                {allowedQuoteStatusTransitions[quote.status].map((next) => (
                   <Button
                     key={next}
                     type="button"

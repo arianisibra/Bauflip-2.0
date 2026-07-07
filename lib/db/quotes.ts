@@ -2,7 +2,11 @@ import "server-only";
 
 import { cache } from "react";
 import type { Quote, QuoteLineItem, QuoteStatus } from "@/lib/domain/types";
-import { projectStatusAfterQuoteStatusChange, quoteStatuses } from "@/lib/domain/types";
+import {
+  assertAllowedQuoteStatusTransition,
+  projectStatusAfterQuoteStatusChange,
+  quoteStatuses,
+} from "@/lib/domain/types";
 import { computeQuoteTotals, type QuoteLineItemInput } from "@/lib/quotes/totals";
 import { updateProject } from "@/lib/db/repository";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -333,6 +337,20 @@ export async function setQuoteStatus(
 ): Promise<Quote> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) throw new Error("Supabase nicht verfügbar.");
+
+  // Übergang serverseitig validieren — die UI-Buttons sind nur Komfort.
+  const { data: existing, error: existingError } = await supabase
+    .from("quotes")
+    .select("id, status")
+    .eq("id", quoteId)
+    .eq("project_id", projectId)
+    .maybeSingle();
+  if (existingError) throw new Error(existingError.message);
+  if (!existing) throw new Error("Offerte nicht gefunden.");
+  assertAllowedQuoteStatusTransition(
+    mapQuoteStatus((existing as { status?: string }).status),
+    status,
+  );
 
   const patch: Record<string, unknown> = { status };
   if (status === "sent") {
