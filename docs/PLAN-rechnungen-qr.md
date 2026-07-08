@@ -1,5 +1,10 @@
 # Plan: Rechnungen mit Schweizer QR-Rechnung
 
+> **Status: UMGESETZT** (Juli 2026) — R1–R4 komplett auf `bauflip-os`
+> (Commits `123f6f4`, `e6fb2dd`, `7694d34`, `a841dda`). Offen: Scan-Test des
+> Zahlteils mit einer Banking-App durch den Betreiber; echte IBAN in
+> Einstellungen → Zahlungsdaten erfassen.
+
 Stand: Juli 2026, Branch `bauflip-os`. Schliesst den Geld-Workflow: Offerte (fertig) → **Rechnung** → Projekt-Abschluss. Folgt Abschnitt A der [ROADMAP](./ROADMAP.md), Punkt «Rechnungen».
 
 ---
