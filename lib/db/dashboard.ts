@@ -205,6 +205,47 @@ export const getReportOutcomeSummary = cache(async function getReportOutcomeSumm
   };
 });
 
+export type OpenInvoicesSummary = {
+  openCount: number;
+  openTotalGross: number;
+  overdueCount: number;
+  overdueTotalGross: number;
+};
+
+/** Versendete, unbezahlte Rechnungen — überfällig = Fälligkeit vor heute. */
+export const getOpenInvoicesSummary = cache(async function getOpenInvoicesSummary(
+  organizationId: string,
+): Promise<OpenInvoicesSummary> {
+  const empty: OpenInvoicesSummary = {
+    openCount: 0,
+    openTotalGross: 0,
+    overdueCount: 0,
+    overdueTotalGross: 0,
+  };
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return empty;
+
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("total_gross, due_date")
+    .eq("organization_id", organizationId)
+    .eq("status", "sent");
+  if (error || !data) return empty;
+
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const summary = { ...empty };
+  for (const row of data as { total_gross: number | null; due_date: string | null }[]) {
+    const gross = Number(row.total_gross ?? 0);
+    summary.openCount += 1;
+    summary.openTotalGross += gross;
+    if (row.due_date && row.due_date < todayKey) {
+      summary.overdueCount += 1;
+      summary.overdueTotalGross += gross;
+    }
+  }
+  return summary;
+});
+
 export type TechnicianWorkloadPoint = { technicianId: string; displayName: string; appointmentCount: number };
 
 /** Anzahl Termine je Monteur in den nächsten `days` Tagen (Auslastungs-Vorschau). */
@@ -267,6 +308,7 @@ export type DashboardData = {
   monthlyRevenue: MonthlyRevenuePoint[];
   reportOutcome: ReportOutcomeSummary;
   technicianWorkload: TechnicianWorkloadPoint[];
+  openInvoices: OpenInvoicesSummary;
 };
 
 /** Für Sessions ohne Organisation (z. B. frisch onboarded). */
@@ -283,6 +325,7 @@ export const emptyDashboardData: DashboardData = {
   monthlyRevenue: [],
   reportOutcome: { behobenCount: 0, aufgenommenCount: 0, fixedOnFirstVisitRate: null },
   technicianWorkload: [],
+  openInvoices: { openCount: 0, openTotalGross: 0, overdueCount: 0, overdueTotalGross: 0 },
 };
 
 /** Liest alle Dashboard-Kennzahlen parallel — die Projektstatus-Zählung nutzt den bestehenden RPC-Helper. */
@@ -290,7 +333,7 @@ export async function loadDashboardData(
   organizationId: string,
   loadStatusCounts: () => Promise<{ byStatus: Partial<Record<ProjectStatus, number>>; totalActive: number }>,
 ): Promise<DashboardData> {
-  const [statusCounts, projectAge, cycleTime, quotePipeline, monthlyRevenue, reportOutcome, technicianWorkload] =
+  const [statusCounts, projectAge, cycleTime, quotePipeline, monthlyRevenue, reportOutcome, technicianWorkload, openInvoices] =
     await Promise.all([
       loadStatusCounts(),
       getProjectAgeSummary(organizationId),
@@ -299,6 +342,7 @@ export async function loadDashboardData(
       getMonthlyApprovedRevenue(organizationId),
       getReportOutcomeSummary(organizationId),
       getTechnicianWorkload(organizationId),
+      getOpenInvoicesSummary(organizationId),
     ]);
 
   return {
@@ -310,6 +354,7 @@ export async function loadDashboardData(
     monthlyRevenue,
     reportOutcome,
     technicianWorkload,
+    openInvoices,
   };
 }
 

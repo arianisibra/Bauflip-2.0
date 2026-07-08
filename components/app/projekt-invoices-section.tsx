@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { FileText, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { FileText, Loader2, Pencil, Plus, Send, Trash2 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button-variants";
-import type { Invoice, InvoiceStatus, PriceBookItem, Quote } from "@/lib/domain/types";
+import type { Invoice, InvoiceStatus, PriceBookItem, ProjectStatus, Quote } from "@/lib/domain/types";
 import {
   allowedInvoiceStatusTransitions,
   invoiceStatusBadgeClassNames,
@@ -26,8 +26,11 @@ import {
   usePriceBookItems,
   useProjectInvoices,
   useProjectQuotes,
+  useQuoteMailConfig,
+  useSendInvoice,
   useSetInvoiceStatus,
   useUpdateInvoice,
+  useUpdateProjectStatus,
 } from "@/lib/query/hooks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -108,12 +111,24 @@ const INVOICE_STATUS_ACTION_LABELS: Record<InvoiceStatus, string> = {
   cancelled: "Stornieren",
 };
 
+type SendFormState = {
+  invoiceId: string;
+  recipientEmail: string;
+  message: string;
+};
+
 export function ProjektInvoicesSection({
   projectId,
   canEdit,
+  defaultRecipientEmail,
+  projectStatus,
 }: {
   projectId: string;
   canEdit: boolean;
+  /** Vorbefüllung «Senden an» — Mieter- oder Verwaltungs-Mail des Projekts. */
+  defaultRecipientEmail?: string | null;
+  /** Für das Abschluss-Angebot nach «bezahlt» (nur aus abrechnen/garantiefall erlaubt). */
+  projectStatus?: ProjectStatus;
 }) {
   const invoicesQuery = useProjectInvoices(projectId);
   const quotesQuery = useProjectQuotes(projectId, canEdit);
@@ -121,7 +136,40 @@ export function ProjektInvoicesSection({
   const updateInvoice = useUpdateInvoice();
   const setStatus = useSetInvoiceStatus();
   const deleteInvoice = useDeleteInvoice();
+  const sendInvoice = useSendInvoice();
+  const updateProjectStatus = useUpdateProjectStatus();
+  const mailConfig = useQuoteMailConfig(canEdit);
+  const mailConfigured = mailConfig.data?.mailConfigured ?? false;
+  const [sendForm, setSendForm] = useState<SendFormState | null>(null);
   const [editor, setEditor] = useState<EditorState | null>(null);
+
+  const submitSend = async () => {
+    if (!sendForm) return;
+    try {
+      await sendInvoice.mutateAsync({
+        invoiceId: sendForm.invoiceId,
+        projectId,
+        recipientEmail: sendForm.recipientEmail.trim(),
+        message: sendForm.message.trim() || null,
+      });
+      toast.success("Rechnung versendet");
+      setSendForm(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Versand fehlgeschlagen.");
+    }
+  };
+
+  /** Nach «bezahlt»: Projekt-Abschluss anbieten (Server validiert den Übergang nochmals). */
+  const offerProjectCompletion = async () => {
+    if (projectStatus !== "abrechnen" && projectStatus !== "garantiefall") return;
+    if (!window.confirm("Rechnung bezahlt — Projekt als «Abgeschlossen» markieren?")) return;
+    try {
+      await updateProjectStatus.mutateAsync({ projectId, status: "abgeschlossen" });
+      toast.success("Projekt abgeschlossen");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Abschluss fehlgeschlagen.");
+    }
+  };
   const priceBookQuery = usePriceBookItems(canEdit && Boolean(editor));
   const priceBookItems = (priceBookQuery.data ?? []).filter((i: PriceBookItem) => i.isActive);
 
@@ -281,6 +329,28 @@ export function ProjektInvoicesSection({
                 <FileText className="size-4" aria-hidden />
                 PDF
               </a>
+              {canEdit && mailConfigured && (invoice.status === "draft" || invoice.status === "sent") ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={sendInvoice.isPending}
+                  onClick={() =>
+                    setSendForm((prev) =>
+                      prev?.invoiceId === invoice.id
+                        ? null
+                        : {
+                            invoiceId: invoice.id,
+                            recipientEmail: invoice.sentToEmail ?? defaultRecipientEmail ?? "",
+                            message: "",
+                          },
+                    )
+                  }
+                >
+                  <Send className="size-4" aria-hidden />
+                  {invoice.status === "sent" ? "Erneut senden" : "Senden"}
+                </Button>
+              ) : null}
               {canEdit ? (
                 <>
                   {allowedInvoiceStatusTransitions[invoice.status].map((next) => (
@@ -295,6 +365,7 @@ export function ProjektInvoicesSection({
                         try {
                           await setStatus.mutateAsync({ invoiceId: invoice.id, projectId, status: next });
                           toast.success(`Rechnung: ${invoiceStatusLabels[next]}`);
+                          if (next === "paid") await offerProjectCompletion();
                         } catch (e) {
                           toast.error(e instanceof Error ? e.message : "Status fehlgeschlagen.");
                         }
@@ -337,6 +408,40 @@ export function ProjektInvoicesSection({
                 </>
               ) : null}
             </div>
+            {sendForm?.invoiceId === invoice.id ? (
+              <div className="mt-2 space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+                <div>
+                  <Label className="text-[11px]">Senden an</Label>
+                  <Input
+                    type="email"
+                    value={sendForm.recipientEmail}
+                    placeholder="kunde@example.com"
+                    onChange={(e) =>
+                      setSendForm((prev) => (prev ? { ...prev, recipientEmail: e.target.value } : prev))
+                    }
+                  />
+                </div>
+                <div>
+                  <Label className="text-[11px]">Persönliche Nachricht (optional)</Label>
+                  <Textarea
+                    rows={2}
+                    value={sendForm.message}
+                    onChange={(e) =>
+                      setSendForm((prev) => (prev ? { ...prev, message: e.target.value } : prev))
+                    }
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" size="sm" disabled={sendInvoice.isPending} onClick={() => setSendForm(null)}>
+                    Abbrechen
+                  </Button>
+                  <Button type="button" size="sm" disabled={sendInvoice.isPending || !sendForm.recipientEmail.trim()} onClick={submitSend}>
+                    {sendInvoice.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Send className="size-4" aria-hidden />}
+                    Mit PDF versenden
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </div>
         ))}
       </div>

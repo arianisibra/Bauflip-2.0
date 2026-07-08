@@ -16,6 +16,10 @@ export type AbrechnungExportRow = {
   reportMinutes: number;
   approvedQuoteNumber: string | null;
   approvedQuoteGross: number | null;
+  /** Neueste Rechnung des Projekts (alle Status). */
+  invoiceNumber: string | null;
+  invoiceStatus: string | null;
+  invoiceGross: number | null;
 };
 
 export async function fetchAbrechnungExportAction(): Promise<AbrechnungExportRow[]> {
@@ -35,7 +39,7 @@ export async function fetchAbrechnungExportAction(): Promise<AbrechnungExportRow
 
   const projectIds = projects.map((p) => String((p as Record<string, unknown>).id));
 
-  const [reportsRes, quotesRes] = await Promise.all([
+  const [reportsRes, quotesRes, invoicesRes] = await Promise.all([
     supabase
       .from("technician_reports")
       .select("project_id, time_spent_minutes")
@@ -45,6 +49,11 @@ export async function fetchAbrechnungExportAction(): Promise<AbrechnungExportRow
       .select("project_id, quote_number, total_gross, created_at")
       .in("project_id", projectIds)
       .eq("status", "approved")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("invoices")
+      .select("project_id, invoice_number, status, total_gross, created_at")
+      .in("project_id", projectIds)
       .order("created_at", { ascending: false }),
   ]);
 
@@ -66,6 +75,18 @@ export async function fetchAbrechnungExportAction(): Promise<AbrechnungExportRow
     });
   }
 
+  // Neueste Rechnung pro Projekt (Liste ist absteigend sortiert).
+  const invoiceByProject = new Map<string, { number: string | null; status: string; gross: number }>();
+  for (const row of (invoicesRes.data ?? []) as Record<string, unknown>[]) {
+    const pid = String(row.project_id);
+    if (invoiceByProject.has(pid)) continue;
+    invoiceByProject.set(pid, {
+      number: row.invoice_number != null ? String(row.invoice_number) : null,
+      status: String(row.status ?? ""),
+      gross: Number(row.total_gross ?? 0),
+    });
+  }
+
   return projects.map((raw) => {
     const p = raw as Record<string, unknown>;
     const pid = String(p.id);
@@ -77,6 +98,7 @@ export async function fetchAbrechnungExportAction(): Promise<AbrechnungExportRow
       .filter(Boolean)
       .join(", ");
     const quote = quoteByProject.get(pid);
+    const invoice = invoiceByProject.get(pid);
     return {
       referenceCode: s(p.reference_code),
       title: String(p.title ?? ""),
@@ -88,6 +110,9 @@ export async function fetchAbrechnungExportAction(): Promise<AbrechnungExportRow
       reportMinutes: minutesByProject.get(pid) ?? 0,
       approvedQuoteNumber: quote?.number ?? null,
       approvedQuoteGross: quote?.gross ?? null,
+      invoiceNumber: invoice?.number ?? null,
+      invoiceStatus: invoice?.status ?? null,
+      invoiceGross: invoice ? invoice.gross : null,
     };
   });
 }

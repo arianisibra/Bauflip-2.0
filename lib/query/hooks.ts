@@ -69,6 +69,7 @@ import {
   createInvoiceAction,
   deleteInvoiceAction,
   listInvoicesAction,
+  sendInvoiceAction,
   setInvoiceStatusAction,
   updateInvoiceAction,
 } from "@/app/(app)/projekte/invoice-actions";
@@ -604,6 +605,21 @@ export function useSetInvoiceStatus() {
   const qc = useQueryClient();
   return useMutation<Invoice, Error, { invoiceId: string; projectId: string; status: InvoiceStatus }>({
     mutationFn: (input) => setInvoiceStatusAction(input, getTabId()),
+    onSuccess: (invoice) => {
+      afterInvoiceChange(qc, invoice.projectId, { refetchType: "all" });
+      notifyOtherTabs({ type: "invoice.changed", projectId: invoice.projectId });
+    },
+  });
+}
+
+export function useSendInvoice() {
+  const qc = useQueryClient();
+  return useMutation<
+    Invoice,
+    Error,
+    { invoiceId: string; projectId: string; recipientEmail: string; message?: string | null }
+  >({
+    mutationFn: (input) => sendInvoiceAction(input, getTabId()),
     onSuccess: (invoice) => {
       afterInvoiceChange(qc, invoice.projectId, { refetchType: "all" });
       notifyOtherTabs({ type: "invoice.changed", projectId: invoice.projectId });

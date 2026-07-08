@@ -277,6 +277,14 @@ export const invoiceStatusSchema = z.object({
   status: z.enum(invoiceStatuses),
 });
 
+/** Rechnung per E-Mail versenden (PDF mit Zahlteil im Anhang). */
+export const invoiceSendSchema = z.object({
+  invoiceId: z.string().uuid(),
+  projectId: z.string().uuid(),
+  recipientEmail: z.string().trim().email("Ungültige E-Mail-Adresse."),
+  message: z.string().trim().max(2000).optional().nullable(),
+});
+
 /** Terminbestätigung per E-Mail an Mieter/Verwaltung. */
 export const appointmentConfirmationSendSchema = z.object({
   appointmentId: z.string().uuid(),

@@ -1390,7 +1390,12 @@ export function ProjektSheetEditor({
         }
       />
 
-      <ProjektInvoicesSection projectId={projectId} canEdit={canEdit} />
+      <ProjektInvoicesSection
+        projectId={projectId}
+        canEdit={canEdit}
+        defaultRecipientEmail={core.project.tenantEmail ?? core.project.managementEmail}
+        projectStatus={core.project.status}
+      />
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       {editReport ? (

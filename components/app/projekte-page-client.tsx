@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { fetchAbrechnungExportAction } from "@/app/(app)/projekte/export-actions";
 import { downloadCsv } from "@/lib/csv/download";
 import { todayKeySwiss } from "@/lib/date/swiss";
+import { invoiceStatusLabels, type InvoiceStatus } from "@/lib/domain/types";
 import { sanitizeAppReturnTo } from "@/lib/navigation/app-return-to";
 import {
   buildKalenderSheetHref,
@@ -105,6 +106,11 @@ function AbrechnungExportButton() {
             "Rapportzeit (Std.)": Math.round((r.reportMinutes / 60) * 100) / 100,
             Offerte: r.approvedQuoteNumber ?? "",
             "Offerte Total (CHF)": r.approvedQuoteGross ?? "",
+            Rechnung: r.invoiceNumber ?? "",
+            Rechnungsstatus: r.invoiceStatus
+              ? (invoiceStatusLabels[r.invoiceStatus as InvoiceStatus] ?? r.invoiceStatus)
+              : "",
+            "Rechnung Total (CHF)": r.invoiceGross ?? "",
           })));
           toast.success(`${rows.length} Projekte exportiert`);
         } catch (err) {

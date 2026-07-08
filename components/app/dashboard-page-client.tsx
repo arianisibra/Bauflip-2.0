@@ -231,6 +231,34 @@ export function DashboardPageClient() {
 
         <Card size="sm">
           <CardHeader className="px-4">
+            <CardTitle className="text-sm font-semibold">Offene Rechnungen</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2.5 px-4">
+            {data.openInvoices.openCount === 0 ? (
+              <p className="text-xs text-muted-foreground">Keine offenen Rechnungen.</p>
+            ) : (
+              <>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Offen (versendet)</span>
+                  <span className="font-medium tabular-nums text-foreground">
+                    {data.openInvoices.openCount} · {chf.format(data.openInvoices.openTotalGross)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className={data.openInvoices.overdueCount > 0 ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground"}>
+                    Überfällig
+                  </span>
+                  <span className={cn("font-medium tabular-nums", data.openInvoices.overdueCount > 0 ? "text-rose-600 dark:text-rose-400" : "text-foreground")}>
+                    {data.openInvoices.overdueCount} · {chf.format(data.openInvoices.overdueTotalGross)}
+                  </span>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card size="sm">
+          <CardHeader className="px-4">
             <CardTitle className="text-sm font-semibold">Rapporte letzte 30 Tage</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2.5 px-4">
