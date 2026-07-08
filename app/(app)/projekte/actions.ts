@@ -30,6 +30,10 @@ import type { ProjectStatus, UserProfile } from "@/lib/domain/types";
 import { DEFAULT_PROJEKTE_LIST_FILTER, type ProjekteListFilter } from "@/lib/projekte/list-filter";
 import { parseProjekteSearchQuery } from "@/lib/projekte/list-page";
 import { loadProjekteBootstrapData } from "@/lib/projekte/server-bootstrap";
+import {
+  loadInviteAppointmentData,
+  sendAppointmentInvites,
+} from "@/lib/calendar-invite/send";
 import { publish } from "@/lib/realtime/publish";
 import {
   projectStammdatenUpdateSchema,
@@ -199,7 +203,7 @@ export async function addAppointmentAction(
     throw new Error(parsed.error.issues[0]?.message ?? "Ungültige Eingabe.");
   }
   const v = parsed.data;
-  await addAppointment({
+  const created = await addAppointment({
     projectId: v.projectId,
     kind: v.kind,
     startsAt: v.startsAt,
@@ -208,6 +212,18 @@ export async function addAppointmentAction(
     assignedTechnicianId2: v.assignedTechnicianId2?.trim() || null,
     planningNotes: v.planningNotes ?? null,
   });
+  await sendAppointmentInvites(
+    "REQUEST",
+    {
+      appointmentId: created.id,
+      projectId: v.projectId,
+      kind: v.kind,
+      startsAtIso: created.startsAt,
+      endsAtIso: created.endsAt,
+      planningNotes: created.planningNotes,
+    },
+    [created.assignedTechnicianId, created.assignedTechnicianId2],
+  );
   const core = await coreOrThrow(v.projectId);
   if (session.organizationId) {
     await publish(session.organizationId, {
@@ -241,7 +257,18 @@ export async function reassignAppointmentTechnicianAction(
       throw new Error("Diese Person ist bereits als andere zuständige Person an diesem Termin zugewiesen.");
     }
   }
+  // Vorherige Zuweisung für Einladungs-Absage festhalten.
+  const before = await loadInviteAppointmentData(v.appointmentId);
   await reassignAppointmentTechnician(v.appointmentId, v.projectId, v.assignedTechnicianId, v.slot);
+  if (before) {
+    const previousId = v.slot === 2 ? before.assignedTechnicianId2 : before.assignedTechnicianId;
+    if (previousId && previousId !== v.assignedTechnicianId) {
+      await sendAppointmentInvites("CANCEL", before, [previousId]);
+    }
+    if (v.assignedTechnicianId && v.assignedTechnicianId !== previousId) {
+      await sendAppointmentInvites("REQUEST", before, [v.assignedTechnicianId]);
+    }
+  }
   const core = await coreOrThrow(v.projectId);
   if (session.organizationId) {
     await publish(session.organizationId, {
@@ -259,7 +286,15 @@ export async function deleteAppointmentAction(
   tabId?: string,
 ): Promise<{ core: ProjectCore }> {
   const session = await requireOfficeSession();
+  // Termindaten vor der Löschung sichern — für die Kalender-Absage.
+  const before = await loadInviteAppointmentData(appointmentId);
   await deleteAppointment(appointmentId);
+  if (before) {
+    await sendAppointmentInvites("CANCEL", before, [
+      before.assignedTechnicianId,
+      before.assignedTechnicianId2,
+    ]);
+  }
   const core = await coreOrThrow(projectId);
   if (session.organizationId) {
     await publish(session.organizationId, {

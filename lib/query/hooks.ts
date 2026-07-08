@@ -66,6 +66,10 @@ import {
   updateBillingSettingsAction,
 } from "@/app/(app)/einstellungen/billing-actions";
 import {
+  getInvitePreferenceAction,
+  setInvitePreferenceAction,
+} from "@/app/(app)/einstellungen/invite-preference-actions";
+import {
   createInvoiceAction,
   deleteInvoiceAction,
   listInvoicesAction,
@@ -634,6 +638,26 @@ export function useDeleteInvoice() {
     onSuccess: (_res, { projectId }) => {
       afterInvoiceChange(qc, projectId, { refetchType: "all" });
       notifyOtherTabs({ type: "invoice.changed", projectId });
+    },
+  });
+}
+
+/** Termin-Einladungen per Mail an/aus (eigener Account, alle Rollen). */
+export function useInvitePreference() {
+  return useQuery<{ enabled: boolean }>({
+    queryKey: queryKeys.invitePreference(),
+    queryFn: () => getInvitePreferenceAction(),
+    staleTime: 60_000,
+    refetchOnMount: false,
+  });
+}
+
+export function useSetInvitePreference() {
+  const qc = useQueryClient();
+  return useMutation<{ enabled: boolean }, Error, boolean>({
+    mutationFn: (enabled) => setInvitePreferenceAction(enabled),
+    onSuccess: (result) => {
+      qc.setQueryData(queryKeys.invitePreference(), result);
     },
   });
 }

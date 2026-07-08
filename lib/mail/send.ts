@@ -49,6 +49,8 @@ export type SendMailInput = {
   fromName?: string;
   replyTo?: string;
   attachments?: MailAttachment[];
+  /** iCal-Einladung (text/calendar-Part) — Outlook/Google/Apple buchen direkt ein. */
+  icalEvent?: { method: "REQUEST" | "CANCEL"; content: string };
 };
 
 export async function sendMail(input: SendMailInput): Promise<void> {
@@ -66,5 +68,13 @@ export async function sendMail(input: SendMailInput): Promise<void> {
     text: input.text,
     replyTo: input.replyTo,
     attachments: input.attachments,
+    icalEvent: input.icalEvent
+      ? { method: input.icalEvent.method, content: input.icalEvent.content }
+      : undefined,
   });
+}
+
+/** Absender-Adresse für ORGANIZER-Felder in iCal-Einladungen. */
+export function getMailFromAddress(): string | null {
+  return process.env.MAIL_FROM || null;
 }

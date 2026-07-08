@@ -69,6 +69,8 @@ export const queryKeys = {
   dashboard: () => ["dashboard"] as const,
   /** Zahlungsdaten der Organisation (QR-Rechnung, Admin). */
   billingSettings: () => ["billing-settings"] as const,
+  /** Termin-Einladungen per Mail an/aus (eigener Account). */
+  invitePreference: () => ["invite-preference"] as const,
   /** Zeiterfassung: eigene Einträge + Team-Übersicht (Büro/Admin). */
   timeEntries: {
     all: () => ["time-entries"] as const,
