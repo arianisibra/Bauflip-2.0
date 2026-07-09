@@ -1,6 +1,7 @@
 "use client";
 
-import { RefreshCw } from "lucide-react";
+import type { ComponentType } from "react";
+import { AlertTriangle, CheckCircle2, ClipboardList, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BauflipLoading } from "@/components/ui/bauflip-loading";
@@ -25,26 +26,51 @@ const AGE_BUCKET_LABELS: Record<ProjectAgeBucket, string> = {
   "90+": "90+ Tage",
 };
 
+/** Fixe Farbe je Alters-Bucket: aufsteigende Sättigung (ordinal) — 90+ ist ein Risikosignal, keine Ramp-Stufe. */
+const AGE_BUCKET_BAR_COLORS: Record<ProjectAgeBucket, string> = {
+  "0-7": "bg-primary/35",
+  "8-30": "bg-primary/60",
+  "31-90": "bg-primary/85",
+  "90+": "bg-rose-500",
+};
+
 const MONTH_LABEL_FORMATTER = new Intl.DateTimeFormat("de-CH", { month: "short", timeZone: "UTC" });
 
-/** Balkenfarbe je Projekt-Status — gleiche Farbfamilie wie `projectStatusBadgeClassNames`. */
-const PROJECT_STATUS_BAR_COLORS: Record<ProjectStatus, string> = {
-  offen: "bg-zinc-500",
-  abgemacht: "bg-lime-500",
-  einsatz_offen: "bg-blue-500",
-  offerte_senden: "bg-indigo-500",
-  offerte_gesendet: "bg-violet-500",
-  offerte_genehmigt: "bg-purple-500",
-  bestellen: "bg-fuchsia-500",
-  bestellt: "bg-pink-500",
-  montagebereit: "bg-emerald-500",
-  abholbereit: "bg-teal-500",
-  werkstatt: "bg-orange-500",
-  abklaeren: "bg-amber-500",
-  abrechnen: "bg-yellow-500",
-  subunternehmer: "bg-stone-500",
-  abgeschlossen: "bg-green-600",
-  garantiefall: "bg-rose-600",
+/**
+ * Der Projekt-Status ist kein Kategorial-, sondern ein ORDINAL-Feld (fester
+ * Workflow, "Reihenfolge = Kunden-Priorität" laut Domain-Kommentar) — eine
+ * Ordinal-Rampe (ein Farbton, steigende Sättigung) statt 16 verschiedener Hues.
+ * Die zwei Status mit echter Status-Bedeutung ("gut"/"kritisch", nicht nur
+ * "weiter im Pfad") bekommen stattdessen feste Status-Farbe + Icon.
+ */
+const ORDINAL_RAMP = [
+  "bg-primary/30",
+  "bg-primary/45",
+  "bg-primary/60",
+  "bg-primary/75",
+  "bg-primary/90",
+  "bg-primary",
+] as const;
+
+function ordinalRampClass(index: number, total: number): string {
+  if (total <= 1) return ORDINAL_RAMP[ORDINAL_RAMP.length - 1];
+  const step = Math.round((index / (total - 1)) * (ORDINAL_RAMP.length - 1));
+  return ORDINAL_RAMP[step];
+}
+
+const TERMINAL_PROJECT_STATUS_STYLE: Partial<
+  Record<ProjectStatus, { icon: ComponentType<{ className?: string }>; iconClassName: string; barClassName: string }>
+> = {
+  abgeschlossen: {
+    icon: CheckCircle2,
+    iconClassName: "text-emerald-600 dark:text-emerald-400",
+    barClassName: "bg-emerald-500",
+  },
+  garantiefall: {
+    icon: AlertTriangle,
+    iconClassName: "text-rose-600 dark:text-rose-400",
+    barClassName: "bg-rose-500",
+  },
 };
 
 function monthLabel(monthKey: string): string {
@@ -52,34 +78,44 @@ function monthLabel(monthKey: string): string {
   return MONTH_LABEL_FORMATTER.format(new Date(Date.UTC(y, m - 1, 1)));
 }
 
-/** Horizontaler Balken mit Prozent-Breite relativ zu `max` — kein Chart-Package nötig. */
-function Bar({ label, value, max, colorClassName, valueLabel }: {
+/**
+ * Horizontaler Balken mit Prozent-Breite relativ zu `max` — kein Chart-Package nötig.
+ * Mark-Spec: Fläche rund am datentragenden Ende, eckig an der Baseline (nicht beidseitig
+ * rund) — die Schiene bleibt als reine Chrome-Form ein volles Pill.
+ */
+function Bar({ label, value, max, colorClassName, valueLabel, icon: Icon, iconClassName }: {
   label: string;
   value: number;
   max: number;
   colorClassName: string;
   valueLabel: string;
+  icon?: ComponentType<{ className?: string }>;
+  iconClassName?: string;
 }) {
   const pct = max > 0 ? Math.max(2, Math.round((value / max) * 100)) : 0;
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between gap-2 text-xs">
-        <span className="truncate text-muted-foreground">{label}</span>
+        <span className="flex min-w-0 items-center gap-1 truncate text-muted-foreground">
+          {Icon ? <Icon className={cn("size-3.5 shrink-0", iconClassName)} aria-hidden /> : null}
+          <span className="truncate">{label}</span>
+        </span>
         <span className="shrink-0 font-medium tabular-nums text-foreground">{valueLabel}</span>
       </div>
       <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-        <div className={cn("h-full rounded-full", colorClassName)} style={{ width: `${pct}%` }} />
+        <div className={cn("h-full rounded-r-full", colorClassName)} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
 }
 
+/** Grosse Stat-Tile-Zahl: proportionale Ziffern (kein tabular-nums — das ist für Tabellenspalten). */
 function KpiCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <Card size="sm">
       <CardContent className="px-4">
         <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-        <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{value}</p>
+        <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
         {hint ? <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p> : null}
       </CardContent>
     </Card>
@@ -103,6 +139,11 @@ export function DashboardPageClient() {
   const maxWorkload = Math.max(1, ...data.technicianWorkload.map((t) => t.appointmentCount));
   const openQuoteValue = data.quotePipeline.valueByStatus.draft + data.quotePipeline.valueByStatus.sent;
   const openQuoteCount = data.quotePipeline.countByStatus.draft + data.quotePipeline.countByStatus.sent;
+  // Ordinal-Rampe nur über die tatsächlich sichtbaren Pipeline-Status spreizen
+  // (Statuswerte mit fixer Status-Bedeutung ausgenommen — siehe TERMINAL_PROJECT_STATUS_STYLE).
+  const visiblePipelineStatuses = projectStatuses.filter(
+    (s) => !TERMINAL_PROJECT_STATUS_STYLE[s] && (data.statusCounts[s] ?? 0) > 0,
+  );
 
   return (
     <section className="flex flex-col gap-6">
@@ -119,6 +160,8 @@ export function DashboardPageClient() {
         </Button>
       </header>
 
+      {/* Vorherigen Stand gedimmt halten statt beim Refetch zu blitzen (kein Skeleton-Flash). */}
+      <div className={cn("flex flex-col gap-6 transition-opacity", isFetching && "opacity-60")}>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KpiCard label="Aktive Projekte" value={String(data.totalActiveProjects)} />
         <KpiCard
@@ -147,6 +190,22 @@ export function DashboardPageClient() {
             {projectStatuses.map((status: ProjectStatus) => {
               const count = data.statusCounts[status] ?? 0;
               if (count === 0) return null;
+              const terminal = TERMINAL_PROJECT_STATUS_STYLE[status];
+              if (terminal) {
+                return (
+                  <Bar
+                    key={status}
+                    label={projectStatusLabels[status]}
+                    value={count}
+                    max={maxStatusCount}
+                    valueLabel={String(count)}
+                    colorClassName={terminal.barClassName}
+                    icon={terminal.icon}
+                    iconClassName={terminal.iconClassName}
+                  />
+                );
+              }
+              const index = visiblePipelineStatuses.indexOf(status);
               return (
                 <Bar
                   key={status}
@@ -154,7 +213,7 @@ export function DashboardPageClient() {
                   value={count}
                   max={maxStatusCount}
                   valueLabel={String(count)}
-                  colorClassName={PROJECT_STATUS_BAR_COLORS[status]}
+                  colorClassName={ordinalRampClass(index, visiblePipelineStatuses.length)}
                 />
               );
             })}
@@ -173,7 +232,9 @@ export function DashboardPageClient() {
                 value={count}
                 max={maxAgeBucket}
                 valueLabel={String(count)}
-                colorClassName={bucket === "90+" ? "bg-rose-500" : "bg-primary"}
+                colorClassName={AGE_BUCKET_BAR_COLORS[bucket]}
+                icon={bucket === "90+" && count > 0 ? AlertTriangle : undefined}
+                iconClassName="text-rose-600 dark:text-rose-400"
               />
             ))}
             {data.projectAge.totalOpen === 0 ? (
@@ -197,7 +258,7 @@ export function DashboardPageClient() {
                   value={point.totalGross}
                   max={maxMonthlyRevenue}
                   valueLabel={point.quoteCount > 0 ? chf.format(point.totalGross) : "—"}
-                  colorClassName="bg-emerald-500"
+                  colorClassName="bg-indigo-500"
                 />
               ))
             )}
@@ -245,7 +306,17 @@ export function DashboardPageClient() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
-                  <span className={data.openInvoices.overdueCount > 0 ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground"}>
+                  <span
+                    className={cn(
+                      "flex items-center gap-1",
+                      data.openInvoices.overdueCount > 0
+                        ? "font-medium text-rose-600 dark:text-rose-400"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {data.openInvoices.overdueCount > 0 ? (
+                      <AlertTriangle className="size-3.5" aria-hidden />
+                    ) : null}
                     Überfällig
                   </span>
                   <span className={cn("font-medium tabular-nums", data.openInvoices.overdueCount > 0 ? "text-rose-600 dark:text-rose-400" : "text-foreground")}>
@@ -272,6 +343,8 @@ export function DashboardPageClient() {
                   max={Math.max(1, data.reportOutcome.behobenCount, data.reportOutcome.aufgenommenCount)}
                   valueLabel={String(data.reportOutcome.behobenCount)}
                   colorClassName="bg-emerald-500"
+                  icon={CheckCircle2}
+                  iconClassName="text-emerald-600 dark:text-emerald-400"
                 />
                 <Bar
                   label="Aufgenommen (Folgetermin nötig)"
@@ -279,6 +352,8 @@ export function DashboardPageClient() {
                   max={Math.max(1, data.reportOutcome.behobenCount, data.reportOutcome.aufgenommenCount)}
                   valueLabel={String(data.reportOutcome.aufgenommenCount)}
                   colorClassName="bg-amber-500"
+                  icon={ClipboardList}
+                  iconClassName="text-amber-600 dark:text-amber-400"
                 />
                 {data.reportOutcome.fixedOnFirstVisitRate != null ? (
                   <p className="pt-1 text-[11px] text-muted-foreground">
@@ -311,6 +386,7 @@ export function DashboardPageClient() {
             )}
           </CardContent>
         </Card>
+      </div>
       </div>
     </section>
   );
