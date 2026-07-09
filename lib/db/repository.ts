@@ -2056,7 +2056,11 @@ export async function updateProject(projectId: string, patch: ProjectPatch): Pro
     if (patch.status !== undefined && patch.status !== "abgeschlossen" && priorStatus === "abgeschlossen") {
       p.closedAt = null;
     }
-    if (patch.status !== undefined && patch.status !== priorStatus) {
+    if (
+      patch.status !== undefined &&
+      patch.status !== priorStatus &&
+      patch.statusUpdateSource !== "manual"
+    ) {
       const promoted = await promoteToAbgemachtIfUpcomingAppointment(projectId, p.status);
       if (promoted) return promoted;
     }
@@ -2126,7 +2130,15 @@ export async function updateProject(projectId: string, patch: ProjectPatch): Pro
   }
   if (!data) throw new Error("Projekt nicht gefunden.");
   const result = mapProjectRow(data as Record<string, unknown>);
-  if (patch.status !== undefined && priorStatus !== undefined && patch.status !== priorStatus) {
+  // Auto-Promotion auf «abgemacht» nur für automatisierte Statuswechsel.
+  // Manuelle Wechsel (Büro-«Setzen», Stammdaten, Rapport-nextStatus) gewinnen —
+  // sonst wird die Nutzerwahl bei bevorstehendem Termin still zurückgestellt.
+  if (
+    patch.status !== undefined &&
+    priorStatus !== undefined &&
+    patch.status !== priorStatus &&
+    patch.statusUpdateSource !== "manual"
+  ) {
     const promoted = await promoteToAbgemachtIfUpcomingAppointment(projectId, result.status);
     if (promoted) return promoted;
   }
