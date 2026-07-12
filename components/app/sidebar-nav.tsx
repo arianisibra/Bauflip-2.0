@@ -12,6 +12,7 @@ import {
   Clock,
   Cog,
   FolderKanban,
+  Landmark,
   UserRound,
   Users,
 } from "lucide-react";
@@ -25,6 +26,7 @@ const iconByKey: Record<SidebarItem["key"], ComponentType<{ className?: string }
   mitarbeiter: Users,
   bestellformulare: ClipboardList,
   zeiterfassung: Clock,
+  zahlungen: Landmark,
   einstellungen: Cog,
   mein_tag: CalendarDays,
   monteur_profil: UserRound,

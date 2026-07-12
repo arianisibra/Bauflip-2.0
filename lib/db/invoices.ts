@@ -283,6 +283,56 @@ export async function createInvoice(
   };
 }
 
+export type InvoiceForPaymentMatching = {
+  id: string;
+  projectId: string;
+  projectTitle: string;
+  invoiceNumber: string | null;
+  paymentReference: string | null;
+  totalGross: number;
+  status: InvoiceStatus;
+};
+
+/**
+ * Rechnungen mit Referenz für den Zahlungsabgleich (Status `sent` **und** `paid`) —
+ * `paid` wird gebraucht, damit ein erneuter Import derselben Zahlung als
+ * "bereits erfasst" statt "unbekannt" erkannt wird (macht Re-Imports harmlos).
+ */
+export const listInvoicesForPaymentMatching = cache(async function listInvoicesForPaymentMatching(
+  organizationId: string,
+): Promise<InvoiceForPaymentMatching[]> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("id, project_id, invoice_number, payment_reference, total_gross, status")
+    .eq("organization_id", organizationId)
+    .in("status", ["sent", "paid"])
+    .not("payment_reference", "is", null);
+  if (error || !data || data.length === 0) return [];
+
+  const rows = data as Record<string, unknown>[];
+  const projectIds = [...new Set(rows.map((r) => String(r.project_id)))];
+  const { data: projects } = await supabase
+    .from("projects")
+    .select("id, title")
+    .in("id", projectIds);
+  const titleById = new Map(
+    ((projects ?? []) as { id: string; title: string | null }[]).map((p) => [p.id, p.title ?? ""]),
+  );
+
+  return rows.map((row) => ({
+    id: String(row.id),
+    projectId: String(row.project_id),
+    projectTitle: titleById.get(String(row.project_id)) ?? "",
+    invoiceNumber: row.invoice_number != null ? String(row.invoice_number) : null,
+    paymentReference: row.payment_reference != null ? String(row.payment_reference) : null,
+    totalGross: Number(row.total_gross ?? 0),
+    status: mapInvoiceStatus(row.status),
+  }));
+});
+
 export type InvoiceUpdateInput = {
   dueDate: string | null;
   introText: string | null;
@@ -362,12 +412,16 @@ export async function deleteInvoice(invoiceId: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-/** Rechnungs-Status setzen (Matrix serverseitig validiert); setzt sent_at/paid_at. */
+/**
+ * Rechnungs-Status setzen (Matrix serverseitig validiert); setzt sent_at/paid_at.
+ * `paidAt` überschreibt das Bezahlt-Datum (z. B. Valuta-Datum aus einem camt-Import) —
+ * ohne Angabe wird "jetzt" verwendet.
+ */
 export async function setInvoiceStatus(
   invoiceId: string,
   projectId: string,
   status: InvoiceStatus,
-  opts?: { sentToEmail?: string },
+  opts?: { sentToEmail?: string; paidAt?: string },
 ): Promise<Invoice> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) throw new Error("Supabase nicht verfügbar.");
@@ -393,7 +447,7 @@ export async function setInvoiceStatus(
     }
   }
   if (status === "paid") {
-    patch.paid_at = new Date().toISOString();
+    patch.paid_at = opts?.paidAt ?? new Date().toISOString();
   }
 
   const { data, error } = await supabase

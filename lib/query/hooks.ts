@@ -77,7 +77,14 @@ import {
   setInvoiceStatusAction,
   updateInvoiceAction,
 } from "@/app/(app)/projekte/invoice-actions";
-import type { Invoice, InvoiceStatus, OrganizationBillingSettings } from "@/lib/domain/types";
+import {
+  confirmPaymentImportAction,
+  listPaymentImportsAction,
+  previewPaymentImportAction,
+  type ConfirmPaymentImportResult,
+  type PaymentImportPreview,
+} from "@/app/(app)/zahlungen/actions";
+import type { Invoice, InvoiceStatus, OrganizationBillingSettings, PaymentImport } from "@/lib/domain/types";
 import { listTeamMembersAction } from "@/app/(app)/einstellungen/actions";
 import {
   createAbsenceAction,
@@ -638,6 +645,37 @@ export function useDeleteInvoice() {
     onSuccess: (_res, { projectId }) => {
       afterInvoiceChange(qc, projectId, { refetchType: "all" });
       notifyOtherTabs({ type: "invoice.changed", projectId });
+    },
+  });
+}
+
+/** Import-Historie Zahlungsabgleich (Protokoll, keine Datei-Inhalte). */
+export function usePaymentImports(enabled = true) {
+  return useQuery<PaymentImport[]>({
+    queryKey: queryKeys.paymentImports(),
+    queryFn: () => listPaymentImportsAction(),
+    enabled,
+    staleTime: 30_000,
+    refetchOnMount: false,
+  });
+}
+
+/** camt-Datei parsen + gegen offene/bezahlte Rechnungen abgleichen — keine Schreiboperation. */
+export function usePreviewPaymentImport() {
+  return useMutation<PaymentImportPreview, Error, FormData>({
+    mutationFn: (formData) => previewPaymentImportAction(formData),
+  });
+}
+
+/** Bestätigte Zuordnungen anwenden: Rechnungen auf bezahlt + Import-Protokoll. */
+export function useConfirmPaymentImport() {
+  const qc = useQueryClient();
+  return useMutation<ConfirmPaymentImportResult, Error, Parameters<typeof confirmPaymentImportAction>[0]>({
+    mutationFn: (input) => confirmPaymentImportAction(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.paymentImports() });
+      qc.invalidateQueries({ queryKey: queryKeys.invoices.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.dashboard() });
     },
   });
 }

@@ -67,6 +67,8 @@ export const queryKeys = {
   reportSignature: (reportId: string) => ["report-signature", reportId] as const,
   /** Auswertungen (Kennzahlen-Übersicht, Admin/Büro). */
   dashboard: () => ["dashboard"] as const,
+  /** Zahlungsabgleich: Import-Historie (camt-Uploads). */
+  paymentImports: () => ["payment-imports"] as const,
   /** Zahlungsdaten der Organisation (QR-Rechnung, Admin). */
   billingSettings: () => ["billing-settings"] as const,
   /** Termin-Einladungen per Mail an/aus (eigener Account). */

@@ -153,6 +153,7 @@ export const appPageKeys = [
   "mitarbeiter",
   "bestellformulare",
   "zeiterfassung",
+  "zahlungen",
   "einstellungen",
   "mein_tag",
   "monteur_profil",
@@ -547,6 +548,21 @@ export type Invoice = {
   createdAt: string;
   updatedAt: string;
   lineItems: InvoiceLineItem[];
+};
+
+/** Protokoll-Zeile eines camt-Zahlungsabgleichs (Datei selbst wird nie gespeichert). */
+export type PaymentImport = {
+  id: string;
+  organizationId: string;
+  filename: string;
+  importedByProfileId: string | null;
+  importedByDisplayName: string | null;
+  entriesTotal: number;
+  entriesMatched: number;
+  entriesAlreadyPaid: number;
+  entriesAmountMismatch: number;
+  entriesUnmatched: number;
+  createdAt: string;
 };
 
 /** Zahlungsdaten der Organisation (organizations.billing_*) für QR-Rechnungen. */
