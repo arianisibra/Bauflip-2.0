@@ -7,7 +7,8 @@
 | [DEVELOPER_OVERVIEW.md](./DEVELOPER_OVERVIEW.md) | Produkt, Stack, Rollen, Code-Orientierung (Haupt-Einstieg für Devs) |
 | [CLIENT_WORKFLOW_AND_ROUTES.md](./CLIENT_WORKFLOW_AND_ROUTES.md) | Workflows und Routen aus Sicht Office/Tech |
 | [ROADMAP.md](./ROADMAP.md) | Ausbau-Analyse: Optionen, Priorisierung, Detailplan Offerten |
-| [PLAN-rechnungen-qr.md](./PLAN-rechnungen-qr.md) | Aktiver Plan: Rechnungen mit Schweizer QR-Rechnung (Phasen R1–R4) |
+| [PLAN-rechnungen-qr.md](./PLAN-rechnungen-qr.md) | Umgesetzt: Rechnungen mit Schweizer QR-Rechnung (Phasen R1–R4) |
+| [PLAN-zahlungen-bexio.md](./PLAN-zahlungen-bexio.md) | Aktiver Plan: camt-Zahlungsabgleich + Bexio-Push Modell A (Z1–Z3, B1–B3) |
 
 ## Performance & Hosting
 
