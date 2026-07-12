@@ -1,5 +1,11 @@
 # Plan: Zahlungsabgleich (camt) + Bexio-Anbindung (Modell A)
 
+> **Teil A (Z1–Z3): UMGESETZT** (Juli 2026, Commit `b0292b9`) — camt-Parser,
+> Matching, Migration, `/zahlungen`-Seite mit Ampel-Vorschau + Import-Historie.
+> 96/96 Tests, Typecheck/Lint/Build grün. Offen (unkritisch): echte camt-Datei
+> als Realitätstest, visueller Durchklick der neuen Seite.
+> **Teil B (Bexio): wartet** auf API-Token + Treuhänder-Okay.
+
 Stand: Juli 2026, Branch `bauflip-os` (kein Merge nach `main` — Entwicklungs-Branch).
 Schliesst den Geld-Kreislauf: Rechnung (fertig) → **Zahlung erkannt** → Projekt abgeschlossen,
 plus **Beleg automatisch beim Treuhänder** (Bexio).
