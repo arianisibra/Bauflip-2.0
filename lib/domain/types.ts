@@ -548,6 +548,10 @@ export type Invoice = {
   createdAt: string;
   updatedAt: string;
   lineItems: InvoiceLineItem[];
+  /** Bexio-Beleg (Teil B) — kb_invoice-ID nach Push, Idempotenz-Schlüssel. */
+  bexioInvoiceId: number | null;
+  bexioSyncedAt: string | null;
+  bexioSyncError: string | null;
 };
 
 /** Protokoll-Zeile eines camt-Zahlungsabgleichs (Datei selbst wird nie gespeichert). */
@@ -574,6 +578,14 @@ export type OrganizationBillingSettings = {
   creditorPostalCode: string | null;
   creditorCity: string | null;
   vatNumber: string | null;
+};
+
+/** Bexio-Anbindung (Teil B): Verbindungsstatus + Mapping (organizations.bexio_*). Token selbst nie hier. */
+export type BexioSettings = {
+  connected: boolean;
+  connectedAt: string | null;
+  taxId: number | null;
+  accountId: number | null;
 };
 
 export type ProjectAttachment = {

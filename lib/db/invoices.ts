@@ -14,7 +14,7 @@ import { buildQrrReference, buildScorReference, chooseReferenceType } from "@/li
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const INVOICE_DB_COLUMNS =
-  "id, organization_id, project_id, quote_id, invoice_number, status, due_date, intro_text, vat_rate, total_net, total_gross, reference_type, payment_reference, sent_at, sent_to_email, paid_at, created_by, created_by_display_name, created_at, updated_at";
+  "id, organization_id, project_id, quote_id, invoice_number, status, due_date, intro_text, vat_rate, total_net, total_gross, reference_type, payment_reference, sent_at, sent_to_email, paid_at, created_by, created_by_display_name, created_at, updated_at, bexio_invoice_id, bexio_synced_at, bexio_sync_error";
 
 const INVOICE_LINE_ITEM_DB_COLUMNS =
   "id, invoice_id, position, description, quantity, unit, unit_price, line_total";
@@ -55,6 +55,9 @@ function mapInvoiceRow(row: Record<string, unknown>): Invoice {
     createdAt: String(row.created_at ?? ""),
     updatedAt: String(row.updated_at ?? ""),
     lineItems: [],
+    bexioInvoiceId: row.bexio_invoice_id != null ? Number(row.bexio_invoice_id) : null,
+    bexioSyncedAt: row.bexio_synced_at != null ? String(row.bexio_synced_at) : null,
+    bexioSyncError: row.bexio_sync_error != null ? String(row.bexio_sync_error) : null,
   };
 }
 
@@ -470,3 +473,45 @@ export async function setInvoiceStatus(
     lineItems: ((items ?? []) as Record<string, unknown>[]).map(mapInvoiceLineItemRow),
   };
 }
+
+/** Bexio-Push-Status setzen (Teil B) — Erfolg löscht einen evtl. vorherigen Fehler. */
+export async function updateInvoiceBexioSync(
+  invoiceId: string,
+  result: { bexioInvoiceId: number; bexioSyncedAt: string } | { bexioSyncError: string },
+): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) throw new Error("Supabase nicht verfügbar.");
+
+  const patch =
+    "bexioSyncError" in result
+      ? { bexio_sync_error: result.bexioSyncError }
+      : {
+          bexio_invoice_id: result.bexioInvoiceId,
+          bexio_synced_at: result.bexioSyncedAt,
+          bexio_sync_error: null,
+        };
+
+  const { error } = await supabase.from("invoices").update(patch).eq("id", invoiceId);
+  if (error) throw new Error(error.message);
+}
+
+/** Minimaldaten für den Bexio-Kontakt-Abgleich (Teil B) — Titel als Kontaktname. */
+export const getProjectForBexio = cache(async function getProjectForBexio(
+  projectId: string,
+): Promise<{ id: string; title: string; bexioContactId: number | null } | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id, title, bexio_contact_id")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (error || !data) return null;
+  const row = data as Record<string, unknown>;
+  return {
+    id: String(row.id),
+    title: row.title != null ? String(row.title) : "Kunde",
+    bexioContactId: row.bexio_contact_id != null ? Number(row.bexio_contact_id) : null,
+  };
+});

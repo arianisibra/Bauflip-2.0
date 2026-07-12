@@ -1,5 +1,6 @@
 "use client";
 
+import { BexioSettingsForm } from "@/components/app/bexio-settings-form";
 import { BillingSettingsForm } from "@/components/app/billing-settings-form";
 import { InvitePreferenceToggle } from "@/components/app/invite-preference-toggle";
 import { useOrganizationBrandingContext } from "@/components/app/organization-branding-provider";
@@ -40,6 +41,8 @@ export function EinstellungenPageClient() {
       <PriceBookManager />
 
       {data.canEditCompanySettings ? <BillingSettingsForm /> : null}
+
+      {data.canEditCompanySettings ? <BexioSettingsForm /> : null}
 
       <InvitePreferenceToggle />
     </section>

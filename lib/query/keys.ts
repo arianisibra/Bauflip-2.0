@@ -71,6 +71,8 @@ export const queryKeys = {
   paymentImports: () => ["payment-imports"] as const,
   /** Zahlungsdaten der Organisation (QR-Rechnung, Admin). */
   billingSettings: () => ["billing-settings"] as const,
+  bexioSettings: () => ["bexio-settings"] as const,
+  bexioMappingOptions: () => ["bexio-mapping-options"] as const,
   /** Termin-Einladungen per Mail an/aus (eigener Account). */
   invitePreference: () => ["invite-preference"] as const,
   /** Zeiterfassung: eigene Einträge + Team-Übersicht (Büro/Admin). */

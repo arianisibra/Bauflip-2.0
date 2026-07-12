@@ -62,6 +62,14 @@ import { sendAppointmentConfirmationAction } from "@/app/(app)/projekte/appointm
 import { fetchDashboardDataAction } from "@/app/(app)/dashboard/actions";
 import type { DashboardData } from "@/lib/db/dashboard";
 import {
+  connectBexioAction,
+  disconnectBexioAction,
+  getBexioMappingOptionsAction,
+  getBexioSettingsAction,
+  saveBexioMappingAction,
+  type BexioMappingOptions,
+} from "@/app/(app)/einstellungen/bexio-actions";
+import {
   getBillingSettingsAction,
   updateBillingSettingsAction,
 } from "@/app/(app)/einstellungen/billing-actions";
@@ -73,6 +81,7 @@ import {
   createInvoiceAction,
   deleteInvoiceAction,
   listInvoicesAction,
+  pushInvoiceToBexioAction,
   sendInvoiceAction,
   setInvoiceStatusAction,
   updateInvoiceAction,
@@ -84,7 +93,7 @@ import {
   type ConfirmPaymentImportResult,
   type PaymentImportPreview,
 } from "@/app/(app)/zahlungen/actions";
-import type { Invoice, InvoiceStatus, OrganizationBillingSettings, PaymentImport } from "@/lib/domain/types";
+import type { BexioSettings, Invoice, InvoiceStatus, OrganizationBillingSettings, PaymentImport } from "@/lib/domain/types";
 import { listTeamMembersAction } from "@/app/(app)/einstellungen/actions";
 import {
   createAbsenceAction,
@@ -638,6 +647,18 @@ export function useSendInvoice() {
   });
 }
 
+/** Manueller Bexio-Retry-Button (Rechnungs-Sektion) — Teil B3. */
+export function usePushInvoiceToBexio() {
+  const qc = useQueryClient();
+  return useMutation<Invoice, Error, string>({
+    mutationFn: (invoiceId) => pushInvoiceToBexioAction(invoiceId, getTabId()),
+    onSuccess: (invoice) => {
+      afterInvoiceChange(qc, invoice.projectId, { refetchType: "all" });
+      notifyOtherTabs({ type: "invoice.changed", projectId: invoice.projectId });
+    },
+  });
+}
+
 export function useDeleteInvoice() {
   const qc = useQueryClient();
   return useMutation<{ ok: true }, Error, { invoiceId: string; projectId: string }>({
@@ -717,6 +738,58 @@ export function useUpdateBillingSettings() {
     mutationFn: (input) => updateBillingSettingsAction(input),
     onSuccess: (settings) => {
       qc.setQueryData(queryKeys.billingSettings(), settings);
+    },
+  });
+}
+
+/** Bexio-Verbindungsstatus + Mapping — Admin-Sektion in Einstellungen. */
+export function useBexioSettings(enabled = true) {
+  return useQuery<BexioSettings>({
+    queryKey: queryKeys.bexioSettings(),
+    queryFn: () => getBexioSettingsAction(),
+    enabled,
+    staleTime: 60_000,
+    refetchOnMount: false,
+  });
+}
+
+export function useConnectBexio() {
+  const qc = useQueryClient();
+  return useMutation<BexioSettings, Error, string>({
+    mutationFn: (token) => connectBexioAction(token),
+    onSuccess: (settings) => {
+      qc.setQueryData(queryKeys.bexioSettings(), settings);
+    },
+  });
+}
+
+export function useDisconnectBexio() {
+  const qc = useQueryClient();
+  return useMutation<BexioSettings, Error, void>({
+    mutationFn: () => disconnectBexioAction(),
+    onSuccess: (settings) => {
+      qc.setQueryData(queryKeys.bexioSettings(), settings);
+    },
+  });
+}
+
+/** Live aus Bexio geladen (Konten/Steuersätze) — nur abrufen, wenn verbunden + Mapping offen. */
+export function useBexioMappingOptions(enabled: boolean) {
+  return useQuery<BexioMappingOptions>({
+    queryKey: queryKeys.bexioMappingOptions(),
+    queryFn: () => getBexioMappingOptionsAction(),
+    enabled,
+    staleTime: 60_000,
+    refetchOnMount: false,
+  });
+}
+
+export function useSaveBexioMapping() {
+  const qc = useQueryClient();
+  return useMutation<BexioSettings, Error, Parameters<typeof saveBexioMappingAction>[0]>({
+    mutationFn: (input) => saveBexioMappingAction(input),
+    onSuccess: (settings) => {
+      qc.setQueryData(queryKeys.bexioSettings(), settings);
     },
   });
 }

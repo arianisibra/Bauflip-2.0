@@ -4,7 +4,13 @@
 > Matching, Migration, `/zahlungen`-Seite mit Ampel-Vorschau + Import-Historie.
 > 96/96 Tests, Typecheck/Lint/Build grün. Offen (unkritisch): echte camt-Datei
 > als Realitätstest, visueller Durchklick der neuen Seite.
-> **Teil B (Bexio): wartet** auf API-Token + Treuhänder-Okay.
+> **Teil B (Bexio, B1–B3): FUNDAMENT UMGESETZT** (Juli 2026, ohne Live-Token gebaut —
+> User-Entscheid). `lib/bexio/` (Client, Secrets, Kontakt-Matching, Push-Orchestrierung),
+> Migration `20260806120000_bexio_integration.sql`, Einstellungen → «Bexio» (Token,
+> MwSt-/Konto-Mapping), automatischer Push nach Rechnungsversand (best-effort) + manueller
+> Retry-Button in der Rechnungs-Sektion. Typecheck/Lint/96 Tests/Build grün.
+> **Ungetestet mit echtem Token** — siehe "Offene Punkte vor Live-Betrieb" am Ende dieses
+> Abschnitts. Nicht produktiv nutzen, bevor das durchgeklickt wurde.
 
 Stand: Juli 2026, Branch `bauflip-os` (kein Merge nach `main` — Entwicklungs-Branch).
 Schliesst den Geld-Kreislauf: Rechnung (fertig) → **Zahlung erkannt** → Projekt abgeschlossen,
@@ -89,6 +95,37 @@ tolerante Parser, aber ein echter Beleg ist Gold wert.
 - **Vor der Implementation:** exakte kb_invoice-/contact-Feldnamen gegen die **aktuelle**
   Bexio-API-Doku verifizieren (WebFetch) — nicht aus dem Gedächtnis bauen.
 
+### Verifiziertes Schema (B0, Juli 2026)
+
+`docs.bexio.com` ist eine JS-gerenderte Redocly-Seite — WebFetch bekommt nur Fliesstext,
+keine Feldtabellen (Contacts-Tag ging teilweise, Invoices-Tag/OpenAPI-Datei nicht — 404 bei
+den geratenen Rohdatei-URLs). Als Ersatz wurden Felder gegen den Quellcode + die Pest-Tests
+des gepflegten, typisierten Community-Clients `codebar-ag/laravel-bexio` (Saloon + Spatie-DTOs,
+GitHub) kreuzverifiziert. Das ist keine offizielle Quelle, aber Code+Tests statt Prosa/Gedächtnis —
+finale Bestätigung bleibt der Verbindungstest mit echtem Token (B1).
+
+**`POST /2.0/contact`** — Pflicht: `name_1` (string), `contact_type_id` (int). Optional:
+`name_2`, `mail`, `address`/`street_name`/`house_number`/`postcode`/`city`/`country_id`,
+`phone_fixed`, `language_id`, u.a. Antwort enthält `id`.
+
+**`POST /2.0/kb_invoice`** — `InvoiceDTO`-Felder (alle optional ausser `user_id`):
+`title`, `contact_id`, `user_id` (Pflicht, int), `language_id`, `bank_account_id`,
+`currency_id`, `payment_type_id`, `mwst_type` (int), `mwst_is_net` (bool),
+`show_position_taxes` (bool), `is_valid_from`/`is_valid_to` (String `Y-m-d H:i:s`),
+`header`, `footer`, `reference`, `api_reference` (frei wählbar — **hier unsere `RE-2026-…`
++ Idempotenz-Schlüssel**), `positions[]`. Server setzt `id`, `document_nr` (Bexios eigene
+Nummer), Summen-Felder.
+
+**Position (`type: "KbPositionCustom"`)** — `amount` (string, Menge), `unit_id` (int),
+`account_id` (int, Ertragskonto), `tax_id` (int), `text` (string), `unit_price`
+(string, z. B. `"100.00"`), `discount_in_percent` (string, meist `"0"`).
+
+**Taxes** (`GET /3.0/taxes?limit=...&scope=active&types=sales_tax`, anderer Namespace als
+der Rest — Achtung bei B2): `id`, `name`, `display_name`, `value` (float, %), `is_active`.
+**Accounts** (`GET /2.0/accounts`): `id`, `account_no`, `name`, `account_type` (int —
+Ertragskonten filtern), `is_active`. Beide Endpunkte + Verbindungstest (`GET /2.0/accounts?limit=1`)
+sind in `lib/bexio/client.ts` (B1) implementiert/vorbereitet.
+
 ### Phasen
 
 - **B1 — Fundament (1 Tag):** Eine Migration (Secrets-Tabelle deny-all,
@@ -105,6 +142,28 @@ tolerante Parser, aber ein echter Beleg ist Gold wert.
 
 1. **Bexio-Konto + API-Token** generieren (erst für B nötig).
 2. **Treuhänder-Okay** für Modell A («fertige Rechnungen liegen als Beleg in Bexio»).
+
+### Offene Punkte vor Live-Betrieb (mit echtem Token durchklicken)
+
+Das Fundament ist ohne Live-Token gebaut (User-Entscheid) — Feldnamen sind gegen Quellcode
++ Tests eines Community-Clients kreuzverifiziert (siehe "Verifiziertes Schema" oben), aber
+folgende Annahmen sind **nicht** gegen die echte API getestet:
+
+- **`mwst_type: 0`** (angenommen: exklusive MwSt, passend zu unseren Netto-Einzelpreisen)
+  — mit dem Treuhänder/einer Testrechnung verifizieren, sonst stimmt der MwSt-Ausweis in
+  Bexio nicht.
+- **Kontakt-Suche** (`POST /2.0/contact/search`, `lib/bexio/client.ts::findBexioContact`) —
+  Body-Format (flaches Array `[{field,value,criteria}]`) stammt aus Community-Quellen, nicht
+  aus der offiziellen Doku direkt.
+- **Automatische Auswahl von `user_id`** (erster Bexio-Benutzer, `getDefaultBexioUserId`)
+  und **`unit_id`** (erste aktive Einheit, `getDefaultBexioUnitId`) — bei mehreren
+  Bexio-Benutzern/-Einheiten ggf. falsch; für eine Einzelperson/kleines Team unkritisch.
+- **`contact_type_id: 1`** (Firma) für automatisch angelegte Kontakte — ausreichend belegt,
+  aber nicht live getestet.
+
+Empfehlung: Nach Token-Erhalt eine harmlose Testrechnung (kleiner Betrag, Testkontakt)
+manuell über den «Nach Bexio übertragen»-Button pushen und in Bexio prüfen, bevor der
+automatische Push nach Versand im produktiven Alltag verlassen wird.
 
 ---
 

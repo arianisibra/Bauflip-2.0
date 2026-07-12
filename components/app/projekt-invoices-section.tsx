@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { FileText, Loader2, Pencil, Plus, Send, Trash2 } from "lucide-react";
+import { AlertTriangle, CloudUpload, FileText, Loader2, Pencil, Plus, Send, Trash2 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button-variants";
 import type { Invoice, InvoiceStatus, PriceBookItem, ProjectStatus, Quote } from "@/lib/domain/types";
 import {
@@ -26,6 +26,7 @@ import {
   usePriceBookItems,
   useProjectInvoices,
   useProjectQuotes,
+  usePushInvoiceToBexio,
   useQuoteMailConfig,
   useSendInvoice,
   useSetInvoiceStatus,
@@ -137,6 +138,7 @@ export function ProjektInvoicesSection({
   const setStatus = useSetInvoiceStatus();
   const deleteInvoice = useDeleteInvoice();
   const sendInvoice = useSendInvoice();
+  const pushToBexio = usePushInvoiceToBexio();
   const updateProjectStatus = useUpdateProjectStatus();
   const mailConfig = useQuoteMailConfig(canEdit);
   const mailConfigured = mailConfig.data?.mailConfigured ?? false;
@@ -306,6 +308,24 @@ export function ProjektInvoicesSection({
                 <Badge variant="outline" className={cn(invoiceStatusBadgeClassNames[invoice.status])}>
                   {invoiceStatusLabels[invoice.status]}
                 </Badge>
+                {invoice.bexioInvoiceId ? (
+                  <Badge
+                    variant="outline"
+                    className="gap-1 border-emerald-500/55 bg-emerald-500/15 text-emerald-700 dark:border-emerald-400/55 dark:bg-emerald-500/20 dark:text-emerald-300"
+                  >
+                    <CloudUpload className="size-3" aria-hidden />
+                    In Bexio
+                  </Badge>
+                ) : invoice.bexioSyncError ? (
+                  <Badge
+                    variant="outline"
+                    className="gap-1 border-amber-500/55 bg-amber-500/15 text-amber-700 dark:border-amber-400/55 dark:bg-amber-500/20 dark:text-amber-300"
+                    title={invoice.bexioSyncError}
+                  >
+                    <AlertTriangle className="size-3" aria-hidden />
+                    Bexio-Übertragung fehlgeschlagen
+                  </Badge>
+                ) : null}
               </div>
               <span className="text-sm font-semibold tabular-nums">{chf.format(invoice.totalGross)}</span>
             </div>
@@ -329,6 +349,29 @@ export function ProjektInvoicesSection({
                 <FileText className="size-4" aria-hidden />
                 PDF
               </a>
+              {canEdit && invoice.status !== "draft" && !invoice.bexioInvoiceId ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pushToBexio.isPending}
+                  onClick={async () => {
+                    try {
+                      await pushToBexio.mutateAsync(invoice.id);
+                      toast.success("An Bexio übertragen");
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Übertragung fehlgeschlagen.");
+                    }
+                  }}
+                >
+                  {pushToBexio.isPending ? (
+                    <Loader2 className="size-4 animate-spin" aria-hidden />
+                  ) : (
+                    <CloudUpload className="size-4" aria-hidden />
+                  )}
+                  {invoice.bexioSyncError ? "Bexio: erneut versuchen" : "Nach Bexio übertragen"}
+                </Button>
+              ) : null}
               {canEdit && mailConfigured && (invoice.status === "draft" || invoice.status === "sent") ? (
                 <Button
                   type="button"

@@ -2,6 +2,7 @@
 
 import { requireOfficeSession } from "@/lib/auth/organization";
 import { getCachedSessionProfile } from "@/lib/auth/session";
+import { pushInvoiceToBexio } from "@/lib/bexio/push-invoice";
 import { getOrganizationBillingSettings } from "@/lib/db/billing";
 import {
   createInvoice,
@@ -156,6 +157,28 @@ export async function sendInvoiceAction(values: unknown, tabId?: string): Promis
   const updated = await setInvoiceStatus(invoice.id, invoice.projectId, "sent", {
     sentToEmail: parsed.data.recipientEmail,
   });
+  await publishInvoiceChanged(session.organizationId, updated.projectId, tabId);
+
+  // Best-effort: Bexio-Push blockiert den Versand nie — Fehler landet nur als Sync-Status
+  // an der Rechnung (Retry-Button in der UI), siehe lib/bexio/push-invoice.ts.
+  if (session.organizationId) {
+    pushInvoiceToBexio(session.organizationId, updated).catch(() => {});
+  }
+
+  return updated;
+}
+
+/** Manueller Retry-Button (Rechnungs-Sektion) — wirft bei Fehler, damit die UI ihn anzeigen kann. */
+export async function pushInvoiceToBexioAction(invoiceId: string, tabId?: string): Promise<Invoice> {
+  const session = await requireOfficeSession();
+  if (!session.organizationId) throw new Error("Keine Organisation.");
+
+  const invoice = await getInvoiceWithItems(invoiceId);
+  if (!invoice) throw new Error("Rechnung nicht gefunden.");
+
+  await pushInvoiceToBexio(session.organizationId, invoice);
+  const updated = await getInvoiceWithItems(invoiceId);
+  if (!updated) throw new Error("Rechnung nicht gefunden.");
   await publishInvoiceChanged(session.organizationId, updated.projectId, tabId);
   return updated;
 }
