@@ -1006,12 +1006,13 @@ export function useAddAppointment() {
   const qc = useQueryClient();
   return useMutation<{ core: ProjectCore }, Error, AppointmentInput>({
     mutationFn: (input) => addAppointmentAction(input, getTabId()),
-    onSuccess: ({ core }, variables) => {
+    onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
-      invalidateProjectAdjacencies(qc, core.project.id, {
-        appointmentWindow: { startsAt: variables.startsAt, endsAt: variables.endsAt },
-        refetchType: "all",
-      });
+      // Buchen kann den Projektstatus promoten (→ abgemacht). Der Status steht auf
+      // ALLEN Kalender-Kacheln des Projekts, nicht nur im Fenster des neuen Termins
+      // (z. B. der bereits sichtbare Ersttermin in einer anderen Woche). Deshalb breit
+      // invalidieren — wie useUpdateProjectStatus und der SSE-Pfad.
+      invalidateProjectAdjacencies(qc, core.project.id, { refetchType: "all" });
       notifyOtherTabs({ type: "appointment.changed", projectId: core.project.id });
     },
   });
@@ -1052,23 +1053,16 @@ export function useDeleteAppointment() {
   return useMutation<
     { core: ProjectCore },
     Error,
-    { appointmentId: string; projectId: string },
-    DeleteAppointmentContext
+    { appointmentId: string; projectId: string }
   >({
     mutationFn: ({ appointmentId, projectId }) =>
       deleteAppointmentAction(appointmentId, projectId, getTabId()),
-    onMutate: ({ appointmentId, projectId }) => {
-      const core = qc.getQueryData<ProjectCore>(queryKeys.projects.core(projectId));
-      const appt = core?.appointments.find((a) => a.id === appointmentId);
-      if (!appt) return {};
-      return { appointmentWindow: { startsAt: appt.startsAt, endsAt: appt.endsAt } };
-    },
-    onSuccess: ({ core }, _variables, context) => {
+    onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
-      invalidateProjectAdjacencies(qc, core.project.id, {
-        appointmentWindow: context?.appointmentWindow,
-        refetchType: "all",
-      });
+      // Löschen des letzten bevorstehenden Termins kann den Status zurücksetzen
+      // (abgemacht → vorher). Wie beim Buchen betrifft das den projektweiten Status
+      // auf allen Kacheln → breit invalidieren statt nur das gelöschte Fenster.
+      invalidateProjectAdjacencies(qc, core.project.id, { refetchType: "all" });
       notifyOtherTabs({ type: "appointment.changed", projectId: core.project.id });
     },
   });
