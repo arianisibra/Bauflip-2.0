@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { toast } from "sonner";
 import { useSessionProfile } from "@/components/app/session-profile-provider";
 import { inviteEmployeeAction, type TeamMemberListItem } from "@/app/(app)/einstellungen/actions";
 import { InviteEmployeeSubmitButton } from "@/components/app/invite-employee-submit-button";
@@ -13,9 +14,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { useTeamMembers } from "@/lib/query/hooks";
+import { Button } from "@/components/ui/button";
+import { useDeactivateTeamMember, useTeamMembers } from "@/lib/query/hooks";
 import type { LucideIcon } from "lucide-react";
-import { Calendar, Layers, Mail, UserPlus, Users } from "lucide-react";
+import { Calendar, Layers, Loader2, Mail, UserMinus, UserPlus, Users } from "lucide-react";
 
 const roleLabel: Record<"admin" | "office" | "technician", string> = {
   admin: "Admin",
@@ -127,6 +129,7 @@ export function MitarbeiterPageClient() {
   const isAdmin = profile.role === "admin";
 
   const { data: teamMembers = [] } = useTeamMembers(isAdmin);
+  const deactivate = useDeactivateTeamMember();
 
   if (!isAdmin) {
     return null;
@@ -135,6 +138,19 @@ export function MitarbeiterPageClient() {
   const activeCount = teamMembers.filter((m) => m.status === "aktiv").length;
   const pendingCount = teamMembers.filter((m) => m.status === "eingeladen").length;
   const currentUserId = profile.userId;
+
+  const handleRemove = async (row: TeamMemberListItem) => {
+    if (!row.userId) return;
+    if (!window.confirm(`«${row.displayName}» aus der Organisation entfernen? Der Zugriff wird sofort gesperrt.`)) {
+      return;
+    }
+    try {
+      await deactivate.mutateAsync(row.userId);
+      toast.success(`${row.displayName} wurde entfernt`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Entfernen fehlgeschlagen.");
+    }
+  };
   const turnstileConfigured = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
   return (
@@ -175,7 +191,8 @@ export function MitarbeiterPageClient() {
                     <TableHead className="h-9 w-[40%] pl-4 text-xs font-medium text-muted-foreground">Person</TableHead>
                     <TableHead className="h-9 text-xs font-medium text-muted-foreground">Rolle</TableHead>
                     <TableHead className="h-9 text-xs font-medium text-muted-foreground">Status</TableHead>
-                    <TableHead className="h-9 pr-4 text-right text-xs font-medium text-muted-foreground">Seit</TableHead>
+                    <TableHead className="h-9 text-right text-xs font-medium text-muted-foreground">Seit</TableHead>
+                    <TableHead className="h-9 w-10 pr-4" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -197,7 +214,7 @@ export function MitarbeiterPageClient() {
                         <TableCell>
                           <StatusBadge status={row.status} />
                         </TableCell>
-                        <TableCell className="pr-4 text-right text-sm tabular-nums text-muted-foreground">
+                        <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
                           {row.createdAt ? (
                             <span className="inline-flex items-center justify-end gap-1">
                               <Calendar className="size-3.5 opacity-60" aria-hidden />
@@ -207,11 +224,31 @@ export function MitarbeiterPageClient() {
                             "—"
                           )}
                         </TableCell>
+                        <TableCell className="pr-4 text-right">
+                          {row.status === "aktiv" && row.userId && row.userId !== currentUserId ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="size-8 p-0 text-muted-foreground hover:text-destructive"
+                              aria-label={`${row.displayName} entfernen`}
+                              title="Aus Organisation entfernen"
+                              disabled={deactivate.isPending}
+                              onClick={() => handleRemove(row)}
+                            >
+                              {deactivate.isPending && deactivate.variables === row.userId ? (
+                                <Loader2 className="size-4 animate-spin" aria-hidden />
+                              ) : (
+                                <UserMinus className="size-4" aria-hidden />
+                              )}
+                            </Button>
+                          ) : null}
+                        </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={4} className="px-4 py-10 text-center">
+                      <TableCell colSpan={5} className="px-4 py-10 text-center">
                         <div className="mx-auto flex max-w-sm flex-col items-center gap-2">
                           <Users className="size-10 text-muted-foreground/50" aria-hidden />
                           <p className="text-sm font-medium text-foreground">Noch keine Mitarbeitenden</p>
