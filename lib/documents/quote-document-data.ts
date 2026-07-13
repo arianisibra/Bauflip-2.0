@@ -72,6 +72,10 @@ export type QuoteDocumentData = {
   verwaltung_name: string;
   objekt_strasse: string;
   objekt_plz_ort: string;
+  /** Objekt-Adresse kombiniert (Strasse, PLZ Ort) — viele Vorlagen haben ein Feld. */
+  objekt: string;
+  /** Zusatz-/c-o-Zeile im Empfängerblock (z. B. Verwaltung). */
+  kunde_zusatz: string;
   referenz: string;
   kopftext: string;
   fusstext: string;
@@ -86,6 +90,8 @@ export type QuoteDocumentData = {
   eigentuemer: string;
   briefanrede: string;
   rabatt: string;
+  rabatt_text: string;
+  rabatt_betrag: string;
 };
 
 /** Katalog für die «Platzhalter-Referenz» in der UI (Feldname + Bedeutung + Beispiel). */
@@ -137,6 +143,8 @@ export function buildQuoteDocumentData(input: QuoteDocumentInput): QuoteDocument
     verwaltung_name: project.managementName ?? "",
     objekt_strasse: project.serviceStreet ?? "",
     objekt_plz_ort: plzOrt,
+    objekt: [project.serviceStreet, plzOrt].filter(Boolean).join(", "),
+    kunde_zusatz: "",
     referenz: project.referenceCode ?? "",
     kopftext: quote.introText ?? "",
     fusstext: quote.outroText ?? "",
@@ -150,5 +158,7 @@ export function buildQuoteDocumentData(input: QuoteDocumentInput): QuoteDocument
     eigentuemer: project.managementName ?? "",
     briefanrede: "",
     rabatt: "",
+    rabatt_text: "",
+    rabatt_betrag: "",
   };
 }
