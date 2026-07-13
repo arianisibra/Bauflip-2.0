@@ -8,8 +8,10 @@ import { isQrIban, isValidQrBillIban } from "@/lib/qr-bill/iban";
 import { billingSettingsSchema } from "@/lib/validations/forms";
 import { useBillingSettings, useUpdateBillingSettings } from "@/lib/query/hooks";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SettingsRow } from "@/components/app/settings-row";
 
 type FormState = {
   iban: string;
@@ -19,6 +21,16 @@ type FormState = {
   creditorPostalCode: string;
   creditorCity: string;
   vatNumber: string;
+};
+
+const EMPTY_FORM: FormState = {
+  iban: "",
+  creditorName: "",
+  creditorStreet: "",
+  creditorBuildingNumber: "",
+  creditorPostalCode: "",
+  creditorCity: "",
+  vatNumber: "",
 };
 
 function formFromSettings(settings: OrganizationBillingSettings): FormState {
@@ -33,27 +45,30 @@ function formFromSettings(settings: OrganizationBillingSettings): FormState {
   };
 }
 
-/** Zahlungsdaten für QR-Rechnungen (Einstellungen, nur Admin). */
+/** Zahlungsdaten für QR-Rechnungen (Einstellungen, nur Admin): Zeile + Bearbeiten-Fenster. */
 export function BillingSettingsForm() {
   const settingsQuery = useBillingSettings();
   const updateSettings = useUpdateBillingSettings();
-  const [form, setForm] = useState<FormState | null>(null);
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
 
-  // Initialwert während des Renders nachziehen (Repo-Muster, kein useEffect):
-  // sobald die Query liefert und noch kein lokaler Zustand existiert.
-  if (settingsQuery.data && form === null) {
-    setForm(formFromSettings(settingsQuery.data));
+  // Beim Öffnen mit den aktuellen Werten befüllen (Render-Zeit-Init, kein useEffect).
+  const [initedOpen, setInitedOpen] = useState(false);
+  if (open && !initedOpen) {
+    setInitedOpen(true);
+    setForm(settingsQuery.data ? formFromSettings(settingsQuery.data) : EMPTY_FORM);
+  } else if (!open && initedOpen) {
+    setInitedOpen(false);
   }
 
   const set = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm((prev) => (prev ? { ...prev, [key]: e.target.value } : prev));
+    setForm((prev) => ({ ...prev, [key]: e.target.value }));
 
-  const ibanTrimmed = form?.iban.trim() ?? "";
+  const ibanTrimmed = form.iban.trim();
   const ibanValid = ibanTrimmed ? isValidQrBillIban(ibanTrimmed) : null;
   const ibanIsQr = ibanValid ? isQrIban(ibanTrimmed) : false;
 
   const submit = async () => {
-    if (!form) return;
     const payload = {
       iban: form.iban || null,
       creditorName: form.creditorName || null,
@@ -69,27 +84,58 @@ export function BillingSettingsForm() {
       return;
     }
     try {
-      const saved = await updateSettings.mutateAsync(payload);
-      setForm(formFromSettings(saved));
+      await updateSettings.mutateAsync(payload);
       toast.success("Zahlungsdaten gespeichert");
+      setOpen(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
     }
   };
 
-  return (
-    <section className="rounded-xl border border-border p-4">
-      <div className="mb-3">
-        <h2 className="text-sm font-semibold">Zahlungsdaten (QR-Rechnung)</h2>
-        <p className="mt-0.5 text-[11px] text-muted-foreground">
-          IBAN und Gläubiger-Adresse für den Zahlteil der QR-Rechnung. Ohne IBAN ist der
-          Rechnungsversand deaktiviert.
-        </p>
-      </div>
+  const data = settingsQuery.data;
+  const summary = settingsQuery.isLoading
+    ? "Wird geladen …"
+    : data?.iban
+      ? `IBAN ${data.iban}${data.creditorCity ? ` · ${data.creditorCity}` : ""}`
+      : "Noch nicht erfasst — ohne IBAN ist der Rechnungsversand deaktiviert.";
 
-      {settingsQuery.isLoading || !form ? (
-        <p className="text-sm text-muted-foreground">Zahlungsdaten werden geladen …</p>
-      ) : (
+  const footer = (
+    <div className="flex items-center justify-end gap-2">
+      <Button type="button" variant="ghost" disabled={updateSettings.isPending} onClick={() => setOpen(false)}>
+        Abbrechen
+      </Button>
+      <Button type="button" disabled={updateSettings.isPending} onClick={submit}>
+        {updateSettings.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+        Speichern
+      </Button>
+    </div>
+  );
+
+  return (
+    <>
+      <SettingsRow
+        title="Zahlungsdaten (QR-Rechnung)"
+        summary={summary}
+        action={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={settingsQuery.isLoading}
+            onClick={() => setOpen(true)}
+          >
+            Bearbeiten
+          </Button>
+        }
+      />
+
+      <Dialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Zahlungsdaten (QR-Rechnung)"
+        description="IBAN und Gläubiger-Adresse für den Zahlteil der QR-Rechnung."
+        footer={footer}
+      >
         <div className="space-y-3">
           <div>
             <Label className="text-[11px]">IBAN oder QR-IBAN (CH/LI)</Label>
@@ -145,15 +191,8 @@ export function BillingSettingsForm() {
               <Input value={form.creditorCity} placeholder="Zürich" onChange={set("creditorCity")} />
             </div>
           </div>
-
-          <div className="flex justify-end">
-            <Button type="button" disabled={updateSettings.isPending} onClick={submit}>
-              {updateSettings.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-              Speichern
-            </Button>
-          </div>
         </div>
-      )}
-    </section>
+      </Dialog>
+    </>
   );
 }
