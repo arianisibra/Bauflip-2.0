@@ -8,11 +8,13 @@ import {
   CircleHelp,
   Info,
   Loader2,
+  RotateCcw,
   Upload,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Stepper } from "@/components/ui/stepper";
 import type { CamtMatchResult } from "@/lib/camt/match";
 import type { InvoiceForPaymentMatching } from "@/lib/db/invoices";
 import {
@@ -25,6 +27,8 @@ import { cn } from "@/lib/utils";
 const chf = new Intl.NumberFormat("de-CH", { style: "currency", currency: "CHF" });
 
 type Row = CamtMatchResult<InvoiceForPaymentMatching>;
+
+const STEPS = ["Datei", "Vorschau", "Bestätigt"];
 
 const KIND_META: Record<
   Row["kind"],
@@ -67,6 +71,7 @@ function formatDateCh(iso: string): string {
 export function ZahlungenPageClient() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const [confirmResult, setConfirmResult] = useState<{ appliedCount: number; failedCount: number } | null>(null);
   const preview = usePreviewPaymentImport();
   const confirm = useConfirmPaymentImport();
   const importsQuery = usePaymentImports();
@@ -80,12 +85,23 @@ export function ZahlungenPageClient() {
     unmatched: (results ?? []).filter((r) => r.kind === "unmatched").length,
   };
 
+  // Der aktuelle Schritt ergibt sich aus dem Zustand — kein separater State nötig.
+  const step = confirmResult ? 2 : results ? 1 : 0;
+
+  const resetToUpload = () => {
+    preview.reset();
+    setConfirmResult(null);
+    setSelectedFileName(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const handleFileCheck = async () => {
     const file = fileInputRef.current?.files?.[0];
     if (!file) {
       toast.error("Bitte zuerst eine camt-Datei wählen.");
       return;
     }
+    setConfirmResult(null);
     const fd = new FormData();
     fd.set("file", file);
     try {
@@ -117,21 +133,18 @@ export function ZahlungenPageClient() {
           entriesUnmatched: counts.unmatched,
         },
       });
-      toast.success(
-        result.failedCount > 0
-          ? `${result.appliedCount} Rechnungen als bezahlt markiert (${result.failedCount} übersprungen)`
-          : `${result.appliedCount} Rechnungen als bezahlt markiert`,
-      );
+      setConfirmResult({ appliedCount: result.appliedCount, failedCount: result.failedCount });
       preview.reset();
-      setSelectedFileName(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Bestätigen fehlgeschlagen.");
     }
   };
 
+  const showHistory = step !== 1;
+
   return (
-    <section className="flex flex-col gap-6">
+    <section className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <header className="flex flex-col gap-1 border-b border-border/60 pb-4">
         <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Zahlungen</h1>
         <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
@@ -140,35 +153,39 @@ export function ZahlungenPageClient() {
         </p>
       </header>
 
-      <Card size="sm">
-        <CardHeader className="px-4">
-          <CardTitle className="text-sm font-semibold">Datei hochladen</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 px-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xml,text/xml,application/xml"
-              className="h-9 flex-1 rounded-md border border-input bg-background px-2.5 text-sm file:mr-2.5 file:h-full file:rounded-md file:border-0 file:bg-muted file:px-2.5 file:text-xs file:font-medium"
-            />
-            <Button type="button" disabled={preview.isPending} onClick={handleFileCheck}>
-              {preview.isPending ? (
-                <Loader2 className="size-4 animate-spin" aria-hidden />
-              ) : (
-                <Upload className="size-4" aria-hidden />
-              )}
-              Datei prüfen
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <Stepper steps={STEPS} current={step} />
 
-      {results ? (
+      {step === 0 ? (
+        <Card size="sm">
+          <CardHeader className="px-4">
+            <CardTitle className="text-sm font-semibold">1 · Datei wählen</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 px-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xml,text/xml,application/xml"
+                className="h-9 flex-1 rounded-md border border-input bg-background px-2.5 text-sm file:mr-2.5 file:h-full file:rounded-md file:border-0 file:bg-muted file:px-2.5 file:text-xs file:font-medium"
+              />
+              <Button type="button" disabled={preview.isPending} onClick={handleFileCheck}>
+                {preview.isPending ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                ) : (
+                  <Upload className="size-4" aria-hidden />
+                )}
+                Datei prüfen
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {step === 1 && results ? (
         <Card size="sm">
           <CardHeader className="px-4">
             <CardTitle className="text-sm font-semibold">
-              Vorschau{selectedFileName ? ` — ${selectedFileName}` : ""}
+              2 · Vorschau prüfen{selectedFileName ? ` — ${selectedFileName}` : ""}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 px-4">
@@ -222,7 +239,10 @@ export function ZahlungenPageClient() {
               })}
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex items-center justify-between gap-2 border-t pt-3">
+              <Button type="button" variant="ghost" disabled={confirm.isPending} onClick={resetToUpload}>
+                Andere Datei
+              </Button>
               <Button type="button" disabled={confirm.isPending || matchedRows.length === 0} onClick={handleConfirm}>
                 {confirm.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
                 Zuordnung bestätigen ({matchedRows.length})
@@ -232,40 +252,66 @@ export function ZahlungenPageClient() {
         </Card>
       ) : null}
 
-      <Card size="sm">
-        <CardHeader className="px-4">
-          <CardTitle className="text-sm font-semibold">Import-Historie</CardTitle>
-        </CardHeader>
-        <CardContent className="px-4">
-          {importsQuery.isLoading ? (
-            <p className="text-xs text-muted-foreground">Wird geladen …</p>
-          ) : (importsQuery.data ?? []).length === 0 ? (
-            <p className="text-xs text-muted-foreground">Noch keine Zahlungen importiert.</p>
-          ) : (
-            <ul className="space-y-1.5">
-              {(importsQuery.data ?? []).map((entry) => (
-                <li
-                  key={entry.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 px-3 py-2 text-xs"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-medium text-foreground">{entry.filename}</p>
-                    <p className="text-muted-foreground">
-                      {new Date(entry.createdAt).toLocaleString("de-CH", { timeZone: "Europe/Zurich" })}
-                      {entry.importedByDisplayName ? ` · ${entry.importedByDisplayName}` : ""}
+      {step === 2 && confirmResult ? (
+        <Card size="sm">
+          <CardContent className="flex flex-col items-center gap-3 px-4 py-8 text-center">
+            <span className="flex size-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="size-7" aria-hidden />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                {confirmResult.appliedCount} Rechnung{confirmResult.appliedCount === 1 ? "" : "en"} als bezahlt markiert
+              </p>
+              {confirmResult.failedCount > 0 ? (
+                <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">
+                  {confirmResult.failedCount} übersprungen
+                </p>
+              ) : null}
+            </div>
+            <Button type="button" variant="outline" onClick={resetToUpload}>
+              <RotateCcw className="size-4" aria-hidden />
+              Neue Datei importieren
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {showHistory ? (
+        <Card size="sm">
+          <CardHeader className="px-4">
+            <CardTitle className="text-sm font-semibold">Import-Historie</CardTitle>
+          </CardHeader>
+          <CardContent className="px-4">
+            {importsQuery.isLoading ? (
+              <p className="text-xs text-muted-foreground">Wird geladen …</p>
+            ) : (importsQuery.data ?? []).length === 0 ? (
+              <p className="text-xs text-muted-foreground">Noch keine Zahlungen importiert.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {(importsQuery.data ?? []).map((entry) => (
+                  <li
+                    key={entry.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 px-3 py-2 text-xs"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-foreground">{entry.filename}</p>
+                      <p className="text-muted-foreground">
+                        {new Date(entry.createdAt).toLocaleString("de-CH", { timeZone: "Europe/Zurich" })}
+                        {entry.importedByDisplayName ? ` · ${entry.importedByDisplayName}` : ""}
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-muted-foreground">
+                      {entry.entriesMatched} zugeordnet
+                      {entry.entriesAmountMismatch > 0 ? ` · ${entry.entriesAmountMismatch} abweichend` : ""}
+                      {entry.entriesUnmatched > 0 ? ` · ${entry.entriesUnmatched} unklar` : ""}
                     </p>
-                  </div>
-                  <p className="shrink-0 text-muted-foreground">
-                    {entry.entriesMatched} zugeordnet
-                    {entry.entriesAmountMismatch > 0 ? ` · ${entry.entriesAmountMismatch} abweichend` : ""}
-                    {entry.entriesUnmatched > 0 ? ` · ${entry.entriesUnmatched} unklar` : ""}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
     </section>
   );
 }
