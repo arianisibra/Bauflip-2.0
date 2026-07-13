@@ -36,6 +36,9 @@ const AGE_BUCKET_BAR_COLORS: Record<ProjectAgeBucket, string> = {
 
 const MONTH_LABEL_FORMATTER = new Intl.DateTimeFormat("de-CH", { month: "short", timeZone: "UTC" });
 
+/** Neutraler Mess-Balken (Menge/Betrag ohne Status-Bedeutung): Umsatz, Auslastung. */
+const MEASURE_BAR_COLOR = "bg-indigo-500";
+
 /**
  * Der Projekt-Status ist kein Kategorial-, sondern ein ORDINAL-Feld (fester
  * Workflow, "Reihenfolge = Kunden-Priorität" laut Domain-Kommentar) — eine
@@ -181,6 +184,8 @@ export function DashboardPageClient() {
         />
       </div>
 
+      <div className="space-y-3">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Projekte</h2>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card size="sm">
           <CardHeader className="px-4">
@@ -242,7 +247,12 @@ export function DashboardPageClient() {
             ) : null}
           </CardContent>
         </Card>
+      </div>
+      </div>
 
+      <div className="space-y-3">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Offerten und Rechnungen</h2>
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card size="sm">
           <CardHeader className="px-4">
             <CardTitle className="text-sm font-semibold">Umsatz angenommener Offerten (6 Monate)</CardTitle>
@@ -258,7 +268,7 @@ export function DashboardPageClient() {
                   value={point.totalGross}
                   max={maxMonthlyRevenue}
                   valueLabel={point.quoteCount > 0 ? chf.format(point.totalGross) : "—"}
-                  colorClassName="bg-indigo-500"
+                  colorClassName={MEASURE_BAR_COLOR}
                 />
               ))
             )}
@@ -327,7 +337,12 @@ export function DashboardPageClient() {
             )}
           </CardContent>
         </Card>
+      </div>
+      </div>
 
+      <div className="space-y-3">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Team und Einsätze</h2>
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card size="sm">
           <CardHeader className="px-4">
             <CardTitle className="text-sm font-semibold">Rapporte letzte 30 Tage</CardTitle>
@@ -380,12 +395,13 @@ export function DashboardPageClient() {
                   value={t.appointmentCount}
                   max={maxWorkload}
                   valueLabel={String(t.appointmentCount)}
-                  colorClassName="bg-indigo-500"
+                  colorClassName={MEASURE_BAR_COLOR}
                 />
               ))
             )}
           </CardContent>
         </Card>
+      </div>
       </div>
       </div>
     </section>
