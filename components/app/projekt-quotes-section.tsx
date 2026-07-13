@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { FileText, MoreHorizontal, Pencil, Plus, Send, Trash2 } from "lucide-react";
+import { FileText, FileType, MoreHorizontal, Pencil, Plus, Send, Trash2 } from "lucide-react";
 import type { Quote, QuoteStatus, TechnicianReport } from "@/lib/domain/types";
 import {
   allowedQuoteStatusTransitions,
@@ -11,6 +11,7 @@ import {
 } from "@/lib/domain/types";
 import {
   useDeleteQuote,
+  useHasOfferDocumentTemplate,
   useProjectQuotes,
   useQuoteMailConfig,
   useSetQuoteStatus,
@@ -55,6 +56,7 @@ export function ProjektQuotesSection({
   const deleteQuote = useDeleteQuote();
   const mailConfig = useQuoteMailConfig(canEdit);
   const mailConfigured = mailConfig.data?.mailConfigured ?? false;
+  const hasWordTemplate = useHasOfferDocumentTemplate(canEdit).data ?? false;
 
   /** null = geschlossen; { quote: null } = neu; { quote } = bearbeiten. */
   const [editor, setEditor] = useState<{ quote: Quote | null } | null>(null);
@@ -155,6 +157,14 @@ export function ProjektQuotesSection({
                       PDF öffnen
                     </a>
                   </DropdownMenuItem>
+                  {hasWordTemplate ? (
+                    <DropdownMenuItem asChild>
+                      <a href={`/api/quotes/${quote.id}/document`} target="_blank" rel="noreferrer">
+                        <FileType className="size-4" aria-hidden />
+                        Als Word (Vorlage)
+                      </a>
+                    </DropdownMenuItem>
+                  ) : null}
                   {canSend ? (
                     <DropdownMenuItem onSelect={() => setSendTarget(quote)}>
                       <Send className="size-4" aria-hidden />

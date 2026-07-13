@@ -2,6 +2,7 @@
 
 import { BexioSettingsForm } from "@/components/app/bexio-settings-form";
 import { BillingSettingsForm } from "@/components/app/billing-settings-form";
+import { DocumentTemplatesManager } from "@/components/app/document-templates-manager";
 import { InvitePreferenceToggle } from "@/components/app/invite-preference-toggle";
 import { useOrganizationBrandingContext } from "@/components/app/organization-branding-provider";
 import { PriceBookManager } from "@/components/app/price-book-manager";
@@ -43,6 +44,8 @@ export function EinstellungenPageClient() {
       {data.canEditCompanySettings ? <BillingSettingsForm /> : null}
 
       {data.canEditCompanySettings ? <BexioSettingsForm /> : null}
+
+      {data.canEditCompanySettings ? <DocumentTemplatesManager /> : null}
 
       <InvitePreferenceToggle />
     </section>

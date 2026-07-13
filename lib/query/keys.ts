@@ -73,6 +73,8 @@ export const queryKeys = {
   billingSettings: () => ["billing-settings"] as const,
   bexioSettings: () => ["bexio-settings"] as const,
   bexioMappingOptions: () => ["bexio-mapping-options"] as const,
+  documentTemplates: () => ["document-templates"] as const,
+  hasOfferDocumentTemplate: () => ["has-offer-document-template"] as const,
   /** Termin-Einladungen per Mail an/aus (eigener Account). */
   invitePreference: () => ["invite-preference"] as const,
   /** Zeiterfassung: eigene Einträge + Team-Übersicht (Büro/Admin). */

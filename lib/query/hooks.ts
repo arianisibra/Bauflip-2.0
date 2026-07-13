@@ -70,6 +70,13 @@ import {
   type BexioMappingOptions,
 } from "@/app/(app)/einstellungen/bexio-actions";
 import {
+  deleteDocumentTemplateAction,
+  hasOfferDocumentTemplateAction,
+  listDocumentTemplatesAction,
+  setDefaultDocumentTemplateAction,
+  uploadDocumentTemplateAction,
+} from "@/app/(app)/einstellungen/document-template-actions";
+import {
   getBillingSettingsAction,
   updateBillingSettingsAction,
 } from "@/app/(app)/einstellungen/billing-actions";
@@ -93,7 +100,7 @@ import {
   type ConfirmPaymentImportResult,
   type PaymentImportPreview,
 } from "@/app/(app)/zahlungen/actions";
-import type { BexioSettings, Invoice, InvoiceStatus, OrganizationBillingSettings, PaymentImport } from "@/lib/domain/types";
+import type { BexioSettings, DocumentTemplate, DocumentTemplateKind, Invoice, InvoiceStatus, OrganizationBillingSettings, PaymentImport } from "@/lib/domain/types";
 import { listTeamMembersAction } from "@/app/(app)/einstellungen/actions";
 import {
   createAbsenceAction,
@@ -791,6 +798,58 @@ export function useSaveBexioMapping() {
     onSuccess: (settings) => {
       qc.setQueryData(queryKeys.bexioSettings(), settings);
     },
+  });
+}
+
+/** Dokumentvorlagen (.docx) der Organisation — Admin-Verwaltung in Einstellungen. */
+export function useDocumentTemplates(enabled = true) {
+  return useQuery<DocumentTemplate[]>({
+    queryKey: queryKeys.documentTemplates(),
+    queryFn: () => listDocumentTemplatesAction(),
+    enabled,
+    staleTime: 60_000,
+    refetchOnMount: false,
+  });
+}
+
+export function useUploadDocumentTemplate() {
+  const qc = useQueryClient();
+  return useMutation<DocumentTemplate, Error, FormData>({
+    mutationFn: (formData) => uploadDocumentTemplateAction(formData),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.documentTemplates() });
+    },
+  });
+}
+
+export function useSetDefaultDocumentTemplate() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, { id: string; kind: DocumentTemplateKind }>({
+    mutationFn: (input) => setDefaultDocumentTemplateAction(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.documentTemplates() });
+    },
+  });
+}
+
+export function useDeleteDocumentTemplate() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: (id) => deleteDocumentTemplateAction(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.documentTemplates() });
+    },
+  });
+}
+
+/** Existiert eine Offert-Vorlage? Steuert den «Als Word»-Eintrag in der Offerten-Sektion. */
+export function useHasOfferDocumentTemplate(enabled = true) {
+  return useQuery<boolean>({
+    queryKey: queryKeys.hasOfferDocumentTemplate(),
+    queryFn: () => hasOfferDocumentTemplateAction(),
+    enabled,
+    staleTime: 60_000,
+    refetchOnMount: false,
   });
 }
 

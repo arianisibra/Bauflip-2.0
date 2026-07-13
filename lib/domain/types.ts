@@ -588,6 +588,24 @@ export type BexioSettings = {
   accountId: number | null;
 };
 
+/** Dokumenttyp einer Word-Vorlage (document_templates.kind). */
+export const documentTemplateKinds = ["offerte", "auftrag", "rapport", "rechnung"] as const;
+export type DocumentTemplateKind = (typeof documentTemplateKinds)[number];
+
+/** Word-Vorlage (.docx) einer Organisation, von Bauflip mit Platzhaltern gefüllt. */
+export type DocumentTemplate = {
+  id: string;
+  organizationId: string;
+  kind: DocumentTemplateKind;
+  name: string;
+  storagePath: string;
+  outputFormat: "docx" | "pdf";
+  isDefault: boolean;
+  createdByProfileId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ProjectAttachment = {
   id: string;
   projectId: string;
