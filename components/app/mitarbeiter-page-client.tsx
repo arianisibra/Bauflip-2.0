@@ -15,9 +15,9 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { useDeactivateTeamMember, useTeamMembers } from "@/lib/query/hooks";
+import { useDeactivateTeamMember, useRevokeInvitation, useTeamMembers } from "@/lib/query/hooks";
 import type { LucideIcon } from "lucide-react";
-import { Calendar, Layers, Loader2, Mail, UserMinus, UserPlus, Users } from "lucide-react";
+import { Calendar, Layers, Loader2, Mail, MailX, UserMinus, UserPlus, Users } from "lucide-react";
 
 const roleLabel: Record<"admin" | "office" | "technician", string> = {
   admin: "Admin",
@@ -130,6 +130,7 @@ export function MitarbeiterPageClient() {
 
   const { data: teamMembers = [] } = useTeamMembers(isAdmin);
   const deactivate = useDeactivateTeamMember();
+  const revokeInvite = useRevokeInvitation();
 
   if (!isAdmin) {
     return null;
@@ -149,6 +150,16 @@ export function MitarbeiterPageClient() {
       toast.success(`${row.displayName} wurde entfernt`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Entfernen fehlgeschlagen.");
+    }
+  };
+
+  const handleRevoke = async (row: TeamMemberListItem) => {
+    if (!window.confirm(`Einladung an ${row.email} zurückziehen?`)) return;
+    try {
+      await revokeInvite.mutateAsync(row.email);
+      toast.success("Einladung zurückgezogen");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Zurückziehen fehlgeschlagen.");
     }
   };
   const turnstileConfigured = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
@@ -240,6 +251,23 @@ export function MitarbeiterPageClient() {
                                 <Loader2 className="size-4 animate-spin" aria-hidden />
                               ) : (
                                 <UserMinus className="size-4" aria-hidden />
+                              )}
+                            </Button>
+                          ) : row.status === "eingeladen" ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="size-8 p-0 text-muted-foreground hover:text-destructive"
+                              aria-label={`Einladung an ${row.email} zurückziehen`}
+                              title="Einladung zurückziehen"
+                              disabled={revokeInvite.isPending}
+                              onClick={() => handleRevoke(row)}
+                            >
+                              {revokeInvite.isPending && revokeInvite.variables === row.email ? (
+                                <Loader2 className="size-4 animate-spin" aria-hidden />
+                              ) : (
+                                <MailX className="size-4" aria-hidden />
                               )}
                             </Button>
                           ) : null}

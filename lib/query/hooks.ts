@@ -102,7 +102,7 @@ import {
 } from "@/app/(app)/zahlungen/actions";
 import type { BexioSettings, DocumentTemplate, DocumentTemplateKind, Invoice, InvoiceStatus, OrganizationBillingSettings, PaymentImport } from "@/lib/domain/types";
 import { listTeamMembersAction } from "@/app/(app)/einstellungen/actions";
-import { deactivateTeamMemberAction } from "@/app/(app)/einstellungen/team-member-actions";
+import { deactivateTeamMemberAction, revokeInvitationAction } from "@/app/(app)/einstellungen/team-member-actions";
 import {
   createAbsenceAction,
   deleteAbsenceAction,
@@ -361,6 +361,16 @@ export function useDeactivateTeamMember() {
   const qc = useQueryClient();
   return useMutation<void, Error, string>({
     mutationFn: (userId) => deactivateTeamMemberAction(userId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.teamMembers() });
+    },
+  });
+}
+
+export function useRevokeInvitation() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: (email) => revokeInvitationAction(email),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.teamMembers() });
     },

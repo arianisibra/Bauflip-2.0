@@ -2,6 +2,7 @@
 
 import { requireAdminLayoutSession } from "@/lib/auth/organization";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
  * Mitglied aus der Organisation entfernen (Soft-Deaktivieren: is_active=false).
@@ -47,5 +48,29 @@ export async function deactivateTeamMemberAction(userId: string): Promise<void> 
     .update({ is_active: false })
     .eq("organization_id", session.organizationId)
     .eq("user_id", userId);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Offene Einladung zurückziehen (setzt invitations.revoked_at). Danach verschwindet
+ * der «Eingeladen»-Eintrag aus der Liste; der Link in der Mail funktioniert nicht mehr.
+ * Org-scoped über den regulären Server-Client (RLS erlaubt Admin/Büro der eigenen Org).
+ */
+export async function revokeInvitationAction(email: string): Promise<void> {
+  const session = await requireAdminLayoutSession();
+  if (!session.organizationId) throw new Error("Keine Organisation.");
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) throw new Error("Ungültige Auswahl.");
+
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) throw new Error("Supabase nicht verfügbar.");
+
+  const { error } = await supabase
+    .from("invitations")
+    .update({ revoked_at: new Date().toISOString() })
+    .eq("organization_id", session.organizationId)
+    .eq("email", normalized)
+    .is("accepted_at", null)
+    .is("revoked_at", null);
   if (error) throw new Error(error.message);
 }
