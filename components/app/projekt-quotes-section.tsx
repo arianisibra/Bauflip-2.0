@@ -2,96 +2,33 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { FileText, Loader2, Pencil, Plus, Send, Trash2 } from "lucide-react";
-import { buttonVariants } from "@/components/ui/button-variants";
-import type { PriceBookItem, Quote, QuoteStatus, TechnicianReport } from "@/lib/domain/types";
+import { FileText, MoreHorizontal, Pencil, Plus, Send, Trash2 } from "lucide-react";
+import type { Quote, QuoteStatus, TechnicianReport } from "@/lib/domain/types";
 import {
   allowedQuoteStatusTransitions,
   quoteStatusBadgeClassNames,
   quoteStatusLabels,
 } from "@/lib/domain/types";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { computeQuoteTotals } from "@/lib/quotes/totals";
-import { quoteCreateSchema } from "@/lib/validations/forms";
-import {
-  useCreateQuote,
   useDeleteQuote,
-  usePriceBookItems,
   useProjectQuotes,
   useQuoteMailConfig,
-  useSendQuote,
   useSetQuoteStatus,
-  useUpdateQuote,
 } from "@/lib/query/hooks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { QuoteEditorDialog } from "@/components/app/quote-editor-dialog";
+import { QuoteSendDialog } from "@/components/app/quote-send-dialog";
 import { cn } from "@/lib/utils";
 
 const chf = new Intl.NumberFormat("de-CH", { style: "currency", currency: "CHF" });
-
-type EditableLineItem = {
-  description: string;
-  quantity: string;
-  unit: string;
-  unitPrice: string;
-};
-
-type EditorState = {
-  /** null = neue Offerte, sonst Entwurf in Bearbeitung. */
-  quoteId: string | null;
-  validUntil: string;
-  introText: string;
-  outroText: string;
-  vatRate: string;
-  lineItems: EditableLineItem[];
-};
-
-const EMPTY_LINE: EditableLineItem = { description: "", quantity: "1", unit: "", unitPrice: "" };
-
-function emptyEditor(): EditorState {
-  return {
-    quoteId: null,
-    validUntil: "",
-    introText: "",
-    outroText: "",
-    vatRate: "8.1",
-    lineItems: [{ ...EMPTY_LINE }],
-  };
-}
-
-function editorFromQuote(quote: Quote): EditorState {
-  return {
-    quoteId: quote.id,
-    validUntil: quote.validUntil ?? "",
-    introText: quote.introText ?? "",
-    outroText: quote.outroText ?? "",
-    vatRate: String(quote.vatRate),
-    lineItems: quote.lineItems.map((item) => ({
-      description: item.description,
-      quantity: String(item.quantity),
-      unit: item.unit ?? "",
-      unitPrice: String(item.unitPrice),
-    })),
-  };
-}
-
-function parsedLineItems(state: EditorState) {
-  return state.lineItems.map((item) => ({
-    description: item.description,
-    quantity: Number(item.quantity.replace(",", ".")),
-    unit: item.unit || null,
-    unitPrice: Number(item.unitPrice.replace(",", ".")),
-  }));
-}
 
 const QUOTE_STATUS_ACTION_LABELS: Record<QuoteStatus, string> = {
   draft: "Zurück zu Entwurf",
@@ -99,16 +36,6 @@ const QUOTE_STATUS_ACTION_LABELS: Record<QuoteStatus, string> = {
   approved: "Angenommen",
   rejected: "Abgelehnt",
 };
-
-type SendFormState = {
-  quoteId: string;
-  recipientEmail: string;
-  message: string;
-};
-
-function isLineEmpty(line: EditableLineItem): boolean {
-  return !line.description.trim() && !line.unitPrice.trim();
-}
 
 export function ProjektQuotesSection({
   projectId,
@@ -124,116 +51,43 @@ export function ProjektQuotesSection({
   latestReport?: Pick<TechnicianReport, "workDescription" | "summary" | "timeSpentMinutes"> | null;
 }) {
   const quotesQuery = useProjectQuotes(projectId);
-  const createQuote = useCreateQuote();
-  const updateQuote = useUpdateQuote();
   const setStatus = useSetQuoteStatus();
   const deleteQuote = useDeleteQuote();
-  const sendQuote = useSendQuote();
   const mailConfig = useQuoteMailConfig(canEdit);
   const mailConfigured = mailConfig.data?.mailConfigured ?? false;
-  const [editor, setEditor] = useState<EditorState | null>(null);
-  const [sendForm, setSendForm] = useState<SendFormState | null>(null);
-  const priceBookQuery = usePriceBookItems(canEdit && Boolean(editor));
-  const priceBookItems = (priceBookQuery.data ?? []).filter((i: PriceBookItem) => i.isActive);
 
-  /** Fügt eine Position an; ersetzt eine einzelne noch leere Zeile. */
-  const appendLine = (line: EditableLineItem) => {
-    setEditor((prev) => {
-      if (!prev) return prev;
-      const lineItems =
-        prev.lineItems.length === 1 && isLineEmpty(prev.lineItems[0])
-          ? [line]
-          : [...prev.lineItems, line];
-      return { ...prev, lineItems };
-    });
-  };
-
-  const addFromPriceBook = (itemId: string) => {
-    const item = priceBookItems.find((i) => i.id === itemId);
-    if (!item) return;
-    appendLine({
-      description: item.name,
-      quantity: "1",
-      unit: item.unit ?? "",
-      unitPrice: String(item.unitPrice),
-    });
-  };
-
-  /** Einleitung + Arbeitszeit-Position aus dem neuesten Rapport übernehmen. */
-  const prefillFromReport = () => {
-    if (!latestReport) return;
-    const text = latestReport.workDescription.trim() || latestReport.summary.trim();
-    setEditor((prev) => (prev ? { ...prev, introText: prev.introText || text } : prev));
-    if (latestReport.timeSpentMinutes && latestReport.timeSpentMinutes > 0) {
-      const hours = Math.round((latestReport.timeSpentMinutes / 60) * 100) / 100;
-      const workItem = priceBookItems.find((i) => i.name.toLowerCase().includes("arbeitszeit"));
-      appendLine({
-        description: workItem?.name ?? "Arbeitszeit Monteur",
-        quantity: String(hours),
-        unit: workItem?.unit ?? "h",
-        unitPrice: workItem ? String(workItem.unitPrice) : "",
-      });
-    }
-  };
-
-  const submitSend = async () => {
-    if (!sendForm) return;
-    try {
-      await sendQuote.mutateAsync({
-        quoteId: sendForm.quoteId,
-        projectId,
-        recipientEmail: sendForm.recipientEmail.trim(),
-        message: sendForm.message.trim() || null,
-      });
-      toast.success("Offerte versendet");
-      setSendForm(null);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Versand fehlgeschlagen.");
-    }
-  };
+  /** null = geschlossen; { quote: null } = neu; { quote } = bearbeiten. */
+  const [editor, setEditor] = useState<{ quote: Quote | null } | null>(null);
+  const [sendTarget, setSendTarget] = useState<Quote | null>(null);
 
   const quotes = quotesQuery.data ?? [];
-  const pending = createQuote.isPending || updateQuote.isPending;
 
-  const submitEditor = async () => {
-    if (!editor) return;
-    const payload = {
-      projectId,
-      validUntil: editor.validUntil || null,
-      introText: editor.introText || null,
-      outroText: editor.outroText || null,
-      vatRate: Number(editor.vatRate.replace(",", ".")),
-      lineItems: parsedLineItems(editor),
-    };
-    const parsed = quoteCreateSchema.safeParse(payload);
-    if (!parsed.success) {
-      toast.error(parsed.error.issues[0]?.message ?? "Ungültige Eingabe.");
-      return;
-    }
+  const openPdf = (quoteId: string) =>
+    window.open(`/api/quotes/${quoteId}/pdf`, "_blank", "noopener,noreferrer");
+
+  const onRowPrimary = (quote: Quote) => {
+    if (canEdit && quote.status === "draft") setEditor({ quote });
+    else openPdf(quote.id);
+  };
+
+  const changeStatus = async (quote: Quote, next: QuoteStatus) => {
     try {
-      if (editor.quoteId) {
-        await updateQuote.mutateAsync({ ...payload, quoteId: editor.quoteId });
-        toast.success("Offerte aktualisiert");
-      } else {
-        await createQuote.mutateAsync(payload);
-        toast.success("Offerte erstellt");
-      }
-      setEditor(null);
+      await setStatus.mutateAsync({ quoteId: quote.id, projectId, status: next });
+      toast.success(`Offerte: ${quoteStatusLabels[next]}`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
+      toast.error(e instanceof Error ? e.message : "Status fehlgeschlagen.");
     }
   };
 
-  const editorTotals = editor
-    ? computeQuoteTotals(
-        parsedLineItems(editor).map((i) => ({
-          ...i,
-          quantity: Number.isFinite(i.quantity) ? i.quantity : 0,
-          unitPrice: Number.isFinite(i.unitPrice) ? i.unitPrice : 0,
-        })),
-        Number(editor.vatRate.replace(",", ".")) || 0,
-      )
-    : null;
+  const removeQuote = async (quote: Quote) => {
+    if (!window.confirm(`Offerte ${quote.quoteNumber ?? ""} wirklich löschen?`)) return;
+    try {
+      await deleteQuote.mutateAsync({ quoteId: quote.id, projectId });
+      toast.success("Offerte gelöscht");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Löschen fehlgeschlagen.");
+    }
+  };
 
   return (
     <section className="border-t pt-4">
@@ -241,8 +95,8 @@ export function ProjektQuotesSection({
         <h3 className="text-sm font-semibold">
           Offerten{quotes.length > 0 ? ` (${quotes.length})` : ""}
         </h3>
-        {canEdit && !editor ? (
-          <Button type="button" variant="outline" size="sm" onClick={() => setEditor(emptyEditor())}>
+        {canEdit ? (
+          <Button type="button" variant="outline" size="sm" onClick={() => setEditor({ quote: null })}>
             <Plus className="size-4" aria-hidden />
             Neue Offerte
           </Button>
@@ -253,341 +107,117 @@ export function ProjektQuotesSection({
         <p className="text-sm text-muted-foreground">Offerten werden geladen …</p>
       ) : null}
 
-      {!quotesQuery.isLoading && quotes.length === 0 && !editor ? (
+      {!quotesQuery.isLoading && quotes.length === 0 ? (
         <p className="text-sm text-muted-foreground">Noch keine Offerte erfasst.</p>
       ) : null}
 
-      <div className="space-y-2">
-        {quotes.map((quote) => (
-          <div key={quote.id} className="rounded-lg border border-border px-3 py-2.5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">{quote.quoteNumber ?? "Offerte"}</span>
-                <Badge variant="outline" className={cn(quoteStatusBadgeClassNames[quote.status])}>
-                  {quoteStatusLabels[quote.status]}
-                </Badge>
-              </div>
-              <span className="text-sm font-semibold tabular-nums">{chf.format(quote.totalGross)}</span>
-            </div>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              {quote.lineItems.length} Position{quote.lineItems.length === 1 ? "" : "en"} · netto{" "}
-              {chf.format(quote.totalNet)} · MwSt. {quote.vatRate}%
-              {quote.validUntil
-                ? ` · gültig bis ${new Date(quote.validUntil).toLocaleDateString("de-CH", { timeZone: "Europe/Zurich" })}`
-                : ""}
-              {quote.createdByDisplayName ? ` · erstellt von ${quote.createdByDisplayName}` : ""}
-            </p>
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <a
-                href={`/api/quotes/${quote.id}/pdf`}
-                target="_blank"
-                rel="noreferrer"
-                className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+      <div className="space-y-1.5">
+        {quotes.map((quote) => {
+          const canSend = canEdit && mailConfigured && (quote.status === "draft" || quote.status === "sent");
+          const canDelete = canEdit && (quote.status === "draft" || quote.status === "rejected");
+          return (
+            <div
+              key={quote.id}
+              className="flex items-center gap-2 rounded-lg border border-border px-3 py-2.5"
+            >
+              <button
+                type="button"
+                onClick={() => onRowPrimary(quote)}
+                className="min-w-0 flex-1 text-left"
               >
-                <FileText className="size-4" aria-hidden />
-                PDF
-              </a>
-              {canEdit && mailConfigured && (quote.status === "draft" || quote.status === "sent") ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={sendQuote.isPending}
-                  onClick={() =>
-                    setSendForm((prev) =>
-                      prev?.quoteId === quote.id
-                        ? null
-                        : {
-                            quoteId: quote.id,
-                            recipientEmail: quote.sentToEmail ?? defaultRecipientEmail ?? "",
-                            message: "",
-                          },
-                    )
-                  }
-                >
-                  <Send className="size-4" aria-hidden />
-                  {quote.status === "sent" ? "Erneut senden" : "Senden"}
-                </Button>
-              ) : null}
-              {canEdit ? (
-                <>
-                {allowedQuoteStatusTransitions[quote.status].map((next) => (
-                  <Button
-                    key={next}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={setStatus.isPending}
-                    onClick={async () => {
-                      try {
-                        await setStatus.mutateAsync({ quoteId: quote.id, projectId, status: next });
-                        toast.success(`Offerte: ${quoteStatusLabels[next]}`);
-                      } catch (e) {
-                        toast.error(e instanceof Error ? e.message : "Status fehlgeschlagen.");
-                      }
-                    }}
-                  >
-                    {QUOTE_STATUS_ACTION_LABELS[next]}
+                <span className="flex items-center gap-2">
+                  <span className="truncate text-sm font-medium">{quote.quoteNumber ?? "Offerte"}</span>
+                  <Badge variant="outline" className={cn(quoteStatusBadgeClassNames[quote.status])}>
+                    {quoteStatusLabels[quote.status]}
+                  </Badge>
+                </span>
+                <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                  {quote.lineItems.length} Position{quote.lineItems.length === 1 ? "" : "en"}
+                  {quote.validUntil
+                    ? ` · gültig bis ${new Date(quote.validUntil).toLocaleDateString("de-CH", { timeZone: "Europe/Zurich" })}`
+                    : ""}
+                  {quote.status === "sent" && quote.sentToEmail ? ` · gesendet an ${quote.sentToEmail}` : ""}
+                </span>
+              </button>
+
+              <span className="shrink-0 text-sm font-semibold tabular-nums">{chf.format(quote.totalGross)}</span>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="ghost" size="sm" className="size-8 shrink-0 p-0" aria-label="Aktionen">
+                    <MoreHorizontal className="size-4" aria-hidden />
                   </Button>
-                ))}
-                {quote.status === "draft" ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setEditor(editorFromQuote(quote))}
-                  >
-                    <Pencil className="size-4" aria-hidden />
-                    Bearbeiten
-                  </Button>
-                ) : null}
-                {quote.status === "draft" || quote.status === "rejected" ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive"
-                    disabled={deleteQuote.isPending}
-                    onClick={async () => {
-                      try {
-                        await deleteQuote.mutateAsync({ quoteId: quote.id, projectId });
-                        toast.success("Offerte gelöscht");
-                      } catch (e) {
-                        toast.error(e instanceof Error ? e.message : "Löschen fehlgeschlagen.");
-                      }
-                    }}
-                  >
-                    <Trash2 className="size-4" aria-hidden />
-                    Löschen
-                  </Button>
-                ) : null}
-                </>
-              ) : null}
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem asChild>
+                    <a href={`/api/quotes/${quote.id}/pdf`} target="_blank" rel="noreferrer">
+                      <FileText className="size-4" aria-hidden />
+                      PDF öffnen
+                    </a>
+                  </DropdownMenuItem>
+                  {canSend ? (
+                    <DropdownMenuItem onSelect={() => setSendTarget(quote)}>
+                      <Send className="size-4" aria-hidden />
+                      {quote.status === "sent" ? "Erneut senden" : "Senden"}
+                    </DropdownMenuItem>
+                  ) : null}
+                  {canEdit && quote.status === "draft" ? (
+                    <DropdownMenuItem onSelect={() => setEditor({ quote })}>
+                      <Pencil className="size-4" aria-hidden />
+                      Bearbeiten
+                    </DropdownMenuItem>
+                  ) : null}
+                  {canEdit && allowedQuoteStatusTransitions[quote.status].length > 0 ? (
+                    <>
+                      <DropdownMenuSeparator />
+                      {allowedQuoteStatusTransitions[quote.status].map((next) => (
+                        <DropdownMenuItem
+                          key={next}
+                          disabled={setStatus.isPending}
+                          onSelect={() => changeStatus(quote, next)}
+                        >
+                          {QUOTE_STATUS_ACTION_LABELS[next]}
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  ) : null}
+                  {canDelete ? (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        disabled={deleteQuote.isPending}
+                        onSelect={() => removeQuote(quote)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="size-4" aria-hidden />
+                        Löschen
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-            {sendForm?.quoteId === quote.id ? (
-              <div className="mt-2 space-y-2 rounded-lg border border-border bg-muted/30 p-3">
-                <div>
-                  <Label className="text-[11px]">Senden an</Label>
-                  <Input
-                    type="email"
-                    value={sendForm.recipientEmail}
-                    placeholder="kunde@example.com"
-                    onChange={(e) =>
-                      setSendForm((prev) => (prev ? { ...prev, recipientEmail: e.target.value } : prev))
-                    }
-                  />
-                </div>
-                <div>
-                  <Label className="text-[11px]">Persönliche Nachricht (optional)</Label>
-                  <Textarea
-                    rows={2}
-                    value={sendForm.message}
-                    onChange={(e) =>
-                      setSendForm((prev) => (prev ? { ...prev, message: e.target.value } : prev))
-                    }
-                  />
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" size="sm" disabled={sendQuote.isPending} onClick={() => setSendForm(null)}>
-                    Abbrechen
-                  </Button>
-                  <Button type="button" size="sm" disabled={sendQuote.isPending || !sendForm.recipientEmail.trim()} onClick={submitSend}>
-                    {sendQuote.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Send className="size-4" aria-hidden />}
-                    Mit PDF versenden
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {editor ? (
-        <div className="mt-3 space-y-3 rounded-lg border border-border bg-muted/30 p-3">
-          <h4 className="text-sm font-semibold">
-            {editor.quoteId ? "Offerte bearbeiten" : "Neue Offerte"}
-          </h4>
-
-          <div className="space-y-2">
-            {editor.lineItems.map((item, index) => (
-              <div key={index} className="grid grid-cols-[1fr_72px_64px_96px_auto] items-end gap-1.5">
-                <div>
-                  {index === 0 ? <Label className="text-[11px]">Beschreibung</Label> : null}
-                  <Input
-                    value={item.description}
-                    placeholder="z. B. Storen-Motor ersetzen"
-                    onChange={(e) =>
-                      setEditor((prev) => {
-                        if (!prev) return prev;
-                        const lineItems = [...prev.lineItems];
-                        lineItems[index] = { ...lineItems[index], description: e.target.value };
-                        return { ...prev, lineItems };
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  {index === 0 ? <Label className="text-[11px]">Menge</Label> : null}
-                  <Input
-                    inputMode="decimal"
-                    value={item.quantity}
-                    onChange={(e) =>
-                      setEditor((prev) => {
-                        if (!prev) return prev;
-                        const lineItems = [...prev.lineItems];
-                        lineItems[index] = { ...lineItems[index], quantity: e.target.value };
-                        return { ...prev, lineItems };
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  {index === 0 ? <Label className="text-[11px]">Einheit</Label> : null}
-                  <Input
-                    value={item.unit}
-                    placeholder="Stk."
-                    onChange={(e) =>
-                      setEditor((prev) => {
-                        if (!prev) return prev;
-                        const lineItems = [...prev.lineItems];
-                        lineItems[index] = { ...lineItems[index], unit: e.target.value };
-                        return { ...prev, lineItems };
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  {index === 0 ? <Label className="text-[11px]">Preis (CHF)</Label> : null}
-                  <Input
-                    inputMode="decimal"
-                    value={item.unitPrice}
-                    onChange={(e) =>
-                      setEditor((prev) => {
-                        if (!prev) return prev;
-                        const lineItems = [...prev.lineItems];
-                        lineItems[index] = { ...lineItems[index], unitPrice: e.target.value };
-                        return { ...prev, lineItems };
-                      })
-                    }
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-destructive"
-                  disabled={editor.lineItems.length <= 1}
-                  aria-label="Position entfernen"
-                  onClick={() =>
-                    setEditor((prev) =>
-                      prev
-                        ? { ...prev, lineItems: prev.lineItems.filter((_, i) => i !== index) }
-                        : prev,
-                    )
-                  }
-                >
-                  <Trash2 className="size-4" aria-hidden />
-                </Button>
-              </div>
-            ))}
-            <div className="flex flex-wrap items-center gap-1.5">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setEditor((prev) =>
-                    prev ? { ...prev, lineItems: [...prev.lineItems, { ...EMPTY_LINE }] } : prev,
-                  )
-                }
-              >
-                <Plus className="size-4" aria-hidden />
-                Position hinzufügen
-              </Button>
-              {priceBookItems.length > 0 ? (
-                <Select value="" onValueChange={(v) => addFromPriceBook(String(v))}>
-                  <SelectTrigger className="h-8 w-56 text-sm">
-                    <SelectValue placeholder="Aus Preisstamm hinzufügen …" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {priceBookItems.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.name} ({chf.format(item.unitPrice)}
-                        {item.unit ? ` / ${item.unit}` : ""})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : null}
-              {latestReport && !editor.quoteId ? (
-                <Button type="button" variant="ghost" size="sm" onClick={prefillFromReport}>
-                  Aus Rapport übernehmen
-                </Button>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label className="text-[11px]">Gültig bis</Label>
-              <Input
-                type="date"
-                value={editor.validUntil}
-                onChange={(e) =>
-                  setEditor((prev) => (prev ? { ...prev, validUntil: e.target.value } : prev))
-                }
-              />
-            </div>
-            <div>
-              <Label className="text-[11px]">MwSt. (%)</Label>
-              <Input
-                inputMode="decimal"
-                value={editor.vatRate}
-                onChange={(e) =>
-                  setEditor((prev) => (prev ? { ...prev, vatRate: e.target.value } : prev))
-                }
-              />
-            </div>
-          </div>
-
-          <div>
-            <Label className="text-[11px]">Einleitungstext (optional)</Label>
-            <Textarea
-              rows={2}
-              value={editor.introText}
-              onChange={(e) =>
-                setEditor((prev) => (prev ? { ...prev, introText: e.target.value } : prev))
-              }
-            />
-          </div>
-          <div>
-            <Label className="text-[11px]">Schlusstext (optional)</Label>
-            <Textarea
-              rows={2}
-              value={editor.outroText}
-              onChange={(e) =>
-                setEditor((prev) => (prev ? { ...prev, outroText: e.target.value } : prev))
-              }
-            />
-          </div>
-
-          {editorTotals ? (
-            <div className="flex items-center justify-end gap-4 text-sm tabular-nums">
-              <span className="text-muted-foreground">Netto {chf.format(editorTotals.totalNet)}</span>
-              <span className="font-semibold">Total {chf.format(editorTotals.totalGross)}</span>
-            </div>
-          ) : null}
-
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" disabled={pending} onClick={() => setEditor(null)}>
-              Abbrechen
-            </Button>
-            <Button type="button" disabled={pending} onClick={submitEditor}>
-              {pending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-              {editor.quoteId ? "Speichern" : "Offerte erstellen"}
-            </Button>
-          </div>
-        </div>
+      {canEdit ? (
+        <>
+          <QuoteEditorDialog
+            open={editor !== null}
+            onOpenChange={(o) => (o ? null : setEditor(null))}
+            projectId={projectId}
+            quote={editor?.quote ?? null}
+            latestReport={latestReport}
+          />
+          <QuoteSendDialog
+            open={sendTarget !== null}
+            onOpenChange={(o) => (o ? null : setSendTarget(null))}
+            projectId={projectId}
+            quote={sendTarget}
+            defaultRecipientEmail={defaultRecipientEmail}
+          />
+        </>
       ) : null}
     </section>
   );
