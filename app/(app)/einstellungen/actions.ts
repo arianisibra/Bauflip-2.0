@@ -285,7 +285,9 @@ export async function inviteEmployeeAction(formData: FormData) {
     throw new Error("Service-Role-Key fehlt. Einladungen per E-Mail sind nicht aktiv.");
   }
 
-  const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/onboarding`;
+  // Über die Auth-Confirm-Route: tauscht den Token in eine Session (schreibt das Cookie),
+  // sonst landet der Eingeladene im ggf. bereits eingeloggten fremden Konto.
+  const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/auth/confirm?next=/onboarding`;
   const { error: authInviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
     redirectTo,
     data: {
