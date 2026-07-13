@@ -25,6 +25,7 @@ import {
   useDeleteInvoice,
   useProjectInvoices,
   useProjectQuotes,
+  useBexioConnected,
   usePushInvoiceToBexio,
   useQuoteMailConfig,
   useSetInvoiceStatus,
@@ -78,6 +79,7 @@ export function ProjektInvoicesSection({
   const pushToBexio = usePushInvoiceToBexio();
   const updateProjectStatus = useUpdateProjectStatus();
   const mailConfig = useQuoteMailConfig(canEdit);
+  const bexioConnected = useBexioConnected(canEdit).data ?? false;
   const mailConfigured = mailConfig.data?.mailConfigured ?? false;
 
   /** null = geschlossen; { invoice: null } = neu; { invoice } = bearbeiten. */
@@ -197,7 +199,8 @@ export function ProjektInvoicesSection({
       <div className="space-y-1.5">
         {invoices.map((invoice) => {
           const canSend = canEdit && mailConfigured && (invoice.status === "draft" || invoice.status === "sent");
-          const canPush = canEdit && invoice.status !== "draft" && !invoice.bexioInvoiceId;
+          const canPush =
+            canEdit && bexioConnected && invoice.status !== "draft" && !invoice.bexioInvoiceId;
           return (
             <div key={invoice.id} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2.5">
               <button type="button" onClick={() => onRowPrimary(invoice)} className="min-w-0 flex-1 text-left">

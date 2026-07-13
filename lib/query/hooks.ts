@@ -66,6 +66,7 @@ import {
   disconnectBexioAction,
   getBexioMappingOptionsAction,
   getBexioSettingsAction,
+  isBexioConnectedAction,
   saveBexioMappingAction,
   type BexioMappingOptions,
 } from "@/app/(app)/einstellungen/bexio-actions";
@@ -775,6 +776,17 @@ export function useBexioSettings(enabled = true) {
   return useQuery<BexioSettings>({
     queryKey: queryKeys.bexioSettings(),
     queryFn: () => getBexioSettingsAction(),
+    enabled,
+    staleTime: 60_000,
+    refetchOnMount: false,
+  });
+}
+
+/** Nur «ist Bexio verbunden?» (Office-Ebene) — für den «Nach Bexio»-Menüpunkt an Rechnungen. */
+export function useBexioConnected(enabled = true) {
+  return useQuery<boolean>({
+    queryKey: queryKeys.bexioConnected(),
+    queryFn: () => isBexioConnectedAction(),
     enabled,
     staleTime: 60_000,
     refetchOnMount: false,

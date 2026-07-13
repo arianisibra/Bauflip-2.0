@@ -1,6 +1,6 @@
 "use server";
 
-import { requireAdminLayoutSession } from "@/lib/auth/organization";
+import { requireAdminLayoutSession, requireOfficeSession } from "@/lib/auth/organization";
 import { getCachedSessionProfile } from "@/lib/auth/session";
 import {
   BexioApiError,
@@ -30,6 +30,16 @@ export async function getBexioSettingsAction(): Promise<BexioSettings> {
   const session = await requireAdminLayoutSession();
   if (!session.organizationId) return EMPTY_BEXIO;
   return (await getBexioSettings(session.organizationId)) ?? EMPTY_BEXIO;
+}
+
+/**
+ * Nur der Verbindungsstatus (Office-Ebene, ohne Mapping-Details) — steuert, ob der
+ * «Nach Bexio übertragen»-Menüpunkt an einer Rechnung überhaupt erscheint.
+ */
+export async function isBexioConnectedAction(): Promise<boolean> {
+  const session = await requireOfficeSession();
+  if (!session.organizationId) return false;
+  return (await getBexioSettings(session.organizationId))?.connected ?? false;
 }
 
 /** Token gegen die Bexio-API testen, erst bei Erfolg speichern — nie ungeprüft ablegen. */

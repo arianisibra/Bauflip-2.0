@@ -72,6 +72,7 @@ export const queryKeys = {
   /** Zahlungsdaten der Organisation (QR-Rechnung, Admin). */
   billingSettings: () => ["billing-settings"] as const,
   bexioSettings: () => ["bexio-settings"] as const,
+  bexioConnected: () => ["bexio-connected"] as const,
   bexioMappingOptions: () => ["bexio-mapping-options"] as const,
   documentTemplates: () => ["document-templates"] as const,
   hasOfferDocumentTemplate: () => ["has-offer-document-template"] as const,
