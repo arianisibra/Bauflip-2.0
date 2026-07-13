@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Download } from "lucide-react";
 import { TimeEntriesManager } from "@/components/app/time-entries-manager";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -117,8 +118,10 @@ function TeamOverview() {
         >
           Dieser Monat
         </button>
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           disabled={entries.length === 0}
           onClick={async () => {
             await downloadCsv(`lohnexport-${start}-bis-${end}`, [...entries]
@@ -136,11 +139,10 @@ function TeamOverview() {
                 Notiz: e.note ?? "",
               })));
           }}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-50"
         >
-          <Download className="size-3.5" aria-hidden />
+          <Download className="size-4" aria-hidden />
           CSV exportieren
-        </button>
+        </Button>
       </div>
 
       {isFetching && entries.length === 0 ? (

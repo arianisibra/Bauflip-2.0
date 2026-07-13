@@ -14,6 +14,7 @@ import {
   parseAdminCalendarUrlState,
 } from "@/lib/navigation/admin-calendar-navigation";
 import { ProjekteListClient } from "@/components/app/projekte-list-client";
+import { Button } from "@/components/ui/button";
 
 export function ProjektePageClient({
   supabaseConfigured,
@@ -82,8 +83,10 @@ function AbrechnungExportButton() {
   const [exporting, setExporting] = useState(false);
 
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
+      size="sm"
       disabled={exporting}
       onClick={async () => {
         setExporting(true);
@@ -119,10 +122,9 @@ function AbrechnungExportButton() {
           setExporting(false);
         }
       }}
-      className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-50"
     >
-      <Download className="size-3.5" aria-hidden />
+      <Download className="size-4" aria-hidden />
       {exporting ? "Exportiert …" : "Abrechnungs-Export (CSV)"}
-    </button>
+    </Button>
   );
 }
