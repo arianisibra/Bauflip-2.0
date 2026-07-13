@@ -162,16 +162,21 @@ def main() -> int:
     if not converted.lstrip().startswith("<?xml"):
         converted = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + converted
 
+    # Nicht gemappte {d.…}-Orphans (Felder ohne Bauflip-Entsprechung, z. B. Positions-
+    # Rabatt) leeren, damit die Vorlage keine kaputten Platzhalter enthält. Die Warnung
+    # bleibt, damit man beim Onboarding sieht, was weggefallen ist.
+    leftover = re.findall(r"\{d\.[^}]*\}", converted)
+    converted = re.sub(r"\{d\.[^}]*\}", "", converted)
+
     # document.xml im Ziel-Zip ersetzen
     with zipfile.ZipFile(src) as zin, zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as zout:
         for item in zin.namelist():
             data = converted.encode("utf-8") if item == "word/document.xml" else zin.read(item)
             zout.writestr(item, data)
 
-    leftover = re.findall(r"\{d\.[^}]*\}", converted)
     print(f"OK: {dst} erstellt.")
     if leftover:
-        print(f"  WARNUNG: {len(leftover)} nicht gemappte Tokens: {leftover[:8]}")
+        print(f"  Hinweis: {len(leftover)} Feld(er) ohne Bauflip-Entsprechung geleert: {leftover[:8]}")
     return 0
 
 

@@ -115,6 +115,53 @@ export const QUOTE_DOCUMENT_FIELDS: { key: keyof QuoteDocumentData; label: strin
   { key: "total_brutto", label: "Gesamtbetrag inkl. MwSt", example: "659.40" },
 ];
 
+/** Beispiel-Datensatz — für die Vorlagen-Prüfung beim Upload (alle Felder belegt). */
+export const SAMPLE_QUOTE_DOCUMENT_DATA: QuoteDocumentData = {
+  firma_name: "Bauflip Storen AG",
+  offerte_nummer: "OF-2026-014",
+  projekt_titel: "Storenreparatur Balkon",
+  datum: "13.07.2026",
+  gueltig_bis: "12.08.2026",
+  ansprechpartner: "M. Muster",
+  kunde_name: "Familie Muster",
+  verwaltung_name: "Muster Immobilien AG",
+  objekt_strasse: "Musterstrasse 12",
+  objekt_plz_ort: "8600 Dübendorf",
+  objekt: "Musterstrasse 12, 8600 Dübendorf",
+  kunde_zusatz: "c/o Muster Immobilien AG",
+  referenz: "P-2026-014",
+  kopftext: "Besten Dank für Ihre Anfrage.",
+  fusstext: "Wir freuen uns auf Ihren Auftrag.",
+  positionen: [
+    {
+      pos: 1,
+      beschreibung: "Storen-Motor ersetzen",
+      menge: "1",
+      einheit: "Stk",
+      menge_einheit: "1 Stk",
+      einzelpreis: "420.00",
+      zeilentotal: "420.00",
+    },
+  ],
+  total_netto: "420.00",
+  mwst_satz: "8.1%",
+  mwst_betrag: "34.02",
+  total_brutto: "454.02",
+  kundennummer: "K-1024",
+  lieferfrist: "2 Wochen",
+  eigentuemer: "Muster Immobilien AG",
+  briefanrede: "Sehr geehrte Damen und Herren",
+  rabatt: "5%",
+  rabatt_text: "Rabatt",
+  rabatt_betrag: "21.00",
+};
+
+/** Alle gültigen Platzhalter-Namen (Top-Level + Positions-Felder) für die Upload-Prüfung. */
+export const QUOTE_DOCUMENT_TOKEN_KEYS: readonly string[] = [
+  ...Object.keys(SAMPLE_QUOTE_DOCUMENT_DATA),
+  ...Object.keys(SAMPLE_QUOTE_DOCUMENT_DATA.positionen[0]!),
+];
+
 export function buildQuoteDocumentData(input: QuoteDocumentInput): QuoteDocumentData {
   const { companyName, quote, project } = input;
   const positionen: QuoteDocumentPosition[] = quote.lineItems

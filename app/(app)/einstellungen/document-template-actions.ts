@@ -9,6 +9,11 @@ import {
   setDefaultDocumentTemplate,
 } from "@/lib/db/document-templates";
 import { documentTemplateKinds, type DocumentTemplate, type DocumentTemplateKind } from "@/lib/domain/types";
+import { findUnknownTemplateTags } from "@/lib/documents/render-docx";
+import {
+  QUOTE_DOCUMENT_TOKEN_KEYS,
+  SAMPLE_QUOTE_DOCUMENT_DATA,
+} from "@/lib/documents/quote-document-data";
 
 const MAX_TEMPLATE_BYTES = 10 * 1024 * 1024;
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -55,6 +60,26 @@ export async function uploadDocumentTemplateAction(formData: FormData): Promise<
   const makeDefault = String(formData.get("makeDefault") ?? "") === "1";
 
   const bytes = Buffer.from(await file.arrayBuffer());
+
+  // Vorlage prüfen: nutzt sie unbekannte Platzhalter, käme sonst ein still leeres
+  // Dokument heraus. Lieber jetzt mit klarer Meldung ablehnen. (Aktuell nur «offerte».)
+  if (kind === "offerte") {
+    const unknownTags = findUnknownTemplateTags(
+      bytes,
+      QUOTE_DOCUMENT_TOKEN_KEYS,
+      SAMPLE_QUOTE_DOCUMENT_DATA as unknown as Record<string, unknown>,
+    );
+    if (unknownTags.length > 0) {
+      const shown = unknownTags.slice(0, 8).map((t) => `{${t}}`).join(", ");
+      const rest = unknownTags.length > 8 ? ` … (+${unknownTags.length - 8})` : "";
+      throw new Error(
+        `Diese Vorlage nutzt unbekannte Platzhalter: ${shown}${rest}. ` +
+          `Bitte nur die dokumentierten Bauflip-Felder verwenden (z. B. {offerte_nummer}, ` +
+          `{kunde_name}, {#positionen}…{/positionen}). Sonst bleiben die Felder leer.`,
+      );
+    }
+  }
+
   const profile = await getCachedSessionProfile(session);
   return createDocumentTemplate(session.organizationId, { kind, name, makeDefault }, bytes, profile.userId);
 }
