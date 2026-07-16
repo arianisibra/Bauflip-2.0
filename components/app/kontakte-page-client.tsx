@@ -12,13 +12,6 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 type FormState = {
   id: string | null;
@@ -250,22 +243,23 @@ export function KontaktePageClient() {
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <Label className="text-xs">Typ</Label>
-                <Select
+                <Label className="text-xs" htmlFor="contact-kind">
+                  Typ
+                </Label>
+                <select
+                  id="contact-kind"
                   value={form.kind}
-                  onValueChange={(v) => setForm((p) => (p ? { ...p, kind: v as ContactKind } : p))}
+                  onChange={(e) =>
+                    setForm((p) => (p ? { ...p, kind: e.target.value as ContactKind } : p))
+                  }
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {contactKinds.map((k) => (
-                      <SelectItem key={k} value={k}>
-                        {contactKindLabels[k]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  {contactKinds.map((k) => (
+                    <option key={k} value={k}>
+                      {contactKindLabels[k]}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <Label className="text-xs">Kundennummer (optional)</Label>
