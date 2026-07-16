@@ -174,6 +174,47 @@ export type ContactProjectRow = {
   role: ContactRole;
 };
 
+export type LinkedBexioContact = {
+  contactId: string;
+  bexioContactId: number | null;
+  name: string;
+  email: string | null;
+};
+
+/**
+ * Zahler-Kontakt eines Projekts für den Bexio-Push: bevorzugt die **Verwaltung**
+ * (üblicher Rechnungsempfänger), sonst der Mieter. Liefert Name/E-Mail und den
+ * evtl. schon hinterlegten Bexio-Kontakt-Link.
+ */
+export async function getLinkedBexioContactForProject(
+  projectId: string,
+): Promise<LinkedBexioContact | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from("project_contacts")
+    .select("role, contacts!inner(id, display_name, company_name, email, bexio_contact_id)")
+    .eq("project_id", projectId);
+  if (error || !data || data.length === 0) return null;
+  const rows = data as Record<string, unknown>[];
+  const pick = rows.find((r) => r.role === "verwaltung") ?? rows[0]!;
+  const c = (pick.contacts ?? {}) as Record<string, unknown>;
+  const company = c.company_name != null ? String(c.company_name).trim() : "";
+  return {
+    contactId: String(c.id ?? ""),
+    bexioContactId: c.bexio_contact_id != null ? Number(c.bexio_contact_id) : null,
+    name: company || String(c.display_name ?? ""),
+    email: cleanText(c.email),
+  };
+}
+
+/** Bexio-Kontakt-Link auf einem Kontakt speichern (nach erstem Match/Neuanlage). */
+export async function setContactBexioId(contactId: string, bexioContactId: number): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return;
+  await supabase.from("contacts").update({ bexio_contact_id: bexioContactId }).eq("id", contactId);
+}
+
 /** Projekte, die mit einem Kontakt verknüpft sind (Historie pro Kontakt). */
 export async function listProjectsForContact(contactId: string): Promise<ContactProjectRow[]> {
   const supabase = await createSupabaseServerClient();
