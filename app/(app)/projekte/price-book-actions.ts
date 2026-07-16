@@ -34,6 +34,9 @@ export async function createPriceBookItemAction(values: unknown, tabId?: string)
 
   const item = await createPriceBookItem(session.organizationId, {
     name: parsed.data.name,
+    description: parsed.data.description ?? null,
+    category: parsed.data.category ?? null,
+    articleNumber: parsed.data.articleNumber ?? null,
     unit: parsed.data.unit ?? null,
     unitPrice: parsed.data.unitPrice,
     isActive: parsed.data.isActive,
@@ -50,6 +53,9 @@ export async function updatePriceBookItemAction(values: unknown, tabId?: string)
 
   const item = await updatePriceBookItem(parsed.data.id, {
     name: parsed.data.name,
+    description: parsed.data.description ?? null,
+    category: parsed.data.category ?? null,
+    articleNumber: parsed.data.articleNumber ?? null,
     unit: parsed.data.unit ?? null,
     unitPrice: parsed.data.unitPrice,
     isActive: parsed.data.isActive,

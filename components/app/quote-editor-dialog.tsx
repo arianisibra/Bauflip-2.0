@@ -13,13 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Stepper } from "@/components/ui/stepper";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { PriceBookPicker } from "@/components/app/price-book-picker";
 
 const chf = new Intl.NumberFormat("de-CH", { style: "currency", currency: "CHF" });
 
@@ -128,11 +122,9 @@ export function QuoteEditorDialog({
     });
   };
 
-  const addFromPriceBook = (itemId: string) => {
-    const item = priceBookItems.find((i) => i.id === itemId);
-    if (!item) return;
+  const addFromPriceBook = (item: PriceBookItem) => {
     appendLine({
-      description: item.name,
+      description: item.description?.trim() || item.name,
       quantity: "1",
       unit: item.unit ?? "",
       unitPrice: String(item.unitPrice),
@@ -338,19 +330,7 @@ export function QuoteEditorDialog({
               Position
             </Button>
             {priceBookItems.length > 0 ? (
-              <Select value="" onValueChange={(v) => addFromPriceBook(String(v))}>
-                <SelectTrigger className="h-8 w-56 text-sm">
-                  <SelectValue placeholder="Aus Preisstamm hinzufügen …" />
-                </SelectTrigger>
-                <SelectContent>
-                  {priceBookItems.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.name} ({chf.format(item.unitPrice)}
-                      {item.unit ? ` / ${item.unit}` : ""})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <PriceBookPicker items={priceBookItems} onPick={addFromPriceBook} />
             ) : null}
             {latestReport && !editor.quoteId ? (
               <Button type="button" variant="ghost" size="sm" onClick={prefillFromReport}>

@@ -449,6 +449,12 @@ export type PriceBookItem = {
   id: string;
   organizationId: string;
   name: string;
+  /** Längerer Beschreibungstext (optional) — wird als Positions-Beschreibung übernommen. */
+  description: string | null;
+  /** Kategorie zur Gruppierung im Picker (optional). */
+  category: string | null;
+  /** Interne/Lieferanten-Artikelnummer (optional). */
+  articleNumber: string | null;
   unit: string | null;
   unitPrice: number;
   isActive: boolean;

@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { SettingsRow } from "@/components/app/settings-row";
 
 const chf = new Intl.NumberFormat("de-CH", { style: "currency", currency: "CHF" });
@@ -23,11 +24,22 @@ type ItemFormState = {
   /** null = neue Position. */
   id: string | null;
   name: string;
+  category: string;
+  articleNumber: string;
+  description: string;
   unit: string;
   unitPrice: string;
 };
 
-const EMPTY_FORM: ItemFormState = { id: null, name: "", unit: "", unitPrice: "" };
+const EMPTY_FORM: ItemFormState = {
+  id: null,
+  name: "",
+  category: "",
+  articleNumber: "",
+  description: "",
+  unit: "",
+  unitPrice: "",
+};
 
 /** Preisstamm-Verwaltung (Einstellungen): Zeile + Verwalten-Fenster mit Liste + Add/Edit. */
 export function PriceBookManager() {
@@ -45,6 +57,9 @@ export function PriceBookManager() {
     if (!form) return;
     const payload = {
       name: form.name,
+      category: form.category || null,
+      articleNumber: form.articleNumber || null,
+      description: form.description || null,
       unit: form.unit || null,
       unitPrice: Number(form.unitPrice.replace(",", ".")),
     };
@@ -120,8 +135,14 @@ export function PriceBookManager() {
           {items.map((item: PriceBookItem) => (
             <li key={item.id} className="flex items-center justify-between gap-2 py-2">
               <div className="min-w-0">
-                <p className="truncate text-sm">{item.name}</p>
+                <p className="truncate text-sm">
+                  {item.name}
+                  {item.articleNumber ? (
+                    <span className="ml-1.5 text-[11px] text-muted-foreground">· {item.articleNumber}</span>
+                  ) : null}
+                </p>
                 <p className="text-[11px] text-muted-foreground">
+                  {item.category ? `${item.category} · ` : ""}
                   {chf.format(item.unitPrice)}
                   {item.unit ? ` / ${item.unit}` : ""}
                 </p>
@@ -133,7 +154,15 @@ export function PriceBookManager() {
                   size="sm"
                   aria-label="Bearbeiten"
                   onClick={() =>
-                    setForm({ id: item.id, name: item.name, unit: item.unit ?? "", unitPrice: String(item.unitPrice) })
+                    setForm({
+                      id: item.id,
+                      name: item.name,
+                      category: item.category ?? "",
+                      articleNumber: item.articleNumber ?? "",
+                      description: item.description ?? "",
+                      unit: item.unit ?? "",
+                      unitPrice: String(item.unitPrice),
+                    })
                   }
                 >
                   <Pencil className="size-4" aria-hidden />
@@ -191,6 +220,33 @@ export function PriceBookManager() {
                   onChange={(e) => setForm((prev) => (prev ? { ...prev, unitPrice: e.target.value } : prev))}
                 />
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <div>
+                <Label className="text-[11px]">Kategorie (optional)</Label>
+                <Input
+                  value={form.category}
+                  placeholder="z. B. Storen, Montage"
+                  onChange={(e) => setForm((prev) => (prev ? { ...prev, category: e.target.value } : prev))}
+                />
+              </div>
+              <div>
+                <Label className="text-[11px]">Artikelnummer (optional)</Label>
+                <Input
+                  value={form.articleNumber}
+                  placeholder="z. B. ART-1024"
+                  onChange={(e) => setForm((prev) => (prev ? { ...prev, articleNumber: e.target.value } : prev))}
+                />
+              </div>
+            </div>
+            <div>
+              <Label className="text-[11px]">Beschreibung (optional)</Label>
+              <Textarea
+                rows={2}
+                value={form.description}
+                placeholder="Längerer Beschreibungstext — wird als Positions-Beschreibung übernommen."
+                onChange={(e) => setForm((prev) => (prev ? { ...prev, description: e.target.value } : prev))}
+              />
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" size="sm" disabled={pending} onClick={() => setForm(null)}>

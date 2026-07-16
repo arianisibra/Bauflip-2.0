@@ -234,6 +234,9 @@ export const billingSettingsSchema = z
 
 export const priceBookItemSchema = z.object({
   name: z.string().trim().min(1, "Bitte Bezeichnung angeben.").max(300),
+  description: z.string().trim().max(2000).optional().nullable(),
+  category: z.string().trim().max(120).optional().nullable(),
+  articleNumber: z.string().trim().max(80).optional().nullable(),
   unit: z.string().trim().max(20).optional().nullable(),
   unitPrice: z.coerce.number().min(0, "Preis darf nicht negativ sein."),
   isActive: z.boolean().optional(),

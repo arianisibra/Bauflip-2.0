@@ -4,14 +4,22 @@ import { cache } from "react";
 import type { PriceBookItem } from "@/lib/domain/types";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-const PRICE_BOOK_DB_COLUMNS = "id, organization_id, name, unit, unit_price, is_active, sort_order";
+const PRICE_BOOK_DB_COLUMNS =
+  "id, organization_id, name, description, category, article_number, unit, unit_price, is_active, sort_order";
+
+function cleanText(value: unknown): string | null {
+  return value != null && String(value).trim() ? String(value).trim() : null;
+}
 
 function mapPriceBookItemRow(row: Record<string, unknown>): PriceBookItem {
   return {
     id: String(row.id),
     organizationId: String(row.organization_id ?? ""),
     name: String(row.name ?? ""),
-    unit: row.unit != null && String(row.unit).trim() ? String(row.unit).trim() : null,
+    description: cleanText(row.description),
+    category: cleanText(row.category),
+    articleNumber: cleanText(row.article_number),
+    unit: cleanText(row.unit),
     unitPrice: Number(row.unit_price ?? 0),
     isActive: Boolean(row.is_active),
     sortOrder: Number(row.sort_order ?? 0),
@@ -37,6 +45,9 @@ export const listPriceBookItemsForOrg = cache(async function listPriceBookItemsF
 
 export type PriceBookItemCreateInput = {
   name: string;
+  description?: string | null;
+  category?: string | null;
+  articleNumber?: string | null;
   unit: string | null;
   unitPrice: number;
   isActive?: boolean;
@@ -55,6 +66,9 @@ export async function createPriceBookItem(
     .insert({
       organization_id: organizationId,
       name: input.name,
+      description: input.description?.trim() || null,
+      category: input.category?.trim() || null,
+      article_number: input.articleNumber?.trim() || null,
       unit: input.unit?.trim() || null,
       unit_price: input.unitPrice,
       is_active: input.isActive ?? true,
@@ -79,6 +93,9 @@ export async function updatePriceBookItem(
     .from("price_book_items")
     .update({
       name: input.name,
+      description: input.description?.trim() || null,
+      category: input.category?.trim() || null,
+      article_number: input.articleNumber?.trim() || null,
       unit: input.unit?.trim() || null,
       unit_price: input.unitPrice,
       ...(input.isActive !== undefined ? { is_active: input.isActive } : {}),
