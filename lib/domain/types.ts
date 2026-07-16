@@ -154,6 +154,7 @@ export const appPageKeys = [
   "bestellformulare",
   "zeiterfassung",
   "zahlungen",
+  "kontakte",
   "einstellungen",
   "mein_tag",
   "monteur_profil",
@@ -459,6 +460,38 @@ export type PriceBookItem = {
   unitPrice: number;
   isActive: boolean;
   sortOrder: number;
+};
+
+export const contactKinds = ["privat", "mieter", "verwaltung", "eigentuemer", "lieferant"] as const;
+export type ContactKind = (typeof contactKinds)[number];
+
+export const contactKindLabels: Record<ContactKind, string> = {
+  privat: "Privatkunde",
+  mieter: "Mieter",
+  verwaltung: "Verwaltung",
+  eigentuemer: "Eigentümer",
+  lieferant: "Lieferant",
+};
+
+/** Kontaktverzeichnis-Eintrag einer Organisation (Kunde/Mieter/Verwaltung/…). */
+export type Contact = {
+  id: string;
+  organizationId: string;
+  kind: ContactKind;
+  displayName: string;
+  companyName: string | null;
+  email: string | null;
+  phone: string | null;
+  mobile: string | null;
+  street: string | null;
+  postalCode: string | null;
+  city: string | null;
+  country: string | null;
+  notes: string | null;
+  kundenNummer: string | null;
+  bexioContactId: number | null;
+  isActive: boolean;
+  createdAt: string;
 };
 
 // ─── Rechnungen (QR-Rechnung) ────────────────────────────────────────────────

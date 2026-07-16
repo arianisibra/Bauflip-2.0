@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { useCreateIntake } from "@/lib/query/hooks";
+import { useRef, useState } from "react";
+import { useContacts, useCreateIntake } from "@/lib/query/hooks";
+import type { Contact } from "@/lib/domain/types";
+import { ContactPicker } from "@/components/app/contact-picker";
 import { BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,11 +12,40 @@ import { Textarea } from "@/components/ui/textarea";
 
 export function IntakeForm({ onCreated }: { onCreated?: (projectId: string) => void }) {
   const createIntake = useCreateIntake();
+  const contactsQuery = useContacts();
+  const formRef = useRef<HTMLFormElement>(null);
   const [error, setError] = useState<string | null>(null);
   const pending = createIntake.isPending;
 
+  const setField = (name: string, value: string | null) => {
+    const el = formRef.current?.elements.namedItem(name) as
+      | HTMLInputElement
+      | HTMLTextAreaElement
+      | null;
+    if (el && value) el.value = value;
+  };
+
+  // Übernimmt einen Kontakt in die passenden Projektfelder: Verwaltung → Verwaltungsblock,
+  // sonst → Mieter-/Kontaktblock. Adresse wird immer übernommen, wenn vorhanden.
+  const applyContact = (c: Contact) => {
+    if (c.kind === "verwaltung") {
+      setField("managementName", c.companyName || c.displayName);
+      setField("managementEmail", c.email);
+    } else {
+      setField("tenantName", c.displayName);
+      setField("tenantPhone", c.phone || c.mobile);
+      setField("tenantEmail", c.email);
+    }
+    setField("serviceStreet", c.street);
+    setField("servicePostalCode", c.postalCode);
+    setField("serviceCity", c.city);
+  };
+
+  const contacts = contactsQuery.data ?? [];
+
   return (
     <form
+      ref={formRef}
       className="flex flex-col gap-4"
       aria-busy={pending}
       action={async (fd) => {
@@ -29,6 +60,13 @@ export function IntakeForm({ onCreated }: { onCreated?: (projectId: string) => v
     >
       <input type="hidden" name="source" value="email" />
       <input type="hidden" name="type" value="reparatur" />
+
+      {contacts.length > 0 ? (
+        <div className="space-y-1">
+          <Label>Aus Kontakt übernehmen (optional)</Label>
+          <ContactPicker contacts={contacts} onPick={applyContact} />
+        </div>
+      ) : null}
 
       <div className="space-y-1">
         <Label htmlFor="tenantName">Mieter / Kontakt</Label>

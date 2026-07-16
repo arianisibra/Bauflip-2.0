@@ -58,6 +58,12 @@ import {
   listPriceBookItemsAction,
   updatePriceBookItemAction,
 } from "@/app/(app)/projekte/price-book-actions";
+import {
+  createContactAction,
+  deleteContactAction,
+  listContactsAction,
+  updateContactAction,
+} from "@/app/(app)/kontakte/actions";
 import { sendAppointmentConfirmationAction } from "@/app/(app)/projekte/appointment-mail-actions";
 import { fetchDashboardDataAction } from "@/app/(app)/dashboard/actions";
 import type { DashboardData } from "@/lib/db/dashboard";
@@ -101,7 +107,7 @@ import {
   type ConfirmPaymentImportResult,
   type PaymentImportPreview,
 } from "@/app/(app)/zahlungen/actions";
-import type { BexioSettings, DocumentTemplate, DocumentTemplateKind, Invoice, InvoiceStatus, OrganizationBillingSettings, PaymentImport } from "@/lib/domain/types";
+import type { BexioSettings, Contact, DocumentTemplate, DocumentTemplateKind, Invoice, InvoiceStatus, OrganizationBillingSettings, PaymentImport } from "@/lib/domain/types";
 import { listTeamMembersAction } from "@/app/(app)/einstellungen/actions";
 import { deactivateTeamMemberAction, revokeInvitationAction } from "@/app/(app)/einstellungen/team-member-actions";
 import {
@@ -154,6 +160,7 @@ import {
 } from "@/app/(app)/order-form-template-actions";
 import {
   afterAbsenceChange,
+  afterContactChange,
   afterInvoiceChange,
   afterPriceBookChange,
   afterProjectCoreChange,
@@ -974,6 +981,50 @@ export function useDeletePriceBookItem() {
     onSuccess: () => {
       afterPriceBookChange(qc, { refetchType: "all" });
       notifyOtherTabs({ type: "price_book.changed" });
+    },
+  });
+}
+
+// ───────── Kontakte (Verzeichnis) ─────────
+
+export function useContacts(enabled = true) {
+  return useQuery<Contact[]>({
+    queryKey: queryKeys.contacts(),
+    queryFn: () => listContactsAction(),
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+export function useCreateContact() {
+  const qc = useQueryClient();
+  return useMutation<Contact, Error, Parameters<typeof createContactAction>[0]>({
+    mutationFn: (values) => createContactAction(values, getTabId()),
+    onSuccess: () => {
+      afterContactChange(qc, { refetchType: "all" });
+      notifyOtherTabs({ type: "contact.changed" });
+    },
+  });
+}
+
+export function useUpdateContact() {
+  const qc = useQueryClient();
+  return useMutation<Contact, Error, Parameters<typeof updateContactAction>[0]>({
+    mutationFn: (values) => updateContactAction(values, getTabId()),
+    onSuccess: () => {
+      afterContactChange(qc, { refetchType: "all" });
+      notifyOtherTabs({ type: "contact.changed" });
+    },
+  });
+}
+
+export function useDeleteContact() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: (contactId) => deleteContactAction(contactId, getTabId()),
+    onSuccess: () => {
+      afterContactChange(qc, { refetchType: "all" });
+      notifyOtherTabs({ type: "contact.changed" });
     },
   });
 }

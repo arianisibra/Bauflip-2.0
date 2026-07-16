@@ -297,6 +297,10 @@ export function afterPriceBookChange(qc: QueryClient, opts?: InvalidateOpts): vo
   inv(qc, queryKeys.priceBook(), opts);
 }
 
+export function afterContactChange(qc: QueryClient, opts?: InvalidateOpts): void {
+  inv(qc, queryKeys.contacts(), opts);
+}
+
 export function afterInvoiceChange(
   qc: QueryClient,
   projectId: string,

@@ -13,6 +13,7 @@ export const sidebarItems: SidebarItem[] = [
   },
   { key: "zeiterfassung", label: "Zeiterfassung", href: "/zeiterfassung", section: "navigation" },
   { key: "zahlungen", label: "Zahlungen", href: "/zahlungen", section: "navigation" },
+  { key: "kontakte", label: "Kontakte", href: "/kontakte", section: "navigation" },
   { key: "einstellungen", label: "Einstellungen", href: "/einstellungen", section: "system" },
   /** Eigener Abschnitt in der Sidebar (zwischen Navigation und System), damit Büro/Admin die Feld-Ansicht finden. */
   { key: "mein_tag", label: "Mein Tag", href: "/tag", section: "einsatz" },
@@ -20,8 +21,8 @@ export const sidebarItems: SidebarItem[] = [
 ];
 
 const roleVisibility: Record<RoleType, AppPageKey[]> = {
-  admin: ["dashboard", "projekte", "kalender", "mitarbeiter", "bestellformulare", "zeiterfassung", "zahlungen", "einstellungen", "mein_tag"],
-  office: ["dashboard", "projekte", "kalender", "mitarbeiter", "zeiterfassung", "zahlungen", "einstellungen", "mein_tag"],
+  admin: ["dashboard", "projekte", "kalender", "mitarbeiter", "bestellformulare", "zeiterfassung", "zahlungen", "kontakte", "einstellungen", "mein_tag"],
+  office: ["dashboard", "projekte", "kalender", "mitarbeiter", "zeiterfassung", "zahlungen", "kontakte", "einstellungen", "mein_tag"],
   technician: ["mein_tag", "monteur_profil"],
 };
 

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isValidQrBillIban } from "@/lib/qr-bill/iban";
 import {
+  contactKinds,
   invoiceStatuses,
   projectStatuses,
   projectTypes,
@@ -244,6 +245,24 @@ export const priceBookItemSchema = z.object({
 });
 
 export const priceBookItemUpdateSchema = priceBookItemSchema.extend({
+  id: z.string().uuid(),
+});
+
+export const contactSchema = z.object({
+  kind: z.enum(contactKinds),
+  displayName: z.string().trim().min(1, "Bitte einen Namen angeben.").max(200),
+  companyName: z.string().trim().max(200).optional().nullable(),
+  email: z.string().trim().max(200).optional().nullable(),
+  phone: z.string().trim().max(60).optional().nullable(),
+  mobile: z.string().trim().max(60).optional().nullable(),
+  street: z.string().trim().max(200).optional().nullable(),
+  postalCode: z.string().trim().max(20).optional().nullable(),
+  city: z.string().trim().max(120).optional().nullable(),
+  country: z.string().trim().max(80).optional().nullable(),
+  notes: z.string().trim().max(2000).optional().nullable(),
+  kundenNummer: z.string().trim().max(60).optional().nullable(),
+});
+export const contactUpdateSchema = contactSchema.extend({
   id: z.string().uuid(),
 });
 
