@@ -2,10 +2,16 @@
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Mail, Pencil, Phone, Plus, Search, Trash2 } from "lucide-react";
+import { History, Loader2, Mail, Pencil, Phone, Plus, Search, Trash2 } from "lucide-react";
 import { contactKindLabels, contactKinds, type Contact, type ContactKind } from "@/lib/domain/types";
 import { contactSchema } from "@/lib/validations/forms";
-import { useContacts, useCreateContact, useDeleteContact, useUpdateContact } from "@/lib/query/hooks";
+import {
+  useContactProjects,
+  useContacts,
+  useCreateContact,
+  useDeleteContact,
+  useUpdateContact,
+} from "@/lib/query/hooks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -67,6 +73,8 @@ export function KontaktePageClient() {
   const deleteContact = useDeleteContact();
   const [query, setQuery] = useState("");
   const [form, setForm] = useState<FormState | null>(null);
+  const [historyContact, setHistoryContact] = useState<Contact | null>(null);
+  const historyQuery = useContactProjects(historyContact?.id ?? null, historyContact !== null);
 
   const contacts = useMemo(() => contactsQuery.data ?? [], [contactsQuery.data]);
   const pending = createContact.isPending || updateContact.isPending;
@@ -196,6 +204,16 @@ export function KontaktePageClient() {
                 ) : null}
               </div>
               <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Verlauf"
+                  title="Verknüpfte Projekte"
+                  onClick={() => setHistoryContact(c)}
+                >
+                  <History className="size-4" aria-hidden />
+                </Button>
                 <Button
                   type="button"
                   variant="ghost"
@@ -345,6 +363,44 @@ export function KontaktePageClient() {
             </div>
           </div>
         ) : null}
+      </Dialog>
+
+      <Dialog
+        open={historyContact !== null}
+        onOpenChange={(o) => (o ? null : setHistoryContact(null))}
+        title={
+          historyContact ? `Projekte — ${historyContact.displayName}` : "Verknüpfte Projekte"
+        }
+        description="Projekte, bei denen dieser Kontakt als Mieter oder Verwaltung hinterlegt ist."
+        footer={
+          <div className="flex justify-end">
+            <Button type="button" variant="ghost" onClick={() => setHistoryContact(null)}>
+              Schliessen
+            </Button>
+          </div>
+        }
+      >
+        {historyQuery.isLoading ? (
+          <p className="text-sm text-muted-foreground">Wird geladen …</p>
+        ) : (historyQuery.data ?? []).length === 0 ? (
+          <p className="text-sm text-muted-foreground">Noch keine verknüpften Projekte.</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {(historyQuery.data ?? []).map((p) => (
+              <li key={`${p.projectId}-${p.role}`} className="flex items-center justify-between gap-2 py-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm">{p.title || "Projekt"}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {p.role === "verwaltung" ? "Verwaltung" : "Mieter"}
+                  </p>
+                </div>
+                <Badge variant="outline" className="shrink-0 text-[10px] uppercase">
+                  {p.status}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        )}
       </Dialog>
     </div>
   );

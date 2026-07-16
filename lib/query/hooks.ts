@@ -61,9 +61,11 @@ import {
 import {
   createContactAction,
   deleteContactAction,
+  listContactProjectsAction,
   listContactsAction,
   updateContactAction,
 } from "@/app/(app)/kontakte/actions";
+import type { ContactProjectRow } from "@/lib/db/contacts";
 import { sendAppointmentConfirmationAction } from "@/app/(app)/projekte/appointment-mail-actions";
 import { fetchDashboardDataAction } from "@/app/(app)/dashboard/actions";
 import type { DashboardData } from "@/lib/db/dashboard";
@@ -1026,6 +1028,16 @@ export function useDeleteContact() {
       afterContactChange(qc, { refetchType: "all" });
       notifyOtherTabs({ type: "contact.changed" });
     },
+  });
+}
+
+/** Verknüpfte Projekte eines Kontakts (Historie) — on-demand beim Öffnen. */
+export function useContactProjects(contactId: string | null, enabled: boolean) {
+  return useQuery<ContactProjectRow[]>({
+    queryKey: queryKeys.contactProjects(contactId ?? "__none"),
+    queryFn: () => listContactProjectsAction(contactId!),
+    enabled: enabled && Boolean(contactId),
+    staleTime: 30_000,
   });
 }
 

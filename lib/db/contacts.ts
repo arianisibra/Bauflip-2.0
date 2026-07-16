@@ -145,3 +145,53 @@ export async function deleteContact(contactId: string): Promise<void> {
   const { error } = await supabase.from("contacts").delete().eq("id", contactId);
   if (error) throw new Error(error.message);
 }
+
+export type ContactRole = "mieter" | "verwaltung";
+
+/** Verknüpft ein Projekt mit einem Kontakt für eine Rolle (idempotent je Projekt+Rolle). */
+export async function setProjectContact(
+  organizationId: string,
+  projectId: string,
+  role: ContactRole,
+  contactId: string,
+): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) throw new Error("Supabase nicht verfügbar.");
+  const { error } = await supabase
+    .from("project_contacts")
+    .upsert(
+      { organization_id: organizationId, project_id: projectId, role, contact_id: contactId },
+      { onConflict: "project_id,role" },
+    );
+  if (error) throw new Error(error.message);
+}
+
+export type ContactProjectRow = {
+  projectId: string;
+  title: string;
+  status: string;
+  createdAt: string;
+  role: ContactRole;
+};
+
+/** Projekte, die mit einem Kontakt verknüpft sind (Historie pro Kontakt). */
+export async function listProjectsForContact(contactId: string): Promise<ContactProjectRow[]> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("project_contacts")
+    .select("role, created_at, projects!inner(id, title, status, created_at)")
+    .eq("contact_id", contactId)
+    .order("created_at", { ascending: false });
+  if (error || !data) return [];
+  return (data as Record<string, unknown>[]).map((row) => {
+    const p = (row.projects ?? {}) as Record<string, unknown>;
+    return {
+      projectId: String(p.id ?? ""),
+      title: String(p.title ?? ""),
+      status: String(p.status ?? ""),
+      createdAt: String(p.created_at ?? ""),
+      role: (row.role as ContactRole) ?? "mieter",
+    };
+  });
+}

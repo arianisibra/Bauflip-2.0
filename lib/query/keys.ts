@@ -65,6 +65,8 @@ export const queryKeys = {
   priceBook: () => ["price-book"] as const,
   /** Kontaktverzeichnis der Organisation. */
   contacts: () => ["contacts"] as const,
+  /** Verknüpfte Projekte eines Kontakts (Historie). */
+  contactProjects: (contactId: string) => ["contact-projects", contactId] as const,
   /** Kundensignatur eines Rapports — on-demand beim Aufklappen der Karte. */
   reportSignature: (reportId: string) => ["report-signature", reportId] as const,
   /** Auswertungen (Kennzahlen-Übersicht, Admin/Büro). */

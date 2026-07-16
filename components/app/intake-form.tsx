@@ -15,6 +15,9 @@ export function IntakeForm({ onCreated }: { onCreated?: (projectId: string) => v
   const contactsQuery = useContacts();
   const formRef = useRef<HTMLFormElement>(null);
   const [error, setError] = useState<string | null>(null);
+  // Gewählte Kontakt-ID je Rolle — geht als Hidden-Input mit und verknüpft Projekt ↔ Kontakt.
+  const [linkedTenantId, setLinkedTenantId] = useState("");
+  const [linkedManagementId, setLinkedManagementId] = useState("");
   const pending = createIntake.isPending;
 
   const setField = (name: string, value: string | null) => {
@@ -31,10 +34,12 @@ export function IntakeForm({ onCreated }: { onCreated?: (projectId: string) => v
     if (c.kind === "verwaltung") {
       setField("managementName", c.companyName || c.displayName);
       setField("managementEmail", c.email);
+      setLinkedManagementId(c.id);
     } else {
       setField("tenantName", c.displayName);
       setField("tenantPhone", c.phone || c.mobile);
       setField("tenantEmail", c.email);
+      setLinkedTenantId(c.id);
     }
     setField("serviceStreet", c.street);
     setField("servicePostalCode", c.postalCode);
@@ -60,6 +65,9 @@ export function IntakeForm({ onCreated }: { onCreated?: (projectId: string) => v
     >
       <input type="hidden" name="source" value="email" />
       <input type="hidden" name="type" value="reparatur" />
+      <input type="hidden" name="tenantContactId" value={linkedTenantId} />
+      <input type="hidden" name="managementContactId" value={linkedManagementId} />
+
 
       {contacts.length > 0 ? (
         <div className="space-y-1">

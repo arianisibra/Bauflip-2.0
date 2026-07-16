@@ -6,7 +6,9 @@ import {
   createContact,
   deleteContact,
   listContactsForOrg,
+  listProjectsForContact,
   updateContact,
+  type ContactProjectRow,
 } from "@/lib/db/contacts";
 import type { Contact, ContactKind } from "@/lib/domain/types";
 import { publish } from "@/lib/realtime/publish";
@@ -29,6 +31,11 @@ export async function listContactsAction(opts?: {
   const session = await requireOfficeSession();
   if (!session.organizationId) return [];
   return listContactsForOrg(session.organizationId, opts);
+}
+
+export async function listContactProjectsAction(contactId: string): Promise<ContactProjectRow[]> {
+  await requireOfficeSession();
+  return listProjectsForContact(contactId);
 }
 
 export async function createContactAction(values: unknown, tabId?: string): Promise<Contact> {

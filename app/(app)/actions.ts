@@ -15,6 +15,7 @@ import {
   deleteProjectAttachment,
   type ProjectCore,
 } from "@/lib/db/repository";
+import { setProjectContact } from "@/lib/db/contacts";
 import { intakeSchema } from "@/lib/validations/forms";
 import {
   inferStoredProjectFileMime,
@@ -131,6 +132,24 @@ export async function createIntakeAction(formData: FormData, tabId?: string) {
     serviceCity: v.serviceCity?.trim() || null,
     serviceCountry: "CH",
   });
+
+  // Kontakt-Verknüpfung (Schritt 2): wenn im Formular ein Kontakt gewählt wurde,
+  // Projekt ↔ Kontakt je Rolle verknüpfen. Best-effort — blockiert das Anlegen nie.
+  if (session.organizationId) {
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const tenantContactId = String(raw.tenantContactId ?? "");
+    const managementContactId = String(raw.managementContactId ?? "");
+    try {
+      if (uuidRe.test(tenantContactId)) {
+        await setProjectContact(session.organizationId, project.id, "mieter", tenantContactId);
+      }
+      if (uuidRe.test(managementContactId)) {
+        await setProjectContact(session.organizationId, project.id, "verwaltung", managementContactId);
+      }
+    } catch {
+      // Verknüpfung ist optional — Fehler hier darf das Projekt nicht scheitern lassen.
+    }
+  }
 
   if (session.organizationId) {
     await publish(session.organizationId, {
