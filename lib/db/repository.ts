@@ -631,13 +631,17 @@ export const listProjectsForOfficePage = cache(async function listProjectsForOff
       return { projects: [], hasMore: false, nextCursor: null };
     }
 
-    if (listFilter === "abgemacht") {
+    // «abgemacht» hat eine eigene, termin-sortierte Pagination — aber nur ohne Suche.
+    // Bei aktiver Suche läuft es über den normalen, org-weiten Suchpfad unten.
+    if (listFilter === "abgemacht" && !searchQuery) {
       return listAbgemachtProjectsPage(supabase, orgId, limit, cursorRaw, runRpc);
     }
 
     const cursor = decodeProjekteListCursor(cursorRaw);
     let segment: "open" | "closed" | null = null;
-    if (listFilter === "all") {
+    // Bei aktiver Suche keine open/closed-Segmentierung — die Suche läuft statusweit
+    // und flach (siehe Status-Filter unten + RPC-Fix).
+    if (listFilter === "all" && !searchQuery) {
       if (cursor?.kind === "keyset" && cursor.segment === "closed") {
         segment = "closed";
       } else {
@@ -661,7 +665,12 @@ export const listProjectsForOfficePage = cache(async function listProjectsForOff
       );
     }
 
-    if (listFilter === "active" || (listFilter === "all" && segment === "open")) {
+    // Bei aktiver Suche wird der Status-Filter NICHT angewendet → org-weite Suche
+    // über alle Status (die UI verspricht «durchsucht alle Projekte»). Das war der Bug:
+    // vorher wurde die Suche mit dem Status-Filter UND-verknüpft.
+    if (searchQuery) {
+      // statusweit — kein Status-Prädikat
+    } else if (listFilter === "active" || (listFilter === "all" && segment === "open")) {
       q = q.neq("status", "abgeschlossen");
     } else if (listFilter === "all" && segment === "closed") {
       q = q.eq("status", "abgeschlossen");
