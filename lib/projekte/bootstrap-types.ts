@@ -11,6 +11,8 @@ export type ProjekteStatusCountsSnapshot = {
   byStatus: Partial<Record<ProjectStatus, number>>;
   totalAll: number;
   totalActive: number;
+  /** Archivierte Projekte (nicht in byStatus/totalAll enthalten). */
+  totalArchived: number;
 };
 
 export type ProjekteListPageSnapshot = {

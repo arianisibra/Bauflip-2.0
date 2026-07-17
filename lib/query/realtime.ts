@@ -14,6 +14,8 @@ import * as inv from "./invalidations";
 export type RealtimeEvent =
   | { type: "project.core_changed"; projectId: string }
   | { type: "project.deleted"; projectId: string }
+  | { type: "project.archived"; projectId: string }
+  | { type: "project.restored"; projectId: string }
   | { type: "appointment.changed"; projectId: string }
   | { type: "report.changed"; projectId: string }
   | { type: "attachment.changed"; projectId: string }
@@ -40,6 +42,10 @@ export function dispatchRealtimeEvent(
       return;
     case "project.deleted":
       inv.afterProjectDeleted(qc, event.projectId, opts);
+      return;
+    case "project.archived":
+    case "project.restored":
+      inv.afterProjectArchiveChanged(qc, event.projectId, opts);
       return;
     case "appointment.changed":
       inv.afterAppointmentChange(qc, event.projectId, opts);

@@ -52,7 +52,10 @@ export default async function ProjektePage({ searchParams }: PageProps) {
           </div>
         }
       >
-        <ProjektePageClient supabaseConfigured={hasSupabaseConfig()} />
+        <ProjektePageClient
+          supabaseConfigured={hasSupabaseConfig()}
+          isAdmin={session.role === "admin"}
+        />
       </Suspense>
     </QueryHydrationBoundary>
   );

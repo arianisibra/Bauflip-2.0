@@ -17,4 +17,9 @@ describe("matchesProjekteListFilter", () => {
     assert.equal(matchesProjekteListFilter("abgeschlossen", "all"), true);
     assert.equal(matchesProjekteListFilter("offen", "all"), true);
   });
+
+  it("archived matches any status (server scopes by archived_at)", () => {
+    assert.equal(matchesProjekteListFilter("abgeschlossen", "archived"), true);
+    assert.equal(matchesProjekteListFilter("offen", "archived"), true);
+  });
 });

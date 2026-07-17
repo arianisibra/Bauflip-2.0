@@ -32,7 +32,13 @@ import {
   PROJEKTE_SEARCH_MIN_CHARS,
 } from "@/lib/projekte/list-page";
 import { compareAbgemachtListOrder } from "@/lib/projekte/list-sort";
-import { useDeleteProject, useProjekteBootstrap, useProjekteListInfinite } from "@/lib/query/hooks";
+import {
+  useArchiveProject,
+  useRestoreProject,
+  useDeleteProjectPermanently,
+  useProjekteBootstrap,
+  useProjekteListInfinite,
+} from "@/lib/query/hooks";
 import { fetchOfficeProjectListItemAction } from "@/app/(app)/projekte/actions";
 import { OfficeReturnBar } from "@/components/app/office-return-bar";
 import { ListPageToolbar } from "@/components/app/list-page-toolbar";
@@ -133,22 +139,31 @@ const PROJECT_TABLE_ROW_ESTIMATE_PX = 49;
 
 type RowProps = {
   p: OfficeProjectListItem;
-  deletingId: string | null;
+  pendingId: string | null;
   selectedId: string | null;
+  isArchivedView: boolean;
+  isAdmin: boolean;
   onOpen: (p: OfficeProjectListItem) => void;
-  onDelete: (p: OfficeProjectListItem) => void;
+  onArchive: (p: OfficeProjectListItem) => void;
+  onRestore: (p: OfficeProjectListItem) => void;
+  onPermanentDelete: (p: OfficeProjectListItem) => void;
   /** Striped row when virtualized table cannot use :nth-child(even). */
   zebraEven?: boolean;
 };
 
 const ProjectTableRow = memo(function ProjectTableRow({
   p,
-  deletingId,
+  pendingId,
   selectedId,
+  isArchivedView,
+  isAdmin,
   onOpen,
-  onDelete,
+  onArchive,
+  onRestore,
+  onPermanentDelete,
   zebraEven,
 }: RowProps) {
+  const pending = pendingId === p.id;
   return (
     <TableRow
       className={`cursor-pointer${zebraEven ? " bg-sky-50/40 dark:bg-muted/25" : ""}`}
@@ -161,26 +176,66 @@ const ProjectTableRow = memo(function ProjectTableRow({
         <StatusBadge status={p.status} />
       </TableCell>
       <TableCell className="text-right">
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="h-8 border-destructive/30 text-destructive hover:bg-destructive/10"
-          disabled={deletingId === p.id}
-          onClick={(e) => {
-            e.stopPropagation();
-            void onDelete(p);
-          }}
-        >
-          {deletingId === p.id ? (
-            <span className="inline-flex items-center gap-1.5">
-              <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden />
-              Löschen …
-            </span>
-          ) : (
-            "Löschen"
-          )}
-        </Button>
+        {isArchivedView ? (
+          <div className="inline-flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8"
+              disabled={pending}
+              onClick={(e) => {
+                e.stopPropagation();
+                void onRestore(p);
+              }}
+            >
+              {pending ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden />
+                  …
+                </span>
+              ) : (
+                "Wiederherstellen"
+              )}
+            </Button>
+            {isAdmin ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 border-destructive/30 text-destructive hover:bg-destructive/10"
+                disabled={pending}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void onPermanentDelete(p);
+                }}
+              >
+                Löschen
+              </Button>
+            ) : null}
+          </div>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 border-amber-300/60 text-amber-700 hover:bg-amber-500/10 dark:border-amber-400/40 dark:text-amber-300"
+            disabled={pending}
+            onClick={(e) => {
+              e.stopPropagation();
+              void onArchive(p);
+            }}
+          >
+            {pending ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden />
+                Archivieren …
+              </span>
+            ) : (
+              "Archivieren"
+            )}
+          </Button>
+        )}
       </TableCell>
     </TableRow>
   );
@@ -188,11 +243,13 @@ const ProjectTableRow = memo(function ProjectTableRow({
 
 export function ProjekteListClient({
   canEditProjectSheet,
+  isAdmin,
   initialOpenProjectId,
   initialOpenSource,
   initialReturnTo = null,
 }: {
   canEditProjectSheet: boolean;
+  isAdmin: boolean;
   initialOpenProjectId?: string;
   initialOpenSource?: "kalender";
   initialReturnTo?: string | null;
@@ -211,7 +268,10 @@ export function ProjekteListClient({
   } = useProjekteListInfinite(statusFilter, urlSearchQuery);
   const statusCountsSnapshot = bootstrap?.statusCounts;
   const listMeta = bootstrap?.listMeta;
-  const deleteProject = useDeleteProject();
+  const isArchivedView = statusFilter === "archived";
+  const archiveProject = useArchiveProject();
+  const restoreProject = useRestoreProject();
+  const deleteProjectPermanently = useDeleteProjectPermanently();
   const [listSort, setListSort] = useState<ProjectsListSort>("default");
   const [q, setQ] = useState(() => searchParams.get("q") ?? "");
   /** Letzter von diesem Tab selbst geschriebener `q`-Wert — unterscheidet ein Echo unseres
@@ -358,6 +418,7 @@ export function ProjekteListClient({
   const isConcreteStatusFilter = isProjectStatus(statusFilter);
   const hasNoMatchesForStatus = isConcreteStatusFilter && !hasSearch && projects.length === 0;
   const hasNoActiveProjects = statusFilter === "active" && !hasSearch && projects.length === 0;
+  const hasNoArchived = isArchivedView && !hasSearch && projects.length === 0;
   const showEmptyState = sorted.length === 0;
   const projectsLoading = metaLoading || listLoading;
   const totalForFilter = useMemo(() => {
@@ -393,13 +454,47 @@ export function ProjekteListClient({
     [],
   );
 
-  const handleDeleteRow = useCallback(
+  const handleArchiveRow = useCallback(
     async (p: OfficeProjectListItem) => {
-      const ok = window.confirm(`Projekt "${p.title}" wirklich löschen?`);
+      const ok = window.confirm(
+        `Projekt "${p.title}" archivieren? Es verschwindet aus der aktiven Liste und ist unter «Archiviert» wiederherstellbar.`,
+      );
       if (!ok) return;
       try {
-        await deleteProject.mutateAsync(p.id);
-        toast.success("Projekt gelöscht");
+        await archiveProject.mutateAsync(p.id);
+        toast.success("Projekt archiviert");
+        if (selectedRef.current?.id === p.id) {
+          setOpen(false);
+          setSelected(null);
+        }
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Archivieren fehlgeschlagen.");
+      }
+    },
+    [archiveProject],
+  );
+
+  const handleRestoreRow = useCallback(
+    async (p: OfficeProjectListItem) => {
+      try {
+        await restoreProject.mutateAsync(p.id);
+        toast.success("Projekt wiederhergestellt");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Wiederherstellen fehlgeschlagen.");
+      }
+    },
+    [restoreProject],
+  );
+
+  const handlePermanentDeleteRow = useCallback(
+    async (p: OfficeProjectListItem) => {
+      const ok = window.confirm(
+        `Projekt "${p.title}" ENDGÜLTIG löschen? Das kann nicht rückgängig gemacht werden (inkl. Termine, Rapporte, Dokumente).`,
+      );
+      if (!ok) return;
+      try {
+        await deleteProjectPermanently.mutateAsync(p.id);
+        toast.success("Projekt endgültig gelöscht");
         if (selectedRef.current?.id === p.id) {
           setOpen(false);
           setSelected(null);
@@ -408,9 +503,14 @@ export function ProjekteListClient({
         toast.error(err instanceof Error ? err.message : "Löschen fehlgeschlagen.");
       }
     },
-    [deleteProject],
+    [deleteProjectPermanently],
   );
-  const deletingId = deleteProject.isPending ? (deleteProject.variables as string | undefined) ?? null : null;
+
+  const pendingRowId =
+    (archiveProject.isPending && (archiveProject.variables as string | undefined)) ||
+    (restoreProject.isPending && (restoreProject.variables as string | undefined)) ||
+    (deleteProjectPermanently.isPending && (deleteProjectPermanently.variables as string | undefined)) ||
+    null;
   const loadMoreLabel = totalForFilter == null ? `${projects.length}+` : String(totalForFilter);
 
   return (
@@ -465,10 +565,14 @@ export function ProjekteListClient({
                 {projectStatusLabels[s]} ({statusCountsSnapshot?.byStatus[s] ?? 0})
               </option>
             ))}
+            <option value="archived" className="font-bold">
+              Archiviert ({statusCountsSnapshot?.totalArchived ?? 0})
+            </option>
           </select>
           <p className="text-[11px] text-muted-foreground">
             Standard: aktive Projekte ohne «Abgeschlossen». «Alle» schliesst auch abgeschlossene Projekte ein.
-            Einzelstatus filtert serverseitig (zusätzlich zur Suche).
+            Einzelstatus filtert serverseitig (zusätzlich zur Suche). «Archiviert» zeigt archivierte Projekte
+            zum Wiederherstellen.
           </p>
         </div>
         <div className="flex flex-col gap-2 border-t border-border/60 pt-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
@@ -524,7 +628,9 @@ export function ProjekteListClient({
         {showEmptyState ? (
           <div className="flex flex-col items-start gap-3 px-5 py-8 sm:px-8">
             <h2 className="text-base font-semibold">
-              {hasNoMatchesForStatus
+              {hasNoArchived
+                ? "Keine archivierten Projekte"
+                : hasNoMatchesForStatus
                 ? `Keine Projekte mit Status „${projectStatusLabels[statusFilter]}“`
                 : hasNoActiveProjects
                   ? "Keine aktiven Projekte"
@@ -533,7 +639,9 @@ export function ProjekteListClient({
                   : "Noch keine Projekte vorhanden"}
             </h2>
             <p className="max-w-2xl text-sm text-muted-foreground">
-              {hasNoMatchesForStatus
+              {hasNoArchived
+                ? "Archivierte Projekte erscheinen hier. Über «Archivieren» in der aktiven Liste können Sie Projekte hierher verschieben."
+                : hasNoMatchesForStatus
                 ? "Wählen Sie einen anderen Status oder zeigen Sie alle Projekte an."
                 : hasNoActiveProjects
                   ? "Alle Projekte sind abgeschlossen — wählen Sie «Alle» oder «Abgeschlossen»."
@@ -542,6 +650,11 @@ export function ProjekteListClient({
                   : "Erfassen Sie die erste Anfrage, damit sie hier erscheint."}
             </p>
             <div className="flex flex-wrap gap-2">
+              {hasNoArchived ? (
+                <Button size="sm" variant="outline" onClick={() => handleStatusFilterChange("active")}>
+                  Zu den aktiven Projekten
+                </Button>
+              ) : null}
               {hasNoMatchesForStatus || hasNoActiveProjects ? (
                 <Button size="sm" variant="outline" onClick={() => handleStatusFilterChange("all")}>
                   Alle Projekte anzeigen
@@ -557,7 +670,7 @@ export function ProjekteListClient({
                   Suche zurücksetzen
                 </Button>
               ) : null}
-              {!hasSearch && !hasNoMatchesForStatus ? (
+              {!hasSearch && !hasNoMatchesForStatus && !hasNoArchived ? (
                 <Button size="sm" onClick={() => setIntakeOpen(true)}>
                   + Erste Anfrage erfassen
                 </Button>
@@ -579,20 +692,47 @@ export function ProjekteListClient({
                       <StatusBadge status={p.status} />
                     </div>
                   </button>
-                  <div className="flex items-center justify-between gap-2 pt-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                     <Button type="button" size="sm" variant="outline" className="rounded-lg" onClick={() => handleOpenRow(p)}>
                       Öffnen
                     </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="rounded-lg border-destructive/30 text-destructive hover:bg-destructive/10"
-                      disabled={deletingId === p.id}
-                      onClick={() => void handleDeleteRow(p)}
-                    >
-                      {deletingId === p.id ? "Löschen …" : "Löschen"}
-                    </Button>
+                    {isArchivedView ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="rounded-lg"
+                          disabled={pendingRowId === p.id}
+                          onClick={() => void handleRestoreRow(p)}
+                        >
+                          {pendingRowId === p.id ? "…" : "Wiederherstellen"}
+                        </Button>
+                        {isAdmin ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="rounded-lg border-destructive/30 text-destructive hover:bg-destructive/10"
+                            disabled={pendingRowId === p.id}
+                            onClick={() => void handlePermanentDeleteRow(p)}
+                          >
+                            Löschen
+                          </Button>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="rounded-lg border-amber-300/60 text-amber-700 hover:bg-amber-500/10 dark:border-amber-400/40 dark:text-amber-300"
+                        disabled={pendingRowId === p.id}
+                        onClick={() => void handleArchiveRow(p)}
+                      >
+                        {pendingRowId === p.id ? "Archivieren …" : "Archivieren"}
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -625,10 +765,14 @@ export function ProjekteListClient({
                           <ProjectTableRow
                             key={p.id}
                             p={p}
-                            deletingId={deletingId}
+                            pendingId={pendingRowId}
                             selectedId={selected?.id ?? null}
+                            isArchivedView={isArchivedView}
+                            isAdmin={isAdmin}
                             onOpen={handleOpenRow}
-                            onDelete={handleDeleteRow}
+                            onArchive={handleArchiveRow}
+                            onRestore={handleRestoreRow}
+                            onPermanentDelete={handlePermanentDeleteRow}
                             zebraEven={vi.index % 2 === 1}
                           />
                         );
@@ -656,10 +800,14 @@ export function ProjekteListClient({
                       <ProjectTableRow
                         key={p.id}
                         p={p}
-                        deletingId={deletingId}
+                        pendingId={pendingRowId}
                         selectedId={selected?.id ?? null}
+                        isArchivedView={isArchivedView}
+                        isAdmin={isAdmin}
                         onOpen={handleOpenRow}
-                        onDelete={handleDeleteRow}
+                        onArchive={handleArchiveRow}
+                        onRestore={handleRestoreRow}
+                        onPermanentDelete={handlePermanentDeleteRow}
                       />
                     ))}
                   </TableBody>

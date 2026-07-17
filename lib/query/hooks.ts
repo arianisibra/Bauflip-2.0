@@ -26,7 +26,9 @@ import {
   addAppointmentAction,
   deleteAppointmentAction,
   reassignAppointmentTechnicianAction,
-  deleteProjectAction,
+  archiveProjectAction,
+  restoreProjectAction,
+  deleteProjectPermanentlyAction,
   deleteReportAction,
   fetchProjekteBootstrapAction,
   fetchProjekteListPageAction,
@@ -93,6 +95,7 @@ import {
   afterAbsenceChange,
   afterProjectCoreChange,
   afterProjectDeleted,
+  afterProjectArchiveChanged,
   afterTimeEntryChange,
   patchAttachmentAdded,
   patchAttachmentNotesUpdated,
@@ -648,10 +651,35 @@ export function useUpdateTechnicianReport() {
   });
 }
 
-export function useDeleteProject() {
+/** Projekt archivieren (Soft, Büro+Admin) — verschwindet aus der aktiven Liste. */
+export function useArchiveProject() {
   const qc = useQueryClient();
   return useMutation<void, Error, string>({
-    mutationFn: (projectId) => deleteProjectAction(projectId, getTabId()),
+    mutationFn: (projectId) => archiveProjectAction(projectId, getTabId()),
+    onSuccess: (_, projectId) => {
+      afterProjectArchiveChanged(qc, projectId);
+      notifyOtherTabs({ type: "project.archived", projectId });
+    },
+  });
+}
+
+/** Archiviertes Projekt wiederherstellen (Büro+Admin). */
+export function useRestoreProject() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: (projectId) => restoreProjectAction(projectId, getTabId()),
+    onSuccess: (_, projectId) => {
+      afterProjectArchiveChanged(qc, projectId);
+      notifyOtherTabs({ type: "project.restored", projectId });
+    },
+  });
+}
+
+/** Endgültig löschen (Hard-Delete, unwiderruflich, nur Admin). */
+export function useDeleteProjectPermanently() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: (projectId) => deleteProjectPermanentlyAction(projectId, getTabId()),
     onSuccess: (_, projectId) => {
       afterProjectDeleted(qc, projectId);
       notifyOtherTabs({ type: "project.deleted", projectId });
