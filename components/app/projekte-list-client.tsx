@@ -289,14 +289,18 @@ export function ProjekteListClient({
   }, [statusFilter]);
 
   const projects = useMemo(() => {
-    const base = loadedProjects.filter((item) =>
-      matchesProjekteListFilter(item.status, statusFilter),
-    );
+    // Bei aktiver Suche liefert der Server bereits die org-weite (statusweite) Trefferliste —
+    // dann NICHT nochmal clientseitig auf den Status-Filter einschränken, sonst verschwinden
+    // Treffer mit anderem Status (das war der gemeldete Bug).
+    const searching = urlSearchQuery.trim().length > 0;
+    const base = searching
+      ? loadedProjects
+      : loadedProjects.filter((item) => matchesProjekteListFilter(item.status, statusFilter));
     if (!prefetchedOpenProject) return base;
     if (base.some((item) => item.id === prefetchedOpenProject.id)) return base;
-    if (!matchesProjekteListFilter(prefetchedOpenProject.status, statusFilter)) return base;
+    if (!searching && !matchesProjekteListFilter(prefetchedOpenProject.status, statusFilter)) return base;
     return [prefetchedOpenProject, ...base];
-  }, [loadedProjects, prefetchedOpenProject, statusFilter]);
+  }, [loadedProjects, prefetchedOpenProject, statusFilter, urlSearchQuery]);
 
   useEffect(() => {
     if (!pendingOpenProjectId) {
