@@ -8,6 +8,8 @@ import {
 import { getCachedSessionProfile } from "@/lib/auth/session";
 import {
   addAppointment,
+  archiveProject,
+  restoreProject,
   deleteProject,
   deleteAppointment,
   reassignAppointmentTechnician,
@@ -306,8 +308,41 @@ export async function deleteAppointmentAction(
   return { core };
 }
 
-export async function deleteProjectAction(projectId: string, tabId?: string) {
+/** Projekt archivieren (Soft): raus aus der aktiven Liste, wiederherstellbar. Büro+Admin. */
+export async function archiveProjectAction(projectId: string, tabId?: string) {
   const session = await requireOfficeSession();
+  if (!projectId) {
+    throw new Error("Projekt-ID fehlt.");
+  }
+  await archiveProject(projectId, session.userId ?? null);
+  if (session.organizationId) {
+    await publish(session.organizationId, {
+      type: "project.archived",
+      projectId,
+      originTabId: tabId,
+    });
+  }
+}
+
+/** Archiviertes Projekt wiederherstellen (zurück in die aktive Liste). Büro+Admin. */
+export async function restoreProjectAction(projectId: string, tabId?: string) {
+  const session = await requireOfficeSession();
+  if (!projectId) {
+    throw new Error("Projekt-ID fehlt.");
+  }
+  await restoreProject(projectId);
+  if (session.organizationId) {
+    await publish(session.organizationId, {
+      type: "project.restored",
+      projectId,
+      originTabId: tabId,
+    });
+  }
+}
+
+/** Endgültiges Löschen (Hard-Delete, Kaskade, unwiderruflich). Nur Admin. */
+export async function deleteProjectPermanentlyAction(projectId: string, tabId?: string) {
+  const session = await requireAdminLayoutSession();
   if (!projectId) {
     throw new Error("Projekt-ID fehlt.");
   }

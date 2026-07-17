@@ -273,6 +273,28 @@ export function afterProjectDeleted(
   inv(qc, queryKeys.availabilityRange.all(), opts);
 }
 
+/**
+ * Archivieren/Wiederherstellen: das Projekt existiert weiter (anders als Delete),
+ * wechselt aber zwischen aktiver Liste und Archiv-Ansicht. Beide Listen-Caches +
+ * Kern-Caches + Kalender neu ziehen, damit alle Tabs konsistent sind.
+ */
+export function afterProjectArchiveChanged(
+  qc: QueryClient,
+  projectId: string,
+  opts?: InvalidateOpts,
+): void {
+  inv(qc, queryKeys.projects.core(projectId), opts);
+  inv(qc, queryKeys.projects.coreHead(projectId), opts);
+  inv(qc, queryKeys.projects.coreDetails(projectId), opts);
+  inv(qc, queryKeys.projekteBootstrapAll(), opts);
+  inv(qc, queryKeys.projekteListAll(), opts);
+  inv(qc, queryKeys.weekTasks.all(), opts);
+  inv(qc, queryKeys.monthTasks.all(), opts);
+  inv(qc, queryKeys.techMonthTasks.all(), opts);
+  inv(qc, queryKeys.calendarRange.all(), opts);
+  inv(qc, queryKeys.availabilityRange.all(), opts);
+}
+
 export function afterAbsenceChange(qc: QueryClient, opts?: InvalidateOpts): void {
   inv(qc, queryKeys.absences.all(), opts);
   inv(qc, queryKeys.availabilityRange.all(), opts);

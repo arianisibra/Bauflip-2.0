@@ -18,8 +18,10 @@ import { Button } from "@/components/ui/button";
 
 export function ProjektePageClient({
   supabaseConfigured,
+  isAdmin,
 }: {
   supabaseConfigured: boolean;
+  isAdmin: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -70,6 +72,7 @@ export function ProjektePageClient({
       </div>
       <ProjekteListClient
         canEditProjectSheet
+        isAdmin={isAdmin}
         initialOpenProjectId={openProjectId}
         initialOpenSource={openSource}
         initialReturnTo={returnTo}

@@ -268,6 +268,7 @@ export const listProjectStatusCountsForOffice = cache(async function listProject
     byStatus: {},
     totalAll: 0,
     totalActive: 0,
+    totalArchived: 0,
   };
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
@@ -280,6 +281,7 @@ export const listProjectStatusCountsForOffice = cache(async function listProject
       byStatus,
       totalAll,
       totalActive: mockProjects.filter((p) => p.status !== "abgeschlossen").length,
+      totalArchived: 0,
     };
   }
   const orgId = organizationId ?? (await getCachedCurrentOrganizationId());
@@ -311,7 +313,7 @@ export const listProjectStatusCountsForOffice = cache(async function listProject
       totalActive += count;
     }
   }
-  return { byStatus, totalAll, totalActive };
+  return { byStatus, totalAll, totalActive, totalArchived: 0 };
 });
 
 async function listProjectStatusCountsForOfficeFallback(
@@ -322,6 +324,7 @@ async function listProjectStatusCountsForOfficeFallback(
     byStatus: {},
     totalAll: 0,
     totalActive: 0,
+    totalArchived: 0,
   };
   const { data, error } = await supabase
     .from("projects")
@@ -343,7 +346,7 @@ async function listProjectStatusCountsForOfficeFallback(
       totalActive += count;
     }
   }
-  return { byStatus, totalAll, totalActive };
+  return { byStatus, totalAll, totalActive, totalArchived: 0 };
 }
 
 function mapRpcStatusCounts(raw: unknown): ProjekteStatusCountsSnapshot | null {
@@ -352,6 +355,7 @@ function mapRpcStatusCounts(raw: unknown): ProjekteStatusCountsSnapshot | null {
     byStatus?: Record<string, unknown>;
     totalAll?: number | string;
     totalActive?: number | string;
+    totalArchived?: number | string;
   };
   const byStatus: Partial<Record<ProjectStatus, number>> = {};
   if (sc.byStatus && typeof sc.byStatus === "object") {
@@ -372,7 +376,12 @@ function mapRpcStatusCounts(raw: unknown): ProjekteStatusCountsSnapshot | null {
       ? sc.totalActive
       : Number.parseInt(String(sc.totalActive ?? "0"), 10);
   if (!Number.isFinite(totalAll) || !Number.isFinite(totalActive)) return null;
-  return { byStatus, totalAll, totalActive };
+  const totalArchivedRaw =
+    typeof sc.totalArchived === "number"
+      ? sc.totalArchived
+      : Number.parseInt(String(sc.totalArchived ?? "0"), 10);
+  const totalArchived = Number.isFinite(totalArchivedRaw) && totalArchivedRaw >= 0 ? totalArchivedRaw : 0;
+  return { byStatus, totalAll, totalActive, totalArchived };
 }
 
 export type ProjekteOfficeBootstrapResult = {
@@ -651,6 +660,13 @@ export const listProjectsForOfficePage = cache(async function listProjectsForOff
 
     let q = supabase.from("projects").select(PROJECT_LIST_COLUMNS).eq("organization_id", orgId);
 
+    // Archiv-Trennung: Filter 'archived' zeigt nur archivierte, alle anderen nur aktive.
+    if (listFilter === "archived") {
+      q = q.not("archived_at", "is", null);
+    } else {
+      q = q.is("archived_at", null);
+    }
+
     if (searchQuery) {
       const pattern = `%${escapeIlikePattern(searchQuery)}%`;
       q = q.or(
@@ -668,8 +684,8 @@ export const listProjectsForOfficePage = cache(async function listProjectsForOff
     // Bei aktiver Suche wird der Status-Filter NICHT angewendet → org-weite Suche
     // über alle Status (die UI verspricht «durchsucht alle Projekte»). Das war der Bug:
     // vorher wurde die Suche mit dem Status-Filter UND-verknüpft.
-    if (searchQuery) {
-      // statusweit — kein Status-Prädikat
+    if (searchQuery || listFilter === "archived") {
+      // statusweit — kein Status-Prädikat (Suche org-weit; Archiv zeigt alle Status)
     } else if (listFilter === "active" || (listFilter === "all" && segment === "open")) {
       q = q.neq("status", "abgeschlossen");
     } else if (listFilter === "all" && segment === "closed") {
@@ -716,7 +732,8 @@ export const listProjectsForOfficePage = cache(async function listProjectsForOff
         .from("projects")
         .select("id", { count: "exact", head: true })
         .eq("organization_id", orgId)
-        .eq("status", "abgeschlossen");
+        .eq("status", "abgeschlossen")
+        .is("archived_at", null);
       const hasClosed = (closedCount ?? 0) > 0;
       return {
         projects: mappedOpen,
@@ -782,6 +799,7 @@ async function listAbgemachtProjectsPage(
     .select(PROJECT_LIST_COLUMNS)
     .eq("organization_id", orgId)
     .eq("status", "abgemacht")
+    .is("archived_at", null)
     .order("created_at", { ascending: false })
     .limit(PROJEKTE_ABGEMACHT_MAX_ROWS);
 
@@ -2210,6 +2228,29 @@ export async function updateProjectStatus(projectId: string, status: ProjectStat
   return updateProject(projectId, { status, statusUpdateSource: "manual" });
 }
 
+/** Projekt archivieren (Soft): raus aus der aktiven Liste, wiederherstellbar. */
+export async function archiveProject(projectId: string, archivedBy: string | null): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return;
+  const { error } = await supabase
+    .from("projects")
+    .update({ archived_at: new Date().toISOString(), archived_by: archivedBy })
+    .eq("id", projectId);
+  if (error) throw new Error(error.message);
+}
+
+/** Archiviertes Projekt wiederherstellen (zurück in die aktive Liste). */
+export async function restoreProject(projectId: string): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return;
+  const { error } = await supabase
+    .from("projects")
+    .update({ archived_at: null, archived_by: null })
+    .eq("id", projectId);
+  if (error) throw new Error(error.message);
+}
+
+/** Endgültiges Löschen (Hard-Delete, Kaskade). Bewusster Extra-Schritt (nur Admin). */
 export async function deleteProject(projectId: string): Promise<void> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
