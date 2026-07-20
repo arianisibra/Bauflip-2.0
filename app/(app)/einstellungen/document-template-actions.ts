@@ -14,6 +14,31 @@ import {
   QUOTE_DOCUMENT_TOKEN_KEYS,
   SAMPLE_QUOTE_DOCUMENT_DATA,
 } from "@/lib/documents/quote-document-data";
+import {
+  AUFTRAG_DOCUMENT_TOKEN_KEYS,
+  SAMPLE_AUFTRAG_DOCUMENT_DATA,
+} from "@/lib/documents/auftrag-document-data";
+
+/** Token-Katalog + Beispiel je Vorlagen-Art für die Upload-Prüfung (null = keine Prüfung). */
+function templateTokenSpec(
+  kind: DocumentTemplateKind,
+): { tokens: readonly string[]; sample: Record<string, unknown>; beispiele: string } | null {
+  if (kind === "offerte") {
+    return {
+      tokens: QUOTE_DOCUMENT_TOKEN_KEYS,
+      sample: SAMPLE_QUOTE_DOCUMENT_DATA as unknown as Record<string, unknown>,
+      beispiele: "{offerte_nummer}, {kunde_name}, {#positionen}…{/positionen}",
+    };
+  }
+  if (kind === "auftrag") {
+    return {
+      tokens: AUFTRAG_DOCUMENT_TOKEN_KEYS,
+      sample: SAMPLE_AUFTRAG_DOCUMENT_DATA as unknown as Record<string, unknown>,
+      beispiele: "{auftrag_nummer}, {kunde_name}, {beschreibung}, {objekt}",
+    };
+  }
+  return null;
+}
 
 const MAX_TEMPLATE_BYTES = 10 * 1024 * 1024;
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -36,6 +61,14 @@ export async function hasOfferDocumentTemplateAction(): Promise<boolean> {
   const session = await requireOfficeSession();
   if (!session.organizationId) return false;
   const templates = await listDocumentTemplates(session.organizationId, "offerte");
+  return templates.length > 0;
+}
+
+/** Für Büro/Admin: existiert eine Auftragsvorlage? (steuert den «Als Word (Auftrag)»-Button) */
+export async function hasAuftragDocumentTemplateAction(): Promise<boolean> {
+  const session = await requireOfficeSession();
+  if (!session.organizationId) return false;
+  const templates = await listDocumentTemplates(session.organizationId, "auftrag");
   return templates.length > 0;
 }
 
@@ -62,20 +95,17 @@ export async function uploadDocumentTemplateAction(formData: FormData): Promise<
   const bytes = Buffer.from(await file.arrayBuffer());
 
   // Vorlage prüfen: nutzt sie unbekannte Platzhalter, käme sonst ein still leeres
-  // Dokument heraus. Lieber jetzt mit klarer Meldung ablehnen. (Aktuell nur «offerte».)
-  if (kind === "offerte") {
-    const unknownTags = findUnknownTemplateTags(
-      bytes,
-      QUOTE_DOCUMENT_TOKEN_KEYS,
-      SAMPLE_QUOTE_DOCUMENT_DATA as unknown as Record<string, unknown>,
-    );
+  // Dokument heraus. Lieber jetzt mit klarer Meldung ablehnen.
+  const spec = templateTokenSpec(kind);
+  if (spec) {
+    const unknownTags = findUnknownTemplateTags(bytes, spec.tokens, spec.sample);
     if (unknownTags.length > 0) {
       const shown = unknownTags.slice(0, 8).map((t) => `{${t}}`).join(", ");
       const rest = unknownTags.length > 8 ? ` … (+${unknownTags.length - 8})` : "";
       throw new Error(
         `Diese Vorlage nutzt unbekannte Platzhalter: ${shown}${rest}. ` +
-          `Bitte nur die dokumentierten Bauflip-Felder verwenden (z. B. {offerte_nummer}, ` +
-          `{kunde_name}, {#positionen}…{/positionen}). Sonst bleiben die Felder leer.`,
+          `Bitte nur die dokumentierten Bauflip-Felder verwenden (z. B. ${spec.beispiele}). ` +
+          `Sonst bleiben die Felder leer.`,
       );
     }
   }

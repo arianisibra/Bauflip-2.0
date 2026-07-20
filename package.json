@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "test:date": "npx --yes tsx --test lib/date/week-bounds.test.ts",
-    "test:unit": "npx --yes tsx --test lib/date/week-bounds.test.ts lib/domain/types.test.ts lib/projekte/list-filter.test.ts lib/qr-bill/iban.test.ts lib/qr-bill/reference.test.ts lib/qr-bill/payload.test.ts lib/calendar-invite/ics.test.ts lib/camt/parse.test.ts lib/camt/match.test.ts lib/documents/quote-document-data.test.ts lib/documents/invoice-document-data.test.ts lib/documents/render-docx.test.ts lib/query/invalidations.test.ts",
+    "test:unit": "npx --yes tsx --test lib/date/week-bounds.test.ts lib/domain/types.test.ts lib/projekte/list-filter.test.ts lib/qr-bill/iban.test.ts lib/qr-bill/reference.test.ts lib/qr-bill/payload.test.ts lib/calendar-invite/ics.test.ts lib/camt/parse.test.ts lib/camt/match.test.ts lib/documents/quote-document-data.test.ts lib/documents/invoice-document-data.test.ts lib/documents/auftrag-document-data.test.ts lib/documents/render-docx.test.ts lib/query/invalidations.test.ts",
     "bootstrap:first-admin": "node --env-file=.env.local scripts/bootstrap-first-admin.mts",
     "sync:user-auth-metadata": "node --env-file=.env.local scripts/sync-user-auth-metadata.mts",
     "db:login": "npx supabase login",

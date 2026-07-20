@@ -80,6 +80,7 @@ export const queryKeys = {
   bexioMappingOptions: () => ["bexio-mapping-options"] as const,
   documentTemplates: () => ["document-templates"] as const,
   hasOfferDocumentTemplate: () => ["has-offer-document-template"] as const,
+  hasAuftragDocumentTemplate: () => ["has-auftrag-document-template"] as const,
   /** Termin-Einladungen per Mail an/aus (eigener Account). */
   invitePreference: () => ["invite-preference"] as const,
   /** Zeiterfassung: eigene Einträge + Team-Übersicht (Büro/Admin). */

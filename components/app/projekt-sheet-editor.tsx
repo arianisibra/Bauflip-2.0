@@ -55,6 +55,7 @@ import { BauflipLoading, BauflipLoadingButtonLabel } from "@/components/ui/baufl
 import { TechnicianReportEditOverlay } from "@/components/app/technician-report-edit-overlay";
 import { ProjektInvoicesSection } from "@/components/app/projekt-invoices-section";
 import { ProjektQuotesSection } from "@/components/app/projekt-quotes-section";
+import { AuftragDocumentButton } from "@/components/app/auftrag-document-button";
 import { AppointmentBookingForm } from "@/components/app/appointment-booking-form";
 import type { AvailabilityBundle } from "@/app/(app)/kalender/availability-actions";
 import { getFilledOrderFormFields } from "@/lib/order-forms/filled-fields";
@@ -1378,6 +1379,8 @@ export function ProjektSheetEditor({
           </div>
         </section>
       )}
+
+      <AuftragDocumentButton projectId={projectId} enabled={canEdit} />
 
       <ProjektQuotesSection
         projectId={projectId}

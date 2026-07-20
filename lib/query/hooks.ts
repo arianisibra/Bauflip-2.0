@@ -83,6 +83,7 @@ import {
 import {
   deleteDocumentTemplateAction,
   hasOfferDocumentTemplateAction,
+  hasAuftragDocumentTemplateAction,
   listDocumentTemplatesAction,
   setDefaultDocumentTemplateAction,
   uploadDocumentTemplateAction,
@@ -867,6 +868,8 @@ export function useUploadDocumentTemplate() {
     mutationFn: (formData) => uploadDocumentTemplateAction(formData),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.documentTemplates() });
+      qc.invalidateQueries({ queryKey: queryKeys.hasOfferDocumentTemplate() });
+      qc.invalidateQueries({ queryKey: queryKeys.hasAuftragDocumentTemplate() });
     },
   });
 }
@@ -887,6 +890,8 @@ export function useDeleteDocumentTemplate() {
     mutationFn: (id) => deleteDocumentTemplateAction(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.documentTemplates() });
+      qc.invalidateQueries({ queryKey: queryKeys.hasOfferDocumentTemplate() });
+      qc.invalidateQueries({ queryKey: queryKeys.hasAuftragDocumentTemplate() });
     },
   });
 }
@@ -896,6 +901,17 @@ export function useHasOfferDocumentTemplate(enabled = true) {
   return useQuery<boolean>({
     queryKey: queryKeys.hasOfferDocumentTemplate(),
     queryFn: () => hasOfferDocumentTemplateAction(),
+    enabled,
+    staleTime: 60_000,
+    refetchOnMount: false,
+  });
+}
+
+/** Existiert eine Auftragsvorlage? Steuert den «Als Word (Auftrag)»-Button im Projekt-Sheet. */
+export function useHasAuftragDocumentTemplate(enabled = true) {
+  return useQuery<boolean>({
+    queryKey: queryKeys.hasAuftragDocumentTemplate(),
+    queryFn: () => hasAuftragDocumentTemplateAction(),
     enabled,
     staleTime: 60_000,
     refetchOnMount: false,
