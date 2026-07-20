@@ -280,11 +280,15 @@ export function KontaktePageClient() {
                 </select>
               </div>
               <div>
-                <Label className="text-xs">Kundennummer (optional)</Label>
+                <Label className="text-xs">Kundennummer</Label>
                 <Input
                   value={form.kundenNummer}
+                  placeholder="leer = automatisch (K-001, K-002 …)"
                   onChange={(e) => setForm((p) => (p ? { ...p, kundenNummer: e.target.value } : p))}
                 />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Leer lassen für eine automatische, fortlaufende Nummer. Eigene Nummer bleibt erhalten.
+                </p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
