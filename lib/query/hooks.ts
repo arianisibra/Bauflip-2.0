@@ -325,10 +325,14 @@ export function useProjekteListInfinite(
     getNextPageParam: (last) => (last.hasMore && last.nextCursor ? last.nextCursor : undefined),
     queryFn: async ({ pageParam }) => {
       if (pageParam === null) {
-        const cached = qc.getQueryData<ProjekteListInfiniteData>(
-          queryKeys.projekteList(statusKey, searchKey),
-        );
-        if (cached?.pages[0]) {
+        // Erste Seite: den vom Bootstrap geprimten Cache wiederverwenden — ABER nur,
+        // solange der Query nicht invalidiert ist. Nach invalidateQueries (Archivieren/
+        // Löschen/Anlegen) will React Query frische Daten; ohne diese Prüfung gäbe die
+        // queryFn stur den alten Stand zurück und die Liste blieb bis zum Reload stehen.
+        const listKey = queryKeys.projekteList(statusKey, searchKey);
+        const cached = qc.getQueryData<ProjekteListInfiniteData>(listKey);
+        const isInvalidated = qc.getQueryState(listKey)?.isInvalidated ?? false;
+        if (cached?.pages[0] && !isInvalidated) {
           return cached.pages[0];
         }
         const data = await fetchProjekteBootstrapAction(listFilter, searchQuery);
