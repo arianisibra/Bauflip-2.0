@@ -556,7 +556,12 @@ export function ProjekteListClient({
           <BauflipLoading size="sm" label="Projekte werden geladen …" />
         </div>
       ) : null}
-      <div className={projectsLoading && projects.length === 0 ? "hidden" : undefined}>
+      <div
+        className={cn(
+          "flex flex-col gap-6",
+          projectsLoading && projects.length === 0 ? "hidden" : undefined,
+        )}
+      >
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold">Projekte</h1>
         {/* gap-3 statt des sonst üblichen gap-2 (Dialog-Button-Paare): hier stehen drei
