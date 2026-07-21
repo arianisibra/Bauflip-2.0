@@ -164,10 +164,18 @@ export function KontaktePageClient() {
       {contactsQuery.isLoading ? (
         <p className="text-sm text-muted-foreground">Kontakte werden geladen …</p>
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border/70 px-4 py-10 text-center text-sm text-muted-foreground">
-          {contacts.length === 0
-            ? "Noch keine Kontakte. Lege oben deinen ersten Kontakt an."
-            : "Kein Kontakt passt zur Suche."}
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border/70 px-4 py-10 text-center text-sm text-muted-foreground">
+          {contacts.length === 0 ? (
+            <>
+              <span>Noch keine Kontakte — einmal erfasst, überall auswählbar.</span>
+              <Button type="button" size="sm" onClick={() => setForm({ ...EMPTY })}>
+                <Plus className="size-4" aria-hidden />
+                Ersten Kontakt anlegen
+              </Button>
+            </>
+          ) : (
+            <span>Kein Kontakt passt zur Suche.</span>
+          )}
         </div>
       ) : (
         <ul className="divide-y divide-border rounded-xl border border-border/70">

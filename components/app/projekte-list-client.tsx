@@ -4,7 +4,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Info, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { OfficeProjectListItem, ProjectStatus } from "@/lib/domain/types";
 import {
@@ -170,12 +170,15 @@ const ProjectTableRow = memo(function ProjectTableRow({
       data-state={selectedId === p.id ? "selected" : undefined}
       onClick={() => onOpen(p)}
     >
-      <TableCell className="font-medium">{p.title}</TableCell>
+      {/* max-w-0 + truncate: Titel gibt nach, damit die Aktionsspalte nie aus dem Sichtfeld rutscht. */}
+      <TableCell className="w-full max-w-0 truncate font-medium" title={p.title}>
+        {p.title}
+      </TableCell>
       <TableCell className="capitalize">{p.type}</TableCell>
       <TableCell>
         <StatusBadge status={p.status} />
       </TableCell>
-      <TableCell className="text-right">
+      <TableCell className="whitespace-nowrap text-right">
         {isArchivedView ? (
           <div className="inline-flex items-center justify-end gap-2">
             <Button
@@ -273,6 +276,7 @@ export function ProjekteListClient({
   const restoreProject = useRestoreProject();
   const deleteProjectPermanently = useDeleteProjectPermanently();
   const [listSort, setListSort] = useState<ProjectsListSort>("default");
+  const [filterHelpOpen, setFilterHelpOpen] = useState(false);
   const [q, setQ] = useState(() => searchParams.get("q") ?? "");
   /** Letzter von diesem Tab selbst geschriebener `q`-Wert — unterscheidet ein Echo unseres
    * eigenen debounced router.replace() von einer echten externen Änderung (z. B. Zurück/Vor). */
@@ -545,8 +549,20 @@ export function ProjekteListClient({
 
       <div className="space-y-3 rounded-xl border border-border/70 bg-muted/30 px-3 py-2.5">
         <div className="space-y-2">
-          <span className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Nach Status anzeigen
+            <button
+              type="button"
+              aria-label="Hinweise zu Filter und Sortierung"
+              aria-expanded={filterHelpOpen}
+              onClick={() => setFilterHelpOpen((v) => !v)}
+              className={cn(
+                "inline-flex size-6 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground",
+                filterHelpOpen ? "bg-muted text-foreground" : "text-muted-foreground",
+              )}
+            >
+              <Info className="size-3.5" aria-hidden />
+            </button>
           </span>
           <select
             value={statusFilter}
@@ -569,58 +585,49 @@ export function ProjekteListClient({
               Archiviert ({statusCountsSnapshot?.totalArchived ?? 0})
             </option>
           </select>
-          <p className="text-[11px] text-muted-foreground">
-            Standard: aktive Projekte ohne «Abgeschlossen». «Alle» schliesst auch abgeschlossene Projekte ein.
-            Einzelstatus filtert serverseitig (zusätzlich zur Suche). «Archiviert» zeigt archivierte Projekte
-            zum Wiederherstellen.
-          </p>
+          {filterHelpOpen ? (
+            <p className="text-[11px] text-muted-foreground">
+              Standard: aktive Projekte ohne «Abgeschlossen». «Alle» schliesst auch abgeschlossene Projekte ein.
+              Einzelstatus filtert serverseitig (zusätzlich zur Suche). «Archiviert» zeigt archivierte Projekte
+              zum Wiederherstellen.
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-col gap-2 border-t border-border/60 pt-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
           <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Sortierung
           </span>
+          {/* Eine neutrale Farbfamilie für die ganze Gruppe — Farbe bleibt Status/primären Aktionen vorbehalten. */}
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setListSort("default")}
-              className={cn(
-                "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
-                listSort === "default"
-                  ? "border-zinc-400 bg-zinc-500/15 text-zinc-900 dark:border-zinc-500 dark:bg-zinc-500/25 dark:text-zinc-100"
-                  : "border-border bg-background text-muted-foreground hover:bg-muted",
-              )}
-            >
-              Standard
-            </button>
-            <button
-              type="button"
-              onClick={() => setListSort("status_asc")}
-              className={cn(
-                "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
-                listSort === "status_asc"
-                  ? "border-sky-500/50 bg-sky-500/20 text-sky-950 dark:border-sky-400/40 dark:bg-sky-500/25 dark:text-sky-50"
-                  : "border-sky-500/25 bg-sky-500/5 text-sky-900/80 hover:bg-sky-500/10 dark:border-sky-500/30 dark:text-sky-100/90",
-              )}
-            >
-              Status A→Z
-            </button>
-            <button
-              type="button"
-              onClick={() => setListSort("status_desc")}
-              className={cn(
-                "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
-                listSort === "status_desc"
-                  ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-950 dark:border-emerald-400/40 dark:bg-emerald-500/25 dark:text-emerald-50"
-                  : "border-emerald-500/25 bg-emerald-500/5 text-emerald-900/80 hover:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-100/90",
-              )}
-            >
-              Status Z→A
-            </button>
+            {(
+              [
+                { value: "default", label: "Standard" },
+                { value: "status_asc", label: "Status A→Z" },
+                { value: "status_desc", label: "Status Z→A" },
+              ] as const
+            ).map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={listSort === value}
+                onClick={() => setListSort(value)}
+                className={cn(
+                  "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                  listSort === value
+                    ? "border-foreground/25 bg-foreground/10 text-foreground"
+                    : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                {label}
+              </button>
+            ))}
           </div>
-          <p className="text-[11px] leading-snug text-muted-foreground">
-            Bei gleichem Status: zuerst neuere Projekte (Erstellungsdatum). Ausnahme: Filter «ABGEMACHT» — dort zuerst der nächste Termin.
-            Adresse und weitere Details beim Öffnen des Projekts.
-          </p>
+          {filterHelpOpen ? (
+            <p className="text-[11px] leading-snug text-muted-foreground">
+              Bei gleichem Status: zuerst neuere Projekte (Erstellungsdatum). Ausnahme: Filter «ABGEMACHT» — dort zuerst der nächste Termin.
+              Adresse und weitere Details beim Öffnen des Projekts.
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -864,7 +871,6 @@ export function ProjekteListClient({
         }}
         className="max-w-6xl w-[min(100vw-1.5rem,80rem)]"
         title={selected?.title ?? "Projekt"}
-        description={selected?.title?.trim() ? selected.title : undefined}
       >
         {selected ? (
           <>

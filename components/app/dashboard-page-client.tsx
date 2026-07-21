@@ -1,6 +1,7 @@
 "use client";
 
 import type { ComponentType } from "react";
+import Link from "next/link";
 import { AlertTriangle, CheckCircle2, ClipboardList, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -95,7 +96,8 @@ function Bar({ label, value, max, colorClassName, valueLabel, icon: Icon, iconCl
   icon?: ComponentType<{ className?: string }>;
   iconClassName?: string;
 }) {
-  const pct = max > 0 ? Math.max(2, Math.round((value / max) * 100)) : 0;
+  // 0 bleibt wirklich leer — der 2%-Mindestbalken gilt nur für echte Werte.
+  const pct = max > 0 && value > 0 ? Math.max(2, Math.round((value / max) * 100)) : 0;
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between gap-2 text-xs">
@@ -259,7 +261,12 @@ export function DashboardPageClient() {
           </CardHeader>
           <CardContent className="space-y-2.5 px-4">
             {data.monthlyRevenue.every((p) => p.quoteCount === 0) ? (
-              <p className="text-xs text-muted-foreground">Noch keine angenommenen Offerten im Zeitraum.</p>
+              <p className="text-xs text-muted-foreground">
+                Noch keine angenommenen Offerten im Zeitraum.{" "}
+                <Link href="/projekte" prefetch={false} className="font-medium text-primary underline-offset-2 hover:underline">
+                  Offerte im Projekt erstellen
+                </Link>
+              </p>
             ) : (
               data.monthlyRevenue.map((point) => (
                 <Bar
@@ -295,7 +302,12 @@ export function DashboardPageClient() {
               );
             })}
             {Object.values(data.quotePipeline.countByStatus).every((c) => c === 0) ? (
-              <p className="text-xs text-muted-foreground">Noch keine Offerten erfasst.</p>
+              <p className="text-xs text-muted-foreground">
+                Noch keine Offerten erfasst.{" "}
+                <Link href="/projekte" prefetch={false} className="font-medium text-primary underline-offset-2 hover:underline">
+                  Offerte im Projekt erstellen
+                </Link>
+              </p>
             ) : null}
           </CardContent>
         </Card>
@@ -306,7 +318,10 @@ export function DashboardPageClient() {
           </CardHeader>
           <CardContent className="space-y-2.5 px-4">
             {data.openInvoices.openCount === 0 ? (
-              <p className="text-xs text-muted-foreground">Keine offenen Rechnungen.</p>
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <CheckCircle2 className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                Alle Rechnungen sind bezahlt.
+              </p>
             ) : (
               <>
                 <div className="flex items-center justify-between text-xs">

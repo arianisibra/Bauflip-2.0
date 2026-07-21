@@ -541,7 +541,7 @@ function StatusPipeline({
             </select>
             {currentStatus !== "abrechnen" && currentStatus !== "garantiefall" ? (
               <p className="mt-1 text-[10px] text-muted-foreground">
-                «Abgeschlossen» erst nach manuellem Wechsel auf «Abrechnen» (externe Buchhaltung) — ausser bei «Garantiefall», dort direkt möglich.
+                «Abgeschlossen» ist erst ab Status «Abrechnen» wählbar (Ausnahme: Garantiefall).
               </p>
             ) : null}
           </div>

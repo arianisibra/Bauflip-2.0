@@ -45,12 +45,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-50 flex h-16 shrink-0 items-center justify-between border-b border-border/80 bg-card/95 px-3 backdrop-blur-md supports-[backdrop-filter]:bg-card/90 sm:px-6">
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               <MobileAdminNav items={items} />
               <MobileContextSwitch />
             </div>
-            <div className="flex items-center gap-1 sm:gap-2">
-              <ThemeToggle />
+            {/* min-w-0, damit der Org-Name innen mit Ellipse kürzt statt aus dem Viewport zu laufen. */}
+            <div className="flex min-w-0 items-center gap-1 sm:gap-2">
+              <span className="shrink-0">
+                <ThemeToggle />
+              </span>
               <OrganizationBrandingHeader />
             </div>
           </header>
