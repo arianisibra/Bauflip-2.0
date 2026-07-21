@@ -40,8 +40,14 @@ describe("nextProjectStatusAfterAppointmentBooked", () => {
 });
 
 describe("canSetQuoteStatus", () => {
-  it("allows draft to sent", () => {
-    assert.equal(canSetQuoteStatus("draft", "sent"), true);
+  it("requires draft to go through pending_approval before sent (Freigabe-Hard-Gate)", () => {
+    assert.equal(canSetQuoteStatus("draft", "sent"), false);
+    assert.equal(canSetQuoteStatus("draft", "pending_approval"), true);
+  });
+
+  it("allows pending_approval to sent (admin freigibt) or back to draft (Zurückweisung)", () => {
+    assert.equal(canSetQuoteStatus("pending_approval", "sent"), true);
+    assert.equal(canSetQuoteStatus("pending_approval", "draft"), true);
   });
 
   it("allows sent to approved and rejected", () => {
@@ -68,7 +74,7 @@ describe("canSetQuoteStatus", () => {
     assert.equal(canSetQuoteStatus("draft", "rejected"), false);
   });
 
-  it("blocks sent back to draft", () => {
+  it("blocks sent back to draft directly", () => {
     assert.equal(canSetQuoteStatus("sent", "draft"), false);
   });
 });

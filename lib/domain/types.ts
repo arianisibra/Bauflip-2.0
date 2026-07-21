@@ -356,11 +356,12 @@ export type TechnicianReport = {
   orderForms: TechnicianReportOrderFormEntry[];
 };
 
-export const quoteStatuses = ["draft", "sent", "approved", "rejected"] as const;
+export const quoteStatuses = ["draft", "pending_approval", "sent", "approved", "rejected"] as const;
 export type QuoteStatus = (typeof quoteStatuses)[number];
 
 export const quoteStatusLabels: Record<QuoteStatus, string> = {
   draft: "ENTWURF",
+  pending_approval: "WARTET AUF FREIGABE",
   sent: "GESENDET",
   approved: "ANGENOMMEN",
   rejected: "ABGELEHNT",
@@ -369,6 +370,8 @@ export const quoteStatusLabels: Record<QuoteStatus, string> = {
 export const quoteStatusBadgeClassNames: Record<QuoteStatus, string> = {
   draft:
     "border-zinc-500/45 bg-zinc-500/35 text-zinc-950 dark:border-zinc-400/50 dark:bg-zinc-500/40 dark:text-zinc-50",
+  pending_approval:
+    "border-amber-500/55 bg-amber-500/35 text-amber-950 dark:border-amber-400/55 dark:bg-amber-500/45 dark:text-amber-50",
   sent:
     "border-violet-500/55 bg-violet-500/35 text-violet-950 dark:border-violet-400/55 dark:bg-violet-500/45 dark:text-violet-50",
   approved:
@@ -379,7 +382,7 @@ export const quoteStatusBadgeClassNames: Record<QuoteStatus, string> = {
 
 /**
  * Kopplung Offerten-Status → Projekt-Status.
- * `null` = Projekt-Status nicht anfassen (draft/rejected: Büro entscheidet manuell).
+ * `null` = Projekt-Status nicht anfassen (draft/pending_approval/rejected: Büro entscheidet manuell).
  */
 export function projectStatusAfterQuoteStatusChange(quoteStatus: QuoteStatus): ProjectStatus | null {
   if (quoteStatus === "sent") return "offerte_gesendet";
@@ -389,15 +392,25 @@ export function projectStatusAfterQuoteStatusChange(quoteStatus: QuoteStatus): P
 
 /**
  * Erlaubte Offerten-Statusübergänge (UI-Buttons UND Server-Validierung —
- * Muster analog `canSetProjectStatus`). Angenommene Offerten sind final;
- * abgelehnte können zur Überarbeitung zurück in den Entwurf.
+ * Muster analog `canSetProjectStatus`). Freigabe-Workflow: Entwürfe gehen immer
+ * über `pending_approval`, bevor sie gesendet werden dürfen (kein Direktversand
+ * aus dem Entwurf) — nur ein Admin darf `pending_approval` → `sent` auslösen
+ * (siehe `canDecideQuoteApproval`, serverseitig in den Actions erzwungen).
+ * Angenommene Offerten sind final; abgelehnte können zur Überarbeitung zurück
+ * in den Entwurf.
  */
 export const allowedQuoteStatusTransitions: Record<QuoteStatus, readonly QuoteStatus[]> = {
-  draft: ["sent"],
+  draft: ["pending_approval"],
+  pending_approval: ["sent", "draft"],
   sent: ["approved", "rejected"],
   approved: [],
   rejected: ["draft"],
 };
+
+/** Nur Admins dürfen eine zur Freigabe eingereichte Offerte freigeben (senden) oder zurückweisen. */
+export function canDecideQuoteApproval(role: RoleType): boolean {
+  return role === "admin";
+}
 
 /** Darf `to` aus `from` gesetzt werden? Gleicher Status = erlaubt (z. B. erneuter Versand). */
 export function canSetQuoteStatus(from: QuoteStatus, to: QuoteStatus): boolean {
@@ -442,6 +455,14 @@ export type Quote = {
   /** Snapshot-Muster wie technician_reports. */
   createdByProfileId: string | null;
   createdByDisplayName: string | null;
+  /** Zeitpunkt der Einreichung zur internen Freigabe (draft → pending_approval). */
+  submittedForApprovalAt: string | null;
+  /** Zeitpunkt der Admin-Entscheidung — Freigabe (→ sent) oder Zurückweisung (→ draft). */
+  approvalDecidedAt: string | null;
+  approvedByProfileId: string | null;
+  approvedByDisplayName: string | null;
+  /** Kommentar des Admins bei Zurückweisung — fürs Büro sichtbar. */
+  approvalNote: string | null;
   createdAt: string;
   updatedAt: string;
   lineItems: QuoteLineItem[];

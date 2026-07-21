@@ -1,6 +1,6 @@
 "use server";
 
-import { requireOfficeSession } from "@/lib/auth/organization";
+import { requireAdminSession, requireOfficeSession } from "@/lib/auth/organization";
 import { getCachedSessionProfile } from "@/lib/auth/session";
 import {
   createQuote,
@@ -11,13 +11,14 @@ import {
   setQuoteStatus,
   updateQuote,
 } from "@/lib/db/quotes";
-import { getOrganizationBranding } from "@/lib/db/repository";
+import { getOrganizationBranding, listAdminEmailsForOrg } from "@/lib/db/repository";
 import type { Quote } from "@/lib/domain/types";
 import { assertMailRateLimit } from "@/lib/mail/rate-limit";
 import { isMailConfigured, sendMail } from "@/lib/mail/send";
 import { buildQuotePdf, fetchLogoBytes, formatChf } from "@/lib/pdf/quote-pdf";
 import { publish } from "@/lib/realtime/publish";
 import {
+  quoteApprovalRejectSchema,
   quoteCreateSchema,
   quoteSendSchema,
   quoteStatusSchema,
@@ -35,6 +36,40 @@ async function publishQuoteChanged(
 ): Promise<void> {
   if (!organizationId) return;
   await publish(organizationId, { type: "quote.changed", projectId, originTabId: tabId });
+}
+
+/**
+ * Best-effort-Benachrichtigung an alle Admins der Organisation, wenn eine Offerte
+ * zur Freigabe eingereicht wird. Bewusst nicht blockierend: ein SMTP-Ausfall darf
+ * die Einreichung selbst nicht verhindern — die Offerte ist auch ohne Mail im
+ * Büro-Sheet als «wartet auf Freigabe» sichtbar.
+ */
+async function notifyAdminsQuoteNeedsApproval(quote: Quote, organizationId: string): Promise<void> {
+  if (!isMailConfigured()) return;
+  const [admins, branding] = await Promise.all([
+    listAdminEmailsForOrg(organizationId),
+    getOrganizationBranding(organizationId),
+  ]);
+  if (admins.length === 0) return;
+
+  const quoteLabel = quote.quoteNumber ?? "Offerte";
+  const text =
+    `Guten Tag\n\n` +
+    `${quote.createdByDisplayName ?? "Das Büro"} hat ${quoteLabel} über CHF ${formatChf(quote.totalGross)} ` +
+    `zur Freigabe eingereicht.\n\n` +
+    `Bitte im Projekt-Sheet unter «Offerten» prüfen und freigeben oder zurückweisen.\n\n` +
+    `Freundliche Grüsse\n${branding.name}`;
+
+  await Promise.allSettled(
+    admins.map((to) =>
+      sendMail({
+        to,
+        subject: `${quoteLabel} wartet auf Freigabe — ${branding.name}`,
+        text,
+        fromName: branding.name,
+      }),
+    ),
+  );
 }
 
 export async function listQuotesAction(projectId: string): Promise<Quote[]> {
@@ -83,8 +118,34 @@ export async function setQuoteStatusAction(values: unknown, tabId?: string): Pro
   const session = await requireOfficeSession();
   const parsed = quoteStatusSchema.safeParse(values);
   if (!parsed.success) throw new Error(firstIssueMessage(parsed.error));
+  if (parsed.data.status === "sent") {
+    throw new Error("Offerten können nur über «Senden» mit PDF-Versand auf «Gesendet» gesetzt werden.");
+  }
 
   const quote = await setQuoteStatus(parsed.data.quoteId, parsed.data.projectId, parsed.data.status);
+  await publishQuoteChanged(session.organizationId, quote.projectId, tabId);
+
+  if (parsed.data.status === "pending_approval" && session.organizationId) {
+    void notifyAdminsQuoteNeedsApproval(quote, session.organizationId).catch((e) => {
+      console.error("Freigabe-Benachrichtigung fehlgeschlagen:", e);
+    });
+  }
+
+  return quote;
+}
+
+/** Admin weist eine zur Freigabe eingereichte Offerte zurück — zurück in den Entwurf, mit Kommentar fürs Büro. */
+export async function rejectQuoteApprovalAction(values: unknown, tabId?: string): Promise<Quote> {
+  const session = await requireAdminSession();
+  const parsed = quoteApprovalRejectSchema.safeParse(values);
+  if (!parsed.success) throw new Error(firstIssueMessage(parsed.error));
+
+  const profile = await getCachedSessionProfile(session);
+  const quote = await setQuoteStatus(parsed.data.quoteId, parsed.data.projectId, "draft", {
+    approvedByProfileId: profile.userId,
+    approvedByDisplayName: profile.displayName,
+    approvalNote: parsed.data.note?.trim() || null,
+  });
   await publishQuoteChanged(session.organizationId, quote.projectId, tabId);
   return quote;
 }
@@ -97,6 +158,9 @@ export async function getQuoteMailConfigAction(): Promise<{ mailConfigured: bool
 
 export async function sendQuoteAction(values: unknown, tabId?: string): Promise<Quote> {
   const session = await requireOfficeSession();
+  if (session.role !== "admin") {
+    throw new Error("Nur Admins dürfen Offerten freigeben und senden. Bitte zuerst zur Freigabe einreichen.");
+  }
   const parsed = quoteSendSchema.safeParse(values);
   if (!parsed.success) throw new Error(firstIssueMessage(parsed.error));
   if (!isMailConfigured()) {
@@ -110,6 +174,9 @@ export async function sendQuoteAction(values: unknown, tabId?: string): Promise<
   }
   if (quote.status === "approved" || quote.status === "rejected") {
     throw new Error("Entschiedene Offerten können nicht mehr versendet werden.");
+  }
+  if (quote.status === "draft") {
+    throw new Error("Diese Offerte muss zuerst zur Freigabe eingereicht werden.");
   }
 
   const [project, branding] = await Promise.all([
@@ -149,8 +216,11 @@ export async function sendQuoteAction(values: unknown, tabId?: string): Promise<
     ],
   });
 
+  const approver = await getCachedSessionProfile(session);
   const updated = await setQuoteStatus(quote.id, quote.projectId, "sent", {
     sentToEmail: parsed.data.recipientEmail,
+    approvedByProfileId: approver.userId,
+    approvedByDisplayName: approver.displayName,
   });
   await publishQuoteChanged(session.organizationId, updated.projectId, tabId);
   return updated;

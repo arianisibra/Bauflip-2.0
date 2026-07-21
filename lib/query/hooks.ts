@@ -50,6 +50,7 @@ import {
   deleteQuoteAction,
   getQuoteMailConfigAction,
   listQuotesAction,
+  rejectQuoteApprovalAction,
   sendQuoteAction,
   setQuoteStatusAction,
   updateQuoteAction,
@@ -613,6 +614,18 @@ export function useSetQuoteStatus() {
   const qc = useQueryClient();
   return useMutation<Quote, Error, { quoteId: string; projectId: string; status: QuoteStatus }>({
     mutationFn: (input) => setQuoteStatusAction(input, getTabId()),
+    onSuccess: (quote) => {
+      afterQuoteChange(qc, quote.projectId, { refetchType: "all" });
+      notifyOtherTabs({ type: "quote.changed", projectId: quote.projectId });
+    },
+  });
+}
+
+/** Admin weist eine Offerte im Freigabe-Workflow zurück (→ Entwurf, mit Kommentar fürs Büro). */
+export function useRejectQuoteApproval() {
+  const qc = useQueryClient();
+  return useMutation<Quote, Error, { quoteId: string; projectId: string; note?: string | null }>({
+    mutationFn: (input) => rejectQuoteApprovalAction(input, getTabId()),
     onSuccess: (quote) => {
       afterQuoteChange(qc, quote.projectId, { refetchType: "all" });
       notifyOtherTabs({ type: "quote.changed", projectId: quote.projectId });

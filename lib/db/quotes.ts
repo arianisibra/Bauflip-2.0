@@ -12,7 +12,7 @@ import { updateProject } from "@/lib/db/repository";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const QUOTE_DB_COLUMNS =
-  "id, organization_id, project_id, quote_number, status, valid_until, intro_text, outro_text, vat_rate, total_net, total_gross, sent_at, sent_to_email, created_by, created_by_display_name, created_at, updated_at";
+  "id, organization_id, project_id, quote_number, status, valid_until, intro_text, outro_text, vat_rate, total_net, total_gross, sent_at, sent_to_email, created_by, created_by_display_name, submitted_for_approval_at, approval_decided_at, approved_by, approved_by_display_name, approval_note, created_at, updated_at";
 
 const QUOTE_LINE_ITEM_DB_COLUMNS =
   "id, quote_id, position, description, quantity, unit, unit_price, line_total";
@@ -41,6 +41,15 @@ function mapQuoteRow(row: Record<string, unknown>): Quote {
       row.created_by_display_name != null && String(row.created_by_display_name).trim()
         ? String(row.created_by_display_name).trim()
         : null,
+    submittedForApprovalAt: row.submitted_for_approval_at != null ? String(row.submitted_for_approval_at) : null,
+    approvalDecidedAt: row.approval_decided_at != null ? String(row.approval_decided_at) : null,
+    approvedByProfileId: row.approved_by != null ? String(row.approved_by) : null,
+    approvedByDisplayName:
+      row.approved_by_display_name != null && String(row.approved_by_display_name).trim()
+        ? String(row.approved_by_display_name).trim()
+        : null,
+    approvalNote:
+      row.approval_note != null && String(row.approval_note).trim() ? String(row.approval_note).trim() : null,
     createdAt: String(row.created_at ?? ""),
     updatedAt: String(row.updated_at ?? ""),
     lineItems: [],
@@ -333,7 +342,14 @@ export async function setQuoteStatus(
   quoteId: string,
   projectId: string,
   status: QuoteStatus,
-  opts?: { sentToEmail?: string },
+  opts?: {
+    sentToEmail?: string;
+    /** Admin, der freigibt (→ sent) oder zurückweist (→ draft mit approvalNote). */
+    approvedByProfileId?: string | null;
+    approvedByDisplayName?: string | null;
+    /** Nur bei Zurückweisung (→ draft) gesetzt; grenzt vom normalen Kunden-Zurück-in-Entwurf ab. */
+    approvalNote?: string | null;
+  },
 ): Promise<Quote> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) throw new Error("Supabase nicht verfügbar.");
@@ -353,11 +369,32 @@ export async function setQuoteStatus(
   );
 
   const patch: Record<string, unknown> = { status };
+  if (status === "pending_approval") {
+    patch.submitted_for_approval_at = new Date().toISOString();
+    // Frischer Freigabe-Durchlauf — alten Entscheid/Kommentar aus einer früheren
+    // Zurückweisung nicht stehen lassen.
+    patch.approval_decided_at = null;
+    patch.approved_by = null;
+    patch.approved_by_display_name = null;
+    patch.approval_note = null;
+  }
   if (status === "sent") {
     patch.sent_at = new Date().toISOString();
     if (opts?.sentToEmail) {
       patch.sent_to_email = opts.sentToEmail;
     }
+    // Erreichen von "sent" bedeutet immer: ein Admin hat soeben freigegeben.
+    patch.approval_decided_at = new Date().toISOString();
+    if (opts?.approvedByProfileId) patch.approved_by = opts.approvedByProfileId;
+    if (opts?.approvedByDisplayName) patch.approved_by_display_name = opts.approvedByDisplayName;
+  }
+  if (status === "draft" && opts?.approvalNote !== undefined) {
+    // Interne Zurückweisung (Admin → Büro) — nicht zu verwechseln mit der
+    // Kunden-Ablehnung (sent → rejected → draft), die opts nicht setzt.
+    patch.approval_decided_at = new Date().toISOString();
+    patch.approval_note = opts.approvalNote ?? null;
+    if (opts?.approvedByProfileId) patch.approved_by = opts.approvedByProfileId;
+    if (opts?.approvedByDisplayName) patch.approved_by_display_name = opts.approvedByDisplayName;
   }
   if (status === "approved" || status === "rejected") {
     patch.decided_at = new Date().toISOString();

@@ -1985,6 +1985,26 @@ export const listProfilesByRole = cache(async function listProfilesByRole(role: 
   return out.sort((a, b) => a.displayName.localeCompare(b.displayName, "de-CH"));
 });
 
+/** E-Mail-Adressen aller aktiven Admins einer Organisation — für Freigabe-Benachrichtigungen. */
+export const listAdminEmailsForOrg = cache(async function listAdminEmailsForOrg(
+  organizationId: string,
+): Promise<string[]> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from("organization_memberships")
+    .select("user_id")
+    .eq("organization_id", organizationId)
+    .eq("is_active", true)
+    .eq("role", "admin");
+  if (error || !data || data.length === 0) return [];
+
+  const userIds = (data as { user_id: string }[]).map((r) => r.user_id);
+  const emailByUserId = await buildEmailByUserIdMap(userIds);
+  return [...emailByUserId.values()];
+});
+
 export type ProjectCreateInput = Omit<
   Project,
   | "id"

@@ -142,8 +142,14 @@ export function DashboardPageClient() {
   const maxAgeBucket = Math.max(1, ...Object.values(data.projectAge.byBucket));
   const maxMonthlyRevenue = Math.max(1, ...data.monthlyRevenue.map((p) => p.totalGross));
   const maxWorkload = Math.max(1, ...data.technicianWorkload.map((t) => t.appointmentCount));
-  const openQuoteValue = data.quotePipeline.valueByStatus.draft + data.quotePipeline.valueByStatus.sent;
-  const openQuoteCount = data.quotePipeline.countByStatus.draft + data.quotePipeline.countByStatus.sent;
+  const openQuoteValue =
+    data.quotePipeline.valueByStatus.draft +
+    data.quotePipeline.valueByStatus.pending_approval +
+    data.quotePipeline.valueByStatus.sent;
+  const openQuoteCount =
+    data.quotePipeline.countByStatus.draft +
+    data.quotePipeline.countByStatus.pending_approval +
+    data.quotePipeline.countByStatus.sent;
   // Ordinal-Rampe nur über die tatsächlich sichtbaren Pipeline-Status spreizen
   // (Statuswerte mit fixer Status-Bedeutung ausgenommen — siehe TERMINAL_PROJECT_STATUS_STYLE).
   const visiblePipelineStatuses = projectStatuses.filter(

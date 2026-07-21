@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { FileText, FileType, MoreHorizontal, Pencil, Plus, Send, Trash2 } from "lucide-react";
+import { CheckCircle2, FileText, FileType, MoreHorizontal, Pencil, Plus, Send, Trash2, XCircle } from "lucide-react";
 import type { Quote, QuoteStatus, TechnicianReport } from "@/lib/domain/types";
 import {
   allowedQuoteStatusTransitions,
@@ -16,6 +16,7 @@ import {
   useQuoteMailConfig,
   useSetQuoteStatus,
 } from "@/lib/query/hooks";
+import { useSessionProfile } from "@/components/app/session-profile-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +26,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { QuoteApprovalRejectDialog } from "@/components/app/quote-approval-reject-dialog";
 import { QuoteEditorDialog } from "@/components/app/quote-editor-dialog";
 import { QuoteSendDialog } from "@/components/app/quote-send-dialog";
 import { cn } from "@/lib/utils";
@@ -33,10 +35,25 @@ const chf = new Intl.NumberFormat("de-CH", { style: "currency", currency: "CHF" 
 
 const QUOTE_STATUS_ACTION_LABELS: Record<QuoteStatus, string> = {
   draft: "Zurück zu Entwurf",
+  pending_approval: "Zur Freigabe einreichen",
   sent: "Als gesendet markieren",
   approved: "Angenommen",
   rejected: "Abgelehnt",
 };
+
+/**
+ * Generische Statuswechsel-Buttons — «sent» ausgeschlossen: Versand läuft immer
+ * über den PDF-Mail-Dialog (`QuoteSendDialog`), nie als blosser Statuswechsel.
+ */
+function genericStatusTargets(status: QuoteStatus, isAdmin: boolean): QuoteStatus[] {
+  return allowedQuoteStatusTransitions[status].filter((next) => {
+    if (next === "sent") return false;
+    // Admin nutzt für pending_approval → draft die «Zurückweisen»-Aktion mit Kommentar,
+    // nicht den stummen Statuswechsel — sonst zwei Buttons für dieselbe Sache.
+    if (isAdmin && status === "pending_approval" && next === "draft") return false;
+    return true;
+  });
+}
 
 export function ProjektQuotesSection({
   projectId,
@@ -57,10 +74,12 @@ export function ProjektQuotesSection({
   const mailConfig = useQuoteMailConfig(canEdit);
   const mailConfigured = mailConfig.data?.mailConfigured ?? false;
   const hasWordTemplate = useHasOfferDocumentTemplate(canEdit).data ?? false;
+  const isAdmin = useSessionProfile().role === "admin";
 
   /** null = geschlossen; { quote: null } = neu; { quote } = bearbeiten. */
   const [editor, setEditor] = useState<{ quote: Quote | null } | null>(null);
   const [sendTarget, setSendTarget] = useState<Quote | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<Quote | null>(null);
 
   const quotes = quotesQuery.data ?? [];
 
@@ -115,8 +134,13 @@ export function ProjektQuotesSection({
 
       <div className="space-y-1.5">
         {quotes.map((quote) => {
-          const canSend = canEdit && mailConfigured && (quote.status === "draft" || quote.status === "sent");
+          const canApproveAndSend =
+            canEdit &&
+            isAdmin &&
+            mailConfigured &&
+            (quote.status === "pending_approval" || quote.status === "sent");
           const canDelete = canEdit && (quote.status === "draft" || quote.status === "rejected");
+          const statusTargets = genericStatusTargets(quote.status, isAdmin);
           return (
             <div
               key={quote.id}
@@ -139,7 +163,13 @@ export function ProjektQuotesSection({
                     ? ` · gültig bis ${new Date(quote.validUntil).toLocaleDateString("de-CH", { timeZone: "Europe/Zurich" })}`
                     : ""}
                   {quote.status === "sent" && quote.sentToEmail ? ` · gesendet an ${quote.sentToEmail}` : ""}
+                  {quote.status === "pending_approval" ? " · wartet auf Freigabe" : ""}
                 </span>
+                {quote.status === "draft" && quote.approvalNote ? (
+                  <span className="mt-0.5 block truncate text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                    Vom Admin zurückgewiesen: {quote.approvalNote}
+                  </span>
+                ) : null}
               </button>
 
               <span className="shrink-0 text-sm font-semibold tabular-nums">{chf.format(quote.totalGross)}</span>
@@ -165,10 +195,16 @@ export function ProjektQuotesSection({
                       </a>
                     </DropdownMenuItem>
                   ) : null}
-                  {canSend ? (
+                  {canApproveAndSend ? (
                     <DropdownMenuItem onSelect={() => setSendTarget(quote)}>
                       <Send className="size-4" aria-hidden />
-                      {quote.status === "sent" ? "Erneut senden" : "Senden"}
+                      {quote.status === "sent" ? "Erneut senden" : "Freigeben & senden"}
+                    </DropdownMenuItem>
+                  ) : null}
+                  {isAdmin && quote.status === "pending_approval" ? (
+                    <DropdownMenuItem onSelect={() => setRejectTarget(quote)}>
+                      <XCircle className="size-4" aria-hidden />
+                      Zurückweisen (mit Kommentar)
                     </DropdownMenuItem>
                   ) : null}
                   {canEdit && quote.status === "draft" ? (
@@ -177,15 +213,18 @@ export function ProjektQuotesSection({
                       Bearbeiten
                     </DropdownMenuItem>
                   ) : null}
-                  {canEdit && allowedQuoteStatusTransitions[quote.status].length > 0 ? (
+                  {canEdit && statusTargets.length > 0 ? (
                     <>
                       <DropdownMenuSeparator />
-                      {allowedQuoteStatusTransitions[quote.status].map((next) => (
+                      {statusTargets.map((next) => (
                         <DropdownMenuItem
                           key={next}
                           disabled={setStatus.isPending}
                           onSelect={() => changeStatus(quote, next)}
                         >
+                          {next === "pending_approval" ? (
+                            <CheckCircle2 className="size-4" aria-hidden />
+                          ) : null}
                           {QUOTE_STATUS_ACTION_LABELS[next]}
                         </DropdownMenuItem>
                       ))}
@@ -227,6 +266,14 @@ export function ProjektQuotesSection({
             quote={sendTarget}
             defaultRecipientEmail={defaultRecipientEmail}
           />
+          {isAdmin ? (
+            <QuoteApprovalRejectDialog
+              open={rejectTarget !== null}
+              onOpenChange={(o) => (o ? null : setRejectTarget(null))}
+              projectId={projectId}
+              quote={rejectTarget}
+            />
+          ) : null}
         </>
       ) : null}
     </section>

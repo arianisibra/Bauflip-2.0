@@ -314,6 +314,13 @@ export const appointmentConfirmationSendSchema = z.object({
   recipientEmail: z.string().trim().email("Ungültige E-Mail-Adresse."),
 });
 
+/** Admin weist eine zur Freigabe eingereichte Offerte zurück — Büro sieht den Grund. */
+export const quoteApprovalRejectSchema = z.object({
+  quoteId: z.string().uuid(),
+  projectId: z.string().uuid(),
+  note: z.string().trim().max(2000).optional().nullable(),
+});
+
 /** Offerte per E-Mail versenden (PDF im Anhang). */
 export const quoteSendSchema = z.object({
   quoteId: z.string().uuid(),

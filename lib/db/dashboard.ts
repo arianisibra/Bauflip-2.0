@@ -318,8 +318,8 @@ export const emptyDashboardData: DashboardData = {
   projectAge: { byBucket: { "0-7": 0, "8-30": 0, "31-90": 0, "90+": 0 }, totalOpen: 0 },
   cycleTime: { averageDays: null, sampleSize: 0 },
   quotePipeline: {
-    countByStatus: { draft: 0, sent: 0, approved: 0, rejected: 0 },
-    valueByStatus: { draft: 0, sent: 0, approved: 0, rejected: 0 },
+    countByStatus: { draft: 0, pending_approval: 0, sent: 0, approved: 0, rejected: 0 },
+    valueByStatus: { draft: 0, pending_approval: 0, sent: 0, approved: 0, rejected: 0 },
     conversionRate: null,
   },
   monthlyRevenue: [],
