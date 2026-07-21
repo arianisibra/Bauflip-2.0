@@ -559,7 +559,11 @@ export function ProjekteListClient({
       <div className={projectsLoading && projects.length === 0 ? "hidden" : undefined}>
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold">Projekte</h1>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        {/* gap-3 statt des sonst üblichen gap-2 (Dialog-Button-Paare): hier stehen drei
+            ungleich gewichtete Elemente (Suchfeld, gefüllter CTA, blasser Icon-Button)
+            nebeneinander — der «…»-Button hat dieselbe Hintergrundfarbe wie die Seite,
+            darum braucht die Gruppe mehr Luft, um nicht optisch zu verschmelzen. */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="w-full sm:w-auto">
             <ListPageToolbar value={q} onChange={setQ} placeholder="Suche…" />
           </div>
