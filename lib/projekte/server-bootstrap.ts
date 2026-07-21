@@ -11,7 +11,6 @@ import {
 } from "@/lib/projekte/bootstrap-types";
 import {
   DEFAULT_PROJEKTE_LIST_FILTER,
-  needsNextAppointmentRpc,
   totalProjectsForListFilter,
   type ProjekteListFilter,
 } from "@/lib/projekte/list-filter";
@@ -60,11 +59,7 @@ export async function loadProjekteBootstrapData(
       hasMore: page.hasMore,
       nextCursor: page.nextCursor,
       totalForFilter,
-      rpc: needsNextAppointmentRpc(listFilter)
-        ? "next_appointment_starts_for_org"
-        : rpcResult
-          ? "projekte_office_bootstrap"
-          : "skipped",
+      rpc: rpcResult ? "projekte_office_bootstrap" : "next_appointment_starts_for_org",
     },
   };
 }

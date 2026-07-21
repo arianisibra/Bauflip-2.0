@@ -4,7 +4,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Info, Loader2 } from "lucide-react";
+import { ChevronDown, Info, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { OfficeProjectListItem, ProjectStatus } from "@/lib/domain/types";
 import {
@@ -133,6 +133,21 @@ function compareOfficeListRows(
   return a.title.localeCompare(b.title, "de", { sensitivity: "base" });
 }
 
+/** «Do., 24.07., 11:00» — kompakte Terminanzeige in der Listenzeile (Europe/Zurich). */
+const NEXT_APPT_FMT = new Intl.DateTimeFormat("de-CH", {
+  timeZone: "Europe/Zurich",
+  weekday: "short",
+  day: "2-digit",
+  month: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+function formatNextAppointment(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : NEXT_APPT_FMT.format(d);
+}
+
 /** Above this row count, tbody uses windowing to limit DOM nodes. */
 const PROJECT_TABLE_VIRTUAL_THRESHOLD = 55;
 const PROJECT_TABLE_ROW_ESTIMATE_PX = 49;
@@ -174,7 +189,19 @@ const ProjectTableRow = memo(function ProjectTableRow({
       <TableCell className="w-full max-w-0 truncate font-medium" title={p.title}>
         {p.title}
       </TableCell>
-      <TableCell className="capitalize">{p.type}</TableCell>
+      {/* Statt der redundanten Typ-Spalte: was das Büro täglich braucht — wann & wer. */}
+      <TableCell className="whitespace-nowrap text-xs">
+        {p.nextAppointmentStartsAt ? (
+          <>
+            <span className="block text-foreground">{formatNextAppointment(p.nextAppointmentStartsAt)}</span>
+            {p.nextAppointmentTechnician ? (
+              <span className="block text-[11px] text-muted-foreground">{p.nextAppointmentTechnician}</span>
+            ) : null}
+          </>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+      </TableCell>
       <TableCell>
         <StatusBadge status={p.status} />
       </TableCell>
@@ -250,12 +277,15 @@ export function ProjekteListClient({
   initialOpenProjectId,
   initialOpenSource,
   initialReturnTo = null,
+  headerActions,
 }: {
   canEditProjectSheet: boolean;
   isAdmin: boolean;
   initialOpenProjectId?: string;
   initialOpenSource?: "kalender";
   initialReturnTo?: string | null;
+  /** Sekundäre Aktionen (z. B. Export-Menü) — landen rechts neben «+ Neue Anfrage». */
+  headerActions?: React.ReactNode;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -277,6 +307,8 @@ export function ProjekteListClient({
   const deleteProjectPermanently = useDeleteProjectPermanently();
   const [listSort, setListSort] = useState<ProjectsListSort>("default");
   const [filterHelpOpen, setFilterHelpOpen] = useState(false);
+  /** Mobil ist der Filterblock eingeklappt — die Liste soll zuerst kommen. Desktop immer offen. */
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [q, setQ] = useState(() => searchParams.get("q") ?? "");
   /** Letzter von diesem Tab selbst geschriebener `q`-Wert — unterscheidet ein Echo unseres
    * eigenen debounced router.replace() von einer echten externen Änderung (z. B. Zurück/Vor). */
@@ -544,10 +576,26 @@ export function ProjekteListClient({
           <Button size="sm" className="h-11 w-full rounded-lg sm:h-9 sm:w-auto" onClick={() => setIntakeOpen(true)}>
             + Neue Anfrage
           </Button>
+          {headerActions}
         </div>
       </div>
 
-      <div className="space-y-3 rounded-xl border border-border/70 bg-muted/30 px-3 py-2.5">
+      {/* Mobil: Filterblock hinter einem Toggle — die Projektliste kommt zuerst. */}
+      <button
+        type="button"
+        aria-expanded={mobileFiltersOpen}
+        onClick={() => setMobileFiltersOpen((v) => !v)}
+        className="flex items-center justify-between rounded-xl border border-border/70 bg-muted/30 px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground sm:hidden"
+      >
+        Filter &amp; Sortierung
+        <ChevronDown className={cn("size-4 transition-transform", mobileFiltersOpen && "rotate-180")} aria-hidden />
+      </button>
+      <div
+        className={cn(
+          "space-y-3 rounded-xl border border-border/70 bg-muted/30 px-3 py-2.5",
+          mobileFiltersOpen ? "block" : "hidden sm:block",
+        )}
+      >
         <div className="space-y-2">
           <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Nach Status anzeigen
@@ -698,6 +746,12 @@ export function ProjekteListClient({
                     <div>
                       <StatusBadge status={p.status} />
                     </div>
+                    {p.nextAppointmentStartsAt ? (
+                      <p className="text-xs text-muted-foreground">
+                        {formatNextAppointment(p.nextAppointmentStartsAt)}
+                        {p.nextAppointmentTechnician ? ` · ${p.nextAppointmentTechnician}` : ""}
+                      </p>
+                    ) : null}
                   </button>
                   <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                     <Button type="button" size="sm" variant="outline" className="rounded-lg" onClick={() => handleOpenRow(p)}>
@@ -755,7 +809,7 @@ export function ProjekteListClient({
                     <TableHeader className="sticky top-0 z-10 border-b bg-card shadow-[0_1px_0_0_hsl(var(--border))]">
                       <TableRow className="hover:bg-transparent">
                         <TableHead>Mieter / Kontakt</TableHead>
-                        <TableHead>Typ</TableHead>
+                        <TableHead>Nächster Termin</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="w-[120px] text-right">Aktion</TableHead>
                       </TableRow>
@@ -797,7 +851,7 @@ export function ProjekteListClient({
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
                       <TableHead>Mieter / Kontakt</TableHead>
-                      <TableHead>Typ</TableHead>
+                      <TableHead>Nächster Termin</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="w-[120px] text-right">Aktion</TableHead>
                     </TableRow>

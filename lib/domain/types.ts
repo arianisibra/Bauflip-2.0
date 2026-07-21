@@ -267,8 +267,10 @@ export type OfficeProjectListItem = {
   status: ProjectStatus;
   /** ISO: Erstellung (Sortierung „neueste zuerst“). */
   createdAt: string;
-  /** Nur bei Filter ABGEMACHT (Termin-Sortierung). */
+  /** Nächster künftiger Termin (Listen-Spalte; bei ABGEMACHT auch Sortierung). */
   nextAppointmentStartsAt?: string | null;
+  /** Monteur des nächsten Termins («Name» bzw. «Name +1» bei zwei Monteuren). */
+  nextAppointmentTechnician?: string | null;
   /** Nicht in schlanker Listen-Payload — Sheet / Legacy. */
   displayLabel?: string | null;
   serviceAddressShort?: string | null;

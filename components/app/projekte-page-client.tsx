@@ -2,8 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Download, TriangleAlert } from "lucide-react";
+import { Download, Loader2, MoreHorizontal, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { fetchAbrechnungExportAction } from "@/app/(app)/projekte/export-actions";
 import { downloadCsv } from "@/lib/csv/download";
 import { todayKeySwiss } from "@/lib/date/swiss";
@@ -67,67 +73,85 @@ export function ProjektePageClient({
           </div>
         </div>
       ) : null}
-      <div className="flex justify-end">
-        <AbrechnungExportButton />
-      </div>
       <ProjekteListClient
         canEditProjectSheet
         isAdmin={isAdmin}
         initialOpenProjectId={openProjectId}
         initialOpenSource={openSource}
         initialReturnTo={returnTo}
+        headerActions={<ProjekteMoreMenu />}
       />
     </section>
   );
 }
 
-/** Exportiert alle Projekte im Status «abrechnen» als CSV (inkl. Rapportzeit + Offerte). */
-function AbrechnungExportButton() {
+/**
+ * «…»-Menü neben «+ Neue Anfrage»: sekundäre Listen-Aktionen. Der Abrechnungs-Export
+ * (Monatsend-Funktion) wohnt hier statt prominent über dem Titel.
+ */
+function ProjekteMoreMenu() {
   const [exporting, setExporting] = useState(false);
 
   return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      disabled={exporting}
-      onClick={async () => {
-        setExporting(true);
-        try {
-          const rows = await fetchAbrechnungExportAction();
-          if (rows.length === 0) {
-            toast.info("Keine Projekte im Status «Abrechnen».");
-            return;
-          }
-          await downloadCsv(`abrechnungs-export-${todayKeySwiss()}`, rows.map((r) => ({
-            "Projekt-Nr.": r.referenceCode ?? "",
-            Titel: r.title,
-            Mieter: r.tenantName ?? "",
-            Telefon: r.tenantPhone ?? "",
-            "E-Mail": r.tenantEmail ?? "",
-            Adresse: r.address,
-            "Erstellt am": r.createdAt
-              ? new Date(r.createdAt).toLocaleDateString("de-CH", { timeZone: "Europe/Zurich" })
-              : "",
-            "Rapportzeit (Std.)": Math.round((r.reportMinutes / 60) * 100) / 100,
-            Offerte: r.approvedQuoteNumber ?? "",
-            "Offerte Total (CHF)": r.approvedQuoteGross ?? "",
-            Rechnung: r.invoiceNumber ?? "",
-            Rechnungsstatus: r.invoiceStatus
-              ? (invoiceStatusLabels[r.invoiceStatus as InvoiceStatus] ?? r.invoiceStatus)
-              : "",
-            "Rechnung Total (CHF)": r.invoiceGross ?? "",
-          })));
-          toast.success(`${rows.length} Projekte exportiert`);
-        } catch (err) {
-          toast.error(err instanceof Error ? err.message : "Export fehlgeschlagen.");
-        } finally {
-          setExporting(false);
-        }
-      }}
-    >
-      <Download className="size-4" aria-hidden />
-      {exporting ? "Exportiert …" : "Abrechnungs-Export (CSV)"}
-    </Button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-11 w-full rounded-lg sm:h-9 sm:w-auto"
+          aria-label="Weitere Aktionen"
+        >
+          <MoreHorizontal className="size-4" aria-hidden />
+          <span className="sm:hidden">Weitere Aktionen</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem disabled={exporting} onSelect={() => void runAbrechnungExport(setExporting)}>
+          {exporting ? (
+            <Loader2 className="size-4 animate-spin" aria-hidden />
+          ) : (
+            <Download className="size-4" aria-hidden />
+          )}
+          Abrechnungs-Export (CSV)
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
+}
+
+/** Exportiert alle Projekte im Status «abrechnen» als CSV (inkl. Rapportzeit + Offerte). */
+async function runAbrechnungExport(setExporting: (v: boolean) => void) {
+  setExporting(true);
+  try {
+    const rows = await fetchAbrechnungExportAction();
+    if (rows.length === 0) {
+      toast.info("Keine Projekte im Status «Abrechnen».");
+      return;
+    }
+    await downloadCsv(`abrechnungs-export-${todayKeySwiss()}`, rows.map((r) => ({
+      "Projekt-Nr.": r.referenceCode ?? "",
+      Titel: r.title,
+      Mieter: r.tenantName ?? "",
+      Telefon: r.tenantPhone ?? "",
+      "E-Mail": r.tenantEmail ?? "",
+      Adresse: r.address,
+      "Erstellt am": r.createdAt
+        ? new Date(r.createdAt).toLocaleDateString("de-CH", { timeZone: "Europe/Zurich" })
+        : "",
+      "Rapportzeit (Std.)": Math.round((r.reportMinutes / 60) * 100) / 100,
+      Offerte: r.approvedQuoteNumber ?? "",
+      "Offerte Total (CHF)": r.approvedQuoteGross ?? "",
+      Rechnung: r.invoiceNumber ?? "",
+      Rechnungsstatus: r.invoiceStatus
+        ? (invoiceStatusLabels[r.invoiceStatus as InvoiceStatus] ?? r.invoiceStatus)
+        : "",
+      "Rechnung Total (CHF)": r.invoiceGross ?? "",
+    })));
+    toast.success(`${rows.length} Projekte exportiert`);
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : "Export fehlgeschlagen.");
+  } finally {
+    setExporting(false);
+  }
 }

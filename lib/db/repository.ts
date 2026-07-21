@@ -43,7 +43,6 @@ import type { ProjekteStatusCountsSnapshot } from "@/lib/projekte/bootstrap-type
 import {
   DEFAULT_PROJEKTE_LIST_FILTER,
   matchesProjekteListFilter,
-  needsNextAppointmentRpc,
   type ProjekteListFilter,
 } from "@/lib/projekte/list-filter";
 import {
@@ -428,6 +427,8 @@ export const loadProjekteOfficeBootstrap = cache(async function loadProjekteOffi
     const projects = Array.isArray(projectsRaw)
       ? projectsRaw.map((row) => mapProjectListRow(row as Record<string, unknown>))
       : [];
+    // Termine sind Listen-Spalte — auch für die per RPC geladene erste Seite anhängen.
+    await attachNextAppointmentsForProjects(supabase, organizationId, projects);
 
     let hasMore = payload.hasMore === true;
     let nextCursor: string | null = null;
@@ -509,16 +510,21 @@ async function attachNextAppointmentsForProjects(
     console.warn("[bauflip] next_appointment_starts_for_org:", apErr.message);
     return;
   }
-  const nextByProject = new Map<string, string>();
+  const nextByProject = new Map<string, { startsAt: string; technician: string | null }>();
   if (apRows?.length) {
-    for (const raw of apRows as { project_id?: string; starts_at?: string }[]) {
+    for (const raw of apRows as { project_id?: string; starts_at?: string; technician_name?: string | null }[]) {
       const pid = String(raw.project_id ?? "");
       const st = String(raw.starts_at ?? "");
-      if (pid && st && projectIds.has(pid)) nextByProject.set(pid, st);
+      const tech = raw.technician_name != null && String(raw.technician_name).trim()
+        ? String(raw.technician_name).trim()
+        : null;
+      if (pid && st && projectIds.has(pid)) nextByProject.set(pid, { startsAt: st, technician: tech });
     }
   }
   for (const p of projects) {
-    p.nextAppointmentStartsAt = nextByProject.get(p.id) ?? null;
+    const next = nextByProject.get(p.id);
+    p.nextAppointmentStartsAt = next?.startsAt ?? null;
+    p.nextAppointmentTechnician = next?.technician ?? null;
   }
 }
 
@@ -629,7 +635,6 @@ export const listProjectsForOfficePage = cache(async function listProjectsForOff
   const limit = options.limit ?? PROJEKTE_LIST_PAGE_SIZE;
   const searchQuery = options.searchQuery?.trim() ?? "";
   const cursorRaw = options.cursor ?? null;
-  const runRpc = needsNextAppointmentRpc(listFilter);
 
   return withSlowLog("listProjectsForOfficePage", async () => {
     const supabase = await createSupabaseServerClient();
@@ -645,7 +650,7 @@ export const listProjectsForOfficePage = cache(async function listProjectsForOff
     // «abgemacht» hat eine eigene, termin-sortierte Pagination — aber nur ohne Suche.
     // Bei aktiver Suche läuft es über den normalen, org-weiten Suchpfad unten.
     if (listFilter === "abgemacht" && !searchQuery) {
-      return listAbgemachtProjectsPage(supabase, orgId, limit, cursorRaw, runRpc);
+      return listAbgemachtProjectsPage(supabase, orgId, limit, cursorRaw);
     }
 
     const cursor = decodeProjekteListCursor(cursorRaw);
@@ -729,7 +734,7 @@ export const listProjectsForOfficePage = cache(async function listProjectsForOff
 
     if (listFilter === "all" && segment === "open" && !hasMore && rows.length > 0) {
       const mappedOpen = rows.map(mapProjectListRow);
-      if (runRpc) await attachNextAppointmentsForProjects(supabase, orgId, mappedOpen);
+      await attachNextAppointmentsForProjects(supabase, orgId, mappedOpen); // Termine sind Listen-Spalte — für alle Filter laden
       const { count: closedCount } = await supabase
         .from("projects")
         .select("id", { count: "exact", head: true })
@@ -754,7 +759,7 @@ export const listProjectsForOfficePage = cache(async function listProjectsForOff
     }
 
     const mapped = rows.map(mapProjectListRow);
-    if (runRpc) await attachNextAppointmentsForProjects(supabase, orgId, mapped);
+    await attachNextAppointmentsForProjects(supabase, orgId, mapped); // Termine sind Listen-Spalte — für alle Filter laden
 
     const last = rows[rows.length - 1];
     let nextCursor: string | null = null;
@@ -777,7 +782,7 @@ export const listProjectsForOfficePage = cache(async function listProjectsForOff
           searchQuery: searchQuery || null,
           projectCount: mapped.length,
           hasMore,
-          rpc: runRpc ? "next_appointment_starts_for_org" : "skipped",
+          rpc: "next_appointment_starts_for_org",
         }),
       );
     }
@@ -791,7 +796,6 @@ async function listAbgemachtProjectsPage(
   orgId: string,
   limit: number,
   cursorRaw: string | null | undefined,
-  runRpc: boolean,
 ): Promise<ProjekteListPageResult> {
   const cursor = decodeProjekteListCursor(cursorRaw);
   const offset = cursor?.kind === "offset" ? cursor.offset : 0;
@@ -810,7 +814,7 @@ async function listAbgemachtProjectsPage(
   }
 
   const mapped = (data as Record<string, unknown>[]).map(mapProjectListRow);
-  if (runRpc) await attachNextAppointmentsForProjects(supabase, orgId, mapped);
+  await attachNextAppointmentsForProjects(supabase, orgId, mapped); // Termine sind Listen-Spalte — für alle Filter laden
   const sorted = sortAbgemachtOfficeProjects(mapped);
   const page = sorted.slice(offset, offset + limit);
   const nextOffset = offset + page.length;

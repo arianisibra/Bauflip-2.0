@@ -32,7 +32,9 @@ export function UserAvatarButton({ organizationName, organizationLogoUrl }: User
         <button
           type="button"
           className={cn(
-            "inline-flex max-w-[min(100vw-8rem,280px)] items-center gap-2 rounded-lg border border-transparent px-2 py-1.5",
+            // min-w-0: als Flex-Item unter Inhaltsbreite schrumpfen dürfen — sonst läuft
+            // der Org-Name auf schmalen Screens aus dem Viewport statt zu truncaten.
+            "inline-flex min-w-0 max-w-[min(100vw-8rem,280px)] items-center gap-2 rounded-lg border border-transparent px-2 py-1.5",
             "text-left text-sm font-medium text-foreground outline-none transition-colors",
             "hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50",
           )}
