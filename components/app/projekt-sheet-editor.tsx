@@ -56,6 +56,7 @@ import { TechnicianReportEditOverlay } from "@/components/app/technician-report-
 import { ProjektInvoicesSection } from "@/components/app/projekt-invoices-section";
 import { ProjektQuotesSection } from "@/components/app/projekt-quotes-section";
 import { AuftragDocumentButton } from "@/components/app/auftrag-document-button";
+import { RapportDocumentButton } from "@/components/app/rapport-document-button";
 import { AppointmentBookingForm } from "@/components/app/appointment-booking-form";
 import type { AvailabilityBundle } from "@/app/(app)/kalender/availability-actions";
 import { getFilledOrderFormFields } from "@/lib/order-forms/filled-fields";
@@ -262,6 +263,7 @@ function ReportCard({
               <Download className="size-3.5" />
               Herunterladen
             </Button>
+            <RapportDocumentButton reportId={r.id} />
             {canEdit && onEdit ? (
               <Button
                 type="button"

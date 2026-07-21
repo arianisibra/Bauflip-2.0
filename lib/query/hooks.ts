@@ -84,6 +84,7 @@ import {
   deleteDocumentTemplateAction,
   hasOfferDocumentTemplateAction,
   hasAuftragDocumentTemplateAction,
+  hasRapportDocumentTemplateAction,
   listDocumentTemplatesAction,
   setDefaultDocumentTemplateAction,
   uploadDocumentTemplateAction,
@@ -870,6 +871,7 @@ export function useUploadDocumentTemplate() {
       qc.invalidateQueries({ queryKey: queryKeys.documentTemplates() });
       qc.invalidateQueries({ queryKey: queryKeys.hasOfferDocumentTemplate() });
       qc.invalidateQueries({ queryKey: queryKeys.hasAuftragDocumentTemplate() });
+      qc.invalidateQueries({ queryKey: queryKeys.hasRapportDocumentTemplate() });
     },
   });
 }
@@ -892,6 +894,7 @@ export function useDeleteDocumentTemplate() {
       qc.invalidateQueries({ queryKey: queryKeys.documentTemplates() });
       qc.invalidateQueries({ queryKey: queryKeys.hasOfferDocumentTemplate() });
       qc.invalidateQueries({ queryKey: queryKeys.hasAuftragDocumentTemplate() });
+      qc.invalidateQueries({ queryKey: queryKeys.hasRapportDocumentTemplate() });
     },
   });
 }
@@ -912,6 +915,17 @@ export function useHasAuftragDocumentTemplate(enabled = true) {
   return useQuery<boolean>({
     queryKey: queryKeys.hasAuftragDocumentTemplate(),
     queryFn: () => hasAuftragDocumentTemplateAction(),
+    enabled,
+    staleTime: 60_000,
+    refetchOnMount: false,
+  });
+}
+
+/** Existiert eine Rapportvorlage? Steuert den «Als Word (Rapport)»-Button je Rapport. */
+export function useHasRapportDocumentTemplate(enabled = true) {
+  return useQuery<boolean>({
+    queryKey: queryKeys.hasRapportDocumentTemplate(),
+    queryFn: () => hasRapportDocumentTemplateAction(),
     enabled,
     staleTime: 60_000,
     refetchOnMount: false,

@@ -20,6 +20,7 @@ import { SettingsRow } from "@/components/app/settings-row";
 const SUPPORTED_KINDS: { kind: DocumentTemplateKind; label: string; hint: string }[] = [
   { kind: "offerte", label: "Offerte", hint: "z. B. {offerte_nummer}, {kunde_name}, {#positionen}…{/positionen}" },
   { kind: "auftrag", label: "Auftrag", hint: "z. B. {auftrag_nummer}, {kunde_name}, {beschreibung}, {objekt}" },
+  { kind: "rapport", label: "Rapport", hint: "z. B. {monteur}, {ergebnis}, {arbeitsbeschreibung}, {zeit}" },
 ];
 
 /**

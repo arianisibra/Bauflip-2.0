@@ -18,6 +18,10 @@ import {
   AUFTRAG_DOCUMENT_TOKEN_KEYS,
   SAMPLE_AUFTRAG_DOCUMENT_DATA,
 } from "@/lib/documents/auftrag-document-data";
+import {
+  RAPPORT_DOCUMENT_TOKEN_KEYS,
+  SAMPLE_RAPPORT_DOCUMENT_DATA,
+} from "@/lib/documents/rapport-document-data";
 
 /** Token-Katalog + Beispiel je Vorlagen-Art für die Upload-Prüfung (null = keine Prüfung). */
 function templateTokenSpec(
@@ -35,6 +39,13 @@ function templateTokenSpec(
       tokens: AUFTRAG_DOCUMENT_TOKEN_KEYS,
       sample: SAMPLE_AUFTRAG_DOCUMENT_DATA as unknown as Record<string, unknown>,
       beispiele: "{auftrag_nummer}, {kunde_name}, {beschreibung}, {objekt}",
+    };
+  }
+  if (kind === "rapport") {
+    return {
+      tokens: RAPPORT_DOCUMENT_TOKEN_KEYS,
+      sample: SAMPLE_RAPPORT_DOCUMENT_DATA as unknown as Record<string, unknown>,
+      beispiele: "{monteur}, {ergebnis}, {arbeitsbeschreibung}, {zeit}",
     };
   }
   return null;
@@ -69,6 +80,14 @@ export async function hasAuftragDocumentTemplateAction(): Promise<boolean> {
   const session = await requireOfficeSession();
   if (!session.organizationId) return false;
   const templates = await listDocumentTemplates(session.organizationId, "auftrag");
+  return templates.length > 0;
+}
+
+/** Für Büro/Admin: existiert eine Rapportvorlage? (steuert den «Als Word (Rapport)»-Button) */
+export async function hasRapportDocumentTemplateAction(): Promise<boolean> {
+  const session = await requireOfficeSession();
+  if (!session.organizationId) return false;
+  const templates = await listDocumentTemplates(session.organizationId, "rapport");
   return templates.length > 0;
 }
 
