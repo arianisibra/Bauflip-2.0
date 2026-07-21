@@ -10,7 +10,8 @@ import {
   type WeekTaskProjectDayGroup,
 } from "@/lib/tech/group-week-tasks-by-project-day";
 import { swissYmdParts, todayKeySwiss } from "@/lib/date/swiss";
-import { shiftSwissDayKey } from "@/lib/date/swiss-week";
+import { shiftSwissDayKey, shiftSwissWeekReference, swissWeekDays, swissWeekReferenceIsoFromDayKey } from "@/lib/date/swiss-week";
+import { swissMonthLastDayKey } from "@/lib/date/week-bounds";
 import { calendarRangeBoundsFromState } from "@/lib/kalender/calendar-range";
 import {
   anchorDateFromDayKey,
@@ -291,6 +292,160 @@ function WeekSection({
   );
 }
 
+type MonthGridDay = { key: string; day: number; monthShort: string };
+
+const MONTH_GRID_WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+
+function MonthDayCell({
+  day,
+  inCurrentMonth,
+  isToday,
+  groups,
+  onOpenDay,
+  onOpenProject,
+  onProjectHover,
+}: {
+  day: MonthGridDay;
+  inCurrentMonth: boolean;
+  isToday: boolean;
+  groups: WeekTaskProjectDayGroup[];
+  onOpenDay: (dayKey: string) => void;
+  onOpenProject: (projectId: string) => void;
+  onProjectHover?: (projectId: string) => void;
+}) {
+  const MAX_VISIBLE = 3;
+  const visible = groups.slice(0, MAX_VISIBLE);
+  const overflow = groups.length - visible.length;
+
+  return (
+    <div
+      className={cn(
+        "flex min-h-[76px] flex-col gap-1 border-b border-r border-border/50 p-1.5 sm:min-h-[112px] sm:p-2",
+        !inCurrentMonth && "bg-muted/20",
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => onOpenDay(day.key)}
+        className={cn(
+          "self-start rounded-full px-1.5 py-0.5 text-xs font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+          isToday
+            ? "bg-foreground text-background"
+            : inCurrentMonth
+              ? "text-foreground hover:bg-muted"
+              : "text-muted-foreground/50 hover:bg-muted/60",
+        )}
+      >
+        {day.day}
+      </button>
+
+      {/* Desktop: Termin-Chips mit Titel */}
+      <div className="hidden min-w-0 flex-1 flex-col gap-0.5 sm:flex">
+        {visible.map((group) => (
+          <button
+            key={group.key}
+            type="button"
+            onClick={() => onOpenProject(group.projectId)}
+            onMouseEnter={() => onProjectHover?.(group.projectId)}
+            onFocus={() => onProjectHover?.(group.projectId)}
+            className="flex min-w-0 items-center gap-1 rounded px-1 py-0.5 text-left text-[10px] font-medium leading-tight text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <span
+              className="size-1.5 shrink-0 rounded-full"
+              style={{ backgroundColor: group.primary.calendarColor }}
+              aria-hidden
+            />
+            <span className="truncate">{group.primary.projectTitle}</span>
+          </button>
+        ))}
+        {overflow > 0 ? (
+          <button
+            type="button"
+            onClick={() => onOpenDay(day.key)}
+            className="px-1 text-left text-[10px] font-semibold text-muted-foreground hover:text-foreground"
+          >
+            +{overflow} mehr
+          </button>
+        ) : null}
+      </div>
+
+      {/* Mobil: Titel würde die Zelle sprengen — nur farbige Punkte, Tap öffnet die Tagesansicht. */}
+      {groups.length > 0 ? (
+        <button
+          type="button"
+          onClick={() => onOpenDay(day.key)}
+          className="flex flex-wrap items-center gap-0.5 sm:hidden"
+          aria-label={`${groups.length} Termin${groups.length === 1 ? "" : "e"} am ${day.key}`}
+        >
+          {groups.slice(0, 4).map((group) => (
+            <span
+              key={group.key}
+              className="size-1.5 shrink-0 rounded-full"
+              style={{ backgroundColor: group.primary.calendarColor }}
+              aria-hidden
+            />
+          ))}
+          {groups.length > 4 ? (
+            <span className="text-[9px] font-medium text-muted-foreground">+{groups.length - 4}</span>
+          ) : null}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function MonthGrid({
+  weeks,
+  year,
+  month,
+  todayKey,
+  dayGroups,
+  onOpenDay,
+  onOpenProject,
+  onProjectHover,
+}: {
+  weeks: MonthGridDay[][];
+  year: number;
+  month: number;
+  todayKey: string;
+  dayGroups: Map<string, WeekTaskProjectDayGroup[]>;
+  onOpenDay: (dayKey: string) => void;
+  onOpenProject: (projectId: string) => void;
+  onProjectHover?: (projectId: string) => void;
+}) {
+  const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
+  return (
+    <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
+      <div className="grid grid-cols-7 border-b border-border/50 bg-muted/30">
+        {MONTH_GRID_WEEKDAY_LABELS.map((label) => (
+          <div
+            key={label}
+            className="px-1.5 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+          >
+            {label}
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 border-l border-t border-border/50">
+        {weeks.map((week) =>
+          week.map((day) => (
+            <MonthDayCell
+              key={day.key}
+              day={day}
+              inCurrentMonth={day.key.startsWith(monthPrefix)}
+              isToday={day.key === todayKey}
+              groups={dayGroups.get(day.key) ?? []}
+              onOpenDay={onOpenDay}
+              onOpenProject={onOpenProject}
+              onProjectHover={onProjectHover}
+            />
+          )),
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function AdminCalendar() {
   const qc = useQueryClient();
   const { openProjectSheet } = useKalenderSheet();
@@ -477,6 +632,33 @@ export function AdminCalendar() {
     return { upcomingByWeek: upcomingWeeks, pastByWeek: pastWeeks };
   }, [calendarNowTs, sortMode, visibleTasks]);
 
+  const monthGridWeeks = useMemo(() => {
+    if (viewMode !== "month") return null;
+    const firstDayKey = `${year}-${String(month).padStart(2, "0")}-01`;
+    const lastDayKey = swissMonthLastDayKey(year, month);
+    const lastWeekMonday = swissWeekReferenceIsoFromDayKey(lastDayKey);
+    const weeks: MonthGridDay[][] = [];
+    let cursor = swissWeekReferenceIsoFromDayKey(firstDayKey);
+    while (true) {
+      weeks.push(swissWeekDays(cursor));
+      if (cursor === lastWeekMonday) break;
+      cursor = shiftSwissWeekReference(cursor, 1);
+    }
+    return weeks;
+  }, [viewMode, year, month]);
+
+  const monthDayGroups = useMemo(() => {
+    if (viewMode !== "month") return null;
+    const groups = sortAppointmentGroups(groupWeekTasksByProjectDay(visibleTasks));
+    const map = new Map<string, WeekTaskProjectDayGroup[]>();
+    for (const g of groups) {
+      const list = map.get(g.dayKey) ?? [];
+      list.push(g);
+      map.set(g.dayKey, list);
+    }
+    return map;
+  }, [viewMode, visibleTasks, sortAppointmentGroups]);
+
   const bumpDayKey = useCallback((deltaDays: number) => {
     setDayKey((k) => {
       const next = shiftSwissDayKey(k, deltaDays);
@@ -507,6 +689,14 @@ export function AdminCalendar() {
   );
 
   const navigateWeek = useCallback((dir: -1 | 1) => bumpDayKey(dir * 7), [bumpDayKey]);
+
+  const openDayFromGrid = useCallback(
+    (targetDayKey: string) => {
+      setViewMode("day");
+      applyDayKey(targetDayKey);
+    },
+    [applyDayKey],
+  );
 
   const navigateDay = useCallback((dir: -1 | 1) => bumpDayKey(dir), [bumpDayKey]);
 
@@ -776,6 +966,17 @@ export function AdminCalendar() {
           </>
         ) : null}
       </div>
+      ) : viewMode === "month" ? (
+      <MonthGrid
+        weeks={monthGridWeeks ?? []}
+        year={year}
+        month={month}
+        todayKey={todayKey}
+        dayGroups={monthDayGroups ?? new Map()}
+        onOpenDay={openDayFromGrid}
+        onOpenProject={openProjectSheet}
+        onProjectHover={handleProjectHover}
+      />
       ) : (
       <div className="space-y-3">
         {upcomingByWeek.length === 0 && pastByWeek.length === 0 ? (
