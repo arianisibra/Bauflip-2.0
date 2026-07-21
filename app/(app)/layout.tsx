@@ -4,6 +4,7 @@ import { MobileAdminNav } from "@/components/app/mobile-admin-nav";
 import { OrganizationBrandingHeader } from "@/components/app/organization-branding-header";
 import { OrganizationBrandingProvider } from "@/components/app/organization-branding-provider";
 import { SidebarNav } from "@/components/app/sidebar-nav";
+import { ThemeToggle } from "@/components/app/theme-toggle";
 import { getCachedSessionProfile, getLayoutSession } from "@/lib/auth/session";
 import { getOrganizationBranding } from "@/lib/db/repository";
 import { isAdminMfaRequiredAndMissing } from "@/lib/auth/mfa";
@@ -48,7 +49,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <MobileAdminNav items={items} />
               <MobileContextSwitch />
             </div>
-            <OrganizationBrandingHeader />
+            <div className="flex items-center gap-1 sm:gap-2">
+              <ThemeToggle />
+              <OrganizationBrandingHeader />
+            </div>
           </header>
           <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-4 sm:px-6 sm:py-6">{children}</main>
         </div>

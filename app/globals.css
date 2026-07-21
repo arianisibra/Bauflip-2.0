@@ -2,14 +2,11 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/* Dark-Mode folgt der System-Einstellung (kein Toggle vorhanden) — rein per CSS,
-   kein Pre-Paint-Skript nötig. `dark:`-Utilities UND die Variablen unten reagieren
-   beide auf `prefers-color-scheme: dark`. */
-@custom-variant dark {
-  @media (prefers-color-scheme: dark) {
-    @slot;
-  }
-}
+/* Hell/Dunkel über `data-theme` am <html>. Ein Pre-Paint-Skript (siehe RootLayout)
+   setzt das Attribut vor dem ersten Rendern und löst «system» dabei zu light/dark auf
+   — darum genügt hier die reine Attribut-Bedingung (kein Media-Query nötig). Sowohl
+   die Farb-Variablen unten als auch alle `dark:`-Utilities hängen an diesem Attribut. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @theme inline {
   --color-background: var(--background);
@@ -90,8 +87,7 @@
   --sidebar-ring: oklch(0.64 0.16 223);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
+:root[data-theme="dark"] {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -123,7 +119,6 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
-  }
 }
 
 @layer base {

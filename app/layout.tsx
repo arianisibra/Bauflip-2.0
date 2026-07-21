@@ -3,6 +3,7 @@ import { Poppins } from "next/font/google";
 import { Toaster } from "sonner";
 import { WebVitalsReporter } from "@/components/observability/web-vitals-reporter";
 import { QueryProvider } from "@/lib/query/provider";
+import { THEME_INIT_SCRIPT } from "@/lib/theme/theme-store";
 import "./globals.css";
 
 const poppins = Poppins({
@@ -40,6 +41,8 @@ export default function RootLayout({
         className={`${poppins.className} min-h-full flex flex-col`}
         suppressHydrationWarning
       >
+        {/* Setzt data-theme vor dem ersten Paint (Hell/Dunkel/System) — verhindert Flackern. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <QueryProvider>
           {children}
           <WebVitalsReporter />
