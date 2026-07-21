@@ -98,6 +98,12 @@ import {
   setInvitePreferenceAction,
 } from "@/app/(app)/einstellungen/invite-preference-actions";
 import {
+  getBusyCalendarStatusAction,
+  saveBusyCalendarAction,
+  syncBusyCalendarAction,
+} from "@/app/(app)/einstellungen/busy-calendar-actions";
+import type { BusyCalendarConfig } from "@/lib/db/busy-calendar";
+import {
   createInvoiceAction,
   deleteInvoiceAction,
   listInvoicesAction,
@@ -764,6 +770,39 @@ export function useSetInvitePreference() {
     mutationFn: (enabled) => setInvitePreferenceAction(enabled),
     onSuccess: (result) => {
       qc.setQueryData(queryKeys.invitePreference(), result);
+    },
+  });
+}
+
+/** Privater Kalender als Busy-Blocker: eigener Status/Konfig. */
+export function useBusyCalendarStatus(enabled = true) {
+  return useQuery<BusyCalendarConfig>({
+    queryKey: queryKeys.busyCalendar(),
+    queryFn: () => getBusyCalendarStatusAction(),
+    enabled,
+    staleTime: 60_000,
+    refetchOnMount: false,
+  });
+}
+
+export function useSaveBusyCalendar() {
+  const qc = useQueryClient();
+  return useMutation<BusyCalendarConfig, Error, { icsUrl: string | null; enabled: boolean }>({
+    mutationFn: (input) => saveBusyCalendarAction(input),
+    onSuccess: (result) => {
+      qc.setQueryData(queryKeys.busyCalendar(), result);
+      qc.invalidateQueries({ queryKey: queryKeys.availabilityRange.all() });
+    },
+  });
+}
+
+export function useSyncBusyCalendar() {
+  const qc = useQueryClient();
+  return useMutation<BusyCalendarConfig, Error, void>({
+    mutationFn: () => syncBusyCalendarAction(),
+    onSuccess: (result) => {
+      qc.setQueryData(queryKeys.busyCalendar(), result);
+      qc.invalidateQueries({ queryKey: queryKeys.availabilityRange.all() });
     },
   });
 }

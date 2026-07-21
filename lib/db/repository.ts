@@ -32,6 +32,8 @@ import {
 import { parseOrderFormFieldsJson } from "@/lib/order-forms/schema";
 import { getWeekBounds } from "@/lib/date/week-bounds";
 import { resolveCalendarColor } from "@/lib/calendar/team-colors";
+import type { BusyBlock } from "@/lib/calendar/availability-conflicts";
+import { getBusyEventsForOrgRange } from "@/lib/db/busy-calendar";
 import { formatServiceAddressFields } from "@/lib/tech/bundle-display";
 import type { TeamMemberListItem } from "@/lib/mitarbeiter/types";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -1891,13 +1893,21 @@ export const listAvailabilityForRange = cache(async function listAvailabilityFor
   technicians: UserProfile[];
   appointments: WeekTaskItem[];
   absences: TechnicianAbsence[];
+  externalBusy: BusyBlock[];
 }> {
-  const [technicians, appointments, absences] = await Promise.all([
+  const orgId = await getCachedCurrentOrganizationId();
+  const [technicians, appointments, absences, busyRows] = await Promise.all([
     listAssignableProfiles(),
     listCalendarRangeTasks(rangeStartIso, rangeEndIso),
     listTechnicianAbsencesInRange(rangeStartIso, rangeEndIso),
+    orgId ? getBusyEventsForOrgRange(orgId, rangeStartIso, rangeEndIso) : Promise.resolve([]),
   ]);
-  return { technicians, appointments, absences };
+  const externalBusy: BusyBlock[] = busyRows.map((r) => ({
+    technicianId: r.technicianId,
+    startsAt: r.startsAt,
+    endsAt: r.endsAt,
+  }));
+  return { technicians, appointments, absences, externalBusy };
 });
 
 export const listAssignableProfiles = cache(async function listAssignableProfiles(

@@ -656,6 +656,16 @@ function AvailabilityHint({
               </li>
             );
           }
+          if (c.type === "external_busy") {
+            return (
+              <li key={`e-${i}`} className="flex flex-wrap items-center gap-1 break-words">
+                <span className="font-semibold">Privater Kalender</span>
+                <span>·</span>
+                <span>{fmtRange(c.busy.startsAt, c.busy.endsAt)}</span>
+                <span className="italic opacity-80">— belegt</span>
+              </li>
+            );
+          }
           const a = c.absence;
           return (
             <li key={`b-${a.id}-${i}`} className="flex flex-wrap items-center gap-1 break-words">
