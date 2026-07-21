@@ -123,11 +123,14 @@ function AppointmentCard({
   dimmed,
   onOpenProject,
   onProjectHover,
+  showDate = true,
 }: {
   group: WeekTaskProjectDayGroup;
   dimmed: boolean;
   onOpenProject: (projectId: string) => void;
   onProjectHover?: (projectId: string) => void;
+  /** Aus (Tages-/Wochentag-Überschrift steht das Datum schon fett darüber) — dann nur die Zeit zeigen. */
+  showDate?: boolean;
 }) {
   const task = group.primary;
   return (
@@ -147,7 +150,8 @@ function AppointmentCard({
       />
       <div className="min-w-0 flex-1 space-y-0.5">
         <p className="text-[10px] font-semibold uppercase leading-tight tracking-wide text-muted-foreground">
-          {formatDate(task.startsAt)} · {formatTime(task.startsAt)}
+          {showDate ? `${formatDate(task.startsAt)} · ` : ""}
+          {formatTime(task.startsAt)}
         </p>
         <p className="line-clamp-2 text-xs font-semibold leading-snug text-foreground">
           {task.projectTitle}
@@ -231,6 +235,8 @@ function WeekSection({
           dimmed={dimmed}
           onOpenProject={onOpenProject}
           onProjectHover={onProjectHover}
+          // Der Tag steht bereits als Überschrift über diesem Block (siehe unten).
+          showDate={false}
         />
       ))}
     </div>
@@ -738,6 +744,8 @@ export function AdminCalendar() {
                     dimmed={false}
                     onOpenProject={openProjectSheet}
                     onProjectHover={handleProjectHover}
+                    // Datum steht schon gross im Seitentitel («Dienstag, 21. Juli 2026»).
+                    showDate={false}
                   />
                 ))}
               </div>
@@ -759,6 +767,7 @@ export function AdminCalendar() {
                       dimmed={true}
                       onOpenProject={openProjectSheet}
                       onProjectHover={handleProjectHover}
+                      showDate={false}
                     />
                   ))}
                 </div>

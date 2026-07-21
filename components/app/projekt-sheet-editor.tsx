@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { Appointment, TechnicianReport, ProjectStatus, UserProfile } from "@/lib/domain/types";
 import {
@@ -34,6 +34,7 @@ import {
 import { isLikelyProjectImage } from "@/lib/storage/mime";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { FileInput } from "@/components/ui/file-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -845,6 +846,67 @@ function AppointmentRow({
   );
 }
 
+type SheetSection = { id: string; label: string };
+
+/**
+ * Sticky Sprungmarken-Leiste für die langen Sheet-Sektionen (Termine/Anhänge/
+ * Rapporte/Offerten/Rechnungen) — bei Projekten mit Fotos, mehreren Rapporten
+ * oder Offerten/Rechnungen wird das Sheet leicht 2–4 Bildschirmhöhen lang.
+ * Scroll-Spy per IntersectionObserver auf dem Sheet-eigenen Scroll-Container.
+ */
+function SheetSectionNav({ sections }: { sections: SheetSection[] }) {
+  const navRef = useRef<HTMLDivElement>(null);
+  const [activeId, setActiveId] = useState<string | null>(sections[0]?.id ?? null);
+  const sectionIds = sections.map((s) => s.id).join("|");
+
+  useEffect(() => {
+    if (sections.length === 0) return;
+    const root = navRef.current?.closest('[class*="overflow-y-auto"]') as HTMLElement | null;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) setActiveId(visible[0].target.id);
+      },
+      // Aktiv, sobald ein Abschnitt knapp unter der Nav-Leiste erscheint (oberste 30 %
+      // des restlichen Scroll-Bereichs) — klassischer Scroll-Spy-Zuschnitt.
+      { root, rootMargin: "-56px 0px -70% 0px", threshold: 0 },
+    );
+    for (const s of sections) {
+      const el = document.getElementById(s.id);
+      if (el) observer.observe(el);
+    }
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sectionIds ist die stabile Kurzform von sections
+  }, [sectionIds]);
+
+  if (sections.length === 0) return null;
+
+  return (
+    <div
+      ref={navRef}
+      className="sticky top-0 z-10 -mx-5 -mt-5 mb-1 flex gap-1.5 overflow-x-auto border-b border-border/70 bg-background/95 px-5 pt-4 pb-2.5 backdrop-blur-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
+      {sections.map((s) => (
+        <button
+          key={s.id}
+          type="button"
+          onClick={() => document.getElementById(s.id)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          className={cn(
+            "shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+            activeId === s.id
+              ? "border-foreground/25 bg-foreground/10 text-foreground"
+              : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
+          )}
+        >
+          {s.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function ProjektSheetEditor({
   projectId,
   open,
@@ -871,6 +933,8 @@ export function ProjektSheetEditor({
   const [editReport, setEditReport] = useState<TechnicianReport | null>(null);
   const { data: orderFormTemplates = [] } = useOrderFormTemplates(undefined, editReport != null);
   const [error, setError] = useState<string | null>(null);
+  // key-Remount statt input.value = "" — FileInput zeigt den Dateinamen selbst an.
+  const [attachmentInputKey, setAttachmentInputKey] = useState(0);
   const [fieldOverlay, setFieldOverlay] = useState<{
     label: string;
     value: string;
@@ -966,8 +1030,19 @@ export function ProjektSheetEditor({
     });
   };
 
+  const hasReports = !coreQuery.isDetailsLoading && core.reports.length > 0;
+
   return (
     <div className="flex flex-col gap-6 pr-1">
+      <SheetSectionNav
+        sections={[
+          ...(canEdit ? [{ id: "sheet-termine", label: "Termine" }] : []),
+          { id: "sheet-anhaenge", label: "Anhänge" },
+          ...(hasReports ? [{ id: "sheet-rapporte", label: `Rapporte (${core.reports.length})` }] : []),
+          { id: "sheet-offerten", label: "Offerten" },
+          { id: "sheet-rechnungen", label: "Rechnungen" },
+        ]}
+      />
       <StatusPipeline
         projectId={projectId}
         currentStatus={p.status}
@@ -1136,7 +1211,8 @@ export function ProjektSheetEditor({
 
       {canEdit ? (
         <section
-          className="border-t pt-4"
+          id="sheet-termine"
+          className="scroll-mt-16 border-t pt-4"
           onFocusCapture={() => setLoadTechnicians(true)}
         >
           <h3 className="mb-2 text-sm font-semibold">Termin planen</h3>
@@ -1166,7 +1242,7 @@ export function ProjektSheetEditor({
         </section>
       ) : null}
 
-      <section className="border-t pt-4">
+      <section id="sheet-anhaenge" className="scroll-mt-16 border-t pt-4">
         <h3 className="mb-2 text-sm font-semibold">Anhänge</h3>
         {coreQuery.isDetailsLoading ? (
           <div className="flex justify-center py-6" role="status" aria-live="polite">
@@ -1187,7 +1263,7 @@ export function ProjektSheetEditor({
             try {
               const result = await uploadAttachment.mutateAsync({ formData: fd, projectId });
               if (result.success) {
-                if (input) input.value = "";
+                setAttachmentInputKey((k) => k + 1);
               } else {
                 setError(result.error);
               }
@@ -1196,11 +1272,13 @@ export function ProjektSheetEditor({
             }
           }}
         >
-          <Input
+          <FileInput
+            key={attachmentInputKey}
             name="file"
-            type="file"
             accept="image/*,application/pdf"
-            className="min-h-11 w-full cursor-pointer text-sm sm:max-w-xs"
+            buttonLabel="Datei wählen"
+            placeholder="Keine Datei ausgewählt"
+            className="w-full sm:max-w-xs"
           />
           <Button
             type="submit"
@@ -1356,8 +1434,8 @@ export function ProjektSheetEditor({
         </section>
       ) : null}
 
-      {!coreQuery.isDetailsLoading && core.reports.length > 0 && (
-        <section className="border-t pt-4">
+      {hasReports && (
+        <section id="sheet-rapporte" className="scroll-mt-16 border-t pt-4">
           <h3 className="mb-3 text-sm font-semibold">
             Rapporte ({core.reports.length})
           </h3>
@@ -1384,23 +1462,27 @@ export function ProjektSheetEditor({
 
       <AuftragDocumentButton projectId={projectId} enabled={canEdit} />
 
-      <ProjektQuotesSection
-        projectId={projectId}
-        canEdit={canEdit}
-        defaultRecipientEmail={core.project.tenantEmail ?? core.project.managementEmail}
-        latestReport={
-          core.reports.length > 0
-            ? core.reports.reduce((a, b) => (a.createdAt >= b.createdAt ? a : b))
-            : null
-        }
-      />
+      <div id="sheet-offerten" className="scroll-mt-16">
+        <ProjektQuotesSection
+          projectId={projectId}
+          canEdit={canEdit}
+          defaultRecipientEmail={core.project.tenantEmail ?? core.project.managementEmail}
+          latestReport={
+            core.reports.length > 0
+              ? core.reports.reduce((a, b) => (a.createdAt >= b.createdAt ? a : b))
+              : null
+          }
+        />
+      </div>
 
-      <ProjektInvoicesSection
-        projectId={projectId}
-        canEdit={canEdit}
-        defaultRecipientEmail={core.project.tenantEmail ?? core.project.managementEmail}
-        projectStatus={core.project.status}
-      />
+      <div id="sheet-rechnungen" className="scroll-mt-16">
+        <ProjektInvoicesSection
+          projectId={projectId}
+          canEdit={canEdit}
+          defaultRecipientEmail={core.project.tenantEmail ?? core.project.managementEmail}
+          projectStatus={core.project.status}
+        />
+      </div>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       {editReport ? (

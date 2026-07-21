@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Stepper } from "@/components/ui/stepper";
+import { FileInput } from "@/components/ui/file-input";
 import type { CamtMatchResult } from "@/lib/camt/match";
 import type { InvoiceForPaymentMatching } from "@/lib/db/invoices";
 import {
@@ -71,6 +72,9 @@ function formatDateCh(iso: string): string {
 export function ZahlungenPageClient() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  // key-Remount statt fileInputRef.value = "" — FileInput zeigt den Dateinamen selbst an
+  // (lokaler State), das lässt sich nur über einen Neu-Mount zuverlässig zurücksetzen.
+  const [fileInputKey, setFileInputKey] = useState(0);
   const [confirmResult, setConfirmResult] = useState<{ appliedCount: number; failedCount: number } | null>(null);
   const preview = usePreviewPaymentImport();
   const confirm = useConfirmPaymentImport();
@@ -92,7 +96,7 @@ export function ZahlungenPageClient() {
     preview.reset();
     setConfirmResult(null);
     setSelectedFileName(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    setFileInputKey((k) => k + 1);
   };
 
   const handleFileCheck = async () => {
@@ -135,7 +139,7 @@ export function ZahlungenPageClient() {
       });
       setConfirmResult({ appliedCount: result.appliedCount, failedCount: result.failedCount });
       preview.reset();
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      setFileInputKey((k) => k + 1);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Bestätigen fehlgeschlagen.");
     }
@@ -162,11 +166,13 @@ export function ZahlungenPageClient() {
           </CardHeader>
           <CardContent className="space-y-3 px-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <input
+              <FileInput
+                key={fileInputKey}
                 ref={fileInputRef}
-                type="file"
                 accept=".xml,text/xml,application/xml"
-                className="h-9 flex-1 rounded-md border border-input bg-background px-2.5 text-sm file:mr-2.5 file:h-full file:rounded-md file:border-0 file:bg-muted file:px-2.5 file:text-xs file:font-medium"
+                buttonLabel="Datei wählen"
+                placeholder="Keine camt-Datei ausgewählt"
+                className="flex-1"
               />
               <Button type="button" disabled={preview.isPending} onClick={handleFileCheck}>
                 {preview.isPending ? (

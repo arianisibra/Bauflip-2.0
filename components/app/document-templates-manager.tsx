@@ -12,6 +12,7 @@ import {
 } from "@/lib/query/hooks";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { FileInput } from "@/components/ui/file-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SettingsRow } from "@/components/app/settings-row";
@@ -33,6 +34,7 @@ export function DocumentTemplatesManager() {
   const setDefault = useSetDefaultDocumentTemplate();
   const remove = useDeleteDocumentTemplate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [fileInputKey, setFileInputKey] = useState(0);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [uploadKind, setUploadKind] = useState<DocumentTemplateKind>("offerte");
@@ -55,7 +57,7 @@ export function DocumentTemplatesManager() {
       await upload.mutateAsync(fd);
       toast.success("Vorlage hochgeladen");
       setName("");
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      setFileInputKey((k) => k + 1);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Hochladen fehlgeschlagen.");
     }
@@ -199,11 +201,12 @@ export function DocumentTemplatesManager() {
             <p className="text-[11px] text-muted-foreground">
               Platzhalter der gewählten Art: {SUPPORTED_KINDS.find((k) => k.kind === uploadKind)?.hint}
             </p>
-            <input
+            <FileInput
+              key={fileInputKey}
               ref={fileInputRef}
-              type="file"
               accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-              className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm file:mr-2.5 file:h-full file:rounded-md file:border-0 file:bg-muted file:px-2.5 file:text-xs file:font-medium"
+              buttonLabel="Datei wählen"
+              placeholder="Keine .docx-Vorlage ausgewählt"
             />
             <div className="flex justify-end">
               <Button type="button" size="sm" disabled={upload.isPending} onClick={handleUpload}>
