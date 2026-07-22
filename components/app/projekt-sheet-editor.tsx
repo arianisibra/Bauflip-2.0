@@ -1223,7 +1223,13 @@ export function ProjektSheetEditor({
         }}
       >
         <div className="text-xs text-muted-foreground sm:col-span-2">
-          {p.referenceCode ? `Auftrag ${p.referenceCode}` : "Ohne Nummer"}
+          {p.referenceCode ? (
+            <>
+              Auftrag <span className="font-mono tracking-tight text-foreground">{p.referenceCode}</span>
+            </>
+          ) : (
+            "Ohne Nummer"
+          )}
         </div>
 
         <div className="space-y-1">

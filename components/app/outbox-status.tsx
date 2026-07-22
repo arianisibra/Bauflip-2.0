@@ -22,7 +22,7 @@ export function OutboxStatus() {
   const failed = items.filter((item) => item.status === "failed");
 
   return (
-    <div className="flex shrink-0 flex-col gap-1.5 bg-sky-500/10 px-4 py-1.5 text-xs text-sky-900 dark:bg-sky-500/15 dark:text-sky-200">
+    <div className="flex shrink-0 flex-col gap-1.5 bg-muted px-4 py-1.5 text-xs text-muted-foreground">
       {pending.length > 0 ? (
         <div className="flex items-center justify-center gap-1.5">
           <UploadCloud className="size-3.5 shrink-0" aria-hidden />

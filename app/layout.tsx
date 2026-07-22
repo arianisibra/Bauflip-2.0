@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   title: "Bauflip 2.0",
   description: "Bauflip 2.0 - Operatives System für Storen-, Rollladen- und Sonnenschutzservice",
   icons: {
-    icon: "/favicon/favicon.ico",
+    icon: "/favicon/favicon-96x96.png",
     apple: "/favicon/apple-touch-icon.png",
   },
   manifest: "/manifest.webmanifest",

@@ -181,7 +181,7 @@ const ProjectTableRow = memo(function ProjectTableRow({
   const pending = pendingId === p.id;
   return (
     <TableRow
-      className={`cursor-pointer${zebraEven ? " bg-sky-50/40 dark:bg-muted/25" : ""}`}
+      className={`cursor-pointer${zebraEven ? " bg-muted/40 dark:bg-muted/25" : ""}`}
       data-state={selectedId === p.id ? "selected" : undefined}
       onClick={() => onOpen(p)}
     >
@@ -856,7 +856,7 @@ export function ProjekteListClient({
                   </table>
                 </div>
               ) : (
-                <Table className="[&_tbody_tr:nth-child(even)]:bg-sky-50/40 dark:[&_tbody_tr:nth-child(even)]:bg-muted/25">
+                <Table className="[&_tbody_tr:nth-child(even)]:bg-muted/40 dark:[&_tbody_tr:nth-child(even)]:bg-muted/25">
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
                       <TableHead>Mieter / Kontakt</TableHead>

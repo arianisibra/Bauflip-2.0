@@ -706,39 +706,44 @@ export const projectStatusLabels: Record<ProjectStatus, string> = {
   garantiefall: "GARANTIEFALL",
 };
 
-/** Tailwind-Klassen pro Status — jeder Schritt eigene Farbe (Liste, Sheet, Monteur). */
+/**
+ * Tailwind-Klassen pro Status — jeder Schritt eigene Farbe (Liste, Sheet, Monteur).
+ * Werkzeug-Präzision-Stil: schmaler Rahmen in der Statusfarbe, sehr leichte Füllung,
+ * Text in der Farbe (nicht fast-schwarz) — wie eine technische Stempel-Markierung.
+ * Scharfe Kanten kommen aus der Badge-Basis (`rounded-sm`).
+ */
 export const projectStatusBadgeClassNames: Record<ProjectStatus, string> = {
-  offen: "border-zinc-500/45 bg-zinc-500/35 text-zinc-950 dark:border-zinc-400/50 dark:bg-zinc-500/40 dark:text-zinc-50",
+  offen: "border-zinc-500/60 bg-zinc-500/10 text-zinc-700 dark:border-zinc-400/50 dark:bg-zinc-400/15 dark:text-zinc-200",
   abgemacht:
-    "border-lime-500/60 bg-lime-500/40 text-lime-950 dark:border-lime-400/60 dark:bg-lime-500/50 dark:text-lime-50",
+    "border-lime-600/60 bg-lime-500/10 text-lime-800 dark:border-lime-400/50 dark:bg-lime-400/15 dark:text-lime-200",
   einsatz_offen:
-    "border-blue-500/55 bg-blue-500/35 text-blue-950 dark:border-blue-400/55 dark:bg-blue-500/45 dark:text-blue-50",
+    "border-blue-600/60 bg-blue-500/10 text-blue-800 dark:border-blue-400/50 dark:bg-blue-400/15 dark:text-blue-200",
   offerte_senden:
-    "border-indigo-500/55 bg-indigo-500/35 text-indigo-950 dark:border-indigo-400/55 dark:bg-indigo-500/45 dark:text-indigo-50",
+    "border-indigo-600/60 bg-indigo-500/10 text-indigo-800 dark:border-indigo-400/50 dark:bg-indigo-400/15 dark:text-indigo-200",
   offerte_gesendet:
-    "border-violet-500/55 bg-violet-500/35 text-violet-950 dark:border-violet-400/55 dark:bg-violet-500/45 dark:text-violet-50",
+    "border-violet-600/60 bg-violet-500/10 text-violet-800 dark:border-violet-400/50 dark:bg-violet-400/15 dark:text-violet-200",
   offerte_genehmigt:
-    "border-purple-500/55 bg-purple-500/35 text-purple-950 dark:border-purple-400/55 dark:bg-purple-500/45 dark:text-purple-50",
+    "border-purple-600/60 bg-purple-500/10 text-purple-800 dark:border-purple-400/50 dark:bg-purple-400/15 dark:text-purple-200",
   bestellen:
-    "border-fuchsia-500/55 bg-fuchsia-500/35 text-fuchsia-950 dark:border-fuchsia-400/55 dark:bg-fuchsia-500/45 dark:text-fuchsia-50",
+    "border-fuchsia-600/60 bg-fuchsia-500/10 text-fuchsia-800 dark:border-fuchsia-400/50 dark:bg-fuchsia-400/15 dark:text-fuchsia-200",
   bestellt:
-    "border-pink-500/55 bg-pink-500/35 text-pink-950 dark:border-pink-400/55 dark:bg-pink-500/45 dark:text-pink-50",
+    "border-pink-600/60 bg-pink-500/10 text-pink-800 dark:border-pink-400/50 dark:bg-pink-400/15 dark:text-pink-200",
   montagebereit:
-    "border-emerald-500/55 bg-emerald-500/35 text-emerald-950 dark:border-emerald-400/55 dark:bg-emerald-500/45 dark:text-emerald-50",
+    "border-emerald-600/60 bg-emerald-500/10 text-emerald-800 dark:border-emerald-400/50 dark:bg-emerald-400/15 dark:text-emerald-200",
   abholbereit:
-    "border-teal-500/55 bg-teal-500/35 text-teal-950 dark:border-teal-400/55 dark:bg-teal-500/45 dark:text-teal-50",
+    "border-teal-600/60 bg-teal-500/10 text-teal-800 dark:border-teal-400/50 dark:bg-teal-400/15 dark:text-teal-200",
   werkstatt:
-    "border-orange-500/55 bg-orange-500/35 text-orange-950 dark:border-orange-400/55 dark:bg-orange-500/45 dark:text-orange-50",
+    "border-orange-600/60 bg-orange-500/10 text-orange-800 dark:border-orange-400/50 dark:bg-orange-400/15 dark:text-orange-200",
   abklaeren:
-    "border-amber-500/55 bg-amber-500/35 text-amber-950 dark:border-amber-400/55 dark:bg-amber-500/45 dark:text-amber-50",
+    "border-amber-600/60 bg-amber-500/10 text-amber-800 dark:border-amber-400/50 dark:bg-amber-400/15 dark:text-amber-200",
   abrechnen:
-    "border-yellow-500/60 bg-yellow-500/45 text-yellow-950 dark:border-yellow-300/60 dark:bg-yellow-500/55 dark:text-yellow-50",
+    "border-yellow-600/70 bg-yellow-500/10 text-yellow-800 dark:border-yellow-400/55 dark:bg-yellow-400/15 dark:text-yellow-200",
   subunternehmer:
-    "border-stone-500/55 bg-stone-500/35 text-stone-950 dark:border-stone-400/55 dark:bg-stone-500/45 dark:text-stone-50",
+    "border-stone-500/60 bg-stone-500/10 text-stone-700 dark:border-stone-400/50 dark:bg-stone-400/15 dark:text-stone-200",
   abgeschlossen:
-    "border-green-600/60 bg-green-600/40 text-green-950 dark:border-green-400/60 dark:bg-green-600/50 dark:text-green-50",
+    "border-green-700/55 bg-green-600/10 text-green-800 dark:border-green-400/50 dark:bg-green-400/15 dark:text-green-200",
   garantiefall:
-    "border-rose-600/60 bg-rose-600/45 text-rose-950 dark:border-rose-400/60 dark:bg-rose-600/55 dark:text-rose-50",
+    "border-rose-600/65 bg-rose-600/10 text-rose-800 dark:border-rose-400/55 dark:bg-rose-400/15 dark:text-rose-200",
 };
 
 export function projectStatusBadgeClassName(status: string): string {

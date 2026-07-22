@@ -62,7 +62,7 @@ export function BauflipLoading({
 export type BauflipLoadingButtonLabelProps = {
   children: ReactNode;
   /**
-   * `onPrimary`: Primär-Button (blau), helles Logo + heller Spinner.
+   * `onPrimary`: Primär-Button (Orange, Tinte-Schrift) — dunkles Logo + Tinte-Spinner.
    * `onSurface`: Outline/Sekundär/heller Hintergrund, dunkles Logo + Primary-Spinner.
    */
   variant?: "onPrimary" | "onSurface";
@@ -72,7 +72,7 @@ export type BauflipLoadingButtonLabelProps = {
  * Inhalt für Submit-Buttons während eine Aktion läuft (Logo + Spinner + Text).
  */
 export function BauflipLoadingButtonLabel({ children, variant = "onPrimary" }: BauflipLoadingButtonLabelProps) {
-  const logo = variant === "onPrimary" ? LOGO_ON_DARK : LOGO_ON_LIGHT;
+  const logo = LOGO_ON_LIGHT;
   const spinnerClass = variant === "onPrimary" ? "text-primary-foreground" : "text-primary";
 
   return (

@@ -38,7 +38,7 @@ const AGE_BUCKET_BAR_COLORS: Record<ProjectAgeBucket, string> = {
 const MONTH_LABEL_FORMATTER = new Intl.DateTimeFormat("de-CH", { month: "short", timeZone: "UTC" });
 
 /** Neutraler Mess-Balken (Menge/Betrag ohne Status-Bedeutung): Umsatz, Auslastung. */
-const MEASURE_BAR_COLOR = "bg-indigo-500";
+const MEASURE_BAR_COLOR = "bg-primary";
 
 /**
  * Der Projekt-Status ist kein Kategorial-, sondern ein ORDINAL-Feld (fester

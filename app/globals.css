@@ -60,7 +60,9 @@
   --popover: #ffffff;
   --popover-foreground: #1c1b18;
   --primary: #e2571c;
-  --primary-foreground: #fbf3ec;
+  /* Tinte-Schwarz statt Creme auf Orange: 4.60:1 (WCAG-AA) statt 3.41:1 —
+     und passt zum Konzept (schwarze Schrift auf orangem Massband). */
+  --primary-foreground: #1c1b18;
   --secondary: #eae6da;
   --secondary-foreground: #1c1b18;
   --muted: #f0ede3;
@@ -95,7 +97,7 @@
   --popover: #211f19;
   --popover-foreground: #f0ede3;
   --primary: #e2571c;
-  --primary-foreground: #fbf3ec;
+  --primary-foreground: #1c1b18;
   --secondary: #2a2822;
   --secondary-foreground: #f0ede3;
   --muted: #262420;
@@ -127,12 +129,27 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Ziffern spaltengenau ausrichten (Beträge, Daten, Zeiten) — Teil der
+       «Werkzeug-Präzision»-Sprache. IBM Plex Sans hat echte Tabellenziffern. */
+    font-variant-numeric: tabular-nums;
   }
   html {
     @apply font-sans;
     scrollbar-gutter: stable;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Bewegung reduzieren, wenn das System es verlangt (Barrierefreiheit). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
