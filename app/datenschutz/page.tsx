@@ -65,14 +65,14 @@ export default function DatenschutzPage() {
             <ul className="list-disc space-y-1 pl-5">
               <li>
                 <strong>Supabase</strong> — Datenbank- und Authentifizierungs-Infrastruktur
-                (Hosting-Region: [einsetzen])
+                (Hosting-Region: Zürich)
               </li>
               <li>
                 <strong>Anthropic</strong> — Texterkennung aus hochgeladenen Auftrags-PDFs (nur
                 bei aktiver PDF-Import-Funktion, keine dauerhafte Speicherung durch Anthropic)
               </li>
               <li>
-                <strong>[SMTP-Anbieter einsetzen]</strong> — Mailversand für Offerten,
+                <strong>Hostpoint</strong> — Mailversand für Offerten,
                 Terminbestätigungen und Rechnungen
               </li>
               <li>
@@ -93,9 +93,10 @@ export default function DatenschutzPage() {
             <h2 className="mb-1.5 font-semibold">5. Aufbewahrungsdauer</h2>
             <p>
               Personendaten werden so lange aufbewahrt, wie es für die vertraglich vereinbarte
-              Nutzung sowie für die Erfüllung gesetzlicher Aufbewahrungspflichten (insb.
-              handelsrechtliche Aufbewahrungsfristen für Rechnungen) erforderlich ist. [Konkrete
-              Fristen/Löschkonzept einsetzen.]
+              Nutzung erforderlich ist. Nach Beendigung des Vertrags mit einer Organisation
+              werden deren Daten innerhalb eines Monats gelöscht, soweit keine gesetzliche
+              Aufbewahrungspflicht entgegensteht (insb. handelsrechtliche Aufbewahrungsfristen für
+              Rechnungen, die davon unberührt weitergelten).
             </p>
           </section>
 
@@ -115,7 +116,7 @@ export default function DatenschutzPage() {
               Nach DSG haben Sie das Recht auf Auskunft, Berichtigung, Löschung und Widerspruch
               bezüglich Ihrer Personendaten. Anfragen zu Kundendaten einer Organisation richten
               Sie bitte direkt an die jeweilige Organisation; Anfragen zu Ihrem eigenen
-              Nutzer:innen-Konto an [datenschutz@ihre-domain.ch].
+              Nutzer:innen-Konto an info@velixar.ch.
             </p>
           </section>
 
