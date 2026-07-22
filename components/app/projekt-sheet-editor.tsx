@@ -25,6 +25,7 @@ import {
   useReportSignature,
   useReassignAppointmentTechnician,
   useSendAppointmentConfirmation,
+  useUpdateAppointmentTime,
   useSetGarantiefall,
   useUpdateProjectStatus,
   useUpdateStammdaten,
@@ -76,6 +77,20 @@ function formatAppointmentRange(startsAtIso: string, endsAtIso: string): string 
     timeZone: "Europe/Zurich",
   });
   return `${day} ${startTime} – ${endTime}`;
+}
+
+function isoToLocalDateTimeInput(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function localInputToIso(local: string): string | null {
+  if (!local) return null;
+  const t = Date.parse(local);
+  if (!Number.isFinite(t)) return null;
+  return new Date(t).toISOString();
 }
 
 function buildReportText(r: TechnicianReport): string {
@@ -342,8 +357,8 @@ const STATUS_PIPELINE: Partial<Record<ProjectStatus, PipelineAction[]>> = {
   offerte_gesendet:  [{ label: "OFFERTE GENEHMIGT", nextStatus: "offerte_genehmigt" }],
   offerte_genehmigt: [{ label: "MATERIAL BESTELLEN", nextStatus: "bestellen" }, { label: "DIREKT ABRECHNEN", nextStatus: "abrechnen" }],
   bestellen:         [{ label: "BESTELLT", nextStatus: "bestellt" }],
-  bestellt:          [{ label: "MATERIAL EINGETROFFEN", nextStatus: "montagebereit" }],
-  abholbereit:       [{ label: "IN WERKSTATT", nextStatus: "werkstatt" }],
+  bestellt:          [{ label: "MATERIAL EINGETROFFEN", nextStatus: "montagebereit" }, { label: "ABHOLBEREIT", nextStatus: "abholbereit" }],
+  abholbereit:       [{ label: "ABGEHOLT", nextStatus: "montagebereit" }],
   werkstatt:         [{ label: "WERKSTATT FERTIG", nextStatus: "montagebereit" }],
   abklaeren:         [{ label: "OFFERTE SENDEN", nextStatus: "offerte_senden" }, { label: "MATERIAL BESTELLEN", nextStatus: "bestellen" }],
   subunternehmer:    [{ label: "ABRECHNEN", nextStatus: "abrechnen" }],
@@ -357,6 +372,7 @@ const STATUS_ACTION_TONE: Partial<Record<ProjectStatus, string>> = {
   offerte_genehmigt: "border-purple-500/35 bg-purple-500/10 text-purple-700 dark:text-purple-200",
   bestellen: "border-fuchsia-500/35 bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-200",
   bestellt: "border-pink-500/35 bg-pink-500/10 text-pink-700 dark:text-pink-200",
+  abholbereit: "border-teal-500/35 bg-teal-500/10 text-teal-700 dark:text-teal-200",
   montagebereit: "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200",
   werkstatt: "border-orange-500/35 bg-orange-500/10 text-orange-700 dark:text-orange-200",
   abrechnen: "border-yellow-500/40 bg-yellow-500/15 text-yellow-800 dark:text-yellow-200",
@@ -586,6 +602,7 @@ function AppointmentRow({
   reassignAppointment,
   deleteAppointment,
   confirmationRecipientEmail,
+  updateAppointmentTime,
 }: {
   appointment: Appointment;
   appointmentIndex: number;
@@ -598,6 +615,7 @@ function AppointmentRow({
   deleteAppointment: ReturnType<typeof useDeleteAppointment>;
   /** Mieter-/Verwaltungs-Mail; null = kein Bestätigungs-Button (keine Adresse oder kein SMTP). */
   confirmationRecipientEmail: string | null;
+  updateAppointmentTime: ReturnType<typeof useUpdateAppointmentTime>;
 }) {
   const sendConfirmation = useSendAppointmentConfirmation();
   const assignedName =
@@ -638,8 +656,20 @@ function AppointmentRow({
     setPreviewId2(a.assignedTechnicianId2 ?? "");
   }
 
-  const slotStart = Date.parse(a.startsAt);
-  const slotEnd = Date.parse(a.endsAt);
+  // Termin umplanen (statt löschen + neu anlegen) — Zeitfelder editierbar, Konfliktprüfung
+  // unten nutzt während der Bearbeitung den Entwurf statt der gespeicherten Zeit.
+  const [editingTime, setEditingTime] = useState(false);
+  const [editStartLocal, setEditStartLocal] = useState(() => isoToLocalDateTimeInput(a.startsAt));
+  const [editEndLocal, setEditEndLocal] = useState(() => isoToLocalDateTimeInput(a.endsAt));
+  const [timeError, setTimeError] = useState<string | null>(null);
+  const updatingThisTime =
+    updateAppointmentTime.isPending && updateAppointmentTime.variables?.appointmentId === a.id;
+
+  const draftStartIso = editingTime ? localInputToIso(editStartLocal) : null;
+  const draftEndIso = editingTime ? localInputToIso(editEndLocal) : null;
+
+  const slotStart = Date.parse(draftStartIso ?? a.startsAt);
+  const slotEnd = Date.parse(draftEndIso ?? a.endsAt);
   const range = useMemo(
     () => (Number.isFinite(slotStart) && Number.isFinite(slotEnd) ? { slotStart, slotEnd } : null),
     [slotStart, slotEnd],
@@ -661,7 +691,120 @@ function AppointmentRow({
     <li className="rounded-lg border border-border bg-muted/20 px-3 py-2">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 space-y-1">
-          <p className="text-xs font-semibold text-foreground">{formatAppointmentRange(a.startsAt, a.endsAt)}</p>
+          {editingTime ? (
+            <div className="space-y-1.5 rounded-md border border-border bg-background p-2">
+              <div className="grid gap-1.5 sm:grid-cols-2">
+                <div className="space-y-0.5">
+                  <Label htmlFor={`appt-start-${a.id}`} className="text-[10px] text-muted-foreground">
+                    Beginn
+                  </Label>
+                  <Input
+                    id={`appt-start-${a.id}`}
+                    type="datetime-local"
+                    step={60}
+                    className="h-8 text-xs"
+                    value={editStartLocal}
+                    disabled={updatingThisTime}
+                    onChange={(e) => {
+                      setEditStartLocal(e.target.value);
+                      setTimeError(null);
+                    }}
+                  />
+                </div>
+                <div className="space-y-0.5">
+                  <Label htmlFor={`appt-end-${a.id}`} className="text-[10px] text-muted-foreground">
+                    Ende
+                  </Label>
+                  <Input
+                    id={`appt-end-${a.id}`}
+                    type="datetime-local"
+                    step={60}
+                    className="h-8 text-xs"
+                    value={editEndLocal}
+                    disabled={updatingThisTime}
+                    onChange={(e) => {
+                      setEditEndLocal(e.target.value);
+                      setTimeError(null);
+                    }}
+                  />
+                </div>
+              </div>
+              {timeError ? <p className="text-[11px] text-destructive">{timeError}</p> : null}
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-7 text-xs"
+                  disabled={updatingThisTime}
+                  onClick={() => {
+                    if (!draftStartIso || !draftEndIso) {
+                      setTimeError("Bitte Beginn und Ende ausfüllen.");
+                      return;
+                    }
+                    if (Date.parse(draftEndIso) <= Date.parse(draftStartIso)) {
+                      setTimeError("Endzeit muss nach Beginn liegen.");
+                      return;
+                    }
+                    if (hasFerienConflict(conflicts1) || hasFerienConflict(conflicts2)) {
+                      setTimeError("Zugewiesene Person ist in diesem Zeitraum in den Ferien.");
+                      return;
+                    }
+                    updateAppointmentTime.mutate(
+                      { appointmentId: a.id, projectId, startsAt: draftStartIso, endsAt: draftEndIso },
+                      {
+                        onSuccess: () => {
+                          toast.success("Termin verschoben");
+                          setEditingTime(false);
+                        },
+                        onError: (err) =>
+                          setTimeError(err instanceof Error ? err.message : "Speichern fehlgeschlagen."),
+                      },
+                    );
+                  }}
+                >
+                  {updatingThisTime ? (
+                    <Loader2 className="size-3.5 animate-spin" aria-label="Wird gespeichert" />
+                  ) : (
+                    "Speichern"
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs"
+                  disabled={updatingThisTime}
+                  onClick={() => {
+                    setEditingTime(false);
+                    setTimeError(null);
+                    setEditStartLocal(isoToLocalDateTimeInput(a.startsAt));
+                    setEditEndLocal(isoToLocalDateTimeInput(a.endsAt));
+                  }}
+                >
+                  Abbrechen
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+              {formatAppointmentRange(a.startsAt, a.endsAt)}
+              {pending ? null : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditStartLocal(isoToLocalDateTimeInput(a.startsAt));
+                    setEditEndLocal(isoToLocalDateTimeInput(a.endsAt));
+                    setTimeError(null);
+                    setEditingTime(true);
+                  }}
+                  className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  aria-label="Zeit ändern"
+                >
+                  <Pencil className="size-3" aria-hidden />
+                </button>
+              )}
+            </p>
+          )}
           <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-muted-foreground">
             <span>{a.kind === "besichtigung" ? "Besichtigung" : "Ausführung"}</span>
             <span className="rounded-md bg-primary/10 px-1.5 py-0 text-[10px] font-medium text-primary">
@@ -924,6 +1067,7 @@ export function ProjektSheetEditor({
   const updateStammdaten = useUpdateStammdaten();
   const deleteAppointment = useDeleteAppointment();
   const reassignAppointment = useReassignAppointmentTechnician();
+  const updateAppointmentTime = useUpdateAppointmentTime();
   const deleteAttachment = useDeleteAttachment();
   const deleteReport = useDeleteReport();
   const updateReport = useUpdateTechnicianReport();
@@ -1011,6 +1155,7 @@ export function ProjektSheetEditor({
     updateStammdaten.isPending ||
     deleteAppointment.isPending ||
     reassignAppointment.isPending ||
+    updateAppointmentTime.isPending ||
     deleteAttachment.isPending ||
     deleteReport.isPending ||
     updateReport.isPending ||
@@ -1236,6 +1381,7 @@ export function ProjektSheetEditor({
                     ? (p.tenantEmail ?? p.managementEmail)
                     : null
                 }
+                updateAppointmentTime={updateAppointmentTime}
               />
             ))}
           </ul>

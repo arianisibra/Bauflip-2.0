@@ -77,6 +77,23 @@ export const reassignAppointmentTechnicianSchema = z
     path: ["assignedTechnicianId"],
   });
 
+/** Zeitfenster eines bestehenden Termins ändern (Umplanen ohne Löschen+Neuanlegen). */
+export const updateAppointmentTimeSchema = z
+  .object({
+    appointmentId: z.string().min(1),
+    projectId: z.string().min(1),
+    startsAt: z.string().min(1),
+    endsAt: z.string().min(1),
+  })
+  .refine(
+    (v) => {
+      const s = Date.parse(v.startsAt);
+      const e = Date.parse(v.endsAt);
+      return Number.isFinite(s) && Number.isFinite(e) && e > s;
+    },
+    { message: "Endzeit muss nach Beginn liegen.", path: ["endsAt"] },
+  );
+
 export const technicianReportSchema = z.object({
   projectId: z.string().min(1),
   outcome: z.enum(["schaden_behoben", "schaden_aufgenommen"]),

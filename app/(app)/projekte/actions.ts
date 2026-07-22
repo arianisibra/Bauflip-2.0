@@ -13,6 +13,7 @@ import {
   deleteProject,
   deleteAppointment,
   reassignAppointmentTechnician,
+  updateAppointmentTime,
   deleteTechnicianReport,
   getReportSignature,
   getOfficeProjectListItemById,
@@ -42,6 +43,7 @@ import {
   appointmentSchema,
   garantiefallSchema,
   reassignAppointmentTechnicianSchema,
+  updateAppointmentTimeSchema,
   technicianReportUpdateSchema,
 } from "@/lib/validations/forms";
 import { validateOrderFormValues } from "@/lib/order-forms/validate-submission";
@@ -271,6 +273,29 @@ export async function reassignAppointmentTechnicianAction(
       await sendAppointmentInvites("REQUEST", before, [v.assignedTechnicianId]);
     }
   }
+  const core = await coreOrThrow(v.projectId);
+  if (session.organizationId) {
+    await publish(session.organizationId, {
+      type: "appointment.changed",
+      projectId: v.projectId,
+      originTabId: tabId,
+    });
+  }
+  return { core };
+}
+
+/** Zeitfenster eines bestehenden Termins ändern — Umplanen ohne Löschen+Neuanlegen. */
+export async function updateAppointmentTimeAction(
+  input: unknown,
+  tabId?: string,
+): Promise<{ core: ProjectCore }> {
+  const session = await requireOfficeSession();
+  const parsed = updateAppointmentTimeSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Ungültige Eingabe.");
+  }
+  const v = parsed.data;
+  await updateAppointmentTime(v.appointmentId, v.projectId, v.startsAt, v.endsAt);
   const core = await coreOrThrow(v.projectId);
   if (session.organizationId) {
     await publish(session.organizationId, {

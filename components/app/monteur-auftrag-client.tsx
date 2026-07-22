@@ -185,11 +185,11 @@ const RAPPORT_NEXT_STEP_OPTIONS_ERSTBESUCH: NextStepOption[] = [
     toneClassName: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200",
   },
   {
-    value: "abholbereit",
+    value: "werkstatt",
     label: "WERKSTATT NÖTIG",
     description: "Gerät muss in die Werkstatt",
     icon: Truck,
-    toneClassName: "border-teal-500/40 bg-teal-500/10 text-teal-700 dark:text-teal-200",
+    toneClassName: "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-200",
   },
 ];
 
@@ -209,11 +209,11 @@ const RAPPORT_NEXT_STEP_OPTIONS_MONTAGE: NextStepOption[] = [
     toneClassName: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200",
   },
   {
-    value: "abholbereit",
+    value: "werkstatt",
     label: "WERKSTATT NÖTIG",
     description: "Gerät muss in die Werkstatt",
     icon: Truck,
-    toneClassName: "border-teal-500/40 bg-teal-500/10 text-teal-700 dark:text-teal-200",
+    toneClassName: "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-200",
   },
 ];
 
@@ -230,7 +230,7 @@ const STATUS_CONFIG: Record<string, { description: string }> = {
   bestellen: { description: "Büro bestellt Material" },
   bestellt: { description: "Material wurde bestellt — warte auf Lieferung" },
   montagebereit: { description: "Material eingetroffen — Montage ausführen" },
-  abholbereit: { description: "Gerät bereit zur Abholung für Werkstatt" },
+  abholbereit: { description: "Material beim Lieferanten abholbereit" },
   werkstatt: { description: "Gerät in Werkstatt — Reparatur / Umbau" },
   abklaeren: { description: "Weitere Abklärungen ausstehend" },
   abrechnen: { description: "Arbeit abgeschlossen — Büro stellt Rechnung" },
