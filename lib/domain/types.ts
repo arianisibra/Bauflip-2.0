@@ -63,7 +63,6 @@ export const projectStatusesToAbgemachtOnAppointmentBooked = [
   "montagebereit",
   "einsatz_offen",
   "bestellt",
-  "abholbereit",
   "werkstatt",
   "garantiefall",
 ] as const satisfies readonly ProjectStatus[];
@@ -94,7 +93,7 @@ export const RAPPORT_NEXT_STEPS_AUFGENOMMEN = [
   "offerte_senden",
   "bestellen",
   "montagebereit",
-  "abholbereit",
+  "werkstatt",       // Werkstatt nötig
 ] as const satisfies readonly ProjectStatus[];
 export type RapportNextStepAufgenommen = (typeof RAPPORT_NEXT_STEPS_AUFGENOMMEN)[number];
 
@@ -102,7 +101,7 @@ export type RapportNextStepAufgenommen = (typeof RAPPORT_NEXT_STEPS_AUFGENOMMEN)
 export const RAPPORT_NEXT_STEPS_MONTAGE = [
   "einsatz_offen",   // Weiterer Termin nötig
   "montagebereit",   // Bereit für nächsten Montageeinsatz
-  "abholbereit",     // Werkstatt nötig
+  "werkstatt",       // Werkstatt nötig
 ] as const satisfies readonly ProjectStatus[];
 export type RapportNextStepMontage = (typeof RAPPORT_NEXT_STEPS_MONTAGE)[number];
 
