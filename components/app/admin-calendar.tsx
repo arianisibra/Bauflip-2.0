@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { projectStatusBadgeClassName, projectStatusLabels, taskAssignedTechnicianIds } from "@/lib/domain/types";
+import { taskAssignedTechnicianIds } from "@/lib/domain/types";
+import { resolveStageBadgeClass, resolveStageLabel } from "@/lib/domain/stage-visuals";
+import { useWorkflowStages } from "@/components/app/workflow-stages-provider";
 import {
   groupWeekTasksByProjectDay,
   swissDayKeyFromTaskStart,
@@ -134,6 +136,7 @@ function AppointmentCard({
   showDate?: boolean;
 }) {
   const task = group.primary;
+  const workflowStages = useWorkflowStages();
   return (
     <button
       type="button"
@@ -162,10 +165,10 @@ function AppointmentCard({
             variant="outline"
             className={cn(
               "max-w-full truncate px-1 py-px text-[9px] font-semibold leading-tight",
-              projectStatusBadgeClassName(task.projectStatus),
+              resolveStageBadgeClass(workflowStages, task.projectStatus),
             )}
           >
-            {projectStatusLabels[task.projectStatus] ?? task.projectStatus}
+            {resolveStageLabel(workflowStages, task.projectStatus)}
           </Badge>
           {[
             { name: task.technicianName, color: task.calendarColor },

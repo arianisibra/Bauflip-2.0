@@ -16,7 +16,9 @@ import type {
 import { isSinglePositionOrderFormTemplate } from "@/lib/order-forms/template-utils";
 import { getFilledOrderFormFields } from "@/lib/order-forms/filled-fields";
 import { isMonteurMontageContext } from "@/lib/tech/monteur-context";
-import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
+import { projectStatusLabels } from "@/lib/domain/types";
+import { resolveStageBadgeClass, resolveStageLabel } from "@/lib/domain/stage-visuals";
+import { useWorkflowStages } from "@/components/app/workflow-stages-provider";
 import { cn } from "@/lib/utils";
 import { telHref } from "@/lib/phone";
 import { formatServiceAddress, managementLabel, tenantLabel } from "@/lib/tech/bundle-display";
@@ -240,13 +242,14 @@ const STATUS_CONFIG: Record<string, { description: string }> = {
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const label = projectStatusLabels[status as keyof typeof projectStatusLabels] ?? status;
+  const stages = useWorkflowStages();
+  const label = resolveStageLabel(stages, status);
   const cfg = STATUS_CONFIG[status];
-  if (!cfg && !(status in projectStatusLabels)) {
+  if (!cfg && !(status in projectStatusLabels) && !stages.some((s) => s.key === status)) {
     return <Badge variant="outline" className="text-[11px]">{status}</Badge>;
   }
   return (
-    <Badge variant="outline" className={cn("gap-1 text-[11px]", projectStatusBadgeClassName(status))}>
+    <Badge variant="outline" className={cn("gap-1 text-[11px]", resolveStageBadgeClass(stages, status))}>
       {status === "abgeschlossen" ? <CheckCircle2 className="size-3" /> : null}
       {label}
     </Badge>
@@ -411,6 +414,7 @@ function MonteurPriorReportsSection({
 }
 
 function StatusContextBanner({ status }: { status: string }) {
+  const stages = useWorkflowStages();
   const cfg = STATUS_CONFIG[status];
   if (!cfg?.description) return null;
   return (
@@ -418,7 +422,7 @@ function StatusContextBanner({ status }: { status: string }) {
       <Wrench className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
       <div>
         <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Stand: {projectStatusLabels[status as keyof typeof projectStatusLabels] ?? status}
+          Stand: {resolveStageLabel(stages, status)}
         </p>
         <p className="mt-0.5 text-xs text-foreground">{cfg.description}</p>
       </div>

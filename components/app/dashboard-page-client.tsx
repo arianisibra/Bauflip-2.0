@@ -9,13 +9,14 @@ import { BauflipLoading } from "@/components/ui/bauflip-loading";
 import { useDashboardData } from "@/lib/query/hooks";
 import { cn } from "@/lib/utils";
 import {
-  projectStatusLabels,
   projectStatuses,
   quoteStatusBadgeClassNames,
   quoteStatusLabels,
   quoteStatuses,
   type ProjectStatus,
 } from "@/lib/domain/types";
+import { resolveStageLabel } from "@/lib/domain/stage-visuals";
+import { useWorkflowStages } from "@/components/app/workflow-stages-provider";
 import type { ProjectAgeBucket } from "@/lib/db/dashboard";
 
 const chf = new Intl.NumberFormat("de-CH", { style: "currency", currency: "CHF", maximumFractionDigits: 0 });
@@ -129,6 +130,7 @@ function KpiCard({ label, value, hint }: { label: string; value: string; hint?: 
 
 export function DashboardPageClient() {
   const { data, isLoading, isFetching, refetch } = useDashboardData();
+  const workflowStages = useWorkflowStages();
 
   if (isLoading || !data) {
     return (
@@ -208,7 +210,7 @@ export function DashboardPageClient() {
                 return (
                   <Bar
                     key={status}
-                    label={projectStatusLabels[status]}
+                    label={resolveStageLabel(workflowStages, status)}
                     value={count}
                     max={maxStatusCount}
                     valueLabel={String(count)}
@@ -222,7 +224,7 @@ export function DashboardPageClient() {
               return (
                 <Bar
                   key={status}
-                  label={projectStatusLabels[status]}
+                  label={resolveStageLabel(workflowStages, status)}
                   value={count}
                   max={maxStatusCount}
                   valueLabel={String(count)}

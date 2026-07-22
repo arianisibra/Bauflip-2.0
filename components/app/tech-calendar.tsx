@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import type { WeekTaskItem } from "@/lib/domain/types";
-import { projectStatusBadgeClassName, projectStatusLabels, taskAssignedTechnicianIds } from "@/lib/domain/types";
+import { projectStatusLabels, taskAssignedTechnicianIds } from "@/lib/domain/types";
+import { resolveStageBadgeClass, resolveStageLabel } from "@/lib/domain/stage-visuals";
+import { useWorkflowStages } from "@/components/app/workflow-stages-provider";
 import { groupWeekTasksByProjectDay } from "@/lib/tech/group-week-tasks-by-project-day";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -87,6 +89,7 @@ export function TechCalendar({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const workflowStages = useWorkflowStages();
   const todayKey = useMemo(() => todayKeySwiss(), []);
 
   const urlState = useMemo(
@@ -526,10 +529,10 @@ export function TechCalendar({
                               variant="outline"
                               className={cn(
                                 "max-w-full truncate px-1.5 py-px text-[9px] font-semibold leading-tight",
-                                projectStatusBadgeClassName(task.projectStatus),
+                                resolveStageBadgeClass(workflowStages, task.projectStatus),
                               )}
                             >
-                              {projectStatusLabels[task.projectStatus] ?? task.projectStatus}
+                              {resolveStageLabel(workflowStages, task.projectStatus)}
                             </Badge>
                           </div>
                           {task.serviceAddressShort ? (

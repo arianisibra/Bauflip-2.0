@@ -8,6 +8,8 @@ import { AuthenticatedRealtime } from "@/components/app/authenticated-realtime";
 import { SessionProfileProvider } from "@/components/app/session-profile-provider";
 import { OfflineBanner } from "@/components/app/offline-banner";
 import { OutboxStatus } from "@/components/app/outbox-status";
+import { getOrgWorkflowStages } from "@/lib/db/workflow";
+import { WorkflowStagesProvider } from "@/components/app/workflow-stages-provider";
 
 export default async function TechLayout({ children }: { children: React.ReactNode }) {
   const session = await getLayoutSession();
@@ -18,10 +20,14 @@ export default async function TechLayout({ children }: { children: React.ReactNo
     redirect("/");
   }
 
-  const profile = await getCachedSessionProfile(session);
+  const [profile, workflowStages] = await Promise.all([
+    getCachedSessionProfile(session),
+    getOrgWorkflowStages(session.organizationId),
+  ]);
 
   return (
     <SessionProfileProvider value={profile}>
+    <WorkflowStagesProvider value={workflowStages}>
       <>
       <script
         dangerouslySetInnerHTML={{
@@ -44,6 +50,7 @@ export default async function TechLayout({ children }: { children: React.ReactNo
         <TechBottomNav />
       </div>
       </>
+    </WorkflowStagesProvider>
     </SessionProfileProvider>
   );
 }

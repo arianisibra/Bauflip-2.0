@@ -6,10 +6,10 @@ import type { Appointment, TechnicianReport, ProjectStatus, UserProfile } from "
 import {
   PROJECT_STATUS_ABGESCHLOSSEN_REQUIRES_ABRECHNEN_MESSAGE,
   canSetProjectStatus,
-  projectStatusBadgeClassName,
-  projectStatusLabels,
   projectStatuses,
 } from "@/lib/domain/types";
+import { resolveStageBadgeClass, resolveStageLabel } from "@/lib/domain/stage-visuals";
+import { useWorkflowStages } from "@/components/app/workflow-stages-provider";
 import { computeConflicts, conflictStatus, hasFerienConflict, type Conflict } from "@/lib/calendar/availability-conflicts";
 import { cn } from "@/lib/utils";
 import { telHref } from "@/lib/phone";
@@ -394,8 +394,9 @@ function StatusPipeline({
 }) {
   const updateStatus = useUpdateProjectStatus();
   const setGarantiefall = useSetGarantiefall();
+  const workflowStages = useWorkflowStages();
   const actions = STATUS_PIPELINE[currentStatus] ?? [];
-  const label = projectStatusLabels[currentStatus] ?? currentStatus;
+  const label = resolveStageLabel(workflowStages, currentStatus);
   const [garantiefallOpen, setGarantiefallOpen] = useState(false);
   const [garantiefallNote, setGarantiefallNote] = useState("");
 
@@ -445,7 +446,7 @@ function StatusPipeline({
     <div className="rounded-lg border border-border bg-muted/20 px-3 py-2.5">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Status:</span>
-        <Badge variant="outline" className={cn("text-xs font-medium", projectStatusBadgeClassName(currentStatus))}>
+        <Badge variant="outline" className={cn("text-xs font-medium", resolveStageBadgeClass(workflowStages, currentStatus))}>
           {label}
         </Badge>
         {canEdit && actions.length > 0 && (
@@ -545,7 +546,7 @@ function StatusPipeline({
               disabled={pending}
             >
               {projectStatuses.map((status) => {
-                const label = projectStatusLabels[status];
+                const label = resolveStageLabel(workflowStages, status);
                 const n = statusCounts?.get(status);
                 const allowed = canSetProjectStatus(currentStatus, status);
                 return (

@@ -8,7 +8,6 @@ import { ChevronDown, Info, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { OfficeProjectListItem, ProjectStatus } from "@/lib/domain/types";
 import {
-  projectStatusLabels,
   projectStatuses,
   projectStatusesOfficeListFilter,
 } from "@/lib/domain/types";
@@ -47,6 +46,8 @@ import { BauflipLoading } from "@/components/ui/bauflip-loading";
 import { Sheet } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/app/status-badge";
+import { useWorkflowStages } from "@/components/app/workflow-stages-provider";
+import { resolveStageLabel, resolveStageBadgeClass } from "@/lib/domain/stage-visuals";
 import {
   Table,
   TableBody,
@@ -179,6 +180,7 @@ const ProjectTableRow = memo(function ProjectTableRow({
   zebraEven,
 }: RowProps) {
   const pending = pendingId === p.id;
+  const stages = useWorkflowStages();
   return (
     <TableRow
       className={`cursor-pointer${zebraEven ? " bg-muted/40 dark:bg-muted/25" : ""}`}
@@ -203,7 +205,11 @@ const ProjectTableRow = memo(function ProjectTableRow({
         )}
       </TableCell>
       <TableCell>
-        <StatusBadge status={p.status} />
+        <StatusBadge
+          status={p.status}
+          label={resolveStageLabel(stages, p.status)}
+          className={resolveStageBadgeClass(stages, p.status)}
+        />
       </TableCell>
       <TableCell className="whitespace-nowrap text-right">
         {isArchivedView ? (
@@ -448,6 +454,7 @@ export function ProjekteListClient({
     return m;
   }, [statusCountsSnapshot]);
 
+  const workflowStages = useWorkflowStages();
   const hasSearch = urlSearchQuery.length > 0;
   const searchDraftTooShort =
     normalizeSearchQuery(q).length > 0 && normalizeSearchQuery(q).length < PROJEKTE_SEARCH_MIN_CHARS;
@@ -635,7 +642,7 @@ export function ProjekteListClient({
             </option>
             {projectStatusesOfficeListFilter.map((s) => (
               <option key={s} value={s} className="font-bold">
-                {projectStatusLabels[s]} ({statusCountsSnapshot?.byStatus[s] ?? 0})
+                {resolveStageLabel(workflowStages, s)} ({statusCountsSnapshot?.byStatus[s] ?? 0})
               </option>
             ))}
             <option value="archived" className="font-bold">
@@ -695,7 +702,7 @@ export function ProjekteListClient({
               {hasNoArchived
                 ? "Keine archivierten Projekte"
                 : hasNoMatchesForStatus
-                ? `Keine Projekte mit Status „${projectStatusLabels[statusFilter]}“`
+                ? `Keine Projekte mit Status „${resolveStageLabel(workflowStages, statusFilter)}“`
                 : hasNoActiveProjects
                   ? "Keine aktiven Projekte"
                 : hasSearch
@@ -753,7 +760,11 @@ export function ProjekteListClient({
                   >
                     <p className="text-base font-semibold leading-tight">{p.title}</p>
                     <div>
-                      <StatusBadge status={p.status} />
+                      <StatusBadge
+                        status={p.status}
+                        label={resolveStageLabel(workflowStages, p.status)}
+                        className={resolveStageBadgeClass(workflowStages, p.status)}
+                      />
                     </div>
                     {p.nextAppointmentStartsAt ? (
                       <p className="text-xs text-muted-foreground">

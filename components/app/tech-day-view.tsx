@@ -14,7 +14,9 @@ import {
 import type { WeekTaskItem } from "@/lib/domain/types";
 import type { WeekTaskProjectDayGroup } from "@/lib/tech/group-week-tasks-by-project-day";
 import { groupWeekTasksByProjectDay } from "@/lib/tech/group-week-tasks-by-project-day";
-import { projectStatusBadgeClassName, projectStatusLabels, taskAssignedTechnicianIds } from "@/lib/domain/types";
+import { taskAssignedTechnicianIds } from "@/lib/domain/types";
+import { resolveStageBadgeClass, resolveStageLabel } from "@/lib/domain/stage-visuals";
+import { useWorkflowStages } from "@/components/app/workflow-stages-provider";
 import { useWeekTasks } from "@/lib/query/hooks";
 import { BauflipLoadingInline } from "@/components/ui/bauflip-loading";
 import { queryKeys } from "@/lib/query/keys";
@@ -42,10 +44,10 @@ function formatTimeRange(isoStart: string, isoEnd: string): string {
 }
 
 function ProjectStatusBadge({ status }: { status: string }) {
-  const label = projectStatusLabels[status as keyof typeof projectStatusLabels] ?? status;
+  const stages = useWorkflowStages();
   return (
-    <Badge variant="outline" className={cn("px-1.5 py-0.5 text-[10px] font-medium", projectStatusBadgeClassName(status))}>
-      {label}
+    <Badge variant="outline" className={cn("px-1.5 py-0.5 text-[10px] font-medium", resolveStageBadgeClass(stages, status))}>
+      {resolveStageLabel(stages, status)}
     </Badge>
   );
 }
