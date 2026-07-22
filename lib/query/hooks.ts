@@ -137,6 +137,7 @@ import {
 } from "@/app/(app)/zeiterfassung/actions";
 import {
   createIntakeAction,
+  extractIntakePdfAction,
   deleteAttachmentAction,
   updateAttachmentNotesAction,
   uploadProjectReportFileAction,
@@ -192,7 +193,12 @@ import { notifyOtherTabs } from "./cross-tab-broadcast";
 import { queryKeys } from "./keys";
 import { availabilityRangeKeyBounds } from "./availability-range-bounds";
 import { getTabId } from "./tab-id";
-import { appointmentSchema, reassignAppointmentTechnicianSchema, technicianReportSchema } from "@/lib/validations/forms";
+import {
+  appointmentSchema,
+  reassignAppointmentTechnicianSchema,
+  technicianReportSchema,
+  type IntakePdfExtraction,
+} from "@/lib/validations/forms";
 import type { z } from "zod";
 
 type AppointmentInput = z.infer<typeof appointmentSchema>;
@@ -1336,6 +1342,17 @@ export function useCreateIntake() {
       invalidateProjectListCaches(qc);
       notifyOtherTabs({ type: "project.core_changed", projectId });
     },
+  });
+}
+
+/** PDF → erkannte Intake-Felder (Vorbefüllung «+ Neue Anfrage»). Legt kein Projekt an. */
+export function useExtractIntakePdf() {
+  return useMutation<
+    { success: true; fields: IntakePdfExtraction } | { success: false; error: string },
+    Error,
+    FormData
+  >({
+    mutationFn: (formData) => extractIntakePdfAction(formData),
   });
 }
 

@@ -10,6 +10,23 @@ import {
   technicianAbsenceKinds,
 } from "@/lib/domain/types";
 
+/** Von der KI aus einem Auftrags-PDF extrahierte Felder — alles optional, da nie garantiert erkennbar. */
+export const intakePdfExtractionSchema = z.object({
+  tenantName: z.string().optional(),
+  tenantPhone: z.string().optional(),
+  tenantEmail: z.string().optional(),
+  managementName: z.string().optional(),
+  managementPhone: z.string().optional(),
+  managementEmail: z.string().optional(),
+  costCeilingText: z.string().optional(),
+  serviceStreet: z.string().optional(),
+  servicePostalCode: z.string().optional(),
+  serviceCity: z.string().optional(),
+  /** Kurze Zusammenfassung des Auftrags/Problems aus der PDF — Vorbefüllung für „Wichtige Informationen". */
+  hintsAndNotes: z.string().optional(),
+});
+export type IntakePdfExtraction = z.infer<typeof intakePdfExtractionSchema>;
+
 export const intakeSchema = z.object({
   title: z.string(),
   source: z.enum(["whatsapp", "telefon", "email"]),

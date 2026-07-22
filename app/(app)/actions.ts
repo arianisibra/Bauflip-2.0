@@ -16,7 +16,8 @@ import {
   type ProjectCore,
 } from "@/lib/db/repository";
 import { setProjectContact } from "@/lib/db/contacts";
-import { intakeSchema } from "@/lib/validations/forms";
+import { intakeSchema, type IntakePdfExtraction } from "@/lib/validations/forms";
+import { extractIntakeFromPdf } from "@/lib/intake/extract-intake-pdf";
 import {
   inferStoredProjectFileMime,
   PROJECT_FILE_MAX_BYTES,
@@ -159,6 +160,41 @@ export async function createIntakeAction(formData: FormData, tabId?: string) {
     });
   }
   return { projectId: project.id };
+}
+
+/**
+ * Liest eine Auftrags-PDF (aus E-Mail-Anhang oder manuell heruntergeladen, z. B. aus
+ * einem Verwaltungsportal) und liefert erkannte Intake-Felder als Vorbefüllung für
+ * «+ Neue Anfrage» zurück. Legt nie selbst ein Projekt an — das Büro prüft und bestätigt.
+ */
+export async function extractIntakePdfAction(
+  formData: FormData,
+): Promise<{ success: true; fields: IntakePdfExtraction } | { success: false; error: string }> {
+  try {
+    await requireOrgLayoutSession();
+  } catch {
+    return { success: false, error: "Nicht angemeldet." };
+  }
+
+  const file = formData.get("file") as File | null;
+  if (!file || typeof file !== "object" || file.size === 0) {
+    return { success: false, error: "Bitte eine PDF wählen." };
+  }
+  if ((file.type || "").toLowerCase() !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+    return { success: false, error: "Nur PDF-Dateien werden unterstützt." };
+  }
+  if (file.size > PROJECT_FILE_MAX_BYTES) {
+    return { success: false, error: "Datei darf maximal 15 MB gross sein." };
+  }
+
+  try {
+    const arrayBuf = await file.arrayBuffer();
+    const base64 = Buffer.from(arrayBuf).toString("base64");
+    const fields = await extractIntakeFromPdf(base64);
+    return { success: true, fields };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "PDF-Import fehlgeschlagen." };
+  }
 }
 
 export async function uploadProjectReportFileAction(
