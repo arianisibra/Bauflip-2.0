@@ -2358,6 +2358,58 @@ export async function reassignAppointmentTechnician(
   if (!data) throw new Error("Termin nicht gefunden.");
 }
 
+/** Zeitfenster eines bestehenden Termins ändern — Umplanen ohne Löschen+Neuanlegen. */
+export async function updateAppointmentTime(
+  appointmentId: string,
+  projectId: string,
+  startsAt: string,
+  endsAt: string,
+): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    const appt = mockAppointments.find((a) => a.id === appointmentId && a.projectId === projectId);
+    if (!appt) throw new Error("Termin nicht gefunden.");
+    await assertNoFerienConflict(appt.assignedTechnicianId, startsAt, endsAt);
+    await assertNoFerienConflict(appt.assignedTechnicianId2, startsAt, endsAt);
+    appt.startsAt = startsAt;
+    appt.endsAt = endsAt;
+    const mockP = mockProjects.find((p) => p.id === projectId);
+    if (mockP) {
+      await promoteToAbgemachtIfUpcomingAppointment(
+        projectId,
+        mockP.status,
+        appointmentEndsInFutureOrNow(endsAt),
+      );
+    }
+    return;
+  }
+
+  const { data: apptRow, error: apptError } = await supabase
+    .from("appointments")
+    .select("assigned_technician_id, assigned_technician_id_2")
+    .eq("id", appointmentId)
+    .eq("project_id", projectId)
+    .maybeSingle();
+  if (apptError) throw new Error(apptError.message);
+  if (!apptRow) throw new Error("Termin nicht gefunden.");
+  await assertNoFerienConflict(apptRow.assigned_technician_id as string | null, startsAt, endsAt);
+  await assertNoFerienConflict(apptRow.assigned_technician_id_2 as string | null, startsAt, endsAt);
+
+  const { data, error } = await supabase
+    .from("appointments")
+    .update({ starts_at: startsAt, ends_at: endsAt })
+    .eq("id", appointmentId)
+    .eq("project_id", projectId)
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Termin nicht gefunden.");
+
+  const { data: statusRow } = await supabase.from("projects").select("status").eq("id", projectId).maybeSingle();
+  const currentStatus = (statusRow?.status as ProjectStatus | undefined) ?? "offen";
+  await promoteToAbgemachtIfUpcomingAppointment(projectId, currentStatus, appointmentEndsInFutureOrNow(endsAt));
+}
+
 export async function deleteAppointment(appointmentId: string): Promise<void> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {

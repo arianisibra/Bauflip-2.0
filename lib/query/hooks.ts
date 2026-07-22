@@ -26,6 +26,7 @@ import {
   addAppointmentAction,
   deleteAppointmentAction,
   reassignAppointmentTechnicianAction,
+  updateAppointmentTimeAction,
   archiveProjectAction,
   restoreProjectAction,
   deleteProjectPermanentlyAction,
@@ -108,7 +109,12 @@ import { notifyOtherTabs } from "./cross-tab-broadcast";
 import { queryKeys } from "./keys";
 import { availabilityRangeKeyBounds } from "./availability-range-bounds";
 import { getTabId } from "./tab-id";
-import { appointmentSchema, reassignAppointmentTechnicianSchema, technicianReportSchema } from "@/lib/validations/forms";
+import {
+  appointmentSchema,
+  reassignAppointmentTechnicianSchema,
+  updateAppointmentTimeSchema,
+  technicianReportSchema,
+} from "@/lib/validations/forms";
 import type { z } from "zod";
 
 type AppointmentInput = z.infer<typeof appointmentSchema>;
@@ -580,6 +586,23 @@ export function useReassignAppointmentTechnician() {
         appointmentWindow: context?.appointmentWindow,
         refetchType: "all",
       });
+      notifyOtherTabs({ type: "appointment.changed", projectId: core.project.id });
+    },
+  });
+}
+
+type UpdateAppointmentTimeInput = z.infer<typeof updateAppointmentTimeSchema>;
+
+/** Zeitfenster eines bestehenden Termins ändern — Umplanen ohne Löschen+Neuanlegen. */
+export function useUpdateAppointmentTime() {
+  const qc = useQueryClient();
+  return useMutation<{ core: ProjectCore }, Error, UpdateAppointmentTimeInput>({
+    mutationFn: (input) => updateAppointmentTimeAction(input, getTabId()),
+    onSuccess: ({ core }) => {
+      primeCore(qc, core.project.id, core);
+      // Termin kann auf einen anderen Tag wandern (altes UND neues Fenster betroffen) —
+      // wie beim Löschen breit invalidieren statt nur ein Fenster.
+      invalidateProjectAdjacencies(qc, core.project.id, { refetchType: "all" });
       notifyOtherTabs({ type: "appointment.changed", projectId: core.project.id });
     },
   });
