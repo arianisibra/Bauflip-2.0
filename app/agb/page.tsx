@@ -30,7 +30,7 @@ export default function AgbPage() {
             <p>
               Diese Nutzungsbedingungen gelten für die Nutzung der Software Bauflip
               («Dienstleistung») durch registrierte Organisationen («Kunde») und deren
-              Mitarbeitende. Anbieterin ist [Firmenname], [Adresse], Schweiz.
+              Mitarbeitende. Anbieterin ist Velixar, Lindenstrasse 12, 8604 Volketswil, Schweiz.
             </p>
           </section>
 
@@ -65,8 +65,8 @@ export default function AgbPage() {
             <p>
               Wir bemühen uns um eine hohe Verfügbarkeit der Dienstleistung, garantieren jedoch
               keine unterbrechungsfreie Nutzung. Wartungsarbeiten werden nach Möglichkeit
-              vorangekündigt. [Konkrete Verfügbarkeits-/SLA-Zusagen einsetzen, falls vertraglich
-              vereinbart.]
+              vorangekündigt. Es bestehen keine vertraglich zugesicherten Verfügbarkeits- oder
+              Reaktionszeiten (kein SLA).
             </p>
           </section>
 
@@ -75,8 +75,7 @@ export default function AgbPage() {
             <p>
               Die Haftung für leichte Fahrlässigkeit wird, soweit gesetzlich zulässig,
               ausgeschlossen. Für Datenverlust haften wir nicht, soweit der Kunde zumutbare
-              eigene Sicherungsmassnahmen unterlassen hat. [Haftungsumfang final mit Rechtsberatung
-              abstimmen.]
+              eigene Sicherungsmassnahmen unterlassen hat.
             </p>
           </section>
 
@@ -94,8 +93,10 @@ export default function AgbPage() {
           <section>
             <h2 className="mb-1.5 font-semibold">7. Laufzeit und Kündigung</h2>
             <p>
-              Laufzeit und Kündigungsfristen richten sich nach dem individuellen Vertrag mit dem
-              Kunden. [Standardlaufzeit/-kündigungsfrist einsetzen, falls einheitlich geregelt.]
+              Der Vertrag läuft auf unbestimmte Zeit bei einer Mindestlaufzeit von einem Jahr ab
+              Vertragsbeginn. Er verlängert sich danach automatisch um jeweils ein weiteres Jahr,
+              sofern er nicht mit einer Frist von drei Monaten auf das Ende der laufenden
+              Vertragsperiode gekündigt wird.
             </p>
           </section>
 
@@ -110,7 +111,7 @@ export default function AgbPage() {
           <section>
             <h2 className="mb-1.5 font-semibold">9. Anwendbares Recht und Gerichtsstand</h2>
             <p>
-              Es gilt schweizerisches Recht. Gerichtsstand ist [Sitz der Anbieterin einsetzen].
+              Es gilt schweizerisches Recht. Gerichtsstand ist Zürich.
             </p>
           </section>
         </div>

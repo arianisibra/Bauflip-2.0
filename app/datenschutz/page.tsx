@@ -28,7 +28,7 @@ export default function DatenschutzPage() {
           <section>
             <h2 className="mb-1.5 font-semibold">1. Verantwortliche Stelle</h2>
             <p>
-              [Firmenname], [Strasse Nr.], [PLZ Ort], Schweiz
+              Velixar, Lindenstrasse 12, 8604 Volketswil, Schweiz
               <br />
               E-Mail für Datenschutzanfragen: [datenschutz@ihre-domain.ch]
               <br />
