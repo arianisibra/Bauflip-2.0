@@ -21,7 +21,7 @@ export default function AgbPage() {
           Allgemeine Nutzungsbedingungen
         </h1>
         <p className="mb-8 text-sm text-muted-foreground">
-          Entwurf — Stand 22.07.2026. Bitte vor Veröffentlichung juristisch prüfen lassen.
+          Stand: 22.07.2026
         </p>
 
         <div className="space-y-6 text-sm leading-relaxed text-foreground">

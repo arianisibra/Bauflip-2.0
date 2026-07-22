@@ -21,7 +21,7 @@ export default function DatenschutzPage() {
           Datenschutzerklärung
         </h1>
         <p className="mb-8 text-sm text-muted-foreground">
-          Entwurf — Stand 22.07.2026. Bitte vor Veröffentlichung juristisch prüfen lassen.
+          Stand: 22.07.2026
         </p>
 
         <div className="space-y-6 text-sm leading-relaxed text-foreground">
@@ -30,9 +30,9 @@ export default function DatenschutzPage() {
             <p>
               Velixar, Lindenstrasse 12, 8604 Volketswil, Schweiz
               <br />
-              E-Mail für Datenschutzanfragen: [datenschutz@ihre-domain.ch]
+              E-Mail für Datenschutzanfragen: info@velixar.ch
               <br />
-              UID: [CHE-XXX.XXX.XXX]
+              UID: noch nicht vorhanden (Firma noch nicht im Handelsregister eingetragen)
             </p>
           </section>
 
