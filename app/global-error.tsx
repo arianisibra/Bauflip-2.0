@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
+
 /**
  * Fängt Fehler im Root-`layout` (Font, `<html>`/`<body>`), die `app/error.tsx` nicht erreichen.
  * In Production erscheint sonst nur die generische Next-Meldung ohne Digest in der UI.
@@ -11,6 +14,10 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    Sentry.captureException(error);
+  }, [error]);
+
   const digest = error.digest;
   const isDev = process.env.NODE_ENV === "development";
 

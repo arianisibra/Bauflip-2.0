@@ -62,8 +62,15 @@ export default function AnmeldungPage() {
               </Button>
 
               <p className="mt-4 text-center text-xs leading-relaxed text-slate-400">
-                Indem Sie auf Weiter klicken, stimmen Sie unseren Nutzungsbedingungen und unserer
-                Datenschutzerklärung zu.
+                Indem Sie auf Weiter klicken, stimmen Sie unseren{" "}
+                <Link href="/agb" className="underline underline-offset-2 hover:text-slate-600">
+                  Nutzungsbedingungen
+                </Link>{" "}
+                und unserer{" "}
+                <Link href="/datenschutz" className="underline underline-offset-2 hover:text-slate-600">
+                  Datenschutzerklärung
+                </Link>{" "}
+                zu.
               </p>
             </CardContent>
           </Card>

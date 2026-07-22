@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -13,6 +14,7 @@ export default function ErrorPage({
 }) {
   useEffect(() => {
     console.error(error);
+    Sentry.captureException(error);
   }, [error]);
 
   const isDev = process.env.NODE_ENV === "development";
