@@ -25,10 +25,15 @@ import {
   RAPPORT_NEXT_STEP_BEHOBEN,
   appointmentEndsInFutureOrNow,
   assertAllowedProjectStatusTransition,
-  nextProjectStatusAfterAppointmentBooked,
-  projectStatusAfterLastAppointmentDeleted,
   projectStatuses,
+  projectStatusesToAbgemachtOnAppointmentBooked,
 } from "@/lib/domain/types";
+import { getOrgWorkflowStages } from "@/lib/db/workflow";
+import {
+  resolveNextStatusAfterAppointmentBooked,
+  resolveRapportBehobenTarget,
+  resolveStatusAfterLastAppointmentDeleted,
+} from "@/lib/domain/workflow-automation";
 import { parseOrderFormFieldsJson } from "@/lib/order-forms/schema";
 import { getWeekBounds } from "@/lib/date/week-bounds";
 import { resolveCalendarColor } from "@/lib/calendar/team-colors";
@@ -2234,8 +2239,9 @@ async function promoteToAbgemachtIfUpcomingAppointment(
   appointmentIsUpcoming?: boolean,
 ): Promise<Project | null> {
   let hasUpcoming = appointmentIsUpcoming;
+  let stages: Awaited<ReturnType<typeof getOrgWorkflowStages>> = [];
+  const supabase = await createSupabaseServerClient();
   if (hasUpcoming === undefined) {
-    const supabase = await createSupabaseServerClient();
     if (!supabase) {
       const now = new Date().toISOString();
       hasUpcoming = mockAppointments.some(
@@ -2245,14 +2251,28 @@ async function promoteToAbgemachtIfUpcomingAppointment(
       hasUpcoming = await projectHasUpcomingAppointment(supabase, projectId);
     }
   }
-  const nextStatus = nextProjectStatusAfterAppointmentBooked(currentStatus, {
-    appointmentIsUpcoming: hasUpcoming,
-  });
+  if (supabase) {
+    const { data: orgRow } = await supabase
+      .from("projects")
+      .select("organization_id")
+      .eq("id", projectId)
+      .maybeSingle();
+    const organizationId = orgRow?.organization_id as string | undefined;
+    if (organizationId) {
+      stages = await getOrgWorkflowStages(organizationId);
+    }
+  }
+  const nextStatus = resolveNextStatusAfterAppointmentBooked(
+    stages,
+    currentStatus,
+    hasUpcoming ?? false,
+    projectStatusesToAbgemachtOnAppointmentBooked,
+  );
   if (nextStatus === null || nextStatus === currentStatus) {
     return null;
   }
   return updateProject(projectId, {
-    status: nextStatus,
+    status: nextStatus as ProjectStatus,
     statusUpdateSource: "appointment_automation",
     statusRevertOnAppointmentClear: currentStatus,
   });
@@ -2466,13 +2486,14 @@ export async function deleteAppointment(appointmentId: string): Promise<void> {
       const now = new Date().toISOString();
       const hasUpcoming = mockAppointments.some((a) => a.projectId === projectId && a.endsAt >= now);
       if (!hasUpcoming) {
-        const revert = projectStatusAfterLastAppointmentDeleted(
+        const revert = resolveStatusAfterLastAppointmentDeleted(
+          [],
           mockP.status,
           mockP.statusRevertOnAppointmentClear,
         );
         const canRevert = mockP.statusUpdateSource === "appointment_automation";
         if (revert !== null && canRevert) {
-          mockP.status = revert;
+          mockP.status = revert as ProjectStatus;
           mockP.statusRevertOnAppointmentClear = null;
           mockP.statusUpdateSource = "appointment_automation";
           mockP.updatedAt = new Date().toISOString();
@@ -2506,7 +2527,7 @@ export async function deleteAppointment(appointmentId: string): Promise<void> {
   if ((count ?? 0) === 0) {
     const { data: statusRow } = await supabase
       .from("projects")
-      .select("status, status_updated_source, status_revert_on_appointment_clear")
+      .select("status, status_updated_source, status_revert_on_appointment_clear, organization_id")
       .eq("id", projectId)
       .maybeSingle();
     const currentStatus = (statusRow?.status as ProjectStatus | undefined) ?? "offen";
@@ -2516,11 +2537,13 @@ export async function deleteAppointment(appointmentId: string): Promise<void> {
       rawRevert != null && projectStatuses.includes(rawRevert as ProjectStatus)
         ? (rawRevert as ProjectStatus)
         : null;
-    const revert = projectStatusAfterLastAppointmentDeleted(currentStatus, revertStatus);
+    const organizationId = statusRow?.organization_id as string | undefined;
+    const stages = organizationId ? await getOrgWorkflowStages(organizationId) : [];
+    const revert = resolveStatusAfterLastAppointmentDeleted(stages, currentStatus, revertStatus);
     const canRevert = statusUpdatedSource === "appointment_automation";
     if (revert !== null && revert !== currentStatus && canRevert) {
       await updateProject(projectId, {
-        status: revert,
+        status: revert as ProjectStatus,
         statusUpdateSource: "appointment_automation",
         statusRevertOnAppointmentClear: null,
       });
@@ -2601,6 +2624,7 @@ export async function addTechnicianReport(
     orderFormSubmissions?: { templateId: string; valuesJson: Record<string, string> }[];
     /** Vom Monteur/Admin gewählter nächster Schritt (nur bei outcome=schaden_aufgenommen) */
     nextStatus?: RapportNextStep;
+    organizationId?: string | null;
   },
 ): Promise<TechnicianReport> {
   const supabase = await createSupabaseServerClient();
@@ -2675,7 +2699,8 @@ export async function addTechnicianReport(
 
   let status: ProjectStatus;
   if (input.outcome === "schaden_behoben") {
-    status = RAPPORT_NEXT_STEP_BEHOBEN; // "abrechnen"
+    const stages = options?.organizationId ? await getOrgWorkflowStages(options.organizationId) : [];
+    status = resolveRapportBehobenTarget(stages, RAPPORT_NEXT_STEP_BEHOBEN) as ProjectStatus;
   } else if (options?.nextStatus) {
     status = options.nextStatus;
   } else {

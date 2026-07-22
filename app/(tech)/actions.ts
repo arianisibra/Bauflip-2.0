@@ -79,6 +79,7 @@ export async function submitTechnicianReportAction(
         createdByProfileId: session.userId,
         orderFormSubmissions,
         nextStatus: v.nextStatus,
+        organizationId,
       },
     );
   } catch (dbErr) {
