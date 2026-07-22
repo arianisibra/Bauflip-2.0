@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Poppins } from "next/font/google";
 import { Toaster } from "sonner";
 import { WebVitalsReporter } from "@/components/observability/web-vitals-reporter";
+import { ServiceWorkerRegister } from "@/components/app/service-worker-register";
 import { QueryProvider } from "@/lib/query/provider";
 import { THEME_INIT_SCRIPT } from "@/lib/theme/theme-store";
 import "./globals.css";
@@ -43,6 +44,7 @@ export default function RootLayout({
       >
         {/* Setzt data-theme vor dem ersten Paint (Hell/Dunkel/System) — verhindert Flackern. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <ServiceWorkerRegister />
         <QueryProvider>
           {children}
           <WebVitalsReporter />
