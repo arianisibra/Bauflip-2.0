@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Poppins } from "next/font/google";
+import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { WebVitalsReporter } from "@/components/observability/web-vitals-reporter";
 import { ServiceWorkerRegister } from "@/components/app/service-worker-register";
@@ -7,11 +7,18 @@ import { QueryProvider } from "@/lib/query/provider";
 import { THEME_INIT_SCRIPT } from "@/lib/theme/theme-store";
 import "./globals.css";
 
-const poppins = Poppins({
+const ibmPlexSans = IBM_Plex_Sans({
   subsets: ["latin"],
-  weight: ["400", "600"],
+  weight: ["400", "500", "600"],
   display: "swap",
   adjustFontFallback: true,
+});
+
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  display: "swap",
+  variable: "--font-plex-mono",
 });
 
 export const metadata: Metadata = {
@@ -25,7 +32,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0f172a",
+  themeColor: "#1c1b18",
   viewportFit: "cover",
   // Reduziert Scroll-/Zoom-Zwang, wenn die Tastatur den sichtbaren Bereich verkleinert (v. a. Android Chrome).
   interactiveWidget: "resizes-content",
@@ -39,7 +46,7 @@ export default function RootLayout({
   return (
     <html lang="de-CH" className="h-full antialiased" suppressHydrationWarning>
       <body
-        className={`${poppins.className} min-h-full flex flex-col`}
+        className={`${ibmPlexSans.className} ${ibmPlexMono.variable} min-h-full flex flex-col`}
         suppressHydrationWarning
       >
         {/* Setzt data-theme vor dem ersten Paint (Hell/Dunkel/System) — verhindert Flackern. */}

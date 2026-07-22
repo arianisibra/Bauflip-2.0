@@ -57,8 +57,8 @@ export function SidebarNav({ items, mobile = false, onNavigate }: SidebarNavProp
   return (
     <aside
       className={cn(
-        "flex h-full flex-col bg-gradient-to-b from-sky-950 to-slate-950 text-slate-100",
-        mobile ? "w-full px-3 py-4" : "w-72 shrink-0 border-r px-4 py-5",
+        "flex h-full flex-col bg-sidebar text-sidebar-foreground",
+        mobile ? "w-full px-3 py-4" : "w-72 shrink-0 border-r border-sidebar-border px-4 py-5",
       )}
     >
       <div className={cn("flex items-center gap-3 px-2", mobile ? "mb-5" : "mb-8")}>
@@ -79,7 +79,7 @@ export function SidebarNav({ items, mobile = false, onNavigate }: SidebarNavProp
           if (list.length === 0) return null;
           return (
             <div key={section} className="flex flex-col gap-2">
-              <p className="px-2 text-xs font-semibold tracking-[0.14em] uppercase text-slate-400">
+              <p className="px-2 text-xs font-semibold tracking-[0.14em] uppercase text-sidebar-foreground/50">
                 {sectionTitle[section]}
               </p>
               {list.map((item) => {
@@ -93,11 +93,11 @@ export function SidebarNav({ items, mobile = false, onNavigate }: SidebarNavProp
                     target={item.href.startsWith("http") ? "_blank" : undefined}
                     rel={item.href.startsWith("http") ? "noopener noreferrer" : undefined}
                     className={cn(
-                      "flex items-center gap-3 rounded-xl px-3 text-sm transition-colors",
+                      "flex items-center gap-3 rounded-sm px-3 text-sm transition-colors",
                       mobile ? "min-h-11 py-2.5" : "py-2",
                       isActive
-                        ? "bg-cyan-400/20 text-cyan-100"
-                        : "text-slate-200 hover:bg-slate-800/80 hover:text-white",
+                        ? "bg-sidebar-accent text-sidebar-primary"
+                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                     )}
                     onClick={() => onNavigate?.()}
                   >

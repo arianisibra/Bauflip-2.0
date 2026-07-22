@@ -10,7 +10,7 @@ export function LoginSubmitButton({ disabled: disabledExternal }: { disabled?: b
     <Button
       type="submit"
       disabled={pending || Boolean(disabledExternal)}
-      className="mt-2 h-11 bg-slate-800 hover:bg-slate-700 disabled:opacity-60"
+      className="mt-2 h-11 disabled:opacity-60"
     >
       {pending ? (
         <BauflipLoadingButtonLabel variant="onPrimary">Anmeldung …</BauflipLoadingButtonLabel>
