@@ -29,6 +29,7 @@ import {
   useUpdateTechnicianReport,
   useUploadAttachment,
 } from "@/lib/query/hooks";
+import { enqueuePhoto, enqueueRapport } from "@/lib/offline/outbox";
 import { queryKeys } from "@/lib/query/keys";
 import { pickMonteurAppointmentDisplay } from "@/lib/tech/auftrag-appointments";
 import { isLikelyProjectImage } from "@/lib/storage/mime";
@@ -507,10 +508,11 @@ export function MonteurAuftragClient({
         } else {
           toast.success("Datei hochgeladen");
         }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Upload fehlgeschlagen.";
-        setError(message);
-        toast.error(message);
+      } catch {
+        // Kein `{success:false}` vom Server, sondern die Anfrage kam gar nicht durch
+        // (kein Netz im Keller/Rohbau) — Foto in die Offline-Warteschlange statt Fehler.
+        await enqueuePhoto(p.id, file);
+        toast.info("Kein Netz — Foto wird gesendet sobald online");
       } finally {
         setUploading(false);
       }
@@ -834,20 +836,21 @@ export function MonteurAuftragClient({
                 const fd = new FormData(e.currentTarget);
                 setPending(true);
                 setError(null);
+                const reportPayload = {
+                  projectId: p.id,
+                  outcome: mode,
+                  nextStatus: mode === "schaden_aufgenommen" ? nextStatus ?? undefined : undefined,
+                  summary: String(fd.get("reportNotes") ?? "").trim(),
+                  measurementsJson: "{}",
+                  workDescription: String(fd.get("reportNotes") ?? "").trim(),
+                  signatureDataUrl: signaturePadRef.current?.toDataUrl() ?? null,
+                  signedByName: String(fd.get("signedByName") ?? "").trim() || null,
+                  orderForms: isMontageContext
+                    ? []
+                    : orderFormsPayloadFromFormData(fd, orderFormTemplates, orderFormLines),
+                };
                 try {
-                  const result = await submitReport.mutateAsync({
-                    projectId: p.id,
-                    outcome: mode,
-                    nextStatus: mode === "schaden_aufgenommen" ? nextStatus ?? undefined : undefined,
-                    summary: String(fd.get("reportNotes") ?? "").trim(),
-                    measurementsJson: "{}",
-                    workDescription: String(fd.get("reportNotes") ?? "").trim(),
-                    signatureDataUrl: signaturePadRef.current?.toDataUrl() ?? null,
-                    signedByName: String(fd.get("signedByName") ?? "").trim() || null,
-                    orderForms: isMontageContext
-                      ? []
-                      : orderFormsPayloadFromFormData(fd, orderFormTemplates, orderFormLines),
-                  });
+                  const result = await submitReport.mutateAsync(reportPayload);
                   if (!result.success) {
                     toast.error(result.error);
                     return;
@@ -855,7 +858,12 @@ export function MonteurAuftragClient({
                   toast.success("Rapport gespeichert");
                   router.push(backHref ?? "/tag");
                 } catch {
-                  setError("Speichern fehlgeschlagen.");
+                  // Kein `{success:false}` vom Server, sondern die Anfrage kam gar nicht durch
+                  // (kein Netz im Keller/Rohbau) — Rapport in die Offline-Warteschlange statt
+                  // den Monteur blockieren; er kann den Auftrag trotzdem als erledigt verlassen.
+                  await enqueueRapport(reportPayload);
+                  toast.info("Kein Netz — Rapport wird gesendet sobald online");
+                  router.push(backHref ?? "/tag");
                 } finally {
                   rapportSubmitLockRef.current = false;
                   setPending(false);

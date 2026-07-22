@@ -7,6 +7,7 @@ import { TechThemeScope } from "@/components/app/tech-theme-scope";
 import { AuthenticatedRealtime } from "@/components/app/authenticated-realtime";
 import { SessionProfileProvider } from "@/components/app/session-profile-provider";
 import { OfflineBanner } from "@/components/app/offline-banner";
+import { OutboxStatus } from "@/components/app/outbox-status";
 
 export default async function TechLayout({ children }: { children: React.ReactNode }) {
   const session = await getLayoutSession();
@@ -31,6 +32,7 @@ export default async function TechLayout({ children }: { children: React.ReactNo
       <AuthenticatedRealtime orgId={session.organizationId} />
       <div className="flex h-dvh max-h-dvh min-h-0 flex-col overflow-hidden bg-muted/30 dark:bg-muted/35">
         <OfflineBanner />
+        <OutboxStatus />
         {session.role !== "technician" ? (
           <header className="sticky top-0 z-50 mx-auto w-full max-w-md shrink-0 bg-muted/95 px-4 pb-3 pt-[calc(env(safe-area-inset-top,0px)+1rem)] backdrop-blur-md supports-[backdrop-filter]:bg-muted/90 md:hidden">
             <MobileContextSwitch />
