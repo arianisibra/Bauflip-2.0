@@ -31,6 +31,9 @@ export const STAGE_COLOR_BADGE_CLASSES: Record<string, string> = {
   rose: projectStatusBadgeClassNames.garantiefall,
 };
 
+/** Gültige Farb-Keys für die Stage-Bearbeitung (Auswahlliste + Zod-Validierung). */
+export const STAGE_COLOR_KEYS = Object.keys(STAGE_COLOR_BADGE_CLASSES) as [string, ...string[]];
+
 /** Label aus der Workflow-Config, sonst hartcodierter Fallback, sonst der Key. */
 export function resolveStageLabel(stages: readonly StageLike[], key: string): string {
   const stage = stages.find((s) => s.key === key);

@@ -9,6 +9,7 @@ import {
   RAPPORT_ALL_NEXT_STEPS,
   technicianAbsenceKinds,
 } from "@/lib/domain/types";
+import { STAGE_COLOR_KEYS } from "@/lib/domain/stage-visuals";
 
 /** Von der KI aus einem Auftrags-PDF extrahierte Felder — alles optional, da nie garantiert erkennbar. */
 export const intakePdfExtractionSchema = z.object({
@@ -266,6 +267,25 @@ export const billingSettingsSchema = z
       ctx.addIssue({ code: "custom", path: ["creditorCity"], message: "Ort ist mit IBAN Pflicht." });
     }
   });
+
+/**
+ * Editierbare Felder einer Workflow-Stage (Einstellungen → Workflow). Ohne `key`
+ * — der bleibt fix (siehe Kommentar bei `WorkflowStageUpdateInput` in lib/db/workflow.ts).
+ */
+export const workflowStageUpdateSchema = z.object({
+  label: z.string().trim().min(1, "Label darf nicht leer sein.").max(60),
+  color: z.enum(STAGE_COLOR_KEYS),
+  sortOrder: z.number().int().min(0).max(9999),
+  isInitial: z.boolean(),
+  isSchedulingTarget: z.boolean(),
+  promotesOnAppointment: z.boolean(),
+  isBilling: z.boolean(),
+  isTerminal: z.boolean(),
+  hiddenInOfficeFilter: z.boolean(),
+  rapportAufgenommen: z.boolean(),
+  rapportMontage: z.boolean(),
+  rapportBehobenTarget: z.boolean(),
+});
 
 export const priceBookItemSchema = z.object({
   name: z.string().trim().min(1, "Bitte Bezeichnung angeben.").max(300),

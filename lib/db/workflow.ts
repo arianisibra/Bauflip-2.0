@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { WorkflowStage, WorkflowTransition } from "@/lib/domain/workflow-types";
 
 type StageRow = {
+  id: string;
   key: string;
   label: string;
   color: string;
@@ -18,8 +19,12 @@ type StageRow = {
   rapport_behoben_target: boolean;
 };
 
+const STAGE_COLUMNS =
+  "id, key, label, color, sort_order, is_initial, is_scheduling_target, promotes_on_appointment, is_billing, is_terminal, hidden_in_office_filter, rapport_aufgenommen, rapport_montage, rapport_behoben_target";
+
 function mapRow(row: StageRow): WorkflowStage {
   return {
+    id: row.id,
     key: row.key,
     label: row.label,
     color: row.color,
@@ -49,9 +54,7 @@ export const getOrgWorkflowStages = cache(async function getOrgWorkflowStages(
   if (!supabase) return [];
   const { data, error } = await supabase
     .from("workflow_stages")
-    .select(
-      "key, label, color, sort_order, is_initial, is_scheduling_target, promotes_on_appointment, is_billing, is_terminal, hidden_in_office_filter, rapport_aufgenommen, rapport_montage, rapport_behoben_target, workflows!inner(is_default)",
-    )
+    .select(`${STAGE_COLUMNS}, workflows!inner(is_default)`)
     .eq("organization_id", organizationId)
     .eq("workflows.is_default", true)
     .order("sort_order");
@@ -97,3 +100,48 @@ export const getOrgWorkflowTransitions = cache(async function getOrgWorkflowTran
   if (error || !data) return [];
   return (data as unknown as TransitionRow[]).map(mapTransitionRow);
 });
+
+/**
+ * Editierbare Felder einer Stage — bewusst OHNE `key`: der Key ist über den
+ * CHECK-Constraint auf `projects.status` verdrahtet (siehe Stufe-D-Notizen),
+ * neue/umbenannte Keys sind erst nutzbar, sobald dieser Constraint dynamisch
+ * wird. Bis dahin lassen sich nur Anzeige (Label/Farbe/Reihenfolge) und die
+ * Automatik-Tags bestehender Stages anpassen.
+ */
+export type WorkflowStageUpdateInput = Omit<WorkflowStage, "id" | "key">;
+
+function stageUpdateToRow(input: WorkflowStageUpdateInput) {
+  return {
+    label: input.label,
+    color: input.color,
+    sort_order: input.sortOrder,
+    is_initial: input.isInitial,
+    is_scheduling_target: input.isSchedulingTarget,
+    promotes_on_appointment: input.promotesOnAppointment,
+    is_billing: input.isBilling,
+    is_terminal: input.isTerminal,
+    hidden_in_office_filter: input.hiddenInOfficeFilter,
+    rapport_aufgenommen: input.rapportAufgenommen,
+    rapport_montage: input.rapportMontage,
+    rapport_behoben_target: input.rapportBehobenTarget,
+  };
+}
+
+export async function updateWorkflowStage(
+  organizationId: string,
+  stageId: string,
+  input: WorkflowStageUpdateInput,
+): Promise<WorkflowStage> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) throw new Error("Keine Datenbankverbindung.");
+  const { data, error } = await supabase
+    .from("workflow_stages")
+    .update(stageUpdateToRow(input))
+    .eq("id", stageId)
+    .eq("organization_id", organizationId)
+    .select(STAGE_COLUMNS)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Status nicht gefunden.");
+  return mapRow(data as unknown as StageRow);
+}

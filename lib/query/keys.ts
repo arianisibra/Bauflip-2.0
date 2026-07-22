@@ -75,6 +75,8 @@ export const queryKeys = {
   paymentImports: () => ["payment-imports"] as const,
   /** Zahlungsdaten der Organisation (QR-Rechnung, Admin). */
   billingSettings: () => ["billing-settings"] as const,
+  /** Workflow-Stages der Organisation (Einstellungen → Workflow, Admin). */
+  workflowStages: () => ["workflow-stages"] as const,
   bexioSettings: () => ["bexio-settings"] as const,
   bexioConnected: () => ["bexio-connected"] as const,
   bexioMappingOptions: () => ["bexio-mapping-options"] as const,

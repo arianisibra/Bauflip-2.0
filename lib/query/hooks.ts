@@ -100,6 +100,11 @@ import {
   setInvitePreferenceAction,
 } from "@/app/(app)/einstellungen/invite-preference-actions";
 import {
+  getWorkflowStagesAction,
+  updateWorkflowStageAction,
+} from "@/app/(app)/einstellungen/workflow-actions";
+import type { WorkflowStage } from "@/lib/domain/workflow-types";
+import {
   getBusyCalendarStatusAction,
   saveBusyCalendarAction,
   syncBusyCalendarAction,
@@ -845,6 +850,29 @@ export function useUpdateBillingSettings() {
     mutationFn: (input) => updateBillingSettingsAction(input),
     onSuccess: (settings) => {
       qc.setQueryData(queryKeys.billingSettings(), settings);
+    },
+  });
+}
+
+/** Workflow-Stages (Anzeige + Automatik-Tags) — Admin-Sektion in Einstellungen. */
+export function useWorkflowStages(enabled = true) {
+  return useQuery<WorkflowStage[]>({
+    queryKey: queryKeys.workflowStages(),
+    queryFn: () => getWorkflowStagesAction(),
+    enabled,
+    staleTime: 60_000,
+    refetchOnMount: false,
+  });
+}
+
+export function useUpdateWorkflowStage() {
+  const qc = useQueryClient();
+  return useMutation<WorkflowStage, Error, { stageId: string; values: Parameters<typeof updateWorkflowStageAction>[1] }>({
+    mutationFn: ({ stageId, values }) => updateWorkflowStageAction(stageId, values),
+    onSuccess: (updated) => {
+      qc.setQueryData<WorkflowStage[]>(queryKeys.workflowStages(), (prev) =>
+        prev ? prev.map((s) => (s.id === updated.id ? updated : s)) : prev,
+      );
     },
   });
 }

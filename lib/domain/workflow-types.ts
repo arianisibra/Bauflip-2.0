@@ -3,6 +3,7 @@
  * Reiner Typ (kein Server-/Client-Code) — von Loader UND Provider nutzbar.
  */
 export type WorkflowStage = {
+  id: string;
   key: string;
   label: string;
   color: string;
