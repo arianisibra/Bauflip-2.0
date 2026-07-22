@@ -44,3 +44,25 @@ export function resolveStageBadgeClass(stages: readonly StageLike[], key: string
   if (stage) return STAGE_COLOR_BADGE_CLASSES[stage.color] ?? projectStatusBadgeClassName(key);
   return projectStatusBadgeClassName(key);
 }
+
+type TransitionLike = { fromKey: string; toKey: string; actionLabel: string; sortOrder: number };
+type PipelineAction = { label: string; nextStatus: ProjectStatus };
+
+/**
+ * Pipeline-Knöpfe (Status → nächster Status) aus der Workflow-Config, sonst
+ * hartcodierter Fallback (`fallback`, i.d.R. STATUS_PIPELINE[currentStatus]).
+ * Zweistufig: ist überhaupt eine Config geladen (transitions nicht leer)?
+ * Dann gilt „keine Treffer für diesen Status" als echtes Ende der Pipeline
+ * (nicht als „Config fehlt") — nur eine komplett leere Config fällt zurück.
+ */
+export function resolveStagePipelineActions(
+  transitions: readonly TransitionLike[],
+  currentStatus: string,
+  fallback: readonly PipelineAction[],
+): PipelineAction[] {
+  if (transitions.length === 0) return [...fallback];
+  return transitions
+    .filter((t) => t.fromKey === currentStatus)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((t) => ({ label: t.actionLabel, nextStatus: t.toKey as ProjectStatus }));
+}

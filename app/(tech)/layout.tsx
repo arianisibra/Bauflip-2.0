@@ -8,8 +8,9 @@ import { AuthenticatedRealtime } from "@/components/app/authenticated-realtime";
 import { SessionProfileProvider } from "@/components/app/session-profile-provider";
 import { OfflineBanner } from "@/components/app/offline-banner";
 import { OutboxStatus } from "@/components/app/outbox-status";
-import { getOrgWorkflowStages } from "@/lib/db/workflow";
+import { getOrgWorkflowStages, getOrgWorkflowTransitions } from "@/lib/db/workflow";
 import { WorkflowStagesProvider } from "@/components/app/workflow-stages-provider";
+import { WorkflowTransitionsProvider } from "@/components/app/workflow-transitions-provider";
 
 export default async function TechLayout({ children }: { children: React.ReactNode }) {
   const session = await getLayoutSession();
@@ -20,14 +21,16 @@ export default async function TechLayout({ children }: { children: React.ReactNo
     redirect("/");
   }
 
-  const [profile, workflowStages] = await Promise.all([
+  const [profile, workflowStages, workflowTransitions] = await Promise.all([
     getCachedSessionProfile(session),
     getOrgWorkflowStages(session.organizationId),
+    getOrgWorkflowTransitions(session.organizationId),
   ]);
 
   return (
     <SessionProfileProvider value={profile}>
     <WorkflowStagesProvider value={workflowStages}>
+    <WorkflowTransitionsProvider value={workflowTransitions}>
       <>
       <script
         dangerouslySetInnerHTML={{
@@ -50,6 +53,7 @@ export default async function TechLayout({ children }: { children: React.ReactNo
         <TechBottomNav />
       </div>
       </>
+    </WorkflowTransitionsProvider>
     </WorkflowStagesProvider>
     </SessionProfileProvider>
   );

@@ -8,8 +8,9 @@ import {
   canSetProjectStatus,
   projectStatuses,
 } from "@/lib/domain/types";
-import { resolveStageBadgeClass, resolveStageLabel } from "@/lib/domain/stage-visuals";
+import { resolveStageBadgeClass, resolveStageLabel, resolveStagePipelineActions } from "@/lib/domain/stage-visuals";
 import { useWorkflowStages } from "@/components/app/workflow-stages-provider";
+import { useWorkflowTransitions } from "@/components/app/workflow-transitions-provider";
 import { computeConflicts, conflictStatus, hasFerienConflict, type Conflict } from "@/lib/calendar/availability-conflicts";
 import { cn } from "@/lib/utils";
 import { telHref } from "@/lib/phone";
@@ -395,7 +396,12 @@ function StatusPipeline({
   const updateStatus = useUpdateProjectStatus();
   const setGarantiefall = useSetGarantiefall();
   const workflowStages = useWorkflowStages();
-  const actions = STATUS_PIPELINE[currentStatus] ?? [];
+  const workflowTransitions = useWorkflowTransitions();
+  const actions = resolveStagePipelineActions(
+    workflowTransitions,
+    currentStatus,
+    STATUS_PIPELINE[currentStatus] ?? [],
+  );
   const label = resolveStageLabel(workflowStages, currentStatus);
   const [garantiefallOpen, setGarantiefallOpen] = useState(false);
   const [garantiefallNote, setGarantiefallNote] = useState("");

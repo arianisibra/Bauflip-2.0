@@ -17,3 +17,14 @@ export type WorkflowStage = {
   rapportMontage: boolean;
   rapportBehobenTarget: boolean;
 };
+
+/**
+ * Ein Übergang aus der konfigurierbaren Workflow-Engine (Tabelle
+ * `workflow_transitions`) — ein Pipeline-Knopf im Projekt-Sheet.
+ */
+export type WorkflowTransition = {
+  fromKey: string;
+  toKey: string;
+  actionLabel: string;
+  sortOrder: number;
+};

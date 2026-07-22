@@ -7,8 +7,9 @@ import { SidebarNav } from "@/components/app/sidebar-nav";
 import { ThemeToggle } from "@/components/app/theme-toggle";
 import { getCachedSessionProfile, getLayoutSession } from "@/lib/auth/session";
 import { getOrganizationBranding } from "@/lib/db/repository";
-import { getOrgWorkflowStages } from "@/lib/db/workflow";
+import { getOrgWorkflowStages, getOrgWorkflowTransitions } from "@/lib/db/workflow";
 import { WorkflowStagesProvider } from "@/components/app/workflow-stages-provider";
+import { WorkflowTransitionsProvider } from "@/components/app/workflow-transitions-provider";
 import { isAdminMfaRequiredAndMissing } from "@/lib/auth/mfa";
 import { getVisibleSidebarItems } from "@/lib/navigation/sidebar-config";
 import { AuthenticatedRealtime } from "@/components/app/authenticated-realtime";
@@ -30,16 +31,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     }
   }
   const items = getVisibleSidebarItems(role);
-  const [profile, branding, workflowStages] = await Promise.all([
+  const [profile, branding, workflowStages, workflowTransitions] = await Promise.all([
     getCachedSessionProfile(session),
     getOrganizationBranding(session.organizationId),
     getOrgWorkflowStages(session.organizationId),
+    getOrgWorkflowTransitions(session.organizationId),
   ]);
 
   return (
     <SessionProfileProvider value={profile}>
     <OrganizationBrandingProvider value={branding}>
     <WorkflowStagesProvider value={workflowStages}>
+    <WorkflowTransitionsProvider value={workflowTransitions}>
       <div className="flex h-dvh max-h-dvh min-h-0 flex-col overflow-hidden bg-muted/40 dark:bg-muted/35 md:h-screen md:max-h-none">
       <AuthenticatedRealtime orgId={session.organizationId} />
       <div className="flex min-h-0 flex-1">
@@ -65,6 +68,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </div>
       </div>
+    </WorkflowTransitionsProvider>
     </WorkflowStagesProvider>
     </OrganizationBrandingProvider>
     </SessionProfileProvider>
