@@ -100,10 +100,14 @@ import {
   setInvitePreferenceAction,
 } from "@/app/(app)/einstellungen/invite-preference-actions";
 import {
+  createWorkflowTransitionAction,
+  deleteWorkflowTransitionAction,
   getWorkflowStagesAction,
+  getWorkflowTransitionsAction,
   updateWorkflowStageAction,
+  updateWorkflowTransitionAction,
 } from "@/app/(app)/einstellungen/workflow-actions";
-import type { WorkflowStage } from "@/lib/domain/workflow-types";
+import type { WorkflowStage, WorkflowTransition } from "@/lib/domain/workflow-types";
 import {
   getBusyCalendarStatusAction,
   saveBusyCalendarAction,
@@ -872,6 +876,57 @@ export function useUpdateWorkflowStage() {
     onSuccess: (updated) => {
       qc.setQueryData<WorkflowStage[]>(queryKeys.workflowStages(), (prev) =>
         prev ? prev.map((s) => (s.id === updated.id ? updated : s)) : prev,
+      );
+    },
+  });
+}
+
+/** Workflow-Übergänge (Pipeline-Knöpfe) — Admin-Sektion in Einstellungen. */
+export function useWorkflowTransitions(enabled = true) {
+  return useQuery<WorkflowTransition[]>({
+    queryKey: queryKeys.workflowTransitions(),
+    queryFn: () => getWorkflowTransitionsAction(),
+    enabled,
+    staleTime: 60_000,
+    refetchOnMount: false,
+  });
+}
+
+export function useCreateWorkflowTransition() {
+  const qc = useQueryClient();
+  return useMutation<WorkflowTransition, Error, Parameters<typeof createWorkflowTransitionAction>[0]>({
+    mutationFn: (values) => createWorkflowTransitionAction(values),
+    onSuccess: (created) => {
+      qc.setQueryData<WorkflowTransition[]>(queryKeys.workflowTransitions(), (prev) =>
+        prev ? [...prev, created] : [created],
+      );
+    },
+  });
+}
+
+export function useUpdateWorkflowTransition() {
+  const qc = useQueryClient();
+  return useMutation<
+    WorkflowTransition,
+    Error,
+    { transitionId: string; values: Parameters<typeof updateWorkflowTransitionAction>[1] }
+  >({
+    mutationFn: ({ transitionId, values }) => updateWorkflowTransitionAction(transitionId, values),
+    onSuccess: (updated) => {
+      qc.setQueryData<WorkflowTransition[]>(queryKeys.workflowTransitions(), (prev) =>
+        prev ? prev.map((t) => (t.id === updated.id ? updated : t)) : prev,
+      );
+    },
+  });
+}
+
+export function useDeleteWorkflowTransition() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: (transitionId) => deleteWorkflowTransitionAction(transitionId),
+    onSuccess: (_void, transitionId) => {
+      qc.setQueryData<WorkflowTransition[]>(queryKeys.workflowTransitions(), (prev) =>
+        prev ? prev.filter((t) => t.id !== transitionId) : prev,
       );
     },
   });

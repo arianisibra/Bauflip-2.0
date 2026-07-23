@@ -1,9 +1,16 @@
 "use server";
 
 import { requireAdminLayoutSession } from "@/lib/auth/organization";
-import { getOrgWorkflowStages, updateWorkflowStage } from "@/lib/db/workflow";
-import type { WorkflowStage } from "@/lib/domain/workflow-types";
-import { workflowStageUpdateSchema } from "@/lib/validations/forms";
+import {
+  createWorkflowTransition,
+  deleteWorkflowTransition,
+  getOrgWorkflowStages,
+  getOrgWorkflowTransitions,
+  updateWorkflowStage,
+  updateWorkflowTransition,
+} from "@/lib/db/workflow";
+import type { WorkflowStage, WorkflowTransition } from "@/lib/domain/workflow-types";
+import { workflowStageUpdateSchema, workflowTransitionInputSchema } from "@/lib/validations/forms";
 
 export async function getWorkflowStagesAction(): Promise<WorkflowStage[]> {
   const session = await requireAdminLayoutSession();
@@ -23,4 +30,43 @@ export async function updateWorkflowStageAction(
   }
 
   return updateWorkflowStage(session.organizationId, stageId, parsed.data);
+}
+
+export async function getWorkflowTransitionsAction(): Promise<WorkflowTransition[]> {
+  const session = await requireAdminLayoutSession();
+  return getOrgWorkflowTransitions(session.organizationId);
+}
+
+export async function createWorkflowTransitionAction(values: unknown): Promise<WorkflowTransition> {
+  const session = await requireAdminLayoutSession();
+  if (!session.organizationId) throw new Error("Keine Organisation.");
+
+  const parsed = workflowTransitionInputSchema.safeParse(values);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Ungültige Eingabe.");
+  }
+
+  return createWorkflowTransition(session.organizationId, parsed.data);
+}
+
+export async function updateWorkflowTransitionAction(
+  transitionId: string,
+  values: unknown,
+): Promise<WorkflowTransition> {
+  const session = await requireAdminLayoutSession();
+  if (!session.organizationId) throw new Error("Keine Organisation.");
+
+  const parsed = workflowTransitionInputSchema.safeParse(values);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Ungültige Eingabe.");
+  }
+
+  return updateWorkflowTransition(session.organizationId, transitionId, parsed.data);
+}
+
+export async function deleteWorkflowTransitionAction(transitionId: string): Promise<void> {
+  const session = await requireAdminLayoutSession();
+  if (!session.organizationId) throw new Error("Keine Organisation.");
+
+  return deleteWorkflowTransition(session.organizationId, transitionId);
 }

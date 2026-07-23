@@ -63,14 +63,18 @@ export const getOrgWorkflowStages = cache(async function getOrgWorkflowStages(
 });
 
 type TransitionRow = {
+  id: string;
   from_key: string;
   to_key: string;
   action_label: string;
   sort_order: number;
 };
 
+const TRANSITION_COLUMNS = "id, from_key, to_key, action_label, sort_order";
+
 function mapTransitionRow(row: TransitionRow): WorkflowTransition {
   return {
+    id: row.id,
     fromKey: row.from_key,
     toKey: row.to_key,
     actionLabel: row.action_label,
@@ -92,7 +96,7 @@ export const getOrgWorkflowTransitions = cache(async function getOrgWorkflowTran
   if (!supabase) return [];
   const { data, error } = await supabase
     .from("workflow_transitions")
-    .select("from_key, to_key, action_label, sort_order, workflows!inner(is_default)")
+    .select(`${TRANSITION_COLUMNS}, workflows!inner(is_default)`)
     .eq("organization_id", organizationId)
     .eq("workflows.is_default", true)
     .order("from_key")
@@ -100,6 +104,91 @@ export const getOrgWorkflowTransitions = cache(async function getOrgWorkflowTran
   if (error || !data) return [];
   return (data as unknown as TransitionRow[]).map(mapTransitionRow);
 });
+
+/** ID des Standard-Workflows einer Org — legt ihn an, falls (noch) keiner existiert (z. B. neue Org ohne Seed). */
+async function ensureDefaultWorkflowId(
+  supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
+  organizationId: string,
+): Promise<string> {
+  const { data: existing, error: existingError } = await supabase
+    .from("workflows")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("is_default", true)
+    .maybeSingle();
+  if (existingError) throw new Error(existingError.message);
+  if (existing) return (existing as { id: string }).id;
+
+  const { data: created, error: createError } = await supabase
+    .from("workflows")
+    .insert({ organization_id: organizationId, name: "Standard", is_default: true })
+    .select("id")
+    .single();
+  if (createError || !created) throw new Error(createError?.message ?? "Workflow konnte nicht angelegt werden.");
+  return (created as { id: string }).id;
+}
+
+/**
+ * Übergänge referenzieren nur Stage-Keys, die bereits existieren (UI erzwingt
+ * das über eine Auswahlliste) — anders als bei Stages ist hier also Anlegen/
+ * Löschen unbedenklich, kein CHECK-Constraint-Bezug.
+ */
+export type WorkflowTransitionInput = Omit<WorkflowTransition, "id">;
+
+function transitionInputToRow(input: WorkflowTransitionInput) {
+  return {
+    from_key: input.fromKey,
+    to_key: input.toKey,
+    action_label: input.actionLabel,
+    sort_order: input.sortOrder,
+  };
+}
+
+export async function createWorkflowTransition(
+  organizationId: string,
+  input: WorkflowTransitionInput,
+): Promise<WorkflowTransition> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) throw new Error("Keine Datenbankverbindung.");
+  const workflowId = await ensureDefaultWorkflowId(supabase, organizationId);
+  const { data, error } = await supabase
+    .from("workflow_transitions")
+    .insert({ organization_id: organizationId, workflow_id: workflowId, ...transitionInputToRow(input) })
+    .select(TRANSITION_COLUMNS)
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Übergang konnte nicht angelegt werden.");
+  return mapTransitionRow(data as unknown as TransitionRow);
+}
+
+export async function updateWorkflowTransition(
+  organizationId: string,
+  transitionId: string,
+  input: WorkflowTransitionInput,
+): Promise<WorkflowTransition> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) throw new Error("Keine Datenbankverbindung.");
+  const { data, error } = await supabase
+    .from("workflow_transitions")
+    .update(transitionInputToRow(input))
+    .eq("id", transitionId)
+    .eq("organization_id", organizationId)
+    .select(TRANSITION_COLUMNS)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Übergang nicht gefunden.");
+  return mapTransitionRow(data as unknown as TransitionRow);
+}
+
+export async function deleteWorkflowTransition(organizationId: string, transitionId: string): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) throw new Error("Keine Datenbankverbindung.");
+  const { error } = await supabase
+    .from("workflow_transitions")
+    .delete()
+    .eq("id", transitionId)
+    .eq("organization_id", organizationId);
+  if (error) throw new Error(error.message);
+}
 
 /**
  * Editierbare Felder einer Stage — bewusst OHNE `key`: der Key ist über den

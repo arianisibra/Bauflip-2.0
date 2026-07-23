@@ -24,6 +24,7 @@ export type WorkflowStage = {
  * `workflow_transitions`) — ein Pipeline-Knopf im Projekt-Sheet.
  */
 export type WorkflowTransition = {
+  id: string;
   fromKey: string;
   toKey: string;
   actionLabel: string;

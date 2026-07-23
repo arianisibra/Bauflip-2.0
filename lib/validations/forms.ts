@@ -287,6 +287,14 @@ export const workflowStageUpdateSchema = z.object({
   rapportBehobenTarget: z.boolean(),
 });
 
+/** Ein Übergang (Pipeline-Knopf) — Einstellungen → Workflow. */
+export const workflowTransitionInputSchema = z.object({
+  fromKey: z.string().trim().min(1, "Von-Status wählen."),
+  toKey: z.string().trim().min(1, "Ziel-Status wählen."),
+  actionLabel: z.string().trim().min(1, "Beschriftung darf nicht leer sein.").max(40),
+  sortOrder: z.number().int().min(0).max(9999),
+});
+
 export const priceBookItemSchema = z.object({
   name: z.string().trim().min(1, "Bitte Bezeichnung angeben.").max(300),
   description: z.string().trim().max(2000).optional().nullable(),

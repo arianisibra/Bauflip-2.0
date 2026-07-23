@@ -77,6 +77,8 @@ export const queryKeys = {
   billingSettings: () => ["billing-settings"] as const,
   /** Workflow-Stages der Organisation (Einstellungen → Workflow, Admin). */
   workflowStages: () => ["workflow-stages"] as const,
+  /** Workflow-Übergänge (Pipeline-Knöpfe) der Organisation (Einstellungen → Workflow, Admin). */
+  workflowTransitions: () => ["workflow-transitions"] as const,
   bexioSettings: () => ["bexio-settings"] as const,
   bexioConnected: () => ["bexio-connected"] as const,
   bexioMappingOptions: () => ["bexio-mapping-options"] as const,
