@@ -149,7 +149,7 @@ export function OrderLinesSection({
   };
 
   return (
-    <section className="border-t pt-4">
+    <section id="sheet-bestellungen" className="scroll-mt-16 border-t pt-4">
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold">
           Bestellungen{orders.length > 0 ? ` (${openCount} offen)` : ""}

@@ -1191,6 +1191,7 @@ export function ProjektSheetEditor({
         sections={[
           ...(canEdit ? [{ id: "sheet-termine", label: "Termine" }] : []),
           { id: "sheet-anhaenge", label: "Anhänge" },
+          { id: "sheet-bestellungen", label: "Bestellungen" },
           ...(hasReports ? [{ id: "sheet-rapporte", label: `Rapporte (${core.reports.length})` }] : []),
           { id: "sheet-offerten", label: "Offerten" },
           { id: "sheet-rechnungen", label: "Rechnungen" },
