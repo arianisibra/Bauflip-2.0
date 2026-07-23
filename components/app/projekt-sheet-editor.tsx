@@ -34,6 +34,7 @@ import {
   useUploadAttachment,
 } from "@/lib/query/hooks";
 import { isLikelyProjectImage } from "@/lib/storage/mime";
+import { OrderLinesSection } from "@/components/app/order-lines-section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FileInput } from "@/components/ui/file-input";
@@ -1592,6 +1593,8 @@ export function ProjektSheetEditor({
           ) : null}
         </section>
       ) : null}
+
+      <OrderLinesSection projectId={projectId} open={open} canEdit={canEdit} />
 
       {hasReports && (
         <section id="sheet-rapporte" className="scroll-mt-16 border-t pt-4">

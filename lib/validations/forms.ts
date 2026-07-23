@@ -158,6 +158,20 @@ export const technicianAbsenceCreateSchema = z
     { message: "Endzeit muss nach Beginn liegen." },
   );
 
+/** Neue Bestellzeile an einem Projekt (Lieferant frei, kein Stamm vorhanden). */
+export const projectOrderCreateSchema = z.object({
+  projectId: z.string().uuid(),
+  supplierName: z.string().trim().min(1, "Bitte Lieferant angeben."),
+  description: z.string().trim().min(1, "Bitte angeben, was bestellt wurde."),
+  orderedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ungültiges Datum."),
+  expectedAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Ungültiges Datum.")
+    .optional()
+    .nullable(),
+  notes: z.string().trim().max(2000).optional().nullable(),
+});
+
 const HHMM_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export const timeEntrySchema = z.object({

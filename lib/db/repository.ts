@@ -8,6 +8,7 @@ import type {
   OrganizationBranding,
   Project,
   ProjectAttachment,
+  ProjectOrderLine,
   ProjectStatus,
   ProjectStatusUpdateSource,
   RapportNextStep,
@@ -2943,5 +2944,118 @@ export async function deleteOrderFormTemplate(templateId: string): Promise<void>
   const supabase = await createSupabaseServerClient();
   if (!supabase) throw new Error("Supabase nicht konfiguriert.");
   const { error } = await supabase.from("order_form_templates").delete().eq("id", templateId);
+  if (error) throw new Error(error.message);
+}
+
+const PROJECT_ORDER_DB_COLUMNS =
+  "id, project_id, supplier_name, description, ordered_at, expected_at, received_at, notes, created_by, created_at";
+
+function mapProjectOrderRow(
+  row: Record<string, unknown>,
+  nameMap: Map<string, string | null>,
+): ProjectOrderLine {
+  const createdBy = row.created_by != null ? String(row.created_by) : null;
+  return {
+    id: String(row.id),
+    projectId: String(row.project_id),
+    supplierName: String(row.supplier_name ?? ""),
+    description: String(row.description ?? ""),
+    orderedAt: String(row.ordered_at),
+    expectedAt: row.expected_at != null ? String(row.expected_at) : null,
+    receivedAt: row.received_at != null ? String(row.received_at) : null,
+    notes: row.notes != null ? String(row.notes) : null,
+    createdByProfileId: createdBy,
+    createdByDisplayName: createdBy ? (nameMap.get(createdBy) ?? null) : null,
+    createdAt: String(row.created_at),
+  };
+}
+
+/** Bestellzeilen eines Projekts, neueste zuerst. */
+export async function listProjectOrders(projectId: string): Promise<ProjectOrderLine[]> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("project_orders")
+    .select(PROJECT_ORDER_DB_COLUMNS)
+    .eq("project_id", projectId)
+    .order("ordered_at", { ascending: false })
+    .order("created_at", { ascending: false });
+  if (error || !data) return [];
+
+  const rows = data as Record<string, unknown>[];
+  const creatorIds = [...new Set(rows.map((r) => (r.created_by != null ? String(r.created_by) : null)).filter((x): x is string => x !== null))];
+  const nameMap = new Map<string, string | null>();
+  if (creatorIds.length > 0) {
+    const { data: profs } = await supabase.from("profiles").select("id, display_name").in("id", creatorIds);
+    for (const p of profs ?? []) {
+      const r = p as { id: string; display_name: string | null };
+      nameMap.set(r.id, r.display_name ?? null);
+    }
+  }
+  return rows.map((r) => mapProjectOrderRow(r, nameMap));
+}
+
+export type ProjectOrderCreateInput = {
+  projectId: string;
+  supplierName: string;
+  description: string;
+  orderedAt: string;
+  expectedAt: string | null;
+  notes: string | null;
+};
+
+export async function createProjectOrder(
+  input: ProjectOrderCreateInput,
+  organizationId: string,
+  createdByProfileId: string | null,
+): Promise<ProjectOrderLine> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) throw new Error("Supabase nicht konfiguriert.");
+  const { data, error } = await supabase
+    .from("project_orders")
+    .insert({
+      organization_id: organizationId,
+      project_id: input.projectId,
+      supplier_name: input.supplierName,
+      description: input.description,
+      ordered_at: input.orderedAt,
+      expected_at: input.expectedAt,
+      notes: input.notes,
+      created_by: createdByProfileId,
+    })
+    .select(PROJECT_ORDER_DB_COLUMNS)
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Bestellung konnte nicht gespeichert werden.");
+
+  const nameMap = new Map<string, string | null>();
+  if (createdByProfileId) {
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("id, display_name")
+      .eq("id", createdByProfileId)
+      .maybeSingle();
+    if (prof) {
+      const r = prof as { id: string; display_name: string | null };
+      nameMap.set(r.id, r.display_name ?? null);
+    }
+  }
+  return mapProjectOrderRow(data as Record<string, unknown>, nameMap);
+}
+
+/** Markiert eine Bestellzeile als eingetroffen (oder öffnet sie wieder, wenn `received=false`). */
+export async function setProjectOrderReceived(orderId: string, received: boolean): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) throw new Error("Supabase nicht konfiguriert.");
+  const { error } = await supabase
+    .from("project_orders")
+    .update({ received_at: received ? new Date().toISOString() : null })
+    .eq("id", orderId);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteProjectOrder(orderId: string): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) throw new Error("Supabase nicht konfiguriert.");
+  const { error } = await supabase.from("project_orders").delete().eq("id", orderId);
   if (error) throw new Error(error.message);
 }
