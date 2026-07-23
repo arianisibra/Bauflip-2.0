@@ -241,6 +241,25 @@ export type TechnicianAbsence = {
   createdAt: string;
 };
 
+/**
+ * Bestellzeile in `project_orders`: eine Bestellung bei einem (frei erfassten)
+ * Lieferanten. `receivedAt = null` heisst offen — Grundlage für die
+ * «zu lange offen»-Markierung in der UI.
+ */
+export type ProjectOrderLine = {
+  id: string;
+  projectId: string;
+  supplierName: string;
+  description: string;
+  orderedAt: string;
+  expectedAt: string | null;
+  receivedAt: string | null;
+  notes: string | null;
+  createdByProfileId: string | null;
+  createdByDisplayName: string | null;
+  createdAt: string;
+};
+
 /** Eintrag in `time_entries`: manuell erfasste Arbeitszeit eines Mitarbeiters an einem Tag. */
 export type TimeEntry = {
   id: string;

@@ -30,6 +30,7 @@ import {
   useUploadAttachment,
 } from "@/lib/query/hooks";
 import { isLikelyProjectImage } from "@/lib/storage/mime";
+import { OrderLinesSection } from "@/components/app/order-lines-section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1429,6 +1430,8 @@ export function ProjektSheetEditor({
           ) : null}
         </section>
       ) : null}
+
+      <OrderLinesSection projectId={projectId} open={open} canEdit={canEdit} />
 
       {!coreQuery.isDetailsLoading && core.reports.length > 0 && (
         <section className="border-t pt-4">

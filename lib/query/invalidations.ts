@@ -311,6 +311,10 @@ export function afterOrderFormTemplateChange(qc: QueryClient, opts?: InvalidateO
   inv(qc, queryKeys.orderFormTemplates.all(), opts);
 }
 
+export function afterOrderLineChange(qc: QueryClient, projectId: string, opts?: InvalidateOpts): void {
+  inv(qc, queryKeys.orderLines.byProject(projectId), opts);
+}
+
 export function afterTimeEntryChange(qc: QueryClient, opts?: InvalidateOpts): void {
   inv(qc, queryKeys.timeEntries.all(), opts);
 }

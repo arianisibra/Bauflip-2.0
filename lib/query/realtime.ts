@@ -21,6 +21,7 @@ export type RealtimeEvent =
   | { type: "attachment.changed"; projectId: string }
   | { type: "membership.changed" }
   | { type: "order_form_template.changed" }
+  | { type: "order_line.changed"; projectId: string }
   | { type: "time_entry.changed" };
 
 export type DispatchOpts = inv.InvalidateOpts;
@@ -61,6 +62,9 @@ export function dispatchRealtimeEvent(
       return;
     case "order_form_template.changed":
       inv.afterOrderFormTemplateChange(qc, opts);
+      return;
+    case "order_line.changed":
+      inv.afterOrderLineChange(qc, event.projectId, opts);
       return;
     case "time_entry.changed":
       inv.afterTimeEntryChange(qc, opts);

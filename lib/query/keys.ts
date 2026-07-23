@@ -69,4 +69,7 @@ export const queryKeys = {
     all: () => ["order-form-templates"] as const,
     byOrg: (orgId: string | null) => ["order-form-templates", orgId] as const,
   },
+  orderLines: {
+    byProject: (projectId: string) => ["project-orders", projectId] as const,
+  },
 } as const;

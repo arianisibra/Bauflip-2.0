@@ -16,6 +16,7 @@ import type { ProjectCore } from "@/lib/db/repository";
 import type {
   OrderFormTemplate,
   ProjectAttachment,
+  ProjectOrderLine,
   ProjectStatus,
   TechnicianAbsence,
   TimeEntry,
@@ -92,6 +93,12 @@ import {
   deleteOrderFormTemplateAction,
   listOrderFormTemplatesForOrgAction,
 } from "@/app/(app)/order-form-template-actions";
+import {
+  createProjectOrderAction,
+  deleteProjectOrderAction,
+  listProjectOrdersAction,
+  setProjectOrderReceivedAction,
+} from "@/app/(app)/projekte/order-actions";
 import {
   afterAbsenceChange,
   afterProjectCoreChange,
@@ -760,6 +767,61 @@ export function useDeleteOrderFormTemplate() {
     onSuccess: (_, templateId) => {
       qc.setQueryData<OrderFormTemplate[]>(queryKeys.orderFormTemplates.all(), (old) =>
         old ? old.filter((t) => t.id !== templateId) : [],
+      );
+    },
+  });
+}
+
+// ───────── Bestellungen (project_orders) ─────────
+
+function sortProjectOrders(orders: ProjectOrderLine[]): ProjectOrderLine[] {
+  return [...orders].sort((a, b) => b.orderedAt.localeCompare(a.orderedAt) || b.createdAt.localeCompare(a.createdAt));
+}
+
+export function useProjectOrders(projectId: string, enabled = true) {
+  return useQuery<ProjectOrderLine[]>({
+    queryKey: queryKeys.orderLines.byProject(projectId),
+    queryFn: () => listProjectOrdersAction(projectId),
+    enabled: enabled && Boolean(projectId),
+    staleTime: 30_000,
+    refetchOnMount: false,
+  });
+}
+
+export function useCreateProjectOrder() {
+  const qc = useQueryClient();
+  return useMutation<ProjectOrderLine, Error, Parameters<typeof createProjectOrderAction>[0]>({
+    mutationFn: (input) => createProjectOrderAction(input, getTabId()),
+    onSuccess: (created) => {
+      qc.setQueryData<ProjectOrderLine[]>(queryKeys.orderLines.byProject(created.projectId), (old) =>
+        sortProjectOrders([...(old ?? []), created]),
+      );
+    },
+  });
+}
+
+export function useSetProjectOrderReceived() {
+  const qc = useQueryClient();
+  return useMutation<{ ok: true }, Error, { orderId: string; projectId: string; received: boolean }>({
+    mutationFn: ({ orderId, projectId, received }) =>
+      setProjectOrderReceivedAction(orderId, projectId, received, getTabId()),
+    onSuccess: (_, { orderId, projectId, received }) => {
+      qc.setQueryData<ProjectOrderLine[]>(queryKeys.orderLines.byProject(projectId), (old) =>
+        old
+          ? old.map((o) => (o.id === orderId ? { ...o, receivedAt: received ? new Date().toISOString() : null } : o))
+          : old,
+      );
+    },
+  });
+}
+
+export function useDeleteProjectOrder() {
+  const qc = useQueryClient();
+  return useMutation<{ ok: true }, Error, { orderId: string; projectId: string }>({
+    mutationFn: ({ orderId, projectId }) => deleteProjectOrderAction(orderId, projectId, getTabId()),
+    onSuccess: (_, { orderId, projectId }) => {
+      qc.setQueryData<ProjectOrderLine[]>(queryKeys.orderLines.byProject(projectId), (old) =>
+        old ? old.filter((o) => o.id !== orderId) : old,
       );
     },
   });
