@@ -8,8 +8,10 @@ import { ThemeToggle } from "@/components/app/theme-toggle";
 import { getCachedSessionProfile, getLayoutSession } from "@/lib/auth/session";
 import { getOrganizationBranding } from "@/lib/db/repository";
 import { getOrgWorkflowStages, getOrgWorkflowTransitions } from "@/lib/db/workflow";
+import { isOrganizationOnboardingPending } from "@/lib/db/onboarding";
 import { WorkflowStagesProvider } from "@/components/app/workflow-stages-provider";
 import { WorkflowTransitionsProvider } from "@/components/app/workflow-transitions-provider";
+import { OnboardingWizard } from "@/components/app/onboarding-wizard";
 import { isAdminMfaRequiredAndMissing } from "@/lib/auth/mfa";
 import { getVisibleSidebarItems } from "@/lib/navigation/sidebar-config";
 import { AuthenticatedRealtime } from "@/components/app/authenticated-realtime";
@@ -31,11 +33,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     }
   }
   const items = getVisibleSidebarItems(role);
-  const [profile, branding, workflowStages, workflowTransitions] = await Promise.all([
+  const [profile, branding, workflowStages, workflowTransitions, onboardingPending] = await Promise.all([
     getCachedSessionProfile(session),
     getOrganizationBranding(session.organizationId),
     getOrgWorkflowStages(session.organizationId),
     getOrgWorkflowTransitions(session.organizationId),
+    role === "admin" ? isOrganizationOnboardingPending(session.organizationId) : Promise.resolve(false),
   ]);
 
   return (
@@ -45,6 +48,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <WorkflowTransitionsProvider value={workflowTransitions}>
       <div className="flex h-dvh max-h-dvh min-h-0 flex-col overflow-hidden bg-muted/40 dark:bg-muted/35 md:h-screen md:max-h-none">
       <AuthenticatedRealtime orgId={session.organizationId} />
+      {onboardingPending ? <OnboardingWizard initialCompanyName={branding?.name ?? ""} /> : null}
       <div className="flex min-h-0 flex-1">
         <div className="hidden overflow-hidden md:block">
           <SidebarNav items={items} />
