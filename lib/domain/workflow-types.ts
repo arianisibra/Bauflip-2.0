@@ -17,6 +17,8 @@ export type WorkflowStage = {
   rapportAufgenommen: boolean;
   rapportMontage: boolean;
   rapportBehobenTarget: boolean;
+  rapportNextStepDescription: string | null;
+  rapportNextStepIcon: string | null;
 };
 
 /**

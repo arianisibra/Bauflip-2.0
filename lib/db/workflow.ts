@@ -17,10 +17,12 @@ type StageRow = {
   rapport_aufgenommen: boolean;
   rapport_montage: boolean;
   rapport_behoben_target: boolean;
+  rapport_next_step_description: string | null;
+  rapport_next_step_icon: string | null;
 };
 
 const STAGE_COLUMNS =
-  "id, key, label, color, sort_order, is_initial, is_scheduling_target, promotes_on_appointment, is_billing, is_terminal, hidden_in_office_filter, rapport_aufgenommen, rapport_montage, rapport_behoben_target";
+  "id, key, label, color, sort_order, is_initial, is_scheduling_target, promotes_on_appointment, is_billing, is_terminal, hidden_in_office_filter, rapport_aufgenommen, rapport_montage, rapport_behoben_target, rapport_next_step_description, rapport_next_step_icon";
 
 function mapRow(row: StageRow): WorkflowStage {
   return {
@@ -38,6 +40,8 @@ function mapRow(row: StageRow): WorkflowStage {
     rapportAufgenommen: row.rapport_aufgenommen,
     rapportMontage: row.rapport_montage,
     rapportBehobenTarget: row.rapport_behoben_target,
+    rapportNextStepDescription: row.rapport_next_step_description,
+    rapportNextStepIcon: row.rapport_next_step_icon,
   };
 }
 
@@ -213,6 +217,8 @@ function stageUpdateToRow(input: WorkflowStageUpdateInput) {
     rapport_aufgenommen: input.rapportAufgenommen,
     rapport_montage: input.rapportMontage,
     rapport_behoben_target: input.rapportBehobenTarget,
+    rapport_next_step_description: input.rapportNextStepDescription,
+    rapport_next_step_icon: input.rapportNextStepIcon,
   };
 }
 

@@ -4,7 +4,11 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import type { WorkflowStage } from "@/lib/domain/workflow-types";
-import { STAGE_COLOR_BADGE_CLASSES, STAGE_COLOR_KEYS } from "@/lib/domain/stage-visuals";
+import {
+  RAPPORT_NEXT_STEP_ICON_KEYS,
+  STAGE_COLOR_BADGE_CLASSES,
+  STAGE_COLOR_KEYS,
+} from "@/lib/domain/stage-visuals";
 import { workflowStageUpdateSchema } from "@/lib/validations/forms";
 import { useUpdateWorkflowStage, useWorkflowStages } from "@/lib/query/hooks";
 import { Button } from "@/components/ui/button";
@@ -26,6 +30,8 @@ type FormState = {
   rapportAufgenommen: boolean;
   rapportMontage: boolean;
   rapportBehobenTarget: boolean;
+  rapportNextStepDescription: string;
+  rapportNextStepIcon: string;
 };
 
 function formFromStage(stage: WorkflowStage): FormState {
@@ -42,6 +48,8 @@ function formFromStage(stage: WorkflowStage): FormState {
     rapportAufgenommen: stage.rapportAufgenommen,
     rapportMontage: stage.rapportMontage,
     rapportBehobenTarget: stage.rapportBehobenTarget,
+    rapportNextStepDescription: stage.rapportNextStepDescription ?? "",
+    rapportNextStepIcon: stage.rapportNextStepIcon ?? "",
   };
 }
 
@@ -95,6 +103,8 @@ export function WorkflowStagesManager() {
       rapportAufgenommen: form.rapportAufgenommen,
       rapportMontage: form.rapportMontage,
       rapportBehobenTarget: form.rapportBehobenTarget,
+      rapportNextStepDescription: form.rapportNextStepDescription.trim() || null,
+      rapportNextStepIcon: form.rapportNextStepIcon.trim() || null,
     };
     const parsed = workflowStageUpdateSchema.safeParse(payload);
     if (!parsed.success) {
@@ -226,6 +236,42 @@ export function WorkflowStagesManager() {
                 ))}
               </div>
             </div>
+
+            {form.rapportAufgenommen || form.rapportMontage ? (
+              <div>
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Rapport-Nächste-Schritte-Karte
+                </p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-[2fr_1fr]">
+                  <div>
+                    <Label className="text-[11px]">Beschreibung</Label>
+                    <Input
+                      value={form.rapportNextStepDescription}
+                      placeholder="z. B. Masse aufgenommen, Offerte erstellen"
+                      onChange={(e) => setField("rapportNextStepDescription", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[11px]">Icon</Label>
+                    <Select
+                      value={form.rapportNextStepIcon}
+                      onValueChange={(v) => setField("rapportNextStepIcon", String(v))}
+                    >
+                      <SelectTrigger className="h-9 w-full min-w-0">
+                        <SelectValue placeholder="Wählen …" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {RAPPORT_NEXT_STEP_ICON_KEYS.map((icon) => (
+                          <SelectItem key={icon} value={icon}>
+                            {icon}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </Dialog>

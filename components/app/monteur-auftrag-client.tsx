@@ -17,7 +17,11 @@ import { isSinglePositionOrderFormTemplate } from "@/lib/order-forms/template-ut
 import { getFilledOrderFormFields } from "@/lib/order-forms/filled-fields";
 import { isMonteurMontageContext } from "@/lib/tech/monteur-context";
 import { projectStatusLabels } from "@/lib/domain/types";
-import { resolveStageBadgeClass, resolveStageLabel } from "@/lib/domain/stage-visuals";
+import {
+  resolveRapportNextStepOptions,
+  resolveStageBadgeClass,
+  resolveStageLabel,
+} from "@/lib/domain/stage-visuals";
 import { useWorkflowStages } from "@/components/app/workflow-stages-provider";
 import { cn } from "@/lib/utils";
 import { telHref } from "@/lib/phone";
@@ -477,9 +481,12 @@ export function MonteurAuftragClient({
   // Montage-Kontext: Material bestellt / montagebereit / Nachtermin — kein neues Bestellformular.
   const isMontageContext = isMonteurMontageContext(p.status as ProjectStatus, bundle.reports.length);
 
-  const nextStepOptions = isMontageContext
-    ? RAPPORT_NEXT_STEP_OPTIONS_MONTAGE
-    : RAPPORT_NEXT_STEP_OPTIONS_ERSTBESUCH;
+  const workflowStages = useWorkflowStages();
+  const nextStepOptions = resolveRapportNextStepOptions(
+    workflowStages,
+    isMontageContext ? "montage" : "aufgenommen",
+    isMontageContext ? RAPPORT_NEXT_STEP_OPTIONS_MONTAGE : RAPPORT_NEXT_STEP_OPTIONS_ERSTBESUCH,
+  );
 
   const [mode, setMode] = useState<"schaden_behoben" | "schaden_aufgenommen" | null>(null);
   const [nextStatus, setNextStatus] = useState<RapportNextStep | null>(null);

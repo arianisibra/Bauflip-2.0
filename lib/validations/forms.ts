@@ -9,7 +9,7 @@ import {
   RAPPORT_ALL_NEXT_STEPS,
   technicianAbsenceKinds,
 } from "@/lib/domain/types";
-import { STAGE_COLOR_KEYS } from "@/lib/domain/stage-visuals";
+import { RAPPORT_NEXT_STEP_ICON_KEYS, STAGE_COLOR_KEYS } from "@/lib/domain/stage-visuals";
 
 /** Von der KI aus einem Auftrags-PDF extrahierte Felder — alles optional, da nie garantiert erkennbar. */
 export const intakePdfExtractionSchema = z.object({
@@ -285,6 +285,8 @@ export const workflowStageUpdateSchema = z.object({
   rapportAufgenommen: z.boolean(),
   rapportMontage: z.boolean(),
   rapportBehobenTarget: z.boolean(),
+  rapportNextStepDescription: z.string().trim().max(160).nullable(),
+  rapportNextStepIcon: z.enum(RAPPORT_NEXT_STEP_ICON_KEYS).nullable(),
 });
 
 /** Ein Übergang (Pipeline-Knopf) — Einstellungen → Workflow. */
