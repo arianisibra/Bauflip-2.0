@@ -328,7 +328,7 @@ export function TimeEntriesManager() {
             rows={2}
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="z. B. Montage Storen, Baustelle Musterstrasse"
+            placeholder="z. B. Montage, Baustelle Musterstrasse"
           />
         </div>
         {error ? <p className="text-xs font-medium text-destructive sm:col-span-2">{error}</p> : null}

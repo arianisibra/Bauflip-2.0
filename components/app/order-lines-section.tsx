@@ -220,7 +220,7 @@ export function OrderLinesSection({
               <Label className="text-[11px]">Was wurde bestellt?</Label>
               <Input
                 value={form.description}
-                placeholder="z. B. Stoffbahnen weiss, 3 Rollen"
+                placeholder="z. B. Material, 3 Stück"
                 onChange={(e) => setForm((p) => (p ? { ...p, description: e.target.value } : p))}
               />
             </div>

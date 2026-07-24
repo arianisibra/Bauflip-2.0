@@ -248,7 +248,7 @@ export function QuoteEditorDialog({
                 <Label className="text-[11px] sm:hidden">Beschreibung</Label>
                 <Input
                   value={item.description}
-                  placeholder="z. B. Storen-Motor ersetzen"
+                  placeholder="z. B. Arbeiten gemäss Absprache"
                   onChange={(e) =>
                     setEditor((prev) => {
                       const lineItems = [...prev.lineItems];

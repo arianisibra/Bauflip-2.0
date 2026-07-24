@@ -112,7 +112,7 @@ export function OrderFormTemplatesAdmin({ templates: initialTemplates }: { templ
                 id="cms-new-name"
                 value={newFormName}
                 onChange={(e) => setNewFormName(e.target.value)}
-                placeholder="z. B. Lamellenstoren"
+                placeholder="z. B. Standardauftrag"
               />
             </div>
           </CardContent>

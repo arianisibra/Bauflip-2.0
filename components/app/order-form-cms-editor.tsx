@@ -570,7 +570,7 @@ export function CmsFormEditor({
               id="edit-name"
               value={formName}
               onChange={(e) => setFormName(e.target.value)}
-              placeholder="z. B. Lamellenstoren"
+              placeholder="z. B. Standardauftrag"
               required
             />
           </div>

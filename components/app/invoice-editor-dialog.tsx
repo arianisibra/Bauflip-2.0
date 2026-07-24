@@ -229,7 +229,7 @@ export function InvoiceEditorDialog({
                 <Label className="text-[11px] sm:hidden">Beschreibung</Label>
                 <Input
                   value={item.description}
-                  placeholder="z. B. Storen-Motor ersetzt"
+                  placeholder="z. B. Arbeiten gemäss Auftrag"
                   onChange={(e) =>
                     setEditor((prev) => {
                       const lineItems = [...prev.lineItems];

@@ -226,7 +226,7 @@ export function PriceBookManager() {
                 <Label className="text-[11px]">Kategorie (optional)</Label>
                 <Input
                   value={form.category}
-                  placeholder="z. B. Storen, Montage"
+                  placeholder="z. B. Material, Montage"
                   onChange={(e) => setForm((prev) => (prev ? { ...prev, category: e.target.value } : prev))}
                 />
               </div>
