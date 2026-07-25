@@ -58,6 +58,7 @@ export async function createInvoiceAction(values: unknown, tabId?: string): Prom
       dueDate: parsed.data.dueDate ?? null,
       introText: parsed.data.introText?.trim() || null,
       vatRate: parsed.data.vatRate,
+      discountPercent: parsed.data.discountPercent,
       lineItems: parsed.data.lineItems,
     },
     { createdByProfileId: profile.userId },
@@ -75,6 +76,7 @@ export async function updateInvoiceAction(values: unknown, tabId?: string): Prom
     dueDate: parsed.data.dueDate ?? null,
     introText: parsed.data.introText?.trim() || null,
     vatRate: parsed.data.vatRate,
+    discountPercent: parsed.data.discountPercent,
     lineItems: parsed.data.lineItems,
   });
   await publishInvoiceChanged(session.organizationId, invoice.projectId, tabId);

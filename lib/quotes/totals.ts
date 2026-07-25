@@ -18,12 +18,21 @@ export function quoteLineTotal(item: Pick<QuoteLineItemInput, "quantity" | "unit
   return roundRappen(item.quantity * item.unitPrice);
 }
 
+/**
+ * `totalNet` bleibt die Basis für die MwSt-Berechnung (also NACH Rabatt) — das
+ * hält alle bestehenden Aufrufer (PDF "Netto CHF", Dashboard-Summen) korrekt,
+ * ohne sie anzupassen. `subtotal`/`discountAmount` sind nur für die Anzeige
+ * gedacht (Rabattzeile wird nur gezeigt, wenn discountPercent > 0).
+ */
 export function computeQuoteTotals(
   lineItems: readonly QuoteLineItemInput[],
   vatRate: number,
-): { totalNet: number; totalGross: number; lineTotals: number[] } {
+  discountPercent = 0,
+): { subtotal: number; discountAmount: number; totalNet: number; totalGross: number; lineTotals: number[] } {
   const lineTotals = lineItems.map((item) => quoteLineTotal(item));
-  const totalNet = roundRappen(lineTotals.reduce((sum, t) => sum + t, 0));
+  const subtotal = roundRappen(lineTotals.reduce((sum, t) => sum + t, 0));
+  const discountAmount = roundRappen(subtotal * (discountPercent / 100));
+  const totalNet = roundRappen(subtotal - discountAmount);
   const totalGross = roundRappen(totalNet * (1 + vatRate / 100));
-  return { totalNet, totalGross, lineTotals };
+  return { subtotal, discountAmount, totalNet, totalGross, lineTotals };
 }

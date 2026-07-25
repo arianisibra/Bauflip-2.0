@@ -30,6 +30,7 @@ type EditorState = {
   introText: string;
   outroText: string;
   vatRate: string;
+  discountPercent: string;
   lineItems: EditableLineItem[];
 };
 
@@ -43,6 +44,7 @@ function emptyEditor(): EditorState {
     introText: "",
     outroText: "",
     vatRate: "8.1",
+    discountPercent: "0",
     lineItems: [{ ...EMPTY_LINE }],
   };
 }
@@ -54,6 +56,7 @@ function editorFromQuote(quote: Quote): EditorState {
     introText: quote.introText ?? "",
     outroText: quote.outroText ?? "",
     vatRate: String(quote.vatRate),
+    discountPercent: String(quote.discountPercent),
     lineItems: quote.lineItems.map((item) => ({
       description: item.description,
       quantity: String(item.quantity),
@@ -154,6 +157,7 @@ export function QuoteEditorDialog({
       unitPrice: Number.isFinite(i.unitPrice) ? i.unitPrice : 0,
     })),
     Number(editor.vatRate.replace(",", ".")) || 0,
+    Number(editor.discountPercent.replace(",", ".")) || 0,
   );
 
   const hasUsableLine = editor.lineItems.some((l) => l.description.trim() && l.unitPrice.trim());
@@ -173,6 +177,7 @@ export function QuoteEditorDialog({
       introText: editor.introText || null,
       outroText: editor.outroText || null,
       vatRate: Number(editor.vatRate.replace(",", ".")),
+      discountPercent: Number(editor.discountPercent.replace(",", ".")),
       lineItems: parsedLineItems(editor),
     };
     const parsed = quoteCreateSchema.safeParse(payload);
@@ -348,13 +353,22 @@ export function QuoteEditorDialog({
 
       {step === 1 ? (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <Label className="text-[11px]">Gültig bis</Label>
               <Input
                 type="date"
                 value={editor.validUntil}
                 onChange={(e) => setEditor((prev) => ({ ...prev, validUntil: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label className="text-[11px]">Rabatt (%)</Label>
+              <Input
+                inputMode="decimal"
+                value={editor.discountPercent}
+                placeholder="0"
+                onChange={(e) => setEditor((prev) => ({ ...prev, discountPercent: e.target.value }))}
               />
             </div>
             <div>
@@ -407,6 +421,18 @@ export function QuoteEditorDialog({
             </ul>
           </div>
           <dl className="space-y-1.5 rounded-lg bg-muted/40 px-3 py-2.5 text-sm">
+            {totals.discountAmount > 0 ? (
+              <>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Zwischentotal</dt>
+                  <dd className="tabular-nums">{chf.format(totals.subtotal)}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Rabatt {editor.discountPercent}%</dt>
+                  <dd className="tabular-nums">−{chf.format(totals.discountAmount)}</dd>
+                </div>
+              </>
+            ) : null}
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Netto</dt>
               <dd className="tabular-nums">{chf.format(totals.totalNet)}</dd>

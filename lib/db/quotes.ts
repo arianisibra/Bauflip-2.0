@@ -12,7 +12,7 @@ import { updateProject } from "@/lib/db/repository";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const QUOTE_DB_COLUMNS =
-  "id, organization_id, project_id, quote_number, status, valid_until, intro_text, outro_text, vat_rate, total_net, total_gross, sent_at, sent_to_email, created_by, created_by_display_name, submitted_for_approval_at, approval_decided_at, approved_by, approved_by_display_name, approval_note, created_at, updated_at";
+  "id, organization_id, project_id, quote_number, status, valid_until, intro_text, outro_text, vat_rate, discount_percent, total_net, total_gross, sent_at, sent_to_email, created_by, created_by_display_name, submitted_for_approval_at, approval_decided_at, approved_by, approved_by_display_name, approval_note, created_at, updated_at";
 
 const QUOTE_LINE_ITEM_DB_COLUMNS =
   "id, quote_id, position, description, quantity, unit, unit_price, line_total";
@@ -32,6 +32,7 @@ function mapQuoteRow(row: Record<string, unknown>): Quote {
     introText: row.intro_text != null ? String(row.intro_text) : null,
     outroText: row.outro_text != null ? String(row.outro_text) : null,
     vatRate: Number(row.vat_rate ?? 0),
+    discountPercent: Number(row.discount_percent ?? 0),
     totalNet: Number(row.total_net ?? 0),
     totalGross: Number(row.total_gross ?? 0),
     sentAt: row.sent_at != null ? String(row.sent_at) : null,
@@ -185,6 +186,7 @@ export type QuoteCreateInput = {
   introText: string | null;
   outroText: string | null;
   vatRate: number;
+  discountPercent: number;
   lineItems: QuoteLineItemInput[];
 };
 
@@ -217,7 +219,7 @@ export async function createQuote(
     createdByDisplayName = typeof rawName === "string" && rawName.trim() ? rawName.trim() : null;
   }
 
-  const { totalNet, totalGross } = computeQuoteTotals(input.lineItems, input.vatRate);
+  const { totalNet, totalGross } = computeQuoteTotals(input.lineItems, input.vatRate, input.discountPercent);
 
   const { data, error } = await supabase
     .from("quotes")
@@ -228,6 +230,7 @@ export async function createQuote(
       intro_text: input.introText,
       outro_text: input.outroText,
       vat_rate: input.vatRate,
+      discount_percent: input.discountPercent,
       total_net: totalNet,
       total_gross: totalGross,
       created_by: options.createdByProfileId,
@@ -276,7 +279,7 @@ export async function updateQuote(quoteId: string, input: QuoteUpdateInput): Pro
     throw new Error("Nur Entwürfe können bearbeitet werden.");
   }
 
-  const { totalNet, totalGross } = computeQuoteTotals(input.lineItems, input.vatRate);
+  const { totalNet, totalGross } = computeQuoteTotals(input.lineItems, input.vatRate, input.discountPercent);
 
   const { data, error } = await supabase
     .from("quotes")
@@ -285,6 +288,7 @@ export async function updateQuote(quoteId: string, input: QuoteUpdateInput): Pro
       intro_text: input.introText,
       outro_text: input.outroText,
       vat_rate: input.vatRate,
+      discount_percent: input.discountPercent,
       total_net: totalNet,
       total_gross: totalGross,
     })

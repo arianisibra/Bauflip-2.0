@@ -14,7 +14,7 @@ import { buildQrrReference, buildScorReference, chooseReferenceType } from "@/li
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const INVOICE_DB_COLUMNS =
-  "id, organization_id, project_id, quote_id, invoice_number, status, due_date, intro_text, vat_rate, total_net, total_gross, reference_type, payment_reference, sent_at, sent_to_email, paid_at, created_by, created_by_display_name, created_at, updated_at, bexio_invoice_id, bexio_synced_at, bexio_sync_error";
+  "id, organization_id, project_id, quote_id, invoice_number, status, due_date, intro_text, vat_rate, discount_percent, total_net, total_gross, reference_type, payment_reference, sent_at, sent_to_email, paid_at, created_by, created_by_display_name, created_at, updated_at, bexio_invoice_id, bexio_synced_at, bexio_sync_error";
 
 const INVOICE_LINE_ITEM_DB_COLUMNS =
   "id, invoice_id, position, description, quantity, unit, unit_price, line_total";
@@ -40,6 +40,7 @@ function mapInvoiceRow(row: Record<string, unknown>): Invoice {
     dueDate: row.due_date != null ? String(row.due_date) : null,
     introText: row.intro_text != null ? String(row.intro_text) : null,
     vatRate: Number(row.vat_rate ?? 0),
+    discountPercent: Number(row.discount_percent ?? 0),
     totalNet: Number(row.total_net ?? 0),
     totalGross: Number(row.total_gross ?? 0),
     referenceType: mapReferenceType(row.reference_type),
@@ -169,6 +170,7 @@ export type InvoiceCreateInput = {
   dueDate: string | null;
   introText: string | null;
   vatRate: number;
+  discountPercent: number;
   lineItems: QuoteLineItemInput[];
 };
 
@@ -192,6 +194,7 @@ export async function createInvoice(
   // Positionen + Konditionen aus Offerte übernehmen, falls angegeben.
   let lineItems = input.lineItems;
   let vatRate = input.vatRate;
+  let discountPercent = input.discountPercent;
   let quoteId: string | null = null;
   if (input.fromQuoteId) {
     const quote = await getQuoteWithItems(input.fromQuoteId);
@@ -208,6 +211,7 @@ export async function createInvoice(
       unitPrice: item.unitPrice,
     }));
     vatRate = quote.vatRate;
+    discountPercent = quote.discountPercent;
     quoteId = quote.id;
   }
   if (lineItems.length === 0) {
@@ -229,7 +233,7 @@ export async function createInvoice(
   const billing = await getOrganizationBillingSettings(organizationId);
   const referenceType = chooseReferenceType(billing?.iban ?? null);
 
-  const { totalNet, totalGross } = computeQuoteTotals(lineItems, vatRate);
+  const { totalNet, totalGross } = computeQuoteTotals(lineItems, vatRate, discountPercent);
 
   const { data, error } = await supabase
     .from("invoices")
@@ -240,6 +244,7 @@ export async function createInvoice(
       due_date: input.dueDate,
       intro_text: input.introText,
       vat_rate: vatRate,
+      discount_percent: discountPercent,
       total_net: totalNet,
       total_gross: totalGross,
       reference_type: referenceType,
@@ -340,6 +345,7 @@ export type InvoiceUpdateInput = {
   dueDate: string | null;
   introText: string | null;
   vatRate: number;
+  discountPercent: number;
   lineItems: QuoteLineItemInput[];
 };
 
@@ -359,7 +365,7 @@ export async function updateInvoice(invoiceId: string, input: InvoiceUpdateInput
     throw new Error("Nur Entwürfe können bearbeitet werden.");
   }
 
-  const { totalNet, totalGross } = computeQuoteTotals(input.lineItems, input.vatRate);
+  const { totalNet, totalGross } = computeQuoteTotals(input.lineItems, input.vatRate, input.discountPercent);
 
   const { data, error } = await supabase
     .from("invoices")
@@ -367,6 +373,7 @@ export async function updateInvoice(invoiceId: string, input: InvoiceUpdateInput
       due_date: input.dueDate,
       intro_text: input.introText,
       vat_rate: input.vatRate,
+      discount_percent: input.discountPercent,
       total_net: totalNet,
       total_gross: totalGross,
     })

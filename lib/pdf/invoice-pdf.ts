@@ -6,6 +6,7 @@ import type { Invoice, OrganizationBillingSettings } from "@/lib/domain/types";
 import type { OrganizationBranding } from "@/lib/domain/types";
 import type { QuotePdfProjectHead } from "@/lib/db/quotes";
 import { formatChf, letterheadLines } from "@/lib/pdf/quote-pdf";
+import { roundRappen } from "@/lib/quotes/totals";
 import { formatIban } from "@/lib/qr-bill/iban";
 import { buildQrBillPayload, splitStreetAndNumber, type QrBillAddress } from "@/lib/qr-bill/payload";
 import { formatPaymentReference } from "@/lib/qr-bill/reference";
@@ -431,14 +432,22 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Uint8Arra
   }
 
   // ── Summen ────────────────────────────────────────────────────────────────
-  newPageIfNeeded(4 * LINE_HEIGHT + 12);
+  newPageIfNeeded(6 * LINE_HEIGHT + 12);
   page.drawLine({
     start: { x: COLS.unitPrice.x, y: y + LINE_HEIGHT - 6 },
     end: { x: PAGE_WIDTH - MARGIN, y: y + LINE_HEIGHT - 6 },
     thickness: 0.7,
     color: RULE,
   });
+  const subtotal = roundRappen(invoice.lineItems.reduce((sum, item) => sum + item.lineTotal, 0));
+  const discountAmount = roundRappen(subtotal - invoice.totalNet);
   const totals: [string, string, PDFFont][] = [
+    ...(discountAmount > 0
+      ? ([
+          ["Zwischentotal CHF", formatChf(subtotal), font],
+          [`Rabatt ${invoice.discountPercent}%`, `-${formatChf(discountAmount)}`, font],
+        ] as [string, string, PDFFont][])
+      : []),
     ["Netto CHF", formatChf(invoice.totalNet), font],
     [`MwSt. ${invoice.vatRate}%`, formatChf(invoice.totalGross - invoice.totalNet), font],
     ["Total CHF", formatChf(invoice.totalGross), bold],

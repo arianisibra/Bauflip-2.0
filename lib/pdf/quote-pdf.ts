@@ -4,6 +4,7 @@ import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf
 import type { Quote } from "@/lib/domain/types";
 import type { OrganizationBranding, OrganizationBillingSettings } from "@/lib/domain/types";
 import type { QuotePdfProjectHead } from "@/lib/db/quotes";
+import { roundRappen } from "@/lib/quotes/totals";
 
 // A4 in PDF-Punkten
 const PAGE_WIDTH = 595.28;
@@ -239,14 +240,22 @@ export async function buildQuotePdf(input: QuotePdfInput): Promise<Uint8Array> {
   }
 
   // ── Summen ────────────────────────────────────────────────────────────────
-  newPageIfNeeded(4 * LINE_HEIGHT + 12);
+  newPageIfNeeded(6 * LINE_HEIGHT + 12);
   cursor.page.drawLine({
     start: { x: COLS.unitPrice.x, y: cursor.y + LINE_HEIGHT - 6 },
     end: { x: PAGE_WIDTH - MARGIN, y: cursor.y + LINE_HEIGHT - 6 },
     thickness: 0.7,
     color: RULE,
   });
+  const subtotal = roundRappen(quote.lineItems.reduce((sum, item) => sum + item.lineTotal, 0));
+  const discountAmount = roundRappen(subtotal - quote.totalNet);
   const totals: [string, string, PDFFont][] = [
+    ...(discountAmount > 0
+      ? ([
+          ["Zwischentotal CHF", formatChf(subtotal), font],
+          [`Rabatt ${quote.discountPercent}%`, `-${formatChf(discountAmount)}`, font],
+        ] as [string, string, PDFFont][])
+      : []),
     ["Netto CHF", formatChf(quote.totalNet), font],
     [`MwSt. ${quote.vatRate}%`, formatChf(quote.totalGross - quote.totalNet), font],
     ["Total CHF", formatChf(quote.totalGross), bold],

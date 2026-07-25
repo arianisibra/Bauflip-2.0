@@ -466,6 +466,8 @@ export type Quote = {
   introText: string | null;
   outroText: string | null;
   vatRate: number;
+  /** Prozentualer Rabatt auf die Positionssumme, vor der MwSt abgezogen (0 = kein Rabatt). */
+  discountPercent: number;
   totalNet: number;
   totalGross: number;
   sentAt: string | null;
@@ -612,6 +614,8 @@ export type Invoice = {
   dueDate: string | null;
   introText: string | null;
   vatRate: number;
+  /** Prozentualer Rabatt auf die Positionssumme, vor der MwSt abgezogen (0 = kein Rabatt). */
+  discountPercent: number;
   totalNet: number;
   totalGross: number;
   /**

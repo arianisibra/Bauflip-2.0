@@ -91,6 +91,7 @@ export async function createQuoteAction(values: unknown, tabId?: string): Promis
       introText: parsed.data.introText?.trim() || null,
       outroText: parsed.data.outroText?.trim() || null,
       vatRate: parsed.data.vatRate,
+      discountPercent: parsed.data.discountPercent,
       lineItems: parsed.data.lineItems,
     },
     { createdByProfileId: profile.userId },
@@ -109,6 +110,7 @@ export async function updateQuoteAction(values: unknown, tabId?: string): Promis
     introText: parsed.data.introText?.trim() || null,
     outroText: parsed.data.outroText?.trim() || null,
     vatRate: parsed.data.vatRate,
+    discountPercent: parsed.data.discountPercent,
     lineItems: parsed.data.lineItems,
   });
   await publishQuoteChanged(session.organizationId, quote.projectId, tabId);

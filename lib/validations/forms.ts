@@ -234,6 +234,7 @@ export const quoteCreateSchema = z.object({
   introText: z.string().max(4000).optional().nullable(),
   outroText: z.string().max(4000).optional().nullable(),
   vatRate: z.coerce.number().min(0).max(100),
+  discountPercent: z.coerce.number().min(0).max(100).default(0),
   lineItems: z.array(quoteLineItemSchema).min(1, "Mindestens eine Position erfassen."),
 });
 
@@ -358,6 +359,8 @@ export const invoiceCreateSchema = z.object({
     .nullable(),
   introText: z.string().max(4000).optional().nullable(),
   vatRate: z.coerce.number().min(0).max(100),
+  /** Bei fromQuoteId ignoriert (kommt dann aus der Offerte). */
+  discountPercent: z.coerce.number().min(0).max(100).default(0),
   /** Bei fromQuoteId ignoriert (Positionen kommen aus der Offerte). */
   lineItems: z.array(quoteLineItemSchema),
 });
@@ -371,6 +374,7 @@ export const invoiceUpdateSchema = z.object({
     .nullable(),
   introText: z.string().max(4000).optional().nullable(),
   vatRate: z.coerce.number().min(0).max(100),
+  discountPercent: z.coerce.number().min(0).max(100).default(0),
   lineItems: z.array(quoteLineItemSchema).min(1, "Mindestens eine Position erfassen."),
 });
 

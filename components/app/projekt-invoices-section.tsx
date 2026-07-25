@@ -105,6 +105,7 @@ export function ProjektInvoicesSection({
         dueDate: defaultDueDate(),
         introText: null,
         vatRate: quote.vatRate,
+        discountPercent: quote.discountPercent,
         lineItems: [],
       });
       toast.success(`Rechnung aus ${quote.quoteNumber ?? "Offerte"} erstellt`);
