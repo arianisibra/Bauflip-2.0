@@ -21,6 +21,9 @@ type FormState = {
   creditorPostalCode: string;
   creditorCity: string;
   vatNumber: string;
+  phone: string;
+  email: string;
+  website: string;
 };
 
 const EMPTY_FORM: FormState = {
@@ -31,6 +34,9 @@ const EMPTY_FORM: FormState = {
   creditorPostalCode: "",
   creditorCity: "",
   vatNumber: "",
+  phone: "",
+  email: "",
+  website: "",
 };
 
 function formFromSettings(settings: OrganizationBillingSettings): FormState {
@@ -42,6 +48,9 @@ function formFromSettings(settings: OrganizationBillingSettings): FormState {
     creditorPostalCode: settings.creditorPostalCode ?? "",
     creditorCity: settings.creditorCity ?? "",
     vatNumber: settings.vatNumber ?? "",
+    phone: settings.phone ?? "",
+    email: settings.email ?? "",
+    website: settings.website ?? "",
   };
 }
 
@@ -77,6 +86,9 @@ export function BillingSettingsForm() {
       creditorPostalCode: form.creditorPostalCode || null,
       creditorCity: form.creditorCity || null,
       vatNumber: form.vatNumber || null,
+      phone: form.phone || null,
+      email: form.email || null,
+      website: form.website || null,
     };
     const parsed = billingSettingsSchema.safeParse(payload);
     if (!parsed.success) {
@@ -191,6 +203,24 @@ export function BillingSettingsForm() {
               <Input value={form.creditorCity} placeholder="Zürich" onChange={set("creditorCity")} />
             </div>
           </div>
+
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div>
+              <Label className="text-[11px]">Telefon (optional)</Label>
+              <Input value={form.phone} placeholder="044 123 45 67" onChange={set("phone")} />
+            </div>
+            <div>
+              <Label className="text-[11px]">E-Mail (optional)</Label>
+              <Input value={form.email} placeholder="info@firma.ch" onChange={set("email")} />
+            </div>
+          </div>
+          <div>
+            <Label className="text-[11px]">Website (optional)</Label>
+            <Input value={form.website} placeholder="firma.ch" onChange={set("website")} />
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Diese Angaben erscheinen im Briefkopf von Offerten und Rechnungen.
+          </p>
         </div>
       </Dialog>
     </>

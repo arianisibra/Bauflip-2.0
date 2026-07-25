@@ -11,6 +11,7 @@ import {
   setQuoteStatus,
   updateQuote,
 } from "@/lib/db/quotes";
+import { EMPTY_ORGANIZATION_BILLING_SETTINGS, getOrganizationBillingSettings } from "@/lib/db/billing";
 import { getOrganizationBranding, listAdminEmailsForOrg } from "@/lib/db/repository";
 import type { Quote } from "@/lib/domain/types";
 import { assertMailRateLimit } from "@/lib/mail/rate-limit";
@@ -179,14 +180,21 @@ export async function sendQuoteAction(values: unknown, tabId?: string): Promise<
     throw new Error("Diese Offerte muss zuerst zur Freigabe eingereicht werden.");
   }
 
-  const [project, branding] = await Promise.all([
+  const [project, branding, billing] = await Promise.all([
     getQuotePdfProjectHead(quote.projectId),
     getOrganizationBranding(quote.organizationId),
+    getOrganizationBillingSettings(quote.organizationId),
   ]);
   if (!project) throw new Error("Projekt nicht gefunden.");
 
   const logo = await fetchLogoBytes(branding.logoUrl);
-  const pdfBytes = await buildQuotePdf({ quote, project, branding, logo });
+  const pdfBytes = await buildQuotePdf({
+    quote,
+    project,
+    branding,
+    billing: billing ?? EMPTY_ORGANIZATION_BILLING_SETTINGS,
+    logo,
+  });
 
   const quoteLabel = quote.quoteNumber ?? "Offerte";
   const validUntilLine = quote.validUntil

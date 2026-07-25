@@ -5,8 +5,21 @@ import type { OrganizationBillingSettings } from "@/lib/domain/types";
 import { normalizeIban } from "@/lib/qr-bill/iban";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+export const EMPTY_ORGANIZATION_BILLING_SETTINGS: OrganizationBillingSettings = {
+  iban: null,
+  creditorName: null,
+  creditorStreet: null,
+  creditorBuildingNumber: null,
+  creditorPostalCode: null,
+  creditorCity: null,
+  vatNumber: null,
+  phone: null,
+  email: null,
+  website: null,
+};
+
 const BILLING_DB_COLUMNS =
-  "billing_iban, billing_creditor_name, billing_creditor_street, billing_creditor_building_number, billing_creditor_postal_code, billing_creditor_city, billing_vat_number";
+  "billing_iban, billing_creditor_name, billing_creditor_street, billing_creditor_building_number, billing_creditor_postal_code, billing_creditor_city, billing_vat_number, billing_phone, billing_email, billing_website";
 
 function s(v: unknown): string | null {
   return v != null && String(v).trim() ? String(v).trim() : null;
@@ -21,6 +34,9 @@ function mapBillingRow(row: Record<string, unknown>): OrganizationBillingSetting
     creditorPostalCode: s(row.billing_creditor_postal_code),
     creditorCity: s(row.billing_creditor_city),
     vatNumber: s(row.billing_vat_number),
+    phone: s(row.billing_phone),
+    email: s(row.billing_email),
+    website: s(row.billing_website),
   };
 }
 
@@ -56,6 +72,9 @@ export async function updateOrganizationBillingSettings(
       billing_creditor_postal_code: input.creditorPostalCode,
       billing_creditor_city: input.creditorCity,
       billing_vat_number: input.vatNumber,
+      billing_phone: input.phone,
+      billing_email: input.email,
+      billing_website: input.website,
     })
     .eq("id", organizationId)
     .select(BILLING_DB_COLUMNS)

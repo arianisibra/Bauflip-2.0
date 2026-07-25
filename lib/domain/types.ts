@@ -658,6 +658,9 @@ export type OrganizationBillingSettings = {
   creditorPostalCode: string | null;
   creditorCity: string | null;
   vatNumber: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
 };
 
 /** Bexio-Anbindung (Teil B): Verbindungsstatus + Mapping (organizations.bexio_*). Token selbst nie hier. */

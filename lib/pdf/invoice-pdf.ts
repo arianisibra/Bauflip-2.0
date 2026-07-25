@@ -5,7 +5,7 @@ import QRCode from "qrcode";
 import type { Invoice, OrganizationBillingSettings } from "@/lib/domain/types";
 import type { OrganizationBranding } from "@/lib/domain/types";
 import type { QuotePdfProjectHead } from "@/lib/db/quotes";
-import { formatChf } from "@/lib/pdf/quote-pdf";
+import { formatChf, letterheadLines } from "@/lib/pdf/quote-pdf";
 import { formatIban } from "@/lib/qr-bill/iban";
 import { buildQrBillPayload, splitStreetAndNumber, type QrBillAddress } from "@/lib/qr-bill/payload";
 import { formatPaymentReference } from "@/lib/qr-bill/reference";
@@ -341,12 +341,14 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Uint8Arra
     }
   }
   y = headerBottom - (logo ? LINE_HEIGHT : 0);
-  drawText(branding.name, 0, { font: bold, size: 11, rightAlignEnd: PAGE_WIDTH - MARGIN });
-  if (billing.vatNumber) {
+  const { name: senderName, lines: senderLines } = letterheadLines(billing, branding.name);
+  drawText(senderName, 0, { font: bold, size: 11, rightAlignEnd: PAGE_WIDTH - MARGIN });
+  for (const line of senderLines) {
     y -= 12;
-    drawText(billing.vatNumber, 0, { size: 8, color: GRAY, rightAlignEnd: PAGE_WIDTH - MARGIN });
+    drawText(line, 0, { size: 8, color: GRAY, rightAlignEnd: PAGE_WIDTH - MARGIN });
   }
   y -= LINE_HEIGHT;
+  const rightBottom = y;
 
   // ── Adressblock (Debitor) ─────────────────────────────────────────────────
   y = headerTop - 40;
@@ -360,8 +362,8 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Uint8Arra
     y -= LINE_HEIGHT;
   }
 
-  // ── Titel + Meta ──────────────────────────────────────────────────────────
-  y -= 30;
+  // ── Titel + Meta (unterhalb des höheren der beiden Kopf-Blöcke) ────────────
+  y = Math.min(y, rightBottom) - 30;
   drawText(title, MARGIN, { font: bold, size: 16 });
   y -= 22;
 

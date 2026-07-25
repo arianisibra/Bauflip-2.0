@@ -2,26 +2,17 @@
 
 import { requireAdminLayoutSession } from "@/lib/auth/organization";
 import {
+  EMPTY_ORGANIZATION_BILLING_SETTINGS,
   getOrganizationBillingSettings,
   updateOrganizationBillingSettings,
 } from "@/lib/db/billing";
 import type { OrganizationBillingSettings } from "@/lib/domain/types";
 import { billingSettingsSchema } from "@/lib/validations/forms";
 
-const EMPTY_BILLING: OrganizationBillingSettings = {
-  iban: null,
-  creditorName: null,
-  creditorStreet: null,
-  creditorBuildingNumber: null,
-  creditorPostalCode: null,
-  creditorCity: null,
-  vatNumber: null,
-};
-
 export async function getBillingSettingsAction(): Promise<OrganizationBillingSettings> {
   const session = await requireAdminLayoutSession();
-  if (!session.organizationId) return EMPTY_BILLING;
-  return (await getOrganizationBillingSettings(session.organizationId)) ?? EMPTY_BILLING;
+  if (!session.organizationId) return EMPTY_ORGANIZATION_BILLING_SETTINGS;
+  return (await getOrganizationBillingSettings(session.organizationId)) ?? EMPTY_ORGANIZATION_BILLING_SETTINGS;
 }
 
 export async function updateBillingSettingsAction(
@@ -43,5 +34,8 @@ export async function updateBillingSettingsAction(
     creditorPostalCode: parsed.data.creditorPostalCode || null,
     creditorCity: parsed.data.creditorCity || null,
     vatNumber: parsed.data.vatNumber || null,
+    phone: parsed.data.phone || null,
+    email: parsed.data.email || null,
+    website: parsed.data.website || null,
   });
 }

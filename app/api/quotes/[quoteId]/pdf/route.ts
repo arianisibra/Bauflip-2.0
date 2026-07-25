@@ -1,4 +1,5 @@
 import { getOfficeSessionOrNull } from "@/lib/auth/organization";
+import { EMPTY_ORGANIZATION_BILLING_SETTINGS, getOrganizationBillingSettings } from "@/lib/db/billing";
 import { getQuotePdfProjectHead, getQuoteWithItems } from "@/lib/db/quotes";
 import { getOrganizationBranding } from "@/lib/db/repository";
 import { buildQuotePdf, fetchLogoBytes } from "@/lib/pdf/quote-pdf";
@@ -19,16 +20,23 @@ export async function GET(
     return new Response("Offerte nicht gefunden.", { status: 404 });
   }
 
-  const [project, branding] = await Promise.all([
+  const [project, branding, billing] = await Promise.all([
     getQuotePdfProjectHead(quote.projectId),
     getOrganizationBranding(quote.organizationId),
+    getOrganizationBillingSettings(quote.organizationId),
   ]);
   if (!project) {
     return new Response("Projekt nicht gefunden.", { status: 404 });
   }
 
   const logo = await fetchLogoBytes(branding.logoUrl);
-  const pdfBytes = await buildQuotePdf({ quote, project, branding, logo });
+  const pdfBytes = await buildQuotePdf({
+    quote,
+    project,
+    branding,
+    billing: billing ?? EMPTY_ORGANIZATION_BILLING_SETTINGS,
+    logo,
+  });
 
   const filename = `${quote.quoteNumber ?? "Offerte"}.pdf`;
   return new Response(Buffer.from(pdfBytes), {

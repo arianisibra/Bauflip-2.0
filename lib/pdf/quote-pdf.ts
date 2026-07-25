@@ -2,7 +2,7 @@ import "server-only";
 
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { Quote } from "@/lib/domain/types";
-import type { OrganizationBranding } from "@/lib/domain/types";
+import type { OrganizationBranding, OrganizationBillingSettings } from "@/lib/domain/types";
 import type { QuotePdfProjectHead } from "@/lib/db/quotes";
 
 // A4 in PDF-Punkten
@@ -65,10 +65,29 @@ function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): 
   return lines;
 }
 
+/**
+ * Briefkopf-Zeilen aus den Zahlungsdaten (organizations.billing_*): Name (Fallback
+ * `branding.name`) + Adresse/Telefon/E-Mail/Website/MwSt-Nr., wo gesetzt. Gemeinsam
+ * genutzt von Offerten- und Rechnungs-PDF, damit beide denselben Briefkopf zeigen.
+ */
+export function letterheadLines(
+  billing: OrganizationBillingSettings,
+  fallbackName: string,
+): { name: string; lines: string[] } {
+  const name = billing.creditorName?.trim() || fallbackName;
+  const streetLine = [billing.creditorStreet, billing.creditorBuildingNumber].filter(Boolean).join(" ");
+  const cityLine = [billing.creditorPostalCode, billing.creditorCity].filter(Boolean).join(" ");
+  const lines = [streetLine, cityLine, billing.phone, billing.email, billing.website, billing.vatNumber].filter(
+    (l): l is string => Boolean(l && l.trim()),
+  );
+  return { name, lines };
+}
+
 export type QuotePdfInput = {
   quote: Quote;
   project: QuotePdfProjectHead;
   branding: OrganizationBranding;
+  billing: OrganizationBillingSettings;
   /** Logo-Bytes (PNG/JPG), bereits geladen — null wenn keins vorhanden/ladbar. */
   logo: { bytes: Uint8Array; mimeType: string } | null;
 };
@@ -76,7 +95,7 @@ export type QuotePdfInput = {
 type Cursor = { page: PDFPage; y: number };
 
 export async function buildQuotePdf(input: QuotePdfInput): Promise<Uint8Array> {
-  const { quote, project, branding, logo } = input;
+  const { quote, project, branding, billing, logo } = input;
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -135,8 +154,13 @@ export async function buildQuotePdf(input: QuotePdfInput): Promise<Uint8Array> {
     }
   }
   cursor.y = headerBottom - (logo ? LINE_HEIGHT : 0);
-  drawText(branding.name, 0, { font: bold, size: 11, rightAlignEnd: PAGE_WIDTH - MARGIN });
-  cursor.y -= LINE_HEIGHT;
+  const { name: senderName, lines: senderLines } = letterheadLines(billing, branding.name);
+  drawText(senderName, 0, { font: bold, size: 11, rightAlignEnd: PAGE_WIDTH - MARGIN });
+  for (const line of senderLines) {
+    cursor.y -= 12;
+    drawText(line, 0, { size: 8, color: GRAY, rightAlignEnd: PAGE_WIDTH - MARGIN });
+  }
+  const rightBottom = cursor.y;
 
   // ── Adressblock links (auf Höhe des Kopfs) ────────────────────────────────
   cursor.y = headerTop - 40;
@@ -150,8 +174,8 @@ export async function buildQuotePdf(input: QuotePdfInput): Promise<Uint8Array> {
     cursor.y -= LINE_HEIGHT;
   }
 
-  // ── Titel + Metadaten ──────────────────────────────────────────────────────
-  cursor.y -= 30;
+  // ── Titel + Metadaten (unterhalb des höheren der beiden Kopf-Blöcke) ──────
+  cursor.y = Math.min(cursor.y, rightBottom) - 30;
   drawText(title, MARGIN, { font: bold, size: 16 });
   cursor.y -= 22;
 

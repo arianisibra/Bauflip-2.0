@@ -261,6 +261,9 @@ export const billingSettingsSchema = z
     creditorPostalCode: z.string().trim().max(16).optional().nullable(),
     creditorCity: z.string().trim().max(35).optional().nullable(),
     vatNumber: z.string().trim().max(40).optional().nullable(),
+    phone: z.string().trim().max(30).optional().nullable(),
+    email: z.string().trim().max(120).optional().nullable(),
+    website: z.string().trim().max(120).optional().nullable(),
   })
   .superRefine((v, ctx) => {
     if (!v.iban) return;
