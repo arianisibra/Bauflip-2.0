@@ -16,8 +16,8 @@ function sampleInput(): QuoteDocumentInput {
       totalNet: 610,
       totalGross: 659.4,
       lineItems: [
-        { id: "b", quoteId: "q", position: 2, description: "Arbeitszeit Monteur", quantity: 2, unit: "h", unitPrice: 95, lineTotal: 190 },
-        { id: "a", quoteId: "q", position: 1, description: "Storen-Motor ersetzen", quantity: 1, unit: "Stk", unitPrice: 420, lineTotal: 420 },
+        { id: "b", quoteId: "q", position: 2, itemType: "line", description: "Arbeitszeit Monteur", quantity: 2, unit: "h", unitPrice: 95, lineTotal: 190 },
+        { id: "a", quoteId: "q", position: 1, itemType: "line", description: "Storen-Motor ersetzen", quantity: 1, unit: "Stk", unitPrice: 420, lineTotal: 420 },
       ],
     },
     project: {

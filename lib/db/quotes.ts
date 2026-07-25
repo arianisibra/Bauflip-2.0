@@ -15,7 +15,7 @@ const QUOTE_DB_COLUMNS =
   "id, organization_id, project_id, quote_number, status, valid_until, intro_text, outro_text, vat_rate, discount_percent, total_net, total_gross, sent_at, sent_to_email, created_by, created_by_display_name, submitted_for_approval_at, approval_decided_at, approved_by, approved_by_display_name, approval_note, created_at, updated_at";
 
 const QUOTE_LINE_ITEM_DB_COLUMNS =
-  "id, quote_id, position, description, quantity, unit, unit_price, line_total";
+  "id, quote_id, position, item_type, description, quantity, unit, unit_price, line_total";
 
 function mapQuoteStatus(raw: unknown): QuoteStatus {
   return quoteStatuses.includes(raw as QuoteStatus) ? (raw as QuoteStatus) : "draft";
@@ -62,6 +62,7 @@ function mapQuoteLineItemRow(row: Record<string, unknown>): QuoteLineItem {
     id: String(row.id),
     quoteId: String(row.quote_id ?? ""),
     position: Number(row.position ?? 1),
+    itemType: row.item_type === "header" ? "header" : "line",
     description: String(row.description ?? ""),
     quantity: Number(row.quantity ?? 1),
     unit: row.unit != null && String(row.unit).trim() ? String(row.unit).trim() : null,
@@ -72,15 +73,19 @@ function mapQuoteLineItemRow(row: Record<string, unknown>): QuoteLineItem {
 
 function lineItemInsertRows(quoteId: string, lineItems: readonly QuoteLineItemInput[]) {
   const { lineTotals } = computeQuoteTotals(lineItems, 0);
-  return lineItems.map((item, i) => ({
-    quote_id: quoteId,
-    position: i + 1,
-    description: item.description,
-    quantity: item.quantity,
-    unit: item.unit?.trim() || null,
-    unit_price: item.unitPrice,
-    line_total: lineTotals[i],
-  }));
+  return lineItems.map((item, i) => {
+    const isHeader = item.itemType === "header";
+    return {
+      quote_id: quoteId,
+      position: i + 1,
+      item_type: isHeader ? "header" : "line",
+      description: item.description,
+      quantity: isHeader ? 1 : item.quantity,
+      unit: isHeader ? null : item.unit?.trim() || null,
+      unit_price: isHeader ? 0 : item.unitPrice,
+      line_total: isHeader ? 0 : lineTotals[i],
+    };
+  });
 }
 
 /** Offerten eines Projekts inkl. Positionen (neueste zuerst). */

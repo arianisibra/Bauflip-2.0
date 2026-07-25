@@ -3,7 +3,11 @@
  * gemeinsam genutzt. Rundung auf Rappen (0.01) — kaufmännisch.
  */
 
+/** "header" = reine Abschnittsüberschrift (z. B. "Malerarbeiten") ohne Menge/Preis. */
+export type LineItemType = "line" | "header";
+
 export type QuoteLineItemInput = {
+  itemType?: LineItemType;
   description: string;
   quantity: number;
   unit?: string | null;
@@ -14,7 +18,10 @@ export function roundRappen(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-export function quoteLineTotal(item: Pick<QuoteLineItemInput, "quantity" | "unitPrice">): number {
+export function quoteLineTotal(
+  item: Pick<QuoteLineItemInput, "quantity" | "unitPrice" | "itemType">,
+): number {
+  if (item.itemType === "header") return 0;
   return roundRappen(item.quantity * item.unitPrice);
 }
 

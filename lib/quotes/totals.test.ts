@@ -11,6 +11,22 @@ test("quoteLineTotal multipliziert Menge x Preis", () => {
   assert.equal(quoteLineTotal({ quantity: 48, unitPrice: 90.7 }), 4353.6);
 });
 
+test("quoteLineTotal ignoriert Menge/Preis bei Abschnittsüberschriften", () => {
+  assert.equal(quoteLineTotal({ itemType: "header", quantity: 1, unitPrice: 999 }), 0);
+});
+
+test("computeQuoteTotals zählt Abschnittsüberschriften nicht in der Summe", () => {
+  const { subtotal, lineTotals } = computeQuoteTotals(
+    [
+      { itemType: "header", description: "Malerarbeiten", quantity: 1, unitPrice: 0 },
+      { itemType: "line", description: "a", quantity: 2, unitPrice: 100 },
+    ],
+    0,
+  );
+  assert.equal(subtotal, 200);
+  assert.deepEqual(lineTotals, [0, 200]);
+});
+
 test("computeQuoteTotals ohne Rabatt entspricht der alten Berechnung", () => {
   const { subtotal, discountAmount, totalNet, totalGross } = computeQuoteTotals(
     [{ description: "a", quantity: 2, unitPrice: 100 }],

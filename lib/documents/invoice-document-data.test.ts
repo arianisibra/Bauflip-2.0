@@ -17,8 +17,8 @@ function sampleInput(): InvoiceDocumentInput {
       referenceType: "QRR",
       paymentReference: "210000000003139471430009017",
       lineItems: [
-        { id: "b", invoiceId: "i", position: 2, description: "Arbeitszeit Monteur", quantity: 2, unit: "h", unitPrice: 95, lineTotal: 190 },
-        { id: "a", invoiceId: "i", position: 1, description: "Storen-Motor ersetzt", quantity: 1, unit: "Stk", unitPrice: 420, lineTotal: 420 },
+        { id: "b", invoiceId: "i", position: 2, itemType: "line", description: "Arbeitszeit Monteur", quantity: 2, unit: "h", unitPrice: 95, lineTotal: 190 },
+        { id: "a", invoiceId: "i", position: 1, itemType: "line", description: "Storen-Motor ersetzt", quantity: 1, unit: "Stk", unitPrice: 420, lineTotal: 420 },
       ],
     },
     project: {

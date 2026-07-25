@@ -417,7 +417,24 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Uint8Arra
   };
   drawTableHeader();
 
+  let displayPos = 0;
   for (const item of invoice.lineItems) {
+    if (item.itemType === "header") {
+      const headerLines = wrapText(item.description, bold, FONT_SIZE, CONTENT_WIDTH);
+      const headerHeight = Math.max(headerLines.length, 1) * LINE_HEIGHT + 10;
+      if (y - headerHeight < MARGIN) {
+        page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+        y = PAGE_HEIGHT - MARGIN;
+        drawTableHeader();
+      }
+      y -= 6;
+      for (const line of headerLines) {
+        drawText(line, COLS.pos.x, { font: bold });
+        y -= LINE_HEIGHT;
+      }
+      y -= 4;
+      continue;
+    }
     const descLines = wrapText(item.description, font, FONT_SIZE, COLS.description.w);
     const rowHeight = Math.max(descLines.length, 1) * LINE_HEIGHT + 4;
     if (y - rowHeight < MARGIN) {
@@ -425,7 +442,8 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Uint8Arra
       y = PAGE_HEIGHT - MARGIN;
       drawTableHeader();
     }
-    drawText(String(item.position), COLS.pos.x, { color: GRAY });
+    displayPos += 1;
+    drawText(String(displayPos), COLS.pos.x, { color: GRAY });
     drawText(String(item.quantity), 0, { rightAlignEnd: COLS.quantity.x + COLS.quantity.w });
     if (item.unit) drawText(item.unit, COLS.unit.x);
     drawText(formatChf(item.unitPrice), 0, { rightAlignEnd: COLS.unitPrice.x + COLS.unitPrice.w });

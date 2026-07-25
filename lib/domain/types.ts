@@ -444,10 +444,14 @@ export function assertAllowedQuoteStatusTransition(from: QuoteStatus, to: QuoteS
   }
 }
 
+/** "header" = reine Abschnittsüberschrift (z. B. "Malerarbeiten") ohne Menge/Preis. */
+export type LineItemType = "line" | "header";
+
 export type QuoteLineItem = {
   id: string;
   quoteId: string;
   position: number;
+  itemType: LineItemType;
   description: string;
   quantity: number;
   unit: string | null;
@@ -594,6 +598,7 @@ export type InvoiceLineItem = {
   id: string;
   invoiceId: string;
   position: number;
+  itemType: LineItemType;
   description: string;
   quantity: number;
   unit: string | null;

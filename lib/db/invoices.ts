@@ -17,7 +17,7 @@ const INVOICE_DB_COLUMNS =
   "id, organization_id, project_id, quote_id, invoice_number, status, due_date, intro_text, vat_rate, discount_percent, skonto_percent, skonto_days, total_net, total_gross, reference_type, payment_reference, sent_at, sent_to_email, paid_at, created_by, created_by_display_name, created_at, updated_at, bexio_invoice_id, bexio_synced_at, bexio_sync_error";
 
 const INVOICE_LINE_ITEM_DB_COLUMNS =
-  "id, invoice_id, position, description, quantity, unit, unit_price, line_total";
+  "id, invoice_id, position, item_type, description, quantity, unit, unit_price, line_total";
 
 function mapInvoiceStatus(raw: unknown): InvoiceStatus {
   return invoiceStatuses.includes(raw as InvoiceStatus) ? (raw as InvoiceStatus) : "draft";
@@ -69,6 +69,7 @@ function mapInvoiceLineItemRow(row: Record<string, unknown>): InvoiceLineItem {
     id: String(row.id),
     invoiceId: String(row.invoice_id ?? ""),
     position: Number(row.position ?? 1),
+    itemType: row.item_type === "header" ? "header" : "line",
     description: String(row.description ?? ""),
     quantity: Number(row.quantity ?? 1),
     unit: row.unit != null && String(row.unit).trim() ? String(row.unit).trim() : null,
@@ -79,15 +80,19 @@ function mapInvoiceLineItemRow(row: Record<string, unknown>): InvoiceLineItem {
 
 function lineItemInsertRows(invoiceId: string, lineItems: readonly QuoteLineItemInput[]) {
   const { lineTotals } = computeQuoteTotals(lineItems, 0);
-  return lineItems.map((item, i) => ({
-    invoice_id: invoiceId,
-    position: i + 1,
-    description: item.description,
-    quantity: item.quantity,
-    unit: item.unit?.trim() || null,
-    unit_price: item.unitPrice,
-    line_total: lineTotals[i],
-  }));
+  return lineItems.map((item, i) => {
+    const isHeader = item.itemType === "header";
+    return {
+      invoice_id: invoiceId,
+      position: i + 1,
+      item_type: isHeader ? "header" : "line",
+      description: item.description,
+      quantity: isHeader ? 1 : item.quantity,
+      unit: isHeader ? null : item.unit?.trim() || null,
+      unit_price: isHeader ? 0 : item.unitPrice,
+      line_total: isHeader ? 0 : lineTotals[i],
+    };
+  });
 }
 
 /**
@@ -210,6 +215,7 @@ export async function createInvoice(
       throw new Error("Nur angenommene Offerten können in eine Rechnung übernommen werden.");
     }
     lineItems = quote.lineItems.map((item) => ({
+      itemType: item.itemType,
       description: item.description,
       quantity: item.quantity,
       unit: item.unit,
