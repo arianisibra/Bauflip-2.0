@@ -353,6 +353,7 @@ export const invoiceCreateSchema = z.object({
   projectId: z.string().uuid(),
   /** Angenommene Offerte als Quelle — Positionen werden serverseitig kopiert. */
   fromQuoteId: z.string().uuid().optional().nullable(),
+  invoiceKind: z.enum(["standard", "deposit", "final"]).default("standard"),
   dueDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Ungültiges Datum.")
@@ -370,6 +371,7 @@ export const invoiceCreateSchema = z.object({
 
 export const invoiceUpdateSchema = z.object({
   invoiceId: z.string().uuid(),
+  invoiceKind: z.enum(["standard", "deposit", "final"]).default("standard"),
   dueDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Ungültiges Datum.")

@@ -55,6 +55,7 @@ export async function createInvoiceAction(values: unknown, tabId?: string): Prom
     {
       projectId: parsed.data.projectId,
       fromQuoteId: parsed.data.fromQuoteId ?? null,
+      invoiceKind: parsed.data.invoiceKind,
       dueDate: parsed.data.dueDate ?? null,
       introText: parsed.data.introText?.trim() || null,
       vatRate: parsed.data.vatRate,
@@ -75,6 +76,7 @@ export async function updateInvoiceAction(values: unknown, tabId?: string): Prom
   if (!parsed.success) throw new Error(firstIssueMessage(parsed.error));
 
   const invoice = await updateInvoice(parsed.data.invoiceId, {
+    invoiceKind: parsed.data.invoiceKind,
     dueDate: parsed.data.dueDate ?? null,
     introText: parsed.data.introText?.trim() || null,
     vatRate: parsed.data.vatRate,

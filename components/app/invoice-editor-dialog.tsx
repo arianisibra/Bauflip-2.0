@@ -4,7 +4,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { z } from "zod";
-import type { Invoice, PriceBookItem } from "@/lib/domain/types";
+import type { Invoice, InvoiceKind, PriceBookItem } from "@/lib/domain/types";
+import { invoiceKindLabels } from "@/lib/domain/types";
 import { computeQuoteTotals } from "@/lib/quotes/totals";
 import { invoiceUpdateSchema, quoteLineItemSchema } from "@/lib/validations/forms";
 import { useCreateInvoice, usePriceBookItems, useUpdateInvoice } from "@/lib/query/hooks";
@@ -12,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Stepper } from "@/components/ui/stepper";
 import { Textarea } from "@/components/ui/textarea";
 import { PriceBookPicker } from "@/components/app/price-book-picker";
@@ -28,6 +30,7 @@ type EditableLineItem = {
 
 type EditorState = {
   invoiceId: string | null;
+  invoiceKind: InvoiceKind;
   dueDate: string;
   introText: string;
   vatRate: string;
@@ -50,6 +53,7 @@ function defaultDueDate(): string {
 function emptyEditor(): EditorState {
   return {
     invoiceId: null,
+    invoiceKind: "standard",
     dueDate: defaultDueDate(),
     introText: "",
     vatRate: "8.1",
@@ -63,6 +67,7 @@ function emptyEditor(): EditorState {
 function editorFromInvoice(invoice: Invoice): EditorState {
   return {
     invoiceId: invoice.id,
+    invoiceKind: invoice.invoiceKind,
     dueDate: invoice.dueDate ?? "",
     introText: invoice.introText ?? "",
     vatRate: String(invoice.vatRate),
@@ -98,12 +103,15 @@ export function InvoiceEditorDialog({
   onOpenChange,
   projectId,
   invoice,
+  existingInvoices = [],
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string;
   /** null = neue Rechnung, sonst Entwurf in Bearbeitung. */
   invoice: Invoice | null;
+  /** Alle Rechnungen des Projekts — für die Live-Vorschau des Akonto-Abzugs bei Schlussrechnungen. */
+  existingInvoices?: Invoice[];
 }) {
   const createInvoice = useCreateInvoice();
   const updateInvoice = useUpdateInvoice();
@@ -157,6 +165,20 @@ export function InvoiceEditorDialog({
     (l) => l.itemType === "line" && l.description.trim() && l.unitPrice.trim(),
   );
 
+  /** Live-Vorschau (endgültig wird beim Speichern serverseitig neu berechnet). */
+  const deductedPreview =
+    editor.invoiceKind === "final"
+      ? existingInvoices
+          .filter(
+            (i) =>
+              i.id !== editor.invoiceId &&
+              i.invoiceKind === "deposit" &&
+              (i.status === "sent" || i.status === "paid"),
+          )
+          .reduce((sum, i) => sum + i.totalGross, 0)
+      : 0;
+  const amountDuePreview = Math.max(0, totals.totalGross - deductedPreview);
+
   const goNext = () => {
     if (step === 0 && !hasUsableLine) {
       toast.error("Mindestens eine Position mit Beschreibung und Preis erfassen.");
@@ -167,6 +189,7 @@ export function InvoiceEditorDialog({
 
   const submit = async () => {
     const base = {
+      invoiceKind: editor.invoiceKind,
       dueDate: editor.dueDate || null,
       introText: editor.introText || null,
       vatRate: Number(editor.vatRate.replace(",", ".")),
@@ -449,6 +472,29 @@ export function InvoiceEditorDialog({
 
       {step === 1 ? (
         <div className="space-y-4">
+          <div>
+            <Label className="text-[11px]">Rechnungsart</Label>
+            <Select
+              value={editor.invoiceKind}
+              onValueChange={(v) => setEditor((prev) => ({ ...prev, invoiceKind: v as InvoiceKind }))}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="standard">{invoiceKindLabels.standard}</SelectItem>
+                <SelectItem value="deposit">{invoiceKindLabels.deposit}</SelectItem>
+                <SelectItem value="final">{invoiceKindLabels.final}</SelectItem>
+              </SelectContent>
+            </Select>
+            {editor.invoiceKind === "final" ? (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {deductedPreview > 0
+                  ? `Zieht bereits gestellte Akontorechnungen dieses Projekts ab (${chf.format(deductedPreview)}). Zu bezahlen: ${chf.format(amountDuePreview)}.`
+                  : "Keine gesendeten/bezahlten Akontorechnungen in diesem Projekt gefunden — kein Abzug."}
+              </p>
+            ) : null}
+          </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
               <Label className="text-[11px]">Fällig am</Label>
@@ -570,10 +616,22 @@ export function InvoiceEditorDialog({
               <dt className="text-muted-foreground">MwSt. {editor.vatRate}%</dt>
               <dd className="tabular-nums">{chf.format(totals.totalGross - totals.totalNet)}</dd>
             </div>
-            <div className="flex justify-between border-t pt-1.5 font-semibold">
+            <div className={editor.invoiceKind === "final" && deductedPreview > 0 ? "flex justify-between" : "flex justify-between border-t pt-1.5 font-semibold"}>
               <dt>Total</dt>
               <dd className="tabular-nums">{chf.format(totals.totalGross)}</dd>
             </div>
+            {editor.invoiceKind === "final" && deductedPreview > 0 ? (
+              <>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Bereits akontiert</dt>
+                  <dd className="tabular-nums">−{chf.format(deductedPreview)}</dd>
+                </div>
+                <div className="flex justify-between border-t pt-1.5 font-semibold">
+                  <dt>Zu bezahlen</dt>
+                  <dd className="tabular-nums">{chf.format(amountDuePreview)}</dd>
+                </div>
+              </>
+            ) : null}
           </dl>
           <p className="text-[11px] text-muted-foreground">
             {editor.dueDate

@@ -3,6 +3,7 @@ import "server-only";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 import QRCode from "qrcode";
 import type { Invoice, OrganizationBillingSettings } from "@/lib/domain/types";
+import { invoiceKindLabels } from "@/lib/domain/types";
 import type { OrganizationBranding } from "@/lib/domain/types";
 import type { QuotePdfProjectHead } from "@/lib/db/quotes";
 import { formatChf, letterheadLines } from "@/lib/pdf/quote-pdf";
@@ -124,11 +125,12 @@ async function drawPaymentPart(
   const { invoice, project, billing } = input;
   const creditor = creditorFromBilling(billing);
   const debtor = debtorFromProject(project);
+  const amountDue = roundRappen(invoice.totalGross - invoice.deductedAmount);
 
   const payload = buildQrBillPayload({
     iban: billing.iban ?? "",
     creditor,
-    amount: invoice.totalGross,
+    amount: amountDue,
     currency: "CHF",
     debtor,
     referenceType: invoice.referenceType,
@@ -200,7 +202,7 @@ async function drawPaymentPart(
     invoice.referenceType !== "NON" && invoice.paymentReference
       ? formatPaymentReference(invoice.referenceType, invoice.paymentReference)
       : null;
-  const amountDisplay = formatAmountForPaymentPart(invoice.totalGross);
+  const amountDisplay = formatAmountForPaymentPart(amountDue);
 
   // ── Empfangsschein (links, 62 mm) ──────────────────────────────────────────
   const rx = 5 * MM;
@@ -298,7 +300,8 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Uint8Arra
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
 
-  const title = invoice.invoiceNumber ? `Rechnung ${invoice.invoiceNumber}` : "Rechnung";
+  const documentLabel = invoiceKindLabels[invoice.invoiceKind];
+  const title = invoice.invoiceNumber ? `${documentLabel} ${invoice.invoiceNumber}` : documentLabel;
   doc.setTitle(title);
   doc.setAuthor(branding.name);
 
@@ -461,7 +464,9 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Uint8Arra
   }
 
   // ── Summen ────────────────────────────────────────────────────────────────
-  newPageIfNeeded(6 * LINE_HEIGHT + 12);
+  const amountDue = roundRappen(invoice.totalGross - invoice.deductedAmount);
+  const hasDeduction = invoice.invoiceKind === "final" && invoice.deductedAmount > 0;
+  newPageIfNeeded((hasDeduction ? 8 : 6) * LINE_HEIGHT + 12);
   page.drawLine({
     start: { x: COLS.unitPrice.x, y: y + LINE_HEIGHT - 6 },
     end: { x: PAGE_WIDTH - MARGIN, y: y + LINE_HEIGHT - 6 },
@@ -479,7 +484,13 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Uint8Arra
       : []),
     ["Netto CHF", formatChf(invoice.totalNet), font],
     [`MwSt. ${invoice.vatRate}%`, formatChf(invoice.totalGross - invoice.totalNet), font],
-    ["Total CHF", formatChf(invoice.totalGross), bold],
+    ["Total CHF", formatChf(invoice.totalGross), hasDeduction ? font : bold],
+    ...(hasDeduction
+      ? ([
+          ["Bereits akontiert", `-${formatChf(invoice.deductedAmount)}`, font],
+          ["Zu bezahlen CHF", formatChf(amountDue), bold],
+        ] as [string, string, PDFFont][])
+      : []),
   ];
   for (const [label, value, f] of totals) {
     drawText(label, COLS.unitPrice.x - 40, { font: f });

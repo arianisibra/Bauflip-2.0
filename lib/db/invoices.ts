@@ -1,20 +1,25 @@
 import "server-only";
 
 import { cache } from "react";
-import type { Invoice, InvoiceLineItem, InvoiceReferenceType, InvoiceStatus } from "@/lib/domain/types";
+import type { Invoice, InvoiceKind, InvoiceLineItem, InvoiceReferenceType, InvoiceStatus } from "@/lib/domain/types";
 import {
   assertAllowedInvoiceStatusTransition,
+  invoiceKinds,
   invoiceReferenceTypes,
   invoiceStatuses,
 } from "@/lib/domain/types";
-import { computeQuoteTotals, type QuoteLineItemInput } from "@/lib/quotes/totals";
+import { computeQuoteTotals, roundRappen, type QuoteLineItemInput } from "@/lib/quotes/totals";
 import { getOrganizationBillingSettings } from "@/lib/db/billing";
 import { getQuoteWithItems } from "@/lib/db/quotes";
 import { buildQrrReference, buildScorReference, chooseReferenceType } from "@/lib/qr-bill/reference";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const INVOICE_DB_COLUMNS =
-  "id, organization_id, project_id, quote_id, invoice_number, status, due_date, intro_text, vat_rate, discount_percent, skonto_percent, skonto_days, total_net, total_gross, reference_type, payment_reference, sent_at, sent_to_email, paid_at, created_by, created_by_display_name, created_at, updated_at, bexio_invoice_id, bexio_synced_at, bexio_sync_error";
+  "id, organization_id, project_id, quote_id, invoice_number, status, invoice_kind, deducted_amount, due_date, intro_text, vat_rate, discount_percent, skonto_percent, skonto_days, total_net, total_gross, reference_type, payment_reference, sent_at, sent_to_email, paid_at, created_by, created_by_display_name, created_at, updated_at, bexio_invoice_id, bexio_synced_at, bexio_sync_error";
+
+function mapInvoiceKind(raw: unknown): InvoiceKind {
+  return invoiceKinds.includes(raw as InvoiceKind) ? (raw as InvoiceKind) : "standard";
+}
 
 const INVOICE_LINE_ITEM_DB_COLUMNS =
   "id, invoice_id, position, item_type, description, quantity, unit, unit_price, line_total";
@@ -37,6 +42,8 @@ function mapInvoiceRow(row: Record<string, unknown>): Invoice {
     quoteId: row.quote_id != null ? String(row.quote_id) : null,
     invoiceNumber: row.invoice_number != null ? String(row.invoice_number) : null,
     status: mapInvoiceStatus(row.status),
+    invoiceKind: mapInvoiceKind(row.invoice_kind),
+    deductedAmount: Number(row.deducted_amount ?? 0),
     dueDate: row.due_date != null ? String(row.due_date) : null,
     introText: row.intro_text != null ? String(row.intro_text) : null,
     vatRate: Number(row.vat_rate ?? 0),
@@ -171,10 +178,35 @@ export const getInvoiceWithItems = cache(async function getInvoiceWithItems(
   };
 });
 
+/**
+ * Summe bereits gestellter Akontorechnungen (Status "sent"/"paid") desselben Projekts —
+ * Basis für den Abzug auf einer Schlussrechnung. `excludeInvoiceId` verhindert, dass
+ * eine Schlussrechnung sich beim Neu-Speichern selbst mitzählt.
+ */
+async function sumDepositInvoices(
+  supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
+  projectId: string,
+  excludeInvoiceId?: string,
+): Promise<number> {
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("id, total_gross")
+    .eq("project_id", projectId)
+    .eq("invoice_kind", "deposit")
+    .in("status", ["sent", "paid"]);
+  if (error) throw new Error(error.message);
+  return roundRappen(
+    ((data ?? []) as { id: string; total_gross: number | null }[])
+      .filter((row) => row.id !== excludeInvoiceId)
+      .reduce((sum, row) => sum + Number(row.total_gross ?? 0), 0),
+  );
+}
+
 export type InvoiceCreateInput = {
   projectId: string;
   /** Herkunfts-Offerte — Positionen werden kopiert, lineItems ignoriert. */
   fromQuoteId?: string | null;
+  invoiceKind: InvoiceKind;
   dueDate: string | null;
   introText: string | null;
   vatRate: number;
@@ -246,6 +278,8 @@ export async function createInvoice(
   const referenceType = chooseReferenceType(billing?.iban ?? null);
 
   const { totalNet, totalGross } = computeQuoteTotals(lineItems, vatRate, discountPercent);
+  const deductedAmount =
+    input.invoiceKind === "final" ? await sumDepositInvoices(supabase, input.projectId) : 0;
 
   const { data, error } = await supabase
     .from("invoices")
@@ -253,6 +287,8 @@ export async function createInvoice(
       organization_id: organizationId,
       project_id: input.projectId,
       quote_id: quoteId,
+      invoice_kind: input.invoiceKind,
+      deducted_amount: deductedAmount,
       due_date: input.dueDate,
       intro_text: input.introText,
       vat_rate: vatRate,
@@ -356,6 +392,7 @@ export const listInvoicesForPaymentMatching = cache(async function listInvoicesF
 });
 
 export type InvoiceUpdateInput = {
+  invoiceKind: InvoiceKind;
   dueDate: string | null;
   introText: string | null;
   vatRate: number;
@@ -372,7 +409,7 @@ export async function updateInvoice(invoiceId: string, input: InvoiceUpdateInput
 
   const { data: existing, error: existingError } = await supabase
     .from("invoices")
-    .select("id, status")
+    .select("id, status, project_id")
     .eq("id", invoiceId)
     .maybeSingle();
   if (existingError) throw new Error(existingError.message);
@@ -380,12 +417,17 @@ export async function updateInvoice(invoiceId: string, input: InvoiceUpdateInput
   if (mapInvoiceStatus((existing as { status?: string }).status) !== "draft") {
     throw new Error("Nur Entwürfe können bearbeitet werden.");
   }
+  const projectId = String((existing as { project_id: string }).project_id);
 
   const { totalNet, totalGross } = computeQuoteTotals(input.lineItems, input.vatRate, input.discountPercent);
+  const deductedAmount =
+    input.invoiceKind === "final" ? await sumDepositInvoices(supabase, projectId, invoiceId) : 0;
 
   const { data, error } = await supabase
     .from("invoices")
     .update({
+      invoice_kind: input.invoiceKind,
+      deducted_amount: deductedAmount,
       due_date: input.dueDate,
       intro_text: input.introText,
       vat_rate: input.vatRate,

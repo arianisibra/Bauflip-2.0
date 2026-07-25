@@ -598,6 +598,28 @@ export function assertAllowedInvoiceStatusTransition(from: InvoiceStatus, to: In
 export const invoiceReferenceTypes = ["QRR", "SCOR", "NON"] as const;
 export type InvoiceReferenceType = (typeof invoiceReferenceTypes)[number];
 
+/**
+ * "deposit" = Akontorechnung (Teilbetrag während der Ausführung).
+ * "final" = Schlussrechnung — zieht die Summe bereits gestellter Akontorechnungen
+ * desselben Projekts ab (`deductedAmount`, bei Erstellung/Bearbeitung eingefroren).
+ */
+export const invoiceKinds = ["standard", "deposit", "final"] as const;
+export type InvoiceKind = (typeof invoiceKinds)[number];
+
+export const invoiceKindLabels: Record<InvoiceKind, string> = {
+  standard: "Rechnung",
+  deposit: "Akontorechnung",
+  final: "Schlussrechnung",
+};
+
+export const invoiceKindBadgeClassNames: Record<InvoiceKind, string> = {
+  standard: "border-border bg-muted text-muted-foreground",
+  deposit:
+    "border-amber-500/55 bg-amber-500/30 text-amber-950 dark:border-amber-400/55 dark:bg-amber-500/40 dark:text-amber-50",
+  final:
+    "border-blue-500/55 bg-blue-500/30 text-blue-950 dark:border-blue-400/55 dark:bg-blue-500/40 dark:text-blue-50",
+};
+
 export type InvoiceLineItem = {
   id: string;
   invoiceId: string;
@@ -619,6 +641,14 @@ export type Invoice = {
   /** Per DB-Trigger vergeben (RE-Jahr-Sequenz je Organisation). */
   invoiceNumber: string | null;
   status: InvoiceStatus;
+  invoiceKind: InvoiceKind;
+  /**
+   * Summe bereits gestellter Akontorechnungen (Status "sent"/"paid") desselben
+   * Projekts — nur bei `invoiceKind === "final"` gefüllt, bei Erstellung/Bearbeitung
+   * eingefroren. `totalGross` bleibt die volle Auftragssumme; der noch zu zahlende
+   * Restbetrag ist `totalGross - deductedAmount`.
+   */
+  deductedAmount: number;
   /** Fälligkeit (YYYY-MM-DD), Default +30 Tage bei Erstellung. */
   dueDate: string | null;
   introText: string | null;

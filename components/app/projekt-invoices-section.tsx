@@ -16,6 +16,8 @@ import {
 import type { Invoice, InvoiceStatus, ProjectStatus, Quote } from "@/lib/domain/types";
 import {
   allowedInvoiceStatusTransitions,
+  invoiceKindBadgeClassNames,
+  invoiceKindLabels,
   invoiceStatusBadgeClassNames,
   invoiceStatusLabels,
 } from "@/lib/domain/types";
@@ -102,6 +104,7 @@ export function ProjektInvoicesSection({
       await createInvoice.mutateAsync({
         projectId,
         fromQuoteId: quote.id,
+        invoiceKind: "standard",
         dueDate: defaultDueDate(),
         introText: null,
         vatRate: quote.vatRate,
@@ -210,6 +213,11 @@ export function ProjektInvoicesSection({
                   <Badge variant="outline" className={cn(invoiceStatusBadgeClassNames[invoice.status])}>
                     {invoiceStatusLabels[invoice.status]}
                   </Badge>
+                  {invoice.invoiceKind !== "standard" ? (
+                    <Badge variant="outline" className={cn(invoiceKindBadgeClassNames[invoice.invoiceKind])}>
+                      {invoiceKindLabels[invoice.invoiceKind]}
+                    </Badge>
+                  ) : null}
                   {invoice.bexioInvoiceId ? (
                     <Badge
                       variant="outline"
@@ -315,6 +323,7 @@ export function ProjektInvoicesSection({
             onOpenChange={(o) => (o ? null : setEditor(null))}
             projectId={projectId}
             invoice={editor?.invoice ?? null}
+            existingInvoices={invoices}
           />
           <InvoiceSendDialog
             open={sendTarget !== null}
