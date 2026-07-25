@@ -444,10 +444,15 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Uint8Arra
     }
     displayPos += 1;
     drawText(String(displayPos), COLS.pos.x, { color: GRAY });
-    drawText(String(item.quantity), 0, { rightAlignEnd: COLS.quantity.x + COLS.quantity.w });
-    if (item.unit) drawText(item.unit, COLS.unit.x);
-    drawText(formatChf(item.unitPrice), 0, { rightAlignEnd: COLS.unitPrice.x + COLS.unitPrice.w });
-    drawText(formatChf(item.lineTotal), 0, { rightAlignEnd: PAGE_WIDTH - MARGIN });
+    if (item.itemType === "open") {
+      if (item.unit) drawText(item.unit, COLS.unit.x);
+      drawText("nach Aufwand", 0, { color: GRAY, rightAlignEnd: PAGE_WIDTH - MARGIN });
+    } else {
+      drawText(String(item.quantity), 0, { rightAlignEnd: COLS.quantity.x + COLS.quantity.w });
+      if (item.unit) drawText(item.unit, COLS.unit.x);
+      drawText(formatChf(item.unitPrice), 0, { rightAlignEnd: COLS.unitPrice.x + COLS.unitPrice.w });
+      drawText(formatChf(item.lineTotal), 0, { rightAlignEnd: PAGE_WIDTH - MARGIN });
+    }
     for (const line of descLines) {
       drawText(line, COLS.description.x);
       y -= LINE_HEIGHT;

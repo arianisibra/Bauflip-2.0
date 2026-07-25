@@ -18,7 +18,7 @@ import { PriceBookPicker } from "@/components/app/price-book-picker";
 const chf = new Intl.NumberFormat("de-CH", { style: "currency", currency: "CHF" });
 
 type EditableLineItem = {
-  itemType: "line" | "header";
+  itemType: "line" | "header" | "open";
   description: string;
   quantity: string;
   unit: string;
@@ -37,6 +37,7 @@ type EditorState = {
 
 const EMPTY_LINE: EditableLineItem = { itemType: "line", description: "", quantity: "1", unit: "", unitPrice: "" };
 const EMPTY_HEADER: EditableLineItem = { itemType: "header", description: "", quantity: "1", unit: "", unitPrice: "0" };
+const EMPTY_OPEN: EditableLineItem = { itemType: "open", description: "", quantity: "1", unit: "", unitPrice: "0" };
 const STEPS = ["Positionen", "Details", "Prüfen"];
 
 function emptyEditor(): EditorState {
@@ -287,6 +288,59 @@ export function QuoteEditorDialog({
                   <Trash2 className="size-4" aria-hidden />
                 </Button>
               </div>
+            ) : item.itemType === "open" ? (
+              <div
+                key={index}
+                className="grid grid-cols-[1fr_auto] items-end gap-1.5 sm:grid-cols-[1fr_72px_auto]"
+              >
+                <div>
+                  <Label className="text-[11px] sm:hidden">Beschreibung</Label>
+                  <Input
+                    value={item.description}
+                    placeholder="z. B. Regiearbeiten nach Aufwand"
+                    onChange={(e) =>
+                      setEditor((prev) => {
+                        const lineItems = [...prev.lineItems];
+                        lineItems[index] = { ...lineItems[index], description: e.target.value };
+                        return { ...prev, lineItems };
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <Label className="text-[11px] sm:hidden">Einheit</Label>
+                  <Input
+                    value={item.unit}
+                    placeholder="Std."
+                    onChange={(e) =>
+                      setEditor((prev) => {
+                        const lineItems = [...prev.lineItems];
+                        lineItems[index] = { ...lineItems[index], unit: e.target.value };
+                        return { ...prev, lineItems };
+                      })
+                    }
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-muted-foreground whitespace-nowrap">nach Aufwand</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive"
+                    disabled={editor.lineItems.length <= 1}
+                    aria-label="Position entfernen"
+                    onClick={() =>
+                      setEditor((prev) => ({
+                        ...prev,
+                        lineItems: prev.lineItems.filter((_, i) => i !== index),
+                      }))
+                    }
+                  >
+                    <Trash2 className="size-4" aria-hidden />
+                  </Button>
+                </div>
+              </div>
             ) : (
               <div
                 key={index}
@@ -387,6 +441,15 @@ export function QuoteEditorDialog({
               <Plus className="size-4" aria-hidden />
               Überschrift
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setEditor((prev) => ({ ...prev, lineItems: [...prev.lineItems, { ...EMPTY_OPEN }] }))}
+            >
+              <Plus className="size-4" aria-hidden />
+              Nach Aufwand
+            </Button>
             {priceBookItems.length > 0 ? (
               <PriceBookPicker items={priceBookItems} onPick={addFromPriceBook} />
             ) : null}
@@ -457,11 +520,23 @@ export function QuoteEditorDialog({
           <div className="rounded-lg border border-border">
             <ul className="divide-y divide-border/70">
               {editor.lineItems
-                .filter((l) => l.itemType === "header" ? l.description.trim() : l.description.trim() || l.unitPrice.trim())
+                .filter((l) =>
+                  l.itemType === "header" || l.itemType === "open"
+                    ? l.description.trim()
+                    : l.description.trim() || l.unitPrice.trim(),
+                )
                 .map((l, i) =>
                   l.itemType === "header" ? (
                     <li key={i} className="px-3 py-2 text-sm font-semibold">
                       {l.description || "—"}
+                    </li>
+                  ) : l.itemType === "open" ? (
+                    <li key={i} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                      <span className="min-w-0 truncate">
+                        {l.description || "—"}
+                        {l.unit ? <span className="ml-1.5 text-muted-foreground">{l.unit}</span> : null}
+                      </span>
+                      <span className="shrink-0 text-muted-foreground">nach Aufwand</span>
                     </li>
                   ) : (
                     <li key={i} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">

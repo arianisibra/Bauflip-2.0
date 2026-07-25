@@ -62,7 +62,7 @@ function mapQuoteLineItemRow(row: Record<string, unknown>): QuoteLineItem {
     id: String(row.id),
     quoteId: String(row.quote_id ?? ""),
     position: Number(row.position ?? 1),
-    itemType: row.item_type === "header" ? "header" : "line",
+    itemType: row.item_type === "header" ? "header" : row.item_type === "open" ? "open" : "line",
     description: String(row.description ?? ""),
     quantity: Number(row.quantity ?? 1),
     unit: row.unit != null && String(row.unit).trim() ? String(row.unit).trim() : null,
@@ -75,15 +75,16 @@ function lineItemInsertRows(quoteId: string, lineItems: readonly QuoteLineItemIn
   const { lineTotals } = computeQuoteTotals(lineItems, 0);
   return lineItems.map((item, i) => {
     const isHeader = item.itemType === "header";
+    const isOpen = item.itemType === "open";
     return {
       quote_id: quoteId,
       position: i + 1,
-      item_type: isHeader ? "header" : "line",
+      item_type: isHeader ? "header" : isOpen ? "open" : "line",
       description: item.description,
-      quantity: isHeader ? 1 : item.quantity,
+      quantity: isHeader || isOpen ? 1 : item.quantity,
       unit: isHeader ? null : item.unit?.trim() || null,
-      unit_price: isHeader ? 0 : item.unitPrice,
-      line_total: isHeader ? 0 : lineTotals[i],
+      unit_price: isHeader || isOpen ? 0 : item.unitPrice,
+      line_total: isHeader || isOpen ? 0 : lineTotals[i],
     };
   });
 }

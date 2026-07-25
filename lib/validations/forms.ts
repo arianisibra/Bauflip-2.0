@@ -218,7 +218,7 @@ export const garantiefallSchema = z.object({
 });
 
 export const quoteLineItemSchema = z.object({
-  itemType: z.enum(["line", "header"]).default("line"),
+  itemType: z.enum(["line", "header", "open"]).default("line"),
   description: z.string().trim().min(1, "Bitte Beschreibung angeben."),
   quantity: z.coerce.number().gt(0, "Menge muss grösser 0 sein."),
   unit: z.string().trim().max(20).optional().nullable(),

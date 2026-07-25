@@ -15,6 +15,10 @@ test("quoteLineTotal ignoriert Menge/Preis bei Abschnittsüberschriften", () => 
   assert.equal(quoteLineTotal({ itemType: "header", quantity: 1, unitPrice: 999 }), 0);
 });
 
+test("quoteLineTotal ignoriert Menge/Preis bei 'nach Aufwand'-Positionen", () => {
+  assert.equal(quoteLineTotal({ itemType: "open", quantity: 1, unitPrice: 999 }), 0);
+});
+
 test("computeQuoteTotals zählt Abschnittsüberschriften nicht in der Summe", () => {
   const { subtotal, lineTotals } = computeQuoteTotals(
     [

@@ -3,8 +3,12 @@
  * gemeinsam genutzt. Rundung auf Rappen (0.01) — kaufmännisch.
  */
 
-/** "header" = reine Abschnittsüberschrift (z. B. "Malerarbeiten") ohne Menge/Preis. */
-export type LineItemType = "line" | "header";
+/**
+ * "header" = reine Abschnittsüberschrift ohne Menge/Preis.
+ * "open" = Regie-/Zeit&Material-Position ("nach Aufwand") — Menge/Preis stehen
+ * bewusst noch nicht fest, zählt daher (wie "header") nicht in der Summe.
+ */
+export type LineItemType = "line" | "header" | "open";
 
 export type QuoteLineItemInput = {
   itemType?: LineItemType;
@@ -21,7 +25,7 @@ export function roundRappen(value: number): number {
 export function quoteLineTotal(
   item: Pick<QuoteLineItemInput, "quantity" | "unitPrice" | "itemType">,
 ): number {
-  if (item.itemType === "header") return 0;
+  if (item.itemType === "header" || item.itemType === "open") return 0;
   return roundRappen(item.quantity * item.unitPrice);
 }
 

@@ -444,8 +444,12 @@ export function assertAllowedQuoteStatusTransition(from: QuoteStatus, to: QuoteS
   }
 }
 
-/** "header" = reine Abschnittsüberschrift (z. B. "Malerarbeiten") ohne Menge/Preis. */
-export type LineItemType = "line" | "header";
+/**
+ * "header" = reine Abschnittsüberschrift (z. B. "Malerarbeiten") ohne Menge/Preis.
+ * "open" = Regie-/Zeit&Material-Position ("nach Aufwand") — Menge/Preis stehen zum
+ * Offert-/Rechnungszeitpunkt bewusst noch nicht fest.
+ */
+export type LineItemType = "line" | "header" | "open";
 
 export type QuoteLineItem = {
   id: string;
