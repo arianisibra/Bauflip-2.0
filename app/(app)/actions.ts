@@ -128,6 +128,8 @@ export async function createIntakeAction(formData: FormData, tabId?: string) {
     managementPhone: v.managementPhone?.trim() || null,
     managementEmail: v.managementEmail?.trim() || null,
     costCeilingText: v.costCeilingText?.trim() || null,
+    projectManagerName: null,
+    customerNumber: null,
     serviceStreet: v.serviceStreet?.trim() || null,
     servicePostalCode: v.servicePostalCode?.trim() || null,
     serviceCity: v.serviceCity?.trim() || null,

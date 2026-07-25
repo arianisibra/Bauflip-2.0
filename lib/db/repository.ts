@@ -71,7 +71,7 @@ export { mapUserProfileRow } from "./repository-map";
 
 /** DB-Spaltenliste — kein select('*') für Projektkern. */
 const PROJECT_DB_COLUMNS =
-  "id, organization_id, title, type, status, status_updated_source, status_revert_on_appointment_clear, next_owner_role, next_owner_user_id, source, intake_original_text, access_notes, created_at, updated_at, closed_at, reference_code, hints_and_notes, tenant_name, tenant_phone, tenant_email, management_name, management_phone, management_email, cost_ceiling_text, service_street, service_postal_code, service_city, service_country, warranty_note, warranty_opened_at, warranty_opened_by, warranty_opened_by_display_name";
+  "id, organization_id, title, type, status, status_updated_source, status_revert_on_appointment_clear, next_owner_role, next_owner_user_id, source, intake_original_text, access_notes, created_at, updated_at, closed_at, reference_code, hints_and_notes, tenant_name, tenant_phone, tenant_email, management_name, management_phone, management_email, cost_ceiling_text, project_manager_name, customer_number, service_street, service_postal_code, service_city, service_country, warranty_note, warranty_opened_at, warranty_opened_by, warranty_opened_by_display_name";
 
 const APPOINTMENT_DB_COLUMNS =
   "id, project_id, kind, starts_at, ends_at, assigned_technician_id, assigned_technician_id_2, planning_notes, created_at";
@@ -130,6 +130,8 @@ function mapProjectRow(row: Record<string, unknown>): Project {
     managementPhone: row.management_phone != null ? String(row.management_phone) : null,
     managementEmail: row.management_email != null ? String(row.management_email) : null,
     costCeilingText: row.cost_ceiling_text != null ? String(row.cost_ceiling_text) : null,
+    projectManagerName: row.project_manager_name != null ? String(row.project_manager_name) : null,
+    customerNumber: row.customer_number != null ? String(row.customer_number) : null,
     serviceStreet: row.service_street != null ? String(row.service_street) : null,
     servicePostalCode: row.service_postal_code != null ? String(row.service_postal_code) : null,
     serviceCity: row.service_city != null ? String(row.service_city) : null,
@@ -2073,6 +2075,8 @@ export async function createProject(input: ProjectCreateInput): Promise<Project>
       management_phone: input.managementPhone,
       management_email: input.managementEmail,
       cost_ceiling_text: input.costCeilingText,
+      project_manager_name: input.projectManagerName,
+      customer_number: input.customerNumber,
       service_street: input.serviceStreet,
       service_postal_code: input.servicePostalCode,
       service_city: input.serviceCity,
@@ -2105,6 +2109,8 @@ export type ProjectPatch = Partial<
     | "managementPhone"
     | "managementEmail"
     | "costCeilingText"
+    | "projectManagerName"
+    | "customerNumber"
     | "serviceStreet"
     | "servicePostalCode"
     | "serviceCity"
@@ -2172,6 +2178,8 @@ export async function updateProject(projectId: string, patch: ProjectPatch): Pro
   if (patch.managementPhone !== undefined) row.management_phone = patch.managementPhone;
   if (patch.managementEmail !== undefined) row.management_email = patch.managementEmail;
   if (patch.costCeilingText !== undefined) row.cost_ceiling_text = patch.costCeilingText;
+  if (patch.projectManagerName !== undefined) row.project_manager_name = patch.projectManagerName;
+  if (patch.customerNumber !== undefined) row.customer_number = patch.customerNumber;
   if (patch.serviceStreet !== undefined) row.service_street = patch.serviceStreet;
   if (patch.servicePostalCode !== undefined) row.service_postal_code = patch.servicePostalCode;
   if (patch.serviceCity !== undefined) row.service_city = patch.serviceCity;

@@ -176,6 +176,8 @@ export async function updateProjectStammdatenAction(
     managementPhone: nz(v.managementPhone),
     managementEmail: nz(v.managementEmail),
     costCeilingText: nz(v.costCeilingText),
+    projectManagerName: nz(v.projectManagerName),
+    customerNumber: nz(v.customerNumber),
     serviceStreet: nz(v.serviceStreet),
     servicePostalCode: nz(v.servicePostalCode),
     serviceCity: nz(v.serviceCity),

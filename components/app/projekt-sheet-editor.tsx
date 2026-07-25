@@ -1220,6 +1220,8 @@ export function ProjektSheetEditor({
               managementName: String(fd.get("managementName") ?? ""),
               managementEmail: String(fd.get("managementEmail") ?? ""),
               costCeilingText: String(fd.get("costCeilingText") ?? ""),
+              projectManagerName: String(fd.get("projectManagerName") ?? ""),
+              customerNumber: String(fd.get("customerNumber") ?? ""),
               serviceStreet: String(fd.get("serviceStreet") ?? ""),
               servicePostalCode: String(fd.get("servicePostalCode") ?? ""),
               serviceCity: String(fd.get("serviceCity") ?? ""),
@@ -1313,6 +1315,25 @@ export function ProjektSheetEditor({
             defaultValue={p.costCeilingText ?? ""}
             disabled={!canEdit}
             onDoubleClick={(e) => openFieldOverlay(e.currentTarget, "Kostendach")}
+          />
+        </div>
+
+        <div className="space-y-1">
+          <Label>Projektleiter</Label>
+          <Input
+            name="projectManagerName"
+            defaultValue={p.projectManagerName ?? ""}
+            disabled={!canEdit}
+            onDoubleClick={(e) => openFieldOverlay(e.currentTarget, "Projektleiter")}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label>Kunden-Nr.</Label>
+          <Input
+            name="customerNumber"
+            defaultValue={p.customerNumber ?? ""}
+            disabled={!canEdit}
+            onDoubleClick={(e) => openFieldOverlay(e.currentTarget, "Kunden-Nr.")}
           />
         </div>
 

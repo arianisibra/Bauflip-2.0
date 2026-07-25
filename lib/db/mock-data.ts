@@ -45,6 +45,8 @@ export const mockProjects: Project[] = [
     managementPhone: "+41 44 000 00 00",
     managementEmail: "info@verwaltung.ch",
     costCeilingText: "CHF 800",
+    projectManagerName: null,
+    customerNumber: null,
     serviceStreet: "Musterstrasse 12",
     servicePostalCode: "8000",
     serviceCity: "Zürich",

@@ -382,6 +382,8 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Uint8Arra
       : []),
     ...(project.referenceCode ? ([["Projekt-Nr.", project.referenceCode]] as [string, string][]) : []),
     ["Projekt", project.title],
+    ...(project.customerNumber ? ([["Kunden-Nr.", project.customerNumber]] as [string, string][]) : []),
+    ...(project.projectManagerName ? ([["Projektleiter", project.projectManagerName]] as [string, string][]) : []),
   ];
   for (const [label, value] of metaPairs) {
     drawText(label, MARGIN, { color: GRAY });

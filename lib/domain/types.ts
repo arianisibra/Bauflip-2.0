@@ -193,6 +193,10 @@ export type Project = {
   managementPhone: string | null;
   managementEmail: string | null;
   costCeilingText: string | null;
+  /** Zuständige interne Person (z.B. Bauleiter/Projektleiter) — Freitext, erscheint auf Offerte/Rechnung. */
+  projectManagerName: string | null;
+  /** Kunden-Nr. des Auftraggebers — Freitext-Snapshot, erscheint auf Offerte/Rechnung. */
+  customerNumber: string | null;
   serviceStreet: string | null;
   servicePostalCode: string | null;
   serviceCity: string | null;

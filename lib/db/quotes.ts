@@ -155,6 +155,8 @@ export type QuotePdfProjectHead = {
   referenceCode: string | null;
   tenantName: string | null;
   managementName: string | null;
+  projectManagerName: string | null;
+  customerNumber: string | null;
   serviceStreet: string | null;
   servicePostalCode: string | null;
   serviceCity: string | null;
@@ -168,7 +170,9 @@ export const getQuotePdfProjectHead = cache(async function getQuotePdfProjectHea
 
   const { data, error } = await supabase
     .from("projects")
-    .select("title, reference_code, tenant_name, management_name, service_street, service_postal_code, service_city")
+    .select(
+      "title, reference_code, tenant_name, management_name, project_manager_name, customer_number, service_street, service_postal_code, service_city",
+    )
     .eq("id", projectId)
     .maybeSingle();
   if (error || !data) return null;
@@ -180,6 +184,8 @@ export const getQuotePdfProjectHead = cache(async function getQuotePdfProjectHea
     referenceCode: s(row.reference_code),
     tenantName: s(row.tenant_name),
     managementName: s(row.management_name),
+    projectManagerName: s(row.project_manager_name),
+    customerNumber: s(row.customer_number),
     serviceStreet: s(row.service_street),
     servicePostalCode: s(row.service_postal_code),
     serviceCity: s(row.service_city),

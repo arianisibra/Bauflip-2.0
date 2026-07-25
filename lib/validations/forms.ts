@@ -203,6 +203,8 @@ export const projectStammdatenUpdateSchema = z.object({
   managementPhone: z.string().optional(),
   managementEmail: z.string().optional(),
   costCeilingText: z.string().optional(),
+  projectManagerName: z.string().optional(),
+  customerNumber: z.string().optional(),
   serviceStreet: z.string().optional(),
   servicePostalCode: z.string().optional(),
   serviceCity: z.string().optional(),
