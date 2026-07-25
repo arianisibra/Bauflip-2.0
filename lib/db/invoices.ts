@@ -14,7 +14,7 @@ import { buildQrrReference, buildScorReference, chooseReferenceType } from "@/li
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const INVOICE_DB_COLUMNS =
-  "id, organization_id, project_id, quote_id, invoice_number, status, due_date, intro_text, vat_rate, discount_percent, total_net, total_gross, reference_type, payment_reference, sent_at, sent_to_email, paid_at, created_by, created_by_display_name, created_at, updated_at, bexio_invoice_id, bexio_synced_at, bexio_sync_error";
+  "id, organization_id, project_id, quote_id, invoice_number, status, due_date, intro_text, vat_rate, discount_percent, skonto_percent, skonto_days, total_net, total_gross, reference_type, payment_reference, sent_at, sent_to_email, paid_at, created_by, created_by_display_name, created_at, updated_at, bexio_invoice_id, bexio_synced_at, bexio_sync_error";
 
 const INVOICE_LINE_ITEM_DB_COLUMNS =
   "id, invoice_id, position, description, quantity, unit, unit_price, line_total";
@@ -41,6 +41,8 @@ function mapInvoiceRow(row: Record<string, unknown>): Invoice {
     introText: row.intro_text != null ? String(row.intro_text) : null,
     vatRate: Number(row.vat_rate ?? 0),
     discountPercent: Number(row.discount_percent ?? 0),
+    skontoPercent: Number(row.skonto_percent ?? 0),
+    skontoDays: Number(row.skonto_days ?? 0),
     totalNet: Number(row.total_net ?? 0),
     totalGross: Number(row.total_gross ?? 0),
     referenceType: mapReferenceType(row.reference_type),
@@ -171,6 +173,9 @@ export type InvoiceCreateInput = {
   introText: string | null;
   vatRate: number;
   discountPercent: number;
+  /** Rein informativ — mindert totalGross nicht. */
+  skontoPercent: number;
+  skontoDays: number;
   lineItems: QuoteLineItemInput[];
 };
 
@@ -245,6 +250,8 @@ export async function createInvoice(
       intro_text: input.introText,
       vat_rate: vatRate,
       discount_percent: discountPercent,
+      skonto_percent: input.skontoPercent,
+      skonto_days: input.skontoDays,
       total_net: totalNet,
       total_gross: totalGross,
       reference_type: referenceType,
@@ -346,6 +353,8 @@ export type InvoiceUpdateInput = {
   introText: string | null;
   vatRate: number;
   discountPercent: number;
+  skontoPercent: number;
+  skontoDays: number;
   lineItems: QuoteLineItemInput[];
 };
 
@@ -374,6 +383,8 @@ export async function updateInvoice(invoiceId: string, input: InvoiceUpdateInput
       intro_text: input.introText,
       vat_rate: input.vatRate,
       discount_percent: input.discountPercent,
+      skonto_percent: input.skontoPercent,
+      skonto_days: input.skontoDays,
       total_net: totalNet,
       total_gross: totalGross,
     })

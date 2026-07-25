@@ -616,6 +616,14 @@ export type Invoice = {
   vatRate: number;
   /** Prozentualer Rabatt auf die Positionssumme, vor der MwSt abgezogen (0 = kein Rabatt). */
   discountPercent: number;
+  /**
+   * Skonto-Satz (%) bei Zahlung innert `skontoDays` — rein informativ auf dem PDF,
+   * mindert NICHT `totalGross` (der offiziell geschuldete Betrag bleibt unverändert;
+   * der Zahlungsabgleich behandelt frühzeitige Skonto-Zahlungen separat).
+   */
+  skontoPercent: number;
+  /** Zahlungsfrist in Tagen, innerhalb der der Skonto-Satz gilt (0 = kein Skonto). */
+  skontoDays: number;
   totalNet: number;
   totalGross: number;
   /**

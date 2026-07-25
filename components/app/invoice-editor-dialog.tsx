@@ -31,6 +31,8 @@ type EditorState = {
   introText: string;
   vatRate: string;
   discountPercent: string;
+  skontoPercent: string;
+  skontoDays: string;
   lineItems: EditableLineItem[];
 };
 
@@ -49,6 +51,8 @@ function emptyEditor(): EditorState {
     introText: "",
     vatRate: "8.1",
     discountPercent: "0",
+    skontoPercent: "0",
+    skontoDays: "0",
     lineItems: [{ ...EMPTY_LINE }],
   };
 }
@@ -60,6 +64,8 @@ function editorFromInvoice(invoice: Invoice): EditorState {
     introText: invoice.introText ?? "",
     vatRate: String(invoice.vatRate),
     discountPercent: String(invoice.discountPercent),
+    skontoPercent: String(invoice.skontoPercent),
+    skontoDays: String(invoice.skontoDays),
     lineItems: invoice.lineItems.map((item) => ({
       description: item.description,
       quantity: String(item.quantity),
@@ -157,6 +163,8 @@ export function InvoiceEditorDialog({
       introText: editor.introText || null,
       vatRate: Number(editor.vatRate.replace(",", ".")),
       discountPercent: Number(editor.discountPercent.replace(",", ".")),
+      skontoPercent: Number(editor.skontoPercent.replace(",", ".")),
+      skontoDays: Number(editor.skontoDays) || 0,
       lineItems: parsedLineItems(editor),
     };
     const itemsParsed = z
@@ -359,6 +367,29 @@ export function InvoiceEditorDialog({
               />
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-[11px]">Skonto (%, optional)</Label>
+              <Input
+                inputMode="decimal"
+                value={editor.skontoPercent}
+                placeholder="0"
+                onChange={(e) => setEditor((prev) => ({ ...prev, skontoPercent: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label className="text-[11px]">bei Zahlung innert (Tagen)</Label>
+              <Input
+                inputMode="numeric"
+                value={editor.skontoDays}
+                placeholder="10"
+                onChange={(e) => setEditor((prev) => ({ ...prev, skontoDays: e.target.value }))}
+              />
+            </div>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Skonto ist ein Hinweis auf dem Dokument — der Rechnungsbetrag bleibt unverändert.
+          </p>
           <div>
             <Label className="text-[11px]">Einleitungstext (optional)</Label>
             <Textarea
@@ -420,6 +451,9 @@ export function InvoiceEditorDialog({
           <p className="text-[11px] text-muted-foreground">
             {editor.dueDate
               ? `Fällig am ${new Date(editor.dueDate).toLocaleDateString("de-CH", { timeZone: "Europe/Zurich" })}. `
+              : ""}
+            {Number(editor.skontoPercent.replace(",", ".")) > 0
+              ? `${editor.skontoPercent}% Skonto bei Zahlung innert ${editor.skontoDays} Tagen. `
               : ""}
             Nach dem Speichern kannst du die Rechnung als QR-PDF öffnen und per E-Mail versenden.
           </p>

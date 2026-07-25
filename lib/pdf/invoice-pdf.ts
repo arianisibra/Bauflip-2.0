@@ -371,6 +371,12 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Uint8Arra
   const metaPairs: [string, string][] = [
     ["Datum", formatDateCh(invoice.createdAt)],
     ...(invoice.dueDate ? ([["Fällig am", formatDateCh(invoice.dueDate)]] as [string, string][]) : []),
+    ...(invoice.skontoPercent > 0
+      ? ([["Skonto", `${invoice.skontoPercent}% bei Zahlung innert ${invoice.skontoDays} Tagen`]] as [
+          string,
+          string,
+        ][])
+      : []),
     ...(project.referenceCode ? ([["Projekt-Nr.", project.referenceCode]] as [string, string][]) : []),
     ["Projekt", project.title],
   ];
