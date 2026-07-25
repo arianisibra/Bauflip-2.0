@@ -323,6 +323,10 @@ export function afterPriceBookChange(qc: QueryClient, opts?: InvalidateOpts): vo
   inv(qc, queryKeys.priceBook(), opts);
 }
 
+export function afterTextSnippetsChange(qc: QueryClient, opts?: InvalidateOpts): void {
+  inv(qc, queryKeys.textSnippets(), opts);
+}
+
 export function afterContactChange(qc: QueryClient, opts?: InvalidateOpts): void {
   inv(qc, queryKeys.contacts(), opts);
 }

@@ -517,6 +517,16 @@ export type PriceBookItem = {
   sortOrder: number;
 };
 
+/** Eintrag in `text_snippets`: wiederverwendbarer Textblock (Einleitungs-/Schlusstext) je Organisation. */
+export type TextSnippet = {
+  id: string;
+  organizationId: string;
+  title: string;
+  body: string;
+  isActive: boolean;
+  sortOrder: number;
+};
+
 export const contactKinds = ["privat", "mieter", "verwaltung", "eigentuemer", "lieferant"] as const;
 export type ContactKind = (typeof contactKinds)[number];
 
@@ -656,6 +666,8 @@ export type Invoice = {
   /** Fälligkeit (YYYY-MM-DD), Default +30 Tage bei Erstellung. */
   dueDate: string | null;
   introText: string | null;
+  /** Schlusstext (optional) — analog zum outroText der Offerte, erscheint unterhalb der Summen. */
+  footerText: string | null;
   vatRate: number;
   /** Prozentualer Rabatt auf die Positionssumme, vor der MwSt abgezogen (0 = kein Rabatt). */
   discountPercent: number;

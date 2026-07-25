@@ -22,6 +22,7 @@ import type {
   Quote,
   QuoteStatus,
   TechnicianAbsence,
+  TextSnippet,
   TimeEntry,
   UserProfile,
   WeekTaskItem,
@@ -63,6 +64,12 @@ import {
   listPriceBookItemsAction,
   updatePriceBookItemAction,
 } from "@/app/(app)/projekte/price-book-actions";
+import {
+  createTextSnippetAction,
+  deleteTextSnippetAction,
+  listTextSnippetsAction,
+  updateTextSnippetAction,
+} from "@/app/(app)/projekte/text-snippet-actions";
 import {
   createContactAction,
   deleteContactAction,
@@ -198,6 +205,7 @@ import {
   afterProjectDeleted,
   afterProjectArchiveChanged,
   afterQuoteChange,
+  afterTextSnippetsChange,
   afterTimeEntryChange,
   patchAttachmentAdded,
   patchAttachmentNotesUpdated,
@@ -1170,6 +1178,50 @@ export function useDeletePriceBookItem() {
     onSuccess: () => {
       afterPriceBookChange(qc, { refetchType: "all" });
       notifyOtherTabs({ type: "price_book.changed" });
+    },
+  });
+}
+
+/** Textbausteine der Organisation (Offert-/Rechnungs-Editor + Verwaltung in Einstellungen). */
+export function useTextSnippets(enabled = true) {
+  return useQuery<TextSnippet[]>({
+    queryKey: queryKeys.textSnippets(),
+    queryFn: () => listTextSnippetsAction(),
+    enabled,
+    staleTime: 60_000,
+    refetchOnMount: false,
+  });
+}
+
+export function useCreateTextSnippet() {
+  const qc = useQueryClient();
+  return useMutation<TextSnippet, Error, Parameters<typeof createTextSnippetAction>[0]>({
+    mutationFn: (input) => createTextSnippetAction(input, getTabId()),
+    onSuccess: () => {
+      afterTextSnippetsChange(qc, { refetchType: "all" });
+      notifyOtherTabs({ type: "text_snippets.changed" });
+    },
+  });
+}
+
+export function useUpdateTextSnippet() {
+  const qc = useQueryClient();
+  return useMutation<TextSnippet, Error, Parameters<typeof updateTextSnippetAction>[0]>({
+    mutationFn: (input) => updateTextSnippetAction(input, getTabId()),
+    onSuccess: () => {
+      afterTextSnippetsChange(qc, { refetchType: "all" });
+      notifyOtherTabs({ type: "text_snippets.changed" });
+    },
+  });
+}
+
+export function useDeleteTextSnippet() {
+  const qc = useQueryClient();
+  return useMutation<{ ok: true }, Error, { snippetId: string }>({
+    mutationFn: ({ snippetId }) => deleteTextSnippetAction(snippetId, getTabId()),
+    onSuccess: () => {
+      afterTextSnippetsChange(qc, { refetchType: "all" });
+      notifyOtherTabs({ type: "text_snippets.changed" });
     },
   });
 }

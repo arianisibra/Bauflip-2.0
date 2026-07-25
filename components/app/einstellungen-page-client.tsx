@@ -8,6 +8,7 @@ import { BusyCalendarSettings } from "@/components/app/busy-calendar-settings";
 import { useOrganizationBrandingContext } from "@/components/app/organization-branding-provider";
 import { PriceBookManager } from "@/components/app/price-book-manager";
 import { ProfileSettingsForm } from "@/components/app/profile-settings-form";
+import { TextSnippetsManager } from "@/components/app/text-snippets-manager";
 import { WorkflowStagesManager } from "@/components/app/workflow-stages-manager";
 import { WorkflowTransitionsManager } from "@/components/app/workflow-transitions-manager";
 import { useEinstellungenPage, useOrganizationBranding } from "@/lib/query/hooks";
@@ -43,6 +44,8 @@ export function EinstellungenPageClient() {
       />
 
       <PriceBookManager />
+
+      <TextSnippetsManager />
 
       {data.canEditCompanySettings ? <BillingSettingsForm /> : null}
 

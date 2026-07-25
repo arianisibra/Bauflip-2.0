@@ -3,10 +3,10 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2 } from "lucide-react";
-import type { PriceBookItem, Quote, TechnicianReport } from "@/lib/domain/types";
+import type { PriceBookItem, Quote, TechnicianReport, TextSnippet } from "@/lib/domain/types";
 import { computeQuoteTotals } from "@/lib/quotes/totals";
 import { quoteCreateSchema } from "@/lib/validations/forms";
-import { useCreateQuote, usePriceBookItems, useUpdateQuote } from "@/lib/query/hooks";
+import { useCreateQuote, usePriceBookItems, useTextSnippets, useUpdateQuote } from "@/lib/query/hooks";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Stepper } from "@/components/ui/stepper";
 import { Textarea } from "@/components/ui/textarea";
 import { PriceBookPicker } from "@/components/app/price-book-picker";
+import { TextSnippetPicker } from "@/components/app/text-snippet-picker";
 
 const chf = new Intl.NumberFormat("de-CH", { style: "currency", currency: "CHF" });
 
@@ -102,6 +103,8 @@ export function QuoteEditorDialog({
   const updateQuote = useUpdateQuote();
   const priceBookQuery = usePriceBookItems(open);
   const priceBookItems = (priceBookQuery.data ?? []).filter((i: PriceBookItem) => i.isActive);
+  const textSnippetsQuery = useTextSnippets(open);
+  const textSnippets = (textSnippetsQuery.data ?? []).filter((s: TextSnippet) => s.isActive);
 
   const [editor, setEditor] = useState<EditorState>(emptyEditor);
   const [step, setStep] = useState(0);
@@ -137,6 +140,14 @@ export function QuoteEditorDialog({
       quantity: "1",
       unit: item.unit ?? "",
       unitPrice: String(item.unitPrice),
+    });
+  };
+
+  const applySnippet = (field: "introText" | "outroText", snippet: TextSnippet) => {
+    setEditor((prev) => {
+      const current = prev[field].trim();
+      const next = current ? `${prev[field]}\n\n${snippet.body}` : snippet.body;
+      return { ...prev, [field]: next };
     });
   };
 
@@ -497,7 +508,10 @@ export function QuoteEditorDialog({
             </div>
           </div>
           <div>
-            <Label className="text-[11px]">Einleitungstext (optional)</Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px]">Einleitungstext (optional)</Label>
+              <TextSnippetPicker snippets={textSnippets} onPick={(s) => applySnippet("introText", s)} />
+            </div>
             <Textarea
               rows={3}
               value={editor.introText}
@@ -505,7 +519,10 @@ export function QuoteEditorDialog({
             />
           </div>
           <div>
-            <Label className="text-[11px]">Schlusstext (optional)</Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px]">Schlusstext (optional)</Label>
+              <TextSnippetPicker snippets={textSnippets} onPick={(s) => applySnippet("outroText", s)} />
+            </div>
             <Textarea
               rows={3}
               value={editor.outroText}

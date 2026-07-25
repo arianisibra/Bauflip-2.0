@@ -500,6 +500,16 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Uint8Arra
     y -= LINE_HEIGHT;
   }
 
+  // ── Schlusstext ─────────────────────────────────────────────────────────
+  if (invoice.footerText) {
+    y -= 10;
+    for (const line of wrapText(invoice.footerText, font, FONT_SIZE, CONTENT_WIDTH)) {
+      newPageIfNeeded(LINE_HEIGHT);
+      if (line) drawText(line, MARGIN);
+      y -= LINE_HEIGHT;
+    }
+  }
+
   // ── Zahlteil: unten auf der letzten Seite; neue Seite, wenn zu wenig Platz ─
   if (y < PAYMENT_PART_HEIGHT + 10 * MM) {
     page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);

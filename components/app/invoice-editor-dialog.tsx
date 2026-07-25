@@ -4,11 +4,11 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { z } from "zod";
-import type { Invoice, InvoiceKind, PriceBookItem } from "@/lib/domain/types";
+import type { Invoice, InvoiceKind, PriceBookItem, TextSnippet } from "@/lib/domain/types";
 import { invoiceKindLabels } from "@/lib/domain/types";
 import { computeQuoteTotals } from "@/lib/quotes/totals";
 import { invoiceUpdateSchema, quoteLineItemSchema } from "@/lib/validations/forms";
-import { useCreateInvoice, usePriceBookItems, useUpdateInvoice } from "@/lib/query/hooks";
+import { useCreateInvoice, usePriceBookItems, useTextSnippets, useUpdateInvoice } from "@/lib/query/hooks";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Stepper } from "@/components/ui/stepper";
 import { Textarea } from "@/components/ui/textarea";
 import { PriceBookPicker } from "@/components/app/price-book-picker";
+import { TextSnippetPicker } from "@/components/app/text-snippet-picker";
 
 const chf = new Intl.NumberFormat("de-CH", { style: "currency", currency: "CHF" });
 
@@ -33,6 +34,7 @@ type EditorState = {
   invoiceKind: InvoiceKind;
   dueDate: string;
   introText: string;
+  footerText: string;
   vatRate: string;
   discountPercent: string;
   skontoPercent: string;
@@ -56,6 +58,7 @@ function emptyEditor(): EditorState {
     invoiceKind: "standard",
     dueDate: defaultDueDate(),
     introText: "",
+    footerText: "",
     vatRate: "8.1",
     discountPercent: "0",
     skontoPercent: "0",
@@ -70,6 +73,7 @@ function editorFromInvoice(invoice: Invoice): EditorState {
     invoiceKind: invoice.invoiceKind,
     dueDate: invoice.dueDate ?? "",
     introText: invoice.introText ?? "",
+    footerText: invoice.footerText ?? "",
     vatRate: String(invoice.vatRate),
     discountPercent: String(invoice.discountPercent),
     skontoPercent: String(invoice.skontoPercent),
@@ -117,6 +121,8 @@ export function InvoiceEditorDialog({
   const updateInvoice = useUpdateInvoice();
   const priceBookQuery = usePriceBookItems(open);
   const priceBookItems = (priceBookQuery.data ?? []).filter((i: PriceBookItem) => i.isActive);
+  const textSnippetsQuery = useTextSnippets(open);
+  const textSnippets = (textSnippetsQuery.data ?? []).filter((s: TextSnippet) => s.isActive);
 
   const [editor, setEditor] = useState<EditorState>(emptyEditor);
   const [step, setStep] = useState(0);
@@ -148,6 +154,14 @@ export function InvoiceEditorDialog({
       quantity: "1",
       unit: item.unit ?? "",
       unitPrice: String(item.unitPrice),
+    });
+  };
+
+  const applySnippet = (field: "introText" | "footerText", snippet: TextSnippet) => {
+    setEditor((prev) => {
+      const current = prev[field].trim();
+      const next = current ? `${prev[field]}\n\n${snippet.body}` : snippet.body;
+      return { ...prev, [field]: next };
     });
   };
 
@@ -192,6 +206,7 @@ export function InvoiceEditorDialog({
       invoiceKind: editor.invoiceKind,
       dueDate: editor.dueDate || null,
       introText: editor.introText || null,
+      footerText: editor.footerText || null,
       vatRate: Number(editor.vatRate.replace(",", ".")),
       discountPercent: Number(editor.discountPercent.replace(",", ".")),
       skontoPercent: Number(editor.skontoPercent.replace(",", ".")),
@@ -546,11 +561,25 @@ export function InvoiceEditorDialog({
             Skonto ist ein Hinweis auf dem Dokument — der Rechnungsbetrag bleibt unverändert.
           </p>
           <div>
-            <Label className="text-[11px]">Einleitungstext (optional)</Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px]">Einleitungstext (optional)</Label>
+              <TextSnippetPicker snippets={textSnippets} onPick={(s) => applySnippet("introText", s)} />
+            </div>
             <Textarea
               rows={3}
               value={editor.introText}
               onChange={(e) => setEditor((prev) => ({ ...prev, introText: e.target.value }))}
+            />
+          </div>
+          <div>
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px]">Schlusstext (optional)</Label>
+              <TextSnippetPicker snippets={textSnippets} onPick={(s) => applySnippet("footerText", s)} />
+            </div>
+            <Textarea
+              rows={3}
+              value={editor.footerText}
+              onChange={(e) => setEditor((prev) => ({ ...prev, footerText: e.target.value }))}
             />
           </div>
         </div>

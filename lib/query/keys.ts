@@ -63,6 +63,8 @@ export const queryKeys = {
   quoteMailConfig: () => ["quote-mail-config"] as const,
   /** Preisstamm der Organisation (Offert-Editor + Verwaltung). */
   priceBook: () => ["price-book"] as const,
+  /** Textbausteine der Organisation (Offert-/Rechnungs-Editor + Verwaltung). */
+  textSnippets: () => ["text-snippets"] as const,
   /** Kontaktverzeichnis der Organisation. */
   contacts: () => ["contacts"] as const,
   /** Verknüpfte Projekte eines Kontakts (Historie). */

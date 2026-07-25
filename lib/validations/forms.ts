@@ -333,6 +333,17 @@ export const priceBookItemUpdateSchema = priceBookItemSchema.extend({
   id: z.string().uuid(),
 });
 
+export const textSnippetSchema = z.object({
+  title: z.string().trim().min(1, "Bitte Titel angeben.").max(200),
+  body: z.string().trim().min(1, "Bitte Text angeben.").max(4000),
+  isActive: z.boolean().optional(),
+  sortOrder: z.coerce.number().int().min(0).max(9999).optional(),
+});
+
+export const textSnippetUpdateSchema = textSnippetSchema.extend({
+  id: z.string().uuid(),
+});
+
 export const contactSchema = z.object({
   kind: z.enum(contactKinds),
   displayName: z.string().trim().min(1, "Bitte einen Namen angeben.").max(200),
@@ -362,6 +373,7 @@ export const invoiceCreateSchema = z.object({
     .optional()
     .nullable(),
   introText: z.string().max(4000).optional().nullable(),
+  footerText: z.string().max(4000).optional().nullable(),
   vatRate: z.coerce.number().min(0).max(100),
   /** Bei fromQuoteId ignoriert (kommt dann aus der Offerte). */
   discountPercent: z.coerce.number().min(0).max(100).default(0),
@@ -380,6 +392,7 @@ export const invoiceUpdateSchema = z.object({
     .optional()
     .nullable(),
   introText: z.string().max(4000).optional().nullable(),
+  footerText: z.string().max(4000).optional().nullable(),
   vatRate: z.coerce.number().min(0).max(100),
   discountPercent: z.coerce.number().min(0).max(100).default(0),
   skontoPercent: z.coerce.number().min(0).max(100).default(0),

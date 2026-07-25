@@ -15,7 +15,7 @@ import { buildQrrReference, buildScorReference, chooseReferenceType } from "@/li
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const INVOICE_DB_COLUMNS =
-  "id, organization_id, project_id, quote_id, invoice_number, status, invoice_kind, deducted_amount, due_date, intro_text, vat_rate, discount_percent, skonto_percent, skonto_days, total_net, total_gross, reference_type, payment_reference, sent_at, sent_to_email, paid_at, created_by, created_by_display_name, created_at, updated_at, bexio_invoice_id, bexio_synced_at, bexio_sync_error";
+  "id, organization_id, project_id, quote_id, invoice_number, status, invoice_kind, deducted_amount, due_date, intro_text, footer_text, vat_rate, discount_percent, skonto_percent, skonto_days, total_net, total_gross, reference_type, payment_reference, sent_at, sent_to_email, paid_at, created_by, created_by_display_name, created_at, updated_at, bexio_invoice_id, bexio_synced_at, bexio_sync_error";
 
 function mapInvoiceKind(raw: unknown): InvoiceKind {
   return invoiceKinds.includes(raw as InvoiceKind) ? (raw as InvoiceKind) : "standard";
@@ -46,6 +46,7 @@ function mapInvoiceRow(row: Record<string, unknown>): Invoice {
     deductedAmount: Number(row.deducted_amount ?? 0),
     dueDate: row.due_date != null ? String(row.due_date) : null,
     introText: row.intro_text != null ? String(row.intro_text) : null,
+    footerText: row.footer_text != null ? String(row.footer_text) : null,
     vatRate: Number(row.vat_rate ?? 0),
     discountPercent: Number(row.discount_percent ?? 0),
     skontoPercent: Number(row.skonto_percent ?? 0),
@@ -209,6 +210,7 @@ export type InvoiceCreateInput = {
   invoiceKind: InvoiceKind;
   dueDate: string | null;
   introText: string | null;
+  footerText: string | null;
   vatRate: number;
   discountPercent: number;
   /** Rein informativ — mindert totalGross nicht. */
@@ -291,6 +293,7 @@ export async function createInvoice(
       deducted_amount: deductedAmount,
       due_date: input.dueDate,
       intro_text: input.introText,
+      footer_text: input.footerText,
       vat_rate: vatRate,
       discount_percent: discountPercent,
       skonto_percent: input.skontoPercent,
@@ -395,6 +398,7 @@ export type InvoiceUpdateInput = {
   invoiceKind: InvoiceKind;
   dueDate: string | null;
   introText: string | null;
+  footerText: string | null;
   vatRate: number;
   discountPercent: number;
   skontoPercent: number;
@@ -430,6 +434,7 @@ export async function updateInvoice(invoiceId: string, input: InvoiceUpdateInput
       deducted_amount: deductedAmount,
       due_date: input.dueDate,
       intro_text: input.introText,
+      footer_text: input.footerText,
       vat_rate: input.vatRate,
       discount_percent: input.discountPercent,
       skonto_percent: input.skontoPercent,
