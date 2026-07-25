@@ -2,15 +2,20 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import type { WorkflowStage } from "@/lib/domain/workflow-types";
 import {
   RAPPORT_NEXT_STEP_ICON_KEYS,
   STAGE_COLOR_BADGE_CLASSES,
   STAGE_COLOR_KEYS,
 } from "@/lib/domain/stage-visuals";
-import { workflowStageUpdateSchema } from "@/lib/validations/forms";
-import { useUpdateWorkflowStage, useWorkflowStages } from "@/lib/query/hooks";
+import { workflowStageCreateSchema, workflowStageUpdateSchema } from "@/lib/validations/forms";
+import {
+  useCreateWorkflowStage,
+  useDeleteWorkflowStage,
+  useUpdateWorkflowStage,
+  useWorkflowStages,
+} from "@/lib/query/hooks";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -18,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type FormState = {
+  key: string;
   label: string;
   color: string;
   sortOrder: string;
@@ -34,8 +40,27 @@ type FormState = {
   rapportNextStepIcon: string;
 };
 
+const EMPTY_FORM: FormState = {
+  key: "",
+  label: "",
+  color: STAGE_COLOR_KEYS[0],
+  sortOrder: "0",
+  isInitial: false,
+  isSchedulingTarget: false,
+  promotesOnAppointment: false,
+  isBilling: false,
+  isTerminal: false,
+  hiddenInOfficeFilter: false,
+  rapportAufgenommen: false,
+  rapportMontage: false,
+  rapportBehobenTarget: false,
+  rapportNextStepDescription: "",
+  rapportNextStepIcon: "",
+};
+
 function formFromStage(stage: WorkflowStage): FormState {
   return {
+    key: stage.key,
     label: stage.label,
     color: stage.color,
     sortOrder: String(stage.sortOrder),
@@ -69,7 +94,10 @@ const TAG_FIELDS: { key: keyof FormState; label: string; hint: string }[] = [
 export function WorkflowStagesManager() {
   const stagesQuery = useWorkflowStages();
   const updateStage = useUpdateWorkflowStage();
+  const createStage = useCreateWorkflowStage();
+  const deleteStage = useDeleteWorkflowStage();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
   const [form, setForm] = useState<FormState | null>(null);
 
   const stages = [...(stagesQuery.data ?? [])].sort((a, b) => a.sortOrder - b.sortOrder);
@@ -77,20 +105,37 @@ export function WorkflowStagesManager() {
 
   const openEdit = (stage: WorkflowStage) => {
     setEditingId(stage.id);
+    setIsCreating(false);
     setForm(formFromStage(stage));
+  };
+  const openCreate = () => {
+    setEditingId(null);
+    setIsCreating(true);
+    setForm({ ...EMPTY_FORM, sortOrder: String(stages.length * 10) });
   };
   const closeEdit = () => {
     setEditingId(null);
+    setIsCreating(false);
     setForm(null);
   };
 
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
 
+  const removeStage = async (stage: WorkflowStage) => {
+    if (!window.confirm(`Status «${stage.label}» (${stage.key}) wirklich löschen?`)) return;
+    try {
+      await deleteStage.mutateAsync(stage.id);
+      toast.success("Status gelöscht");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Löschen fehlgeschlagen.");
+    }
+  };
+
   const submit = async () => {
-    if (!editing || !form) return;
+    if (!form || (!editing && !isCreating)) return;
     const sortOrder = Number.parseInt(form.sortOrder, 10);
-    const payload = {
+    const basePayload = {
       label: form.label,
       color: form.color,
       sortOrder: Number.isFinite(sortOrder) ? sortOrder : 0,
@@ -106,7 +151,25 @@ export function WorkflowStagesManager() {
       rapportNextStepDescription: form.rapportNextStepDescription.trim() || null,
       rapportNextStepIcon: form.rapportNextStepIcon.trim() || null,
     };
-    const parsed = workflowStageUpdateSchema.safeParse(payload);
+
+    if (isCreating) {
+      const parsed = workflowStageCreateSchema.safeParse({ ...basePayload, key: form.key.trim() });
+      if (!parsed.success) {
+        toast.error(parsed.error.issues[0]?.message ?? "Ungültige Eingabe.");
+        return;
+      }
+      try {
+        await createStage.mutateAsync(parsed.data);
+        toast.success("Status angelegt");
+        closeEdit();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Anlegen fehlgeschlagen.");
+      }
+      return;
+    }
+
+    if (!editing) return;
+    const parsed = workflowStageUpdateSchema.safeParse(basePayload);
     if (!parsed.success) {
       toast.error(parsed.error.issues[0]?.message ?? "Ungültige Eingabe.");
       return;
@@ -126,13 +189,15 @@ export function WorkflowStagesManager() {
       ? `${stages.length} Status-Definitionen`
       : "Noch nicht konfiguriert — es gelten die Standardwerte.";
 
+  const isPending = updateStage.isPending || createStage.isPending;
+
   const footer = (
     <div className="flex items-center justify-end gap-2">
-      <Button type="button" variant="ghost" disabled={updateStage.isPending} onClick={closeEdit}>
+      <Button type="button" variant="ghost" disabled={isPending} onClick={closeEdit}>
         Abbrechen
       </Button>
-      <Button type="button" disabled={updateStage.isPending} onClick={submit}>
-        {updateStage.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+      <Button type="button" disabled={isPending} onClick={submit}>
+        {isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
         Speichern
       </Button>
     </div>
@@ -146,6 +211,10 @@ export function WorkflowStagesManager() {
             <h2 className="text-sm font-semibold">Workflow</h2>
             <p className="mt-0.5 text-[11px] text-muted-foreground">{summary}</p>
           </div>
+          <Button type="button" variant="outline" size="sm" onClick={openCreate}>
+            <Plus className="size-4" aria-hidden />
+            Neuer Status
+          </Button>
         </div>
 
         {stages.length > 0 ? (
@@ -160,9 +229,22 @@ export function WorkflowStagesManager() {
                   </span>
                   <span className="truncate font-mono text-[11px] text-muted-foreground">{stage.key}</span>
                 </div>
-                <Button type="button" variant="outline" size="sm" onClick={() => openEdit(stage)}>
-                  Bearbeiten
-                </Button>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Button type="button" variant="outline" size="sm" onClick={() => openEdit(stage)}>
+                    Bearbeiten
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    disabled={deleteStage.isPending}
+                    onClick={() => removeStage(stage)}
+                    aria-label={`Status ${stage.label} löschen`}
+                  >
+                    <Trash2 className="size-4" aria-hidden />
+                  </Button>
+                </div>
               </li>
             ))}
           </ul>
@@ -170,17 +252,31 @@ export function WorkflowStagesManager() {
       </section>
 
       <Dialog
-        open={editing !== null && form !== null}
+        open={(editing !== null || isCreating) && form !== null}
         onOpenChange={(open) => {
           if (!open) closeEdit();
         }}
-        title={editing ? `Status «${editing.key}» bearbeiten` : ""}
-        description="Anzeige und Automatik-Tags. Der interne Schlüssel bleibt fix."
+        title={isCreating ? "Neuer Status" : editing ? `Status «${editing.key}» bearbeiten` : ""}
+        description={
+          isCreating
+            ? "Der Schlüssel lässt sich nach dem Anlegen nicht mehr ändern."
+            : "Anzeige und Automatik-Tags. Der interne Schlüssel bleibt fix."
+        }
         footer={footer}
         className="max-w-lg"
       >
         {form ? (
           <div className="space-y-4">
+            {isCreating ? (
+              <div>
+                <Label className="text-[11px]">Schlüssel (intern, fix)</Label>
+                <Input
+                  value={form.key}
+                  placeholder="z. B. material_bestellt"
+                  onChange={(e) => setField("key", e.target.value)}
+                />
+              </div>
+            ) : null}
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-[2fr_1fr_1fr]">
               <div>
                 <Label className="text-[11px]">Label</Label>

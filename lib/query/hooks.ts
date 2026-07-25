@@ -108,7 +108,9 @@ import {
   setInvitePreferenceAction,
 } from "@/app/(app)/einstellungen/invite-preference-actions";
 import {
+  createWorkflowStageAction,
   createWorkflowTransitionAction,
+  deleteWorkflowStageAction,
   deleteWorkflowTransitionAction,
   getWorkflowStagesAction,
   getWorkflowTransitionsAction,
@@ -891,6 +893,30 @@ export function useUpdateWorkflowStage() {
     onSuccess: (updated) => {
       qc.setQueryData<WorkflowStage[]>(queryKeys.workflowStages(), (prev) =>
         prev ? prev.map((s) => (s.id === updated.id ? updated : s)) : prev,
+      );
+    },
+  });
+}
+
+export function useCreateWorkflowStage() {
+  const qc = useQueryClient();
+  return useMutation<WorkflowStage, Error, Parameters<typeof createWorkflowStageAction>[0]>({
+    mutationFn: (values) => createWorkflowStageAction(values),
+    onSuccess: (created) => {
+      qc.setQueryData<WorkflowStage[]>(queryKeys.workflowStages(), (prev) =>
+        prev ? [...prev, created] : [created],
+      );
+    },
+  });
+}
+
+export function useDeleteWorkflowStage() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: (stageId) => deleteWorkflowStageAction(stageId),
+    onSuccess: (_data, stageId) => {
+      qc.setQueryData<WorkflowStage[]>(queryKeys.workflowStages(), (prev) =>
+        prev ? prev.filter((s) => s.id !== stageId) : prev,
       );
     },
   });

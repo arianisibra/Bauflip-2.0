@@ -19,15 +19,26 @@ export function AuftragDocumentButton({ projectId, enabled }: { projectId: strin
           <h3 className="text-sm font-semibold">Auftragsdokument</h3>
           <p className="text-[11px] text-muted-foreground">Auftrag als Word aus deiner Vorlage.</p>
         </div>
-        <a
-          href={`/api/projekte/${projectId}/auftrag-document`}
-          target="_blank"
-          rel="noreferrer"
-          className={buttonVariants({ variant: "outline", size: "sm" })}
-        >
-          <FileType className="size-4" aria-hidden />
-          Als Word (Auftrag)
-        </a>
+        <div className="flex shrink-0 gap-2">
+          <a
+            href={`/api/projekte/${projectId}/auftrag-document`}
+            target="_blank"
+            rel="noreferrer"
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            <FileType className="size-4" aria-hidden />
+            Als Word (Auftrag)
+          </a>
+          <a
+            href={`/api/projekte/${projectId}/auftrag-document?format=pdf`}
+            target="_blank"
+            rel="noreferrer"
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            <FileType className="size-4" aria-hidden />
+            Als PDF
+          </a>
+        </div>
       </div>
     </section>
   );

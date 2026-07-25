@@ -10,8 +10,11 @@
 -- besitzen (aktuell: beide bestehenden Orgs — Storenbau + Malerbetrieb Test — haben
 -- das per Seed-Funktion; Org-Anlage läuft bisher manuell, nicht über die App).
 --
--- Bewusst NICHT angewendet mit dieser Migration selbst — nur vorbereitet, wie
--- vereinbart. Anwendung erst nach erneuter expliziter Freigabe.
+-- Bereits live: inhaltlich identisch unter Remote-Version 20260723201058
+-- angewendet (per mcp__supabase__apply_migration, daher die abweichende lokale
+-- Datei-Timestamp — gleiches Muster wie bei project_orders). Diese Datei bleibt
+-- als lokale Historie stehen; alle Statements sind idempotent (if not exists /
+-- or replace), ein erneutes Ausführen wäre also ein sicherer No-op.
 
 alter table public.projects
   drop constraint if exists projects_status_check;

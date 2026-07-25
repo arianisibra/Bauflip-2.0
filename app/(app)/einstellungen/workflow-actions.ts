@@ -2,7 +2,9 @@
 
 import { requireAdminLayoutSession } from "@/lib/auth/organization";
 import {
+  createWorkflowStage,
   createWorkflowTransition,
+  deleteWorkflowStage,
   deleteWorkflowTransition,
   getOrgWorkflowStages,
   getOrgWorkflowTransitions,
@@ -10,7 +12,11 @@ import {
   updateWorkflowTransition,
 } from "@/lib/db/workflow";
 import type { WorkflowStage, WorkflowTransition } from "@/lib/domain/workflow-types";
-import { workflowStageUpdateSchema, workflowTransitionInputSchema } from "@/lib/validations/forms";
+import {
+  workflowStageCreateSchema,
+  workflowStageUpdateSchema,
+  workflowTransitionInputSchema,
+} from "@/lib/validations/forms";
 
 export async function getWorkflowStagesAction(): Promise<WorkflowStage[]> {
   const session = await requireAdminLayoutSession();
@@ -30,6 +36,25 @@ export async function updateWorkflowStageAction(
   }
 
   return updateWorkflowStage(session.organizationId, stageId, parsed.data);
+}
+
+export async function createWorkflowStageAction(values: unknown): Promise<WorkflowStage> {
+  const session = await requireAdminLayoutSession();
+  if (!session.organizationId) throw new Error("Keine Organisation.");
+
+  const parsed = workflowStageCreateSchema.safeParse(values);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Ungültige Eingabe.");
+  }
+
+  return createWorkflowStage(session.organizationId, parsed.data);
+}
+
+export async function deleteWorkflowStageAction(stageId: string): Promise<void> {
+  const session = await requireAdminLayoutSession();
+  if (!session.organizationId) throw new Error("Keine Organisation.");
+
+  return deleteWorkflowStage(session.organizationId, stageId);
 }
 
 export async function getWorkflowTransitionsAction(): Promise<WorkflowTransition[]> {

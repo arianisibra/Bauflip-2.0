@@ -195,6 +195,14 @@ export function ProjektQuotesSection({
                       </a>
                     </DropdownMenuItem>
                   ) : null}
+                  {hasWordTemplate ? (
+                    <DropdownMenuItem asChild>
+                      <a href={`/api/quotes/${quote.id}/document?format=pdf`} target="_blank" rel="noreferrer">
+                        <FileType className="size-4" aria-hidden />
+                        Als PDF (Vorlage)
+                      </a>
+                    </DropdownMenuItem>
+                  ) : null}
                   {canApproveAndSend ? (
                     <DropdownMenuItem onSelect={() => setSendTarget(quote)}>
                       <Send className="size-4" aria-hidden />

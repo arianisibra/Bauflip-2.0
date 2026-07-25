@@ -310,6 +310,16 @@ export const workflowStageUpdateSchema = z.object({
   rapportNextStepIcon: z.enum(RAPPORT_NEXT_STEP_ICON_KEYS).nullable(),
 });
 
+/** Neue Workflow-Stage — zusätzlich zu den editierbaren Feldern der fixe `key`. */
+export const workflowStageCreateSchema = workflowStageUpdateSchema.extend({
+  key: z
+    .string()
+    .trim()
+    .min(1, "Schlüssel darf nicht leer sein.")
+    .max(40)
+    .regex(/^[a-z][a-z0-9_]*$/, "Nur Kleinbuchstaben, Ziffern, Unterstrich; beginnt mit einem Buchstaben."),
+});
+
 /** Ein Übergang (Pipeline-Knopf) — Einstellungen → Workflow. */
 export const workflowTransitionInputSchema = z.object({
   fromKey: z.string().trim().min(1, "Von-Status wählen."),

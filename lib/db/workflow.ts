@@ -195,11 +195,12 @@ export async function deleteWorkflowTransition(organizationId: string, transitio
 }
 
 /**
- * Editierbare Felder einer Stage — bewusst OHNE `key`: der Key ist über den
- * CHECK-Constraint auf `projects.status` verdrahtet (siehe Stufe-D-Notizen),
- * neue/umbenannte Keys sind erst nutzbar, sobald dieser Constraint dynamisch
- * wird. Bis dahin lassen sich nur Anzeige (Label/Farbe/Reihenfolge) und die
- * Automatik-Tags bestehender Stages anpassen.
+ * Editierbare Felder einer Stage — ohne `key`: der bleibt nach dem Anlegen fix,
+ * damit bestehende Projekte mit diesem Status nicht plötzlich auf einen anderen
+ * Schlüssel zeigen. Seit der Migration `project_status_dynamic_check` prüft ein
+ * Trigger `status` gegen `workflow_stages.key` der jeweiligen Org (statt eines
+ * globalen CHECK-Constraints) — neue Keys lassen sich daher über
+ * `createWorkflowStage` frei anlegen.
  */
 export type WorkflowStageUpdateInput = Omit<WorkflowStage, "id" | "key">;
 
@@ -239,4 +240,68 @@ export async function updateWorkflowStage(
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Status nicht gefunden.");
   return mapRow(data as unknown as StageRow);
+}
+
+export type WorkflowStageCreateInput = WorkflowStageUpdateInput & { key: string };
+
+export async function createWorkflowStage(
+  organizationId: string,
+  input: WorkflowStageCreateInput,
+): Promise<WorkflowStage> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) throw new Error("Keine Datenbankverbindung.");
+  const workflowId = await ensureDefaultWorkflowId(supabase, organizationId);
+  const { data, error } = await supabase
+    .from("workflow_stages")
+    .insert({
+      organization_id: organizationId,
+      workflow_id: workflowId,
+      key: input.key,
+      ...stageUpdateToRow(input),
+    })
+    .select(STAGE_COLUMNS)
+    .single();
+  if (error) {
+    if (error.code === "23505") throw new Error(`Status-Schlüssel «${input.key}» existiert bereits.`);
+    throw new Error(error.message);
+  }
+  return mapRow(data as unknown as StageRow);
+}
+
+/**
+ * Löscht eine Stage — blockiert, solange noch Projekte diesen Status tragen
+ * (der Dynamic-Check-Trigger validiert nur bei INSERT/UPDATE, würde einen
+ * verwaisten Key auf Bestandsprojekten also nicht anzeigen; darum hier die
+ * explizite Prüfung statt sich auf den Trigger zu verlassen).
+ */
+export async function deleteWorkflowStage(organizationId: string, stageId: string): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) throw new Error("Keine Datenbankverbindung.");
+
+  const { data: stage, error: stageError } = await supabase
+    .from("workflow_stages")
+    .select("key")
+    .eq("id", stageId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (stageError) throw new Error(stageError.message);
+  if (!stage) throw new Error("Status nicht gefunden.");
+  const key = (stage as { key: string }).key;
+
+  const { count, error: countError } = await supabase
+    .from("projects")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", organizationId)
+    .eq("status", key);
+  if (countError) throw new Error(countError.message);
+  if (count && count > 0) {
+    throw new Error(`Status «${key}» wird noch von ${count} Projekt${count === 1 ? "" : "en"} verwendet.`);
+  }
+
+  const { error } = await supabase
+    .from("workflow_stages")
+    .delete()
+    .eq("id", stageId)
+    .eq("organization_id", organizationId);
+  if (error) throw new Error(error.message);
 }

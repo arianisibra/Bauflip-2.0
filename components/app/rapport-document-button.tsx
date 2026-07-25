@@ -14,14 +14,25 @@ export function RapportDocumentButton({ reportId }: { reportId: string }) {
   if (!hasTemplate) return null;
 
   return (
-    <a
-      href={`/api/rapporte/${reportId}/document`}
-      target="_blank"
-      rel="noreferrer"
-      className={buttonVariants({ variant: "outline", size: "sm" }) + " gap-1.5 text-xs"}
-    >
-      <FileType className="size-3.5" aria-hidden />
-      Als Word (Vorlage)
-    </a>
+    <>
+      <a
+        href={`/api/rapporte/${reportId}/document`}
+        target="_blank"
+        rel="noreferrer"
+        className={buttonVariants({ variant: "outline", size: "sm" }) + " gap-1.5 text-xs"}
+      >
+        <FileType className="size-3.5" aria-hidden />
+        Als Word (Vorlage)
+      </a>
+      <a
+        href={`/api/rapporte/${reportId}/document?format=pdf`}
+        target="_blank"
+        rel="noreferrer"
+        className={buttonVariants({ variant: "outline", size: "sm" }) + " gap-1.5 text-xs"}
+      >
+        <FileType className="size-3.5" aria-hidden />
+        Als PDF
+      </a>
+    </>
   );
 }
