@@ -43,6 +43,7 @@ import { getBusyEventsForOrgRange } from "@/lib/db/busy-calendar";
 import { formatServiceAddressFields } from "@/lib/tech/bundle-display";
 import type { TeamMemberListItem } from "@/lib/mitarbeiter/types";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { reconcileAppointmentCalendarSync, removeAppointmentFromCalendars } from "@/lib/calendar-sync/sync";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { withSlowLog } from "@/lib/observability/slow-log";
 import type { ProjekteStatusCountsSnapshot } from "@/lib/projekte/bootstrap-types";
@@ -2381,6 +2382,41 @@ async function assertNoFerienConflict(
   }
 }
 
+const APPOINTMENT_KIND_LABEL: Record<Appointment["kind"], string> = {
+  besichtigung: "Besichtigung",
+  ausfuehrung: "Ausführung",
+};
+
+/** Event-Titel/-Beschreibung für den Kalender-Push — best-effort, liefert bei fehlendem Projekt einen generischen Fallback. */
+async function buildCalendarEventInput(
+  supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
+  projectId: string,
+  kind: Appointment["kind"],
+  startsAt: string,
+  endsAt: string,
+  planningNotes: string | null,
+) {
+  const { data } = await supabase
+    .from("projects")
+    .select("title, service_street, service_postal_code, service_city")
+    .eq("id", projectId)
+    .maybeSingle();
+  const p = data as { title?: string; service_street?: string; service_postal_code?: string; service_city?: string } | null;
+  const address = [p?.service_street, [p?.service_postal_code, p?.service_city].filter(Boolean).join(" ")]
+    .filter(Boolean)
+    .join(", ");
+  return {
+    title: `${APPOINTMENT_KIND_LABEL[kind]}${p?.title ? `: ${p.title}` : ""}`,
+    description: [address, planningNotes].filter(Boolean).join("\n\n") || "Bauflip-Termin",
+    startsAt,
+    endsAt,
+  };
+}
+
+function technicianIdsOf(a: { assignedTechnicianId: string | null; assignedTechnicianId2: string | null }): string[] {
+  return [a.assignedTechnicianId, a.assignedTechnicianId2].filter((x): x is string => Boolean(x));
+}
+
 export async function addAppointment(input: Omit<Appointment, "id" | "createdAt">): Promise<Appointment> {
   if (!input.assignedTechnicianId?.trim()) {
     throw new Error("Bitte eine zuständige Person wählen.");
@@ -2424,7 +2460,18 @@ export async function addAppointment(input: Omit<Appointment, "id" | "createdAt"
   const currentStatus = (statusRow?.status as ProjectStatus | undefined) ?? "offen";
   await promoteToAbgemachtIfUpcomingAppointment(input.projectId, currentStatus, appointmentIsUpcoming);
 
-  return mapAppointmentRow(data as Record<string, unknown>);
+  const created = mapAppointmentRow(data as Record<string, unknown>);
+  const eventInput = await buildCalendarEventInput(
+    supabase,
+    input.projectId,
+    created.kind,
+    created.startsAt,
+    created.endsAt,
+    created.planningNotes,
+  );
+  await reconcileAppointmentCalendarSync(created.id, technicianIdsOf(created), eventInput);
+
+  return created;
 }
 
 export async function reassignAppointmentTechnician(
@@ -2466,11 +2513,22 @@ export async function reassignAppointmentTechnician(
     .update({ [dbColumn]: assignedTechnicianId })
     .eq("id", appointmentId)
     .eq("project_id", projectId)
-    .select("id")
+    .select(APPOINTMENT_DB_COLUMNS)
     .maybeSingle();
 
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Termin nicht gefunden.");
+
+  const updated = mapAppointmentRow(data as Record<string, unknown>);
+  const eventInput = await buildCalendarEventInput(
+    supabase,
+    projectId,
+    updated.kind,
+    updated.startsAt,
+    updated.endsAt,
+    updated.planningNotes,
+  );
+  await reconcileAppointmentCalendarSync(appointmentId, technicianIdsOf(updated), eventInput);
 }
 
 /** Zeitfenster eines bestehenden Termins ändern — Umplanen ohne Löschen+Neuanlegen. */
@@ -2515,7 +2573,7 @@ export async function updateAppointmentTime(
     .update({ starts_at: startsAt, ends_at: endsAt })
     .eq("id", appointmentId)
     .eq("project_id", projectId)
-    .select("id")
+    .select(APPOINTMENT_DB_COLUMNS)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Termin nicht gefunden.");
@@ -2523,6 +2581,17 @@ export async function updateAppointmentTime(
   const { data: statusRow } = await supabase.from("projects").select("status").eq("id", projectId).maybeSingle();
   const currentStatus = (statusRow?.status as ProjectStatus | undefined) ?? "offen";
   await promoteToAbgemachtIfUpcomingAppointment(projectId, currentStatus, appointmentEndsInFutureOrNow(endsAt));
+
+  const updated = mapAppointmentRow(data as Record<string, unknown>);
+  const eventInput = await buildCalendarEventInput(
+    supabase,
+    projectId,
+    updated.kind,
+    updated.startsAt,
+    updated.endsAt,
+    updated.planningNotes,
+  );
+  await reconcileAppointmentCalendarSync(appointmentId, technicianIdsOf(updated), eventInput);
 }
 
 export async function deleteAppointment(appointmentId: string): Promise<void> {
@@ -2565,6 +2634,8 @@ export async function deleteAppointment(appointmentId: string): Promise<void> {
 
   const { error } = await supabase.from("appointments").delete().eq("id", appointmentId);
   if (error) throw new Error(error.message);
+
+  await removeAppointmentFromCalendars(appointmentId);
 
   if (!projectId) return;
 

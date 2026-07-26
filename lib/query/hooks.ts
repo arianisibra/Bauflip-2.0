@@ -109,6 +109,11 @@ import {
   type IntakeEmailSettings,
 } from "@/app/(app)/einstellungen/intake-email-actions";
 import {
+  disconnectCalendarSyncAction,
+  getCalendarSyncSettingsAction,
+  type CalendarSyncSettings,
+} from "@/app/(app)/einstellungen/calendar-sync-actions";
+import {
   getInvitePreferenceAction,
   setInvitePreferenceAction,
 } from "@/app/(app)/einstellungen/invite-preference-actions";
@@ -887,6 +892,26 @@ export function useRegenerateIntakeEmailToken() {
     mutationFn: () => regenerateIntakeEmailTokenAction(),
     onSuccess: (settings) => {
       qc.setQueryData(queryKeys.intakeEmailSettings(), settings);
+    },
+  });
+}
+
+/** Google/Microsoft-Kalender-Verbindungen — eigenes Profil in Einstellungen. */
+export function useCalendarSyncSettings(enabled = true) {
+  return useQuery<CalendarSyncSettings>({
+    queryKey: queryKeys.calendarSyncSettings(),
+    queryFn: () => getCalendarSyncSettingsAction(),
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+export function useDisconnectCalendarSync() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, "google" | "microsoft">({
+    mutationFn: (provider) => disconnectCalendarSyncAction(provider),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.calendarSyncSettings() });
     },
   });
 }

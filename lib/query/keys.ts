@@ -83,6 +83,8 @@ export const queryKeys = {
   workflowTransitions: () => ["workflow-transitions"] as const,
   /** E-Mail-Intake-Adresse der Organisation (Einstellungen, Admin). */
   intakeEmailSettings: () => ["intake-email-settings"] as const,
+  /** Google/Microsoft-Kalender-Verbindungen der eingeloggten Person (Einstellungen). */
+  calendarSyncSettings: () => ["calendar-sync-settings"] as const,
   bexioSettings: () => ["bexio-settings"] as const,
   bexioConnected: () => ["bexio-connected"] as const,
   bexioMappingOptions: () => ["bexio-mapping-options"] as const,

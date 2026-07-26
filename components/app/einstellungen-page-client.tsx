@@ -6,6 +6,7 @@ import { DocumentTemplatesManager } from "@/components/app/document-templates-ma
 import { IntakeEmailSettingsCard } from "@/components/app/intake-email-settings-card";
 import { InvitePreferenceToggle } from "@/components/app/invite-preference-toggle";
 import { BusyCalendarSettings } from "@/components/app/busy-calendar-settings";
+import { CalendarSyncSettings } from "@/components/app/calendar-sync-settings";
 import { useOrganizationBrandingContext } from "@/components/app/organization-branding-provider";
 import { PriceBookManager } from "@/components/app/price-book-manager";
 import { ProfileSettingsForm } from "@/components/app/profile-settings-form";
@@ -63,6 +64,8 @@ export function EinstellungenPageClient() {
       <InvitePreferenceToggle />
 
       <BusyCalendarSettings />
+
+      <CalendarSyncSettings />
     </section>
   );
 }
