@@ -10,9 +10,9 @@ import { intakePdfExtractionSchema, type IntakePdfExtraction } from "@/lib/valid
  * nötig (analog SMTP für Mailversand: ein Server-seitiger API-Key).
  */
 
-const EXTRACTION_TOOL_NAME = "submit_intake_fields";
+export const EXTRACTION_TOOL_NAME = "submit_intake_fields";
 
-const EXTRACTION_TOOL_SCHEMA = {
+export const EXTRACTION_TOOL_SCHEMA = {
   type: "object",
   properties: {
     tenantName: { type: "string", description: "Name des Mieters/Ansprechpartners vor Ort" },

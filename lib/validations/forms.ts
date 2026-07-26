@@ -11,6 +11,26 @@ import {
 } from "@/lib/domain/types";
 import { RAPPORT_NEXT_STEP_ICON_KEYS, STAGE_COLOR_KEYS } from "@/lib/domain/stage-visuals";
 
+/** Postmark-Inbound-Webhook-Payload (nur die Felder, die der E-Mail-Intake braucht). */
+export const postmarkInboundSchema = z.object({
+  From: z.string().optional(),
+  FromName: z.string().optional(),
+  Subject: z.string().optional(),
+  TextBody: z.string().optional(),
+  StrippedTextReply: z.string().optional(),
+  OriginalRecipient: z.string().optional(),
+  To: z.string().optional(),
+  Attachments: z
+    .array(
+      z.object({
+        Name: z.string().optional(),
+        Content: z.string().optional(),
+        ContentType: z.string().optional(),
+      }),
+    )
+    .optional(),
+});
+
 /** Von der KI aus einem Auftrags-PDF extrahierte Felder — alles optional, da nie garantiert erkennbar. */
 export const intakePdfExtractionSchema = z.object({
   tenantName: z.string().optional(),

@@ -3,6 +3,7 @@
 import { BexioSettingsForm } from "@/components/app/bexio-settings-form";
 import { BillingSettingsForm } from "@/components/app/billing-settings-form";
 import { DocumentTemplatesManager } from "@/components/app/document-templates-manager";
+import { IntakeEmailSettingsCard } from "@/components/app/intake-email-settings-card";
 import { InvitePreferenceToggle } from "@/components/app/invite-preference-toggle";
 import { BusyCalendarSettings } from "@/components/app/busy-calendar-settings";
 import { useOrganizationBrandingContext } from "@/components/app/organization-branding-provider";
@@ -48,6 +49,8 @@ export function EinstellungenPageClient() {
       <TextSnippetsManager />
 
       {data.canEditCompanySettings ? <BillingSettingsForm /> : null}
+
+      {data.canEditCompanySettings ? <IntakeEmailSettingsCard /> : null}
 
       {data.canEditCompanySettings ? <BexioSettingsForm /> : null}
 

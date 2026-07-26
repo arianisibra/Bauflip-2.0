@@ -9,6 +9,10 @@ import type { RoleType } from "@/lib/domain/types";
 
 const PUBLIC_PATHS = ["/anmeldung", "/onboarding", "/mfa/setup", "/auth/confirm"];
 
+// Server-zu-Server-Webhooks ohne Nutzer-Session — authentisieren sich selbst
+// (z. B. per Capability-Token in der URL/im Payload), nicht per Auth-Cookie.
+const PUBLIC_API_PATHS = ["/api/intake/email"];
+
 function withSecurityHeaders(res: NextResponse): NextResponse {
   const isProd = process.env.NODE_ENV === "production";
   res.headers.set("X-Content-Type-Options", "nosniff");
@@ -85,6 +89,10 @@ export async function proxy(request: NextRequest) {
     pathname.includes(".");
 
   if (isStaticAsset) {
+    return withSecurityHeaders(NextResponse.next());
+  }
+
+  if (PUBLIC_API_PATHS.some((path) => pathname.startsWith(path))) {
     return withSecurityHeaders(NextResponse.next());
   }
 

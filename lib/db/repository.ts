@@ -2028,7 +2028,50 @@ export type ProjectCreateInput = Omit<
   | "warrantyOpenedByDisplayName"
 > & { referenceCode?: string | null };
 
-export async function createProject(input: ProjectCreateInput): Promise<Project> {
+export async function createProject(
+  input: ProjectCreateInput,
+  // Für Server-zu-Server-Aufrufe ohne Nutzer-Session (z. B. den E-Mail-Intake-
+  // Webhook): expliziter Client (Service-Role) statt Cookie-Session/RLS-Kontext.
+  client?: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
+): Promise<Project> {
+  if (client) {
+    const { data, error } = await client
+      .from("projects")
+      .insert({
+        organization_id: input.organizationId,
+        title: input.title,
+        type: input.type,
+        status: input.status,
+        next_owner_role: input.nextOwnerRole,
+        next_owner_user_id: input.nextOwnerUserId,
+        source: input.source,
+        intake_original_text: input.intakeOriginalText,
+        access_notes: input.accessNotes,
+        hints_and_notes: input.hintsAndNotes,
+        tenant_name: input.tenantName,
+        tenant_phone: input.tenantPhone,
+        tenant_email: input.tenantEmail,
+        management_name: input.managementName,
+        management_phone: input.managementPhone,
+        management_email: input.managementEmail,
+        cost_ceiling_text: input.costCeilingText,
+        project_manager_name: input.projectManagerName,
+        customer_number: input.customerNumber,
+        service_street: input.serviceStreet,
+        service_postal_code: input.servicePostalCode,
+        service_city: input.serviceCity,
+        service_country: input.serviceCountry ?? "CH",
+        reference_code: input.referenceCode?.trim() || null,
+        status_updated_source: null,
+      })
+      .select(PROJECT_DB_COLUMNS)
+      .single();
+    if (error || !data) {
+      throw new Error(error?.message ?? "Auftrag konnte nicht erstellt werden.");
+    }
+    return mapProjectRow(data as Record<string, unknown>);
+  }
+
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
     const now = new Date().toISOString();

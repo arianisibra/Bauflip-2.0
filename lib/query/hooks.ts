@@ -104,6 +104,11 @@ import {
   updateBillingSettingsAction,
 } from "@/app/(app)/einstellungen/billing-actions";
 import {
+  getIntakeEmailSettingsAction,
+  regenerateIntakeEmailTokenAction,
+  type IntakeEmailSettings,
+} from "@/app/(app)/einstellungen/intake-email-actions";
+import {
   getInvitePreferenceAction,
   setInvitePreferenceAction,
 } from "@/app/(app)/einstellungen/invite-preference-actions";
@@ -862,6 +867,27 @@ export function useBillingSettings(enabled = true) {
     enabled,
     staleTime: 60_000,
     refetchOnMount: false,
+  });
+}
+
+/** E-Mail-Intake-Adresse — Admin-Zeile in Einstellungen. */
+export function useIntakeEmailSettings(enabled = true) {
+  return useQuery<IntakeEmailSettings>({
+    queryKey: queryKeys.intakeEmailSettings(),
+    queryFn: () => getIntakeEmailSettingsAction(),
+    enabled,
+    staleTime: 60_000,
+    refetchOnMount: false,
+  });
+}
+
+export function useRegenerateIntakeEmailToken() {
+  const qc = useQueryClient();
+  return useMutation<IntakeEmailSettings, Error, void>({
+    mutationFn: () => regenerateIntakeEmailTokenAction(),
+    onSuccess: (settings) => {
+      qc.setQueryData(queryKeys.intakeEmailSettings(), settings);
+    },
   });
 }
 

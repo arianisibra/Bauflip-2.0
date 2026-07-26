@@ -81,6 +81,8 @@ export const queryKeys = {
   workflowStages: () => ["workflow-stages"] as const,
   /** Workflow-Übergänge (Pipeline-Knöpfe) der Organisation (Einstellungen → Workflow, Admin). */
   workflowTransitions: () => ["workflow-transitions"] as const,
+  /** E-Mail-Intake-Adresse der Organisation (Einstellungen, Admin). */
+  intakeEmailSettings: () => ["intake-email-settings"] as const,
   bexioSettings: () => ["bexio-settings"] as const,
   bexioConnected: () => ["bexio-connected"] as const,
   bexioMappingOptions: () => ["bexio-mapping-options"] as const,
