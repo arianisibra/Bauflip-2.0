@@ -31,6 +31,14 @@ export const postmarkInboundSchema = z.object({
     .optional(),
 });
 
+/** Selbstregistrierung einer neuen Organisation (öffentliche Anmeldeseite, kein Login nötig). */
+export const registerOrganizationSchema = z.object({
+  companyName: z.string().trim().min(1, "Bitte einen Firmennamen angeben.").max(120),
+  displayName: z.string().trim().min(1, "Bitte Ihren Namen angeben.").max(80),
+  email: z.string().trim().toLowerCase().email("Bitte eine gültige E-Mail-Adresse angeben."),
+  password: z.string().min(10, "Bitte ein sicheres Passwort mit mindestens 10 Zeichen wählen."),
+});
+
 /** Von der KI aus einem Auftrags-PDF extrahierte Felder — alles optional, da nie garantiert erkennbar. */
 export const intakePdfExtractionSchema = z.object({
   tenantName: z.string().optional(),

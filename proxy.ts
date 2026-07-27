@@ -7,7 +7,7 @@ import { applyProxyAuthContext } from "@/lib/auth/proxy-auth-headers";
 import { readProxyAuthFromUserMetadata } from "@/lib/auth/user-metadata-keys";
 import type { RoleType } from "@/lib/domain/types";
 
-const PUBLIC_PATHS = ["/anmeldung", "/onboarding", "/mfa/setup", "/auth/confirm"];
+const PUBLIC_PATHS = ["/anmeldung", "/registrieren", "/onboarding", "/mfa/setup", "/auth/confirm"];
 
 // Server-zu-Server-Webhooks ohne Nutzer-Session — authentisieren sich selbst
 // (z. B. per Capability-Token in der URL/im Payload), nicht per Auth-Cookie.

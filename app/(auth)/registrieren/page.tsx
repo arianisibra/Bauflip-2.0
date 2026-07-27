@@ -1,11 +1,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { LoginForm } from "@/components/auth/login-form";
+import { RegisterForm } from "@/components/auth/register-form";
 
-export default function AnmeldungPage() {
+export default function RegistrierenPage() {
   return (
     <main className="relative min-h-screen overflow-hidden bg-gradient-to-b from-background to-accent/20">
       <div className="absolute inset-0 pointer-events-none">
@@ -36,33 +35,17 @@ export default function AnmeldungPage() {
                 />
               </div>
               <CardTitle className="text-3xl font-semibold tracking-tight text-foreground">
-                Willkommen zurück!
+                Firma registrieren
               </CardTitle>
               <CardDescription>
-                Bitte melden Sie sich mit Ihrer E-Mail und Ihrem Passwort an.
+                Legen Sie Ihre Organisation an und starten Sie sofort — kein Vertragsabschluss nötig.
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-2">
-              <LoginForm />
-
-              <div className="mt-4 text-center">
-                <button type="button" className="text-sm text-muted-foreground hover:text-foreground">
-                  Passwort vergessen?
-                </button>
-              </div>
-
-              <div className="my-4 flex items-center gap-3">
-                <div className="h-px flex-1 bg-border" />
-                <span className="text-xs tracking-wide text-muted-foreground">ODER</span>
-                <div className="h-px flex-1 bg-border" />
-              </div>
-
-              <Button type="button" variant="outline" className="h-11 w-full">
-                Mit Anmelde-Link anmelden
-              </Button>
+              <RegisterForm />
 
               <p className="mt-4 text-center text-xs leading-relaxed text-muted-foreground">
-                Indem Sie auf Weiter klicken, stimmen Sie unseren{" "}
+                Indem Sie registrieren, stimmen Sie unseren{" "}
                 <Link href="/agb" className="underline underline-offset-2 hover:text-foreground">
                   Nutzungsbedingungen
                 </Link>{" "}
@@ -74,15 +57,14 @@ export default function AnmeldungPage() {
               </p>
 
               <div className="mt-4 text-center text-sm text-muted-foreground">
-                Neu hier?{" "}
-                <Link href="/registrieren" className="text-foreground underline underline-offset-2">
-                  Firma registrieren
+                Bereits registriert?{" "}
+                <Link href="/anmeldung" className="text-foreground underline underline-offset-2">
+                  Anmelden
                 </Link>
               </div>
             </CardContent>
           </Card>
         </div>
-
       </div>
     </main>
   );
