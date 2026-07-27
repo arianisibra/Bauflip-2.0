@@ -44,10 +44,10 @@ function runSoffice(args: string[]): Promise<void> {
 export async function convertDocxToPdf(docxBytes: Uint8Array): Promise<Buffer> {
   const dir = await mkdtemp(path.join(/* turbopackIgnore: true */ tmpdir(), "bauflip-docx2pdf-"));
   try {
-    const inputPath = path.join(dir, "input.docx");
+    const inputPath = path.join(/* turbopackIgnore: true */ dir, "input.docx");
     await writeFile(inputPath, docxBytes);
     await runSoffice(["--headless", "--norestore", "--convert-to", "pdf", "--outdir", dir, inputPath]);
-    return await readFile(path.join(dir, "input.pdf"));
+    return await readFile(path.join(/* turbopackIgnore: true */ dir, "input.pdf"));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
