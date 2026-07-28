@@ -1006,9 +1006,14 @@ export function ProjektSheetEditor({
   }
   if (coreQuery.isError && !coreQuery.data) {
     return (
-      <p className="text-sm text-destructive">
-        {coreQuery.error instanceof Error ? coreQuery.error.message : "Laden fehlgeschlagen."}
-      </p>
+      <div className="flex flex-col items-start gap-3 p-4">
+        <p className="text-sm text-destructive">
+          {coreQuery.error instanceof Error ? coreQuery.error.message : "Laden fehlgeschlagen."}
+        </p>
+        <Button type="button" size="sm" variant="outline" onClick={() => coreQuery.refetch()}>
+          Erneut versuchen
+        </Button>
+      </div>
     );
   }
   if (!coreQuery.data) {

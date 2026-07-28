@@ -135,6 +135,32 @@ type UploadResult =
 
 // ───────── Queries ─────────
 
+/**
+ * Ein vom Browser abgebrochener Server-Action-POST (z. B. durch eine konkurrierende
+ * Navigation direkt nach dem Anlegen eines Projekts) meldet sich nie zurück — weder
+ * mit Erfolg noch mit Fehler. Ohne Zeitschranke bliebe die Query dauerhaft "pending"
+ * und das Sheet für immer im Lade-Spinner.
+ */
+const PROJECT_CORE_FETCH_TIMEOUT_MS = 15_000;
+
+function withFetchTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("Das Projekt hat nicht rechtzeitig geantwortet. Bitte erneut versuchen."));
+    }, ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
 export type ProjectCoreQueryResult = {
   data: ProjectCore | undefined;
   isLoading: boolean;
@@ -144,6 +170,7 @@ export type ProjectCoreQueryResult = {
   isError: boolean;
   error: Error | null;
   isSuccess: boolean;
+  refetch: () => void;
 };
 
 export function useProjectCore(projectId: string | null, enabled = true): ProjectCoreQueryResult {
@@ -153,7 +180,10 @@ export function useProjectCore(projectId: string | null, enabled = true): Projec
     queryKey: projectId ? queryKeys.projects.core(projectId) : ["projects", "core", "__disabled"],
     enabled: isEnabled,
     queryFn: async () => {
-      const { core } = await getProjectSheetBootstrapAction(projectId!);
+      const { core } = await withFetchTimeout(
+        getProjectSheetBootstrapAction(projectId!),
+        PROJECT_CORE_FETCH_TIMEOUT_MS,
+      );
       return core;
     },
     staleTime: 60_000,
@@ -168,6 +198,9 @@ export function useProjectCore(projectId: string | null, enabled = true): Projec
     isError: coreQuery.isError,
     error: coreQuery.error instanceof Error ? coreQuery.error : null,
     isSuccess: coreQuery.isSuccess,
+    refetch: () => {
+      void coreQuery.refetch();
+    },
   };
 }
 
