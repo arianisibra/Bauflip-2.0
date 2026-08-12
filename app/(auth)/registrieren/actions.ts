@@ -97,7 +97,10 @@ export async function registerOrganizationAction(
     );
     if (membershipError) throw new Error(membershipError.message);
 
-    const { error: workflowError } = await admin.rpc("seed_storenbau_workflow", { p_org: newOrg.id });
+    // Ohne Workflow-Schritte lehnt der Trigger projects_status_dynamic_check jeden
+    // Projekt-Status ab — die neue Firma könnte kein einziges Projekt anlegen.
+    // Gewerbeneutrale Vorlage; Beschriftungen sind später im Editor anpassbar.
+    const { error: workflowError } = await admin.rpc("seed_default_workflow", { p_org: newOrg.id });
     if (workflowError) throw new Error(workflowError.message);
 
     const { error: metaError } = await admin.auth.admin.updateUserById(user.id, {
