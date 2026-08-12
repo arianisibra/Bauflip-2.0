@@ -97,6 +97,9 @@ export async function registerOrganizationAction(
     );
     if (membershipError) throw new Error(membershipError.message);
 
+    const { error: workflowError } = await admin.rpc("seed_storenbau_workflow", { p_org: newOrg.id });
+    if (workflowError) throw new Error(workflowError.message);
+
     const { error: metaError } = await admin.auth.admin.updateUserById(user.id, {
       user_metadata: { ...user.user_metadata, display_name: displayName, role: "admin", organization_id: newOrg.id },
     });
