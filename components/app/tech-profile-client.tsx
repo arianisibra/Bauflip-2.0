@@ -1,9 +1,10 @@
 "use client";
 
-import { useLayoutEffect, useState } from "react";
+import { useLayoutEffect, useState, useTransition } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Moon, Sun } from "lucide-react";
+import { LogOut, Moon, Sun } from "lucide-react";
+import { logoutAction } from "@/app/(app)/logout-action";
 
 type Props = {
   displayName: string | null;
@@ -33,6 +34,7 @@ function initials(name: string | null): string {
 }
 
 export function TechProfileClient({ displayName, email }: Props) {
+  const [isSigningOut, startSignOut] = useTransition();
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window === "undefined") return "light";
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
@@ -132,6 +134,28 @@ export function TechProfileClient({ displayName, email }: Props) {
             Gilt auf diesem Gerät und Browser. Weitere Einstellungen (Sprache,
             Benachrichtigungen) können später ergänzt werden.
           </p>
+        </CardContent>
+      </Card>
+
+      {/* Abmelden — bis dahin gab es in der Monteur-Ansicht keinen Weg heraus. */}
+      <Card className="border-border shadow-sm">
+        <CardContent className="space-y-3 pt-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Konto
+          </p>
+          <button
+            type="button"
+            disabled={isSigningOut}
+            onClick={() => {
+              startSignOut(async () => {
+                await logoutAction();
+              });
+            }}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm font-medium text-destructive transition-colors active:scale-[0.99] hover:bg-destructive/10 disabled:opacity-60"
+          >
+            <LogOut className="size-4" />
+            {isSigningOut ? "Wird abgemeldet …" : "Abmelden"}
+          </button>
         </CardContent>
       </Card>
     </section>

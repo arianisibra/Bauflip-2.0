@@ -303,6 +303,21 @@ export async function inviteEmployeeAction(formData: FormData) {
   await publish(organizationId, { type: "membership.changed" });
 }
 
+/**
+ * Schliesst eine Einladung ab: legt Profil + Mitgliedschaft an und markiert die
+ * Einladung als angenommen.
+ *
+ * Läuft bewusst über den Service-Role-Client. Der Eingeladene hat per Definition
+ * noch KEINE Mitgliedschaft, `invitations` und `organization_memberships` sind
+ * per RLS aber Admins der eigenen Organisation vorbehalten. Mit dem regulären
+ * Client scheiterte deshalb jeder Schritt (Einladung nicht lesbar, Mitgliedschaft
+ * nicht anlegbar) — der Flow konnte nie durchlaufen.
+ *
+ * Sicherheitsanker: Die Session wird zuerst regulär geprüft, und es wird
+ * ausschliesslich eine Einladung akzeptiert, die exakt auf die E-Mail des bereits
+ * authentifizierten Nutzers lautet. Rolle und Organisation stammen allein aus
+ * dieser Einladung — nichts davon ist vom Client beeinflussbar.
+ */
 export async function acceptInviteOnboardingAction() {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
@@ -317,8 +332,13 @@ export async function acceptInviteOnboardingAction() {
     throw new Error("Keine aktive Onboarding-Session gefunden.");
   }
 
+  const adminClient = createSupabaseAdminClient();
+  if (!adminClient) {
+    throw new Error("Service-Role-Key fehlt. Einladung kann nicht abgeschlossen werden.");
+  }
+
   const normalizedEmail = user.email.toLowerCase();
-  const { data: invite, error: inviteError } = await supabase
+  const { data: invite, error: inviteError } = await adminClient
     .from("invitations")
     .select("*")
     .eq("email", normalizedEmail)
@@ -333,7 +353,22 @@ export async function acceptInviteOnboardingAction() {
     throw new Error("Keine gültige Einladung gefunden.");
   }
 
-  const { error: membershipError } = await supabase.from("organization_memberships").upsert(
+  // Profil MUSS vor der Mitgliedschaft stehen: organization_memberships.user_id
+  // zeigt per Fremdschlüssel auf profiles.id.
+  const displayName = String(user.user_metadata?.display_name ?? "").trim() || normalizedEmail.split("@")[0];
+  const { error: profileError } = await adminClient.from("profiles").upsert(
+    {
+      id: user.id,
+      display_name: displayName,
+      role: invite.role,
+    },
+    { onConflict: "id" },
+  );
+  if (profileError) {
+    throw new Error("Profil konnte nicht angelegt werden.");
+  }
+
+  const { error: membershipError } = await adminClient.from("organization_memberships").upsert(
     {
       organization_id: invite.organization_id,
       user_id: user.id,
@@ -346,20 +381,10 @@ export async function acceptInviteOnboardingAction() {
     throw new Error("Mitgliedschaft konnte nicht aktiviert werden.");
   }
 
-  const displayName = String(user.user_metadata?.display_name ?? "").trim() || normalizedEmail.split("@")[0];
-  await supabase.from("profiles").upsert(
-    {
-      id: user.id,
-      display_name: displayName,
-      role: invite.role,
-    },
-    { onConflict: "id" },
-  );
-
   // Mirror role + org into user_metadata so proxy can skip membership DB lookup.
   await syncUserAuthMetadata(user.id, invite.role, String(invite.organization_id), user.user_metadata);
 
-  const { error: invitationUpdateError } = await supabase
+  const { error: invitationUpdateError } = await adminClient
     .from("invitations")
     .update({ accepted_at: new Date().toISOString() })
     .eq("id", invite.id);
@@ -367,4 +392,6 @@ export async function acceptInviteOnboardingAction() {
   if (invitationUpdateError) {
     throw new Error("Einladung konnte nicht abgeschlossen werden.");
   }
+
+  await publish(String(invite.organization_id), { type: "membership.changed" });
 }
