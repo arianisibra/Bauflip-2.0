@@ -2,9 +2,14 @@
 
 import { useLayoutEffect, useState, useTransition } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { LogOut, Moon, Sun } from "lucide-react";
 import { logoutAction } from "@/app/(app)/logout-action";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+
+const MIN_PASSWORD_LENGTH = 10;
 
 type Props = {
   displayName: string | null;
@@ -35,6 +40,39 @@ function initials(name: string | null): string {
 
 export function TechProfileClient({ displayName, email }: Props) {
   const [isSigningOut, startSignOut] = useTransition();
+  const [isSavingPassword, startSavePassword] = useTransition();
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordDone, setPasswordDone] = useState(false);
+
+  function handlePasswordChange(formData: FormData) {
+    const password = String(formData.get("password") ?? "");
+    const repeat = String(formData.get("passwordRepeat") ?? "");
+    setPasswordError(null);
+
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setPasswordError(`Mindestens ${MIN_PASSWORD_LENGTH} Zeichen.`);
+      return;
+    }
+    if (password !== repeat) {
+      setPasswordError("Die beiden Passwörter stimmen nicht überein.");
+      return;
+    }
+
+    startSavePassword(async () => {
+      const supabase = createSupabaseBrowserClient();
+      if (!supabase) {
+        setPasswordError("Anmeldedienst ist nicht verfügbar.");
+        return;
+      }
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) {
+        setPasswordError("Passwort konnte nicht geändert werden.");
+        return;
+      }
+      setPasswordDone(true);
+    });
+  }
+
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window === "undefined") return "light";
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
@@ -134,6 +172,45 @@ export function TechProfileClient({ displayName, email }: Props) {
             Gilt auf diesem Gerät und Browser. Weitere Einstellungen (Sprache,
             Benachrichtigungen) können später ergänzt werden.
           </p>
+        </CardContent>
+      </Card>
+
+      {/* Passwort ändern — vorher gab es dafür in der ganzen App keine Möglichkeit. */}
+      <Card className="border-border shadow-sm">
+        <CardContent className="space-y-3 pt-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Passwort
+          </p>
+          {passwordDone ? (
+            <p className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-400">
+              Passwort geändert.
+            </p>
+          ) : (
+            <form action={handlePasswordChange} className="space-y-3">
+              <Input
+                name="password"
+                type="password"
+                placeholder="Neues Passwort (mind. 10 Zeichen)"
+                autoComplete="new-password"
+                required
+                className="h-11"
+              />
+              <Input
+                name="passwordRepeat"
+                type="password"
+                placeholder="Passwort wiederholen"
+                autoComplete="new-password"
+                required
+                className="h-11"
+              />
+              {passwordError ? (
+                <p className="text-sm text-destructive">{passwordError}</p>
+              ) : null}
+              <Button type="submit" disabled={isSavingPassword} className="h-11 w-full">
+                {isSavingPassword ? "Wird gespeichert …" : "Passwort ändern"}
+              </Button>
+            </form>
+          )}
         </CardContent>
       </Card>
 

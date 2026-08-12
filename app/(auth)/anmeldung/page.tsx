@@ -46,9 +46,12 @@ export default function AnmeldungPage() {
               <LoginForm />
 
               <div className="mt-4 text-center">
-                <button type="button" className="text-sm text-muted-foreground hover:text-foreground">
+                <Link
+                  href="/passwort-vergessen"
+                  className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
                   Passwort vergessen?
-                </button>
+                </Link>
               </div>
 
               <div className="my-4 flex items-center gap-3">

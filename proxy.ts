@@ -7,7 +7,15 @@ import { applyProxyAuthContext } from "@/lib/auth/proxy-auth-headers";
 import { readProxyAuthFromUserMetadata } from "@/lib/auth/user-metadata-keys";
 import type { RoleType } from "@/lib/domain/types";
 
-const PUBLIC_PATHS = ["/anmeldung", "/registrieren", "/onboarding", "/mfa/setup", "/auth/confirm"];
+const PUBLIC_PATHS = [
+  "/anmeldung",
+  "/registrieren",
+  "/onboarding",
+  "/mfa/setup",
+  "/auth/confirm",
+  // Ohne Anmeldung erreichbar — wer sein Passwort vergessen hat, hat keine Session.
+  "/passwort-vergessen",
+];
 
 // Server-zu-Server-Webhooks ohne Nutzer-Session — authentisieren sich selbst
 // (z. B. per Capability-Token in der URL/im Payload), nicht per Auth-Cookie.
@@ -51,6 +59,9 @@ const TECHNICIAN_ALLOWED_PREFIXES = [
   "/anmeldung",
   "/profil",
   "/tech",
+  // Nach dem Zurücksetzen-Link ist der Monteur angemeldet; ohne diesen Eintrag
+  // würde er von hier auf «Mein Tag» umgeleitet, ohne das Passwort zu setzen.
+  "/passwort-neu",
 ];
 
 function isTechnicianAllowedPath(pathname: string): boolean {
