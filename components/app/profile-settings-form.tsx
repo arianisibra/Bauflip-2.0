@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { saveProfileSettingsAction } from "@/app/(app)/einstellungen/actions";
 import { usePatchSessionProfile } from "@/components/app/session-profile-provider";
 import { BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { UserProfile } from "@/lib/domain/types";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { resolveCalendarColor } from "@/lib/calendar/team-colors";
 import { queryKeys } from "@/lib/query/keys";
 import { cn } from "@/lib/utils";
@@ -37,6 +38,24 @@ export function ProfileSettingsForm({
   const [displayName, setDisplayName] = useState(profile.displayName);
   const [companyName, setCompanyName] = useState(organizationBilling?.companyName ?? "");
   const [avatarUrl, setAvatarUrl] = useState(profile.avatarUrl);
+  // Die Serverseite liest die Adresse aus dem JWT im Sitzungs-Cookie. Trägt das
+  // Token keinen `email`-Claim, blieb das Feld leer — obwohl die Mitarbeiterseite
+  // dieselbe Adresse anzeigt. Deshalb hier ein Rückfall über die Auth-Session.
+  const [emailFromSession, setEmailFromSession] = useState("");
+  const shownEmail = profile.email || emailFromSession;
+
+  useEffect(() => {
+    if (profile.email) return;
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) return;
+    let abgebrochen = false;
+    void supabase.auth.getUser().then(({ data }) => {
+      if (!abgebrochen && data.user?.email) setEmailFromSession(data.user.email);
+    });
+    return () => {
+      abgebrochen = true;
+    };
+  }, [profile.email]);
   const [logoUrl, setLogoUrl] = useState(organizationBilling?.logoUrl ?? null);
   const [calendarColor, setCalendarColor] = useState(() =>
     resolveCalendarColor(profile.calendarColor, profile.id),
@@ -174,7 +193,7 @@ export function ProfileSettingsForm({
                     id="email"
                     name="email"
                     type="email"
-                    value={profile.email}
+                    value={shownEmail}
                     disabled
                     readOnly
                     className="h-10 bg-muted/50"
