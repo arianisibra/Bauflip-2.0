@@ -143,6 +143,12 @@ export function canAccessTechFieldRoutes(role: RoleType): boolean {
 export type OrganizationBranding = {
   name: string;
   logoUrl: string | null;
+  /**
+   * Firmen-E-Mail (aus den Zahlungsdaten). Dient als Antwortadresse beim
+   * zentralen Mailversand: Die Mail geht technisch von MAIL_FROM raus, eine
+   * Antwort des Endkunden muss aber beim Handwerksbetrieb landen.
+   */
+  email: string | null;
 };
 
 export const appPageKeys = [

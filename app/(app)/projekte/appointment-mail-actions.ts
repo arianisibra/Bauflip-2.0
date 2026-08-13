@@ -97,6 +97,9 @@ export async function sendAppointmentConfirmationAction(
     subject: `Terminbestätigung ${formatConfirmationDate(startsAt)} — ${branding.name}`,
     text,
     fromName: branding.name,
+    // Der Text bittet ausdrücklich um Rückmeldung — ohne Antwortadresse ginge
+    // die Antwort beim zentralen Versand an die technische Absenderadresse.
+    replyTo: branding.email ?? undefined,
   });
 
   return { ok: true };

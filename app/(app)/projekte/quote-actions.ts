@@ -217,6 +217,9 @@ export async function sendQuoteAction(values: unknown, tabId?: string): Promise<
     subject: `${quoteLabel} — ${branding.name}`,
     text,
     fromName: branding.name,
+    // Zentraler Versand: Antworten des Endkunden müssen beim Betrieb landen,
+    // nicht bei der technischen Absenderadresse.
+    replyTo: branding.email ?? undefined,
     attachments: [
       {
         filename: `${quoteLabel}.pdf`,

@@ -155,6 +155,8 @@ export async function sendInvoiceAction(values: unknown, tabId?: string): Promis
     subject: `${invoiceLabel} — ${branding.name}`,
     text,
     fromName: branding.name,
+    // Zentraler Versand: Rückfragen zur Rechnung gehen an den Betrieb.
+    replyTo: branding.email ?? undefined,
     attachments: [
       {
         filename: `${invoiceLabel}.pdf`,

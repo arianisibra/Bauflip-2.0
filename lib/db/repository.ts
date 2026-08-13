@@ -255,20 +255,25 @@ export const getOrganizationBranding = cache(async function getOrganizationBrand
 ): Promise<OrganizationBranding> {
   const fallbackName = process.env.NEXT_PUBLIC_APP_NAME?.trim() || "Bauflip";
   if (!organizationId) {
-    return { name: fallbackName, logoUrl: null };
+    return { name: fallbackName, logoUrl: null, email: null };
   }
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
-    return { name: fallbackName, logoUrl: null };
+    return { name: fallbackName, logoUrl: null, email: null };
   }
-  const { data, error } = await supabase.from("organizations").select("name, logo_url").eq("id", organizationId).maybeSingle();
+  const { data, error } = await supabase
+    .from("organizations")
+    .select("name, logo_url, billing_email")
+    .eq("id", organizationId)
+    .maybeSingle();
   if (error || !data) {
-    return { name: fallbackName, logoUrl: null };
+    return { name: fallbackName, logoUrl: null, email: null };
   }
-  const row = data as { name?: string | null; logo_url?: string | null };
+  const row = data as { name?: string | null; logo_url?: string | null; billing_email?: string | null };
   const name = typeof row.name === "string" && row.name.trim() ? row.name.trim() : fallbackName;
   const logoUrl = row.logo_url && String(row.logo_url).trim() ? String(row.logo_url).trim() : null;
-  return { name, logoUrl };
+  const email = row.billing_email && String(row.billing_email).trim() ? String(row.billing_email).trim() : null;
+  return { name, logoUrl, email };
 });
 
 export const listProjectStatusCountsForOffice = cache(async function listProjectStatusCountsForOffice(
