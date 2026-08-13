@@ -15,6 +15,10 @@ const PUBLIC_PATHS = [
   "/auth/confirm",
   // Ohne Anmeldung erreichbar — wer sein Passwort vergessen hat, hat keine Session.
   "/passwort-vergessen",
+  // Rechtstexte müssen vor der Registrierung lesbar sein: das Formular verlangt
+  // ausdrücklich die Zustimmung zu beiden und verlinkt sie.
+  "/agb",
+  "/datenschutz",
 ];
 
 // Server-zu-Server-Webhooks ohne Nutzer-Session — authentisieren sich selbst
@@ -62,6 +66,10 @@ const TECHNICIAN_ALLOWED_PREFIXES = [
   // Nach dem Zurücksetzen-Link ist der Monteur angemeldet; ohne diesen Eintrag
   // würde er von hier auf «Mein Tag» umgeleitet, ohne das Passwort zu setzen.
   "/passwort-neu",
+  // Rechtstexte gelten für alle Rollen — ohne diese Einträge landet ein
+  // angemeldeter Monteur beim Klick auf AGB/Datenschutz wieder auf «Mein Tag».
+  "/agb",
+  "/datenschutz",
 ];
 
 function isTechnicianAllowedPath(pathname: string): boolean {
