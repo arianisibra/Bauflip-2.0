@@ -1,12 +1,28 @@
 "use server";
 
 import { requireAdminLayoutSession } from "@/lib/auth/organization";
+import {
+  AUTH_METADATA_ORG_KEY,
+  AUTH_METADATA_ROLE_KEY,
+} from "@/lib/auth/user-metadata-keys";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
- * Mitglied aus der Organisation entfernen (Soft-Deaktivieren: is_active=false).
- * Zugriff wird sofort entzogen (Session/RLS verlangen is_active), Historie bleibt.
+ * Mitglied aus der Organisation entfernen (Soft-Deaktivieren: is_active=false)
+ * UND den Schnellpfad im Proxy entwerten.
+ *
+ * Ohne den zweiten Schritt wirkt die Deaktivierung nicht: proxy.ts liest Rolle
+ * und Organisation aus `app_metadata` und fragt `organization_memberships` gar
+ * nicht mehr ab, solange dort etwas steht. Der Gekündigte behielte damit eine
+ * gültige Admin-Sitzung — inklusive aller Service-Role-Pfade, mit denen er
+ * seinerseits Kolleginnen deaktivieren könnte.
+ *
+ * Nach dem Leeren von app_metadata fällt der Proxy auf die Datenbank zurück,
+ * findet keine aktive Mitgliedschaft und vergibt weder Rolle noch Organisation.
+ * Das Sitzungs-Cookie bleibt zwar bis zum Ablauf gültig, trägt aber keine
+ * Berechtigung mehr. (Ein echtes Token-Widerrufen ist über die Admin-API nicht
+ * möglich — `auth.admin.signOut` verlangt das JWT des Nutzers selbst.)
  *
  * Service-Role-Client, weil ein Admin fremde Mitgliedschaften ändert (RLS ließe das
  * nicht zu). Deshalb ist JEDE Abfrage strikt auf die eigene Organisation begrenzt.
@@ -49,6 +65,24 @@ export async function deactivateTeamMemberAction(userId: string): Promise<void> 
     .eq("organization_id", session.organizationId)
     .eq("user_id", userId);
   if (error) throw new Error(error.message);
+
+  // Schnellpfad entwerten: Ohne diesen Schritt liest proxy.ts Rolle und
+  // Organisation weiter aus app_metadata und bemerkt die Deaktivierung nie.
+  const { data: bestehend } = await admin.auth.admin.getUserById(userId);
+  const uebrigeMetadaten = { ...(bestehend?.user?.app_metadata ?? {}) };
+  delete uebrigeMetadaten[AUTH_METADATA_ROLE_KEY];
+  delete uebrigeMetadaten[AUTH_METADATA_ORG_KEY];
+  const { error: metaError } = await admin.auth.admin.updateUserById(userId, {
+    app_metadata: uebrigeMetadaten,
+  });
+  if (metaError) {
+    // Die Mitgliedschaft ist bereits inaktiv — aber der Zugriff bliebe bestehen.
+    // Deshalb hart scheitern statt still weiterlaufen: Der Admin muss erfahren,
+    // dass die Deaktivierung nicht vollständig gegriffen hat.
+    throw new Error(
+      `Mitgliedschaft deaktiviert, aber der Zugriff konnte nicht entzogen werden: ${metaError.message}`,
+    );
+  }
 }
 
 /**
