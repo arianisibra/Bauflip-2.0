@@ -15,7 +15,8 @@
     "sync:user-auth-metadata": "node --env-file=.env.local scripts/sync-user-auth-metadata.mts",
     "db:login": "npx supabase login",
     "db:link": "npx supabase link",
-    "db:push": "npx supabase db push",
+    "db:push": "node scripts/db-push-guard.mjs",
+    "db:push:unsafe": "npx supabase db push",
     "db:push:dry-run": "npx supabase db push --dry-run"
   },
   "dependencies": {
