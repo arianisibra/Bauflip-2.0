@@ -8,6 +8,7 @@ import { AuthenticatedRealtime } from "@/components/app/authenticated-realtime";
 import { SessionProfileProvider } from "@/components/app/session-profile-provider";
 import { OfflineBanner } from "@/components/app/offline-banner";
 import { OutboxStatus } from "@/components/app/outbox-status";
+import { VersionBanner } from "@/components/app/version-banner";
 import { getOrgWorkflowStages, getOrgWorkflowTransitions } from "@/lib/db/workflow";
 import { WorkflowStagesProvider } from "@/components/app/workflow-stages-provider";
 import { WorkflowTransitionsProvider } from "@/components/app/workflow-transitions-provider";
@@ -40,6 +41,7 @@ export default async function TechLayout({ children }: { children: React.ReactNo
       <TechThemeScope />
       <AuthenticatedRealtime orgId={session.organizationId} />
       <div className="flex h-dvh max-h-dvh min-h-0 flex-col overflow-hidden bg-muted/30 dark:bg-muted/35">
+        <VersionBanner />
         <OfflineBanner />
         <OutboxStatus />
         {session.role !== "technician" ? (

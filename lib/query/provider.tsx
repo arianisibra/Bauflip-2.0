@@ -1,9 +1,16 @@
 "use client";
 
-import { QueryClient, QueryClientProvider, type Query } from "@tanstack/react-query";
+import {
+  MutationCache,
+  QueryCache,
+  QueryClient,
+  QueryClientProvider,
+  type Query,
+} from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { useState, type ReactNode } from "react";
+import { checkDeploymentVersion } from "@/lib/version/stale-deployment";
 
 /**
  * One QueryClient per browser session. `useState` gives each component tree
@@ -11,6 +18,17 @@ import { useState, type ReactNode } from "react";
  */
 function makeQueryClient(): QueryClient {
   return new QueryClient({
+    // Nach einem Deploy kennt der Server die Server-Action-IDs des alten Bundles
+    // nicht mehr — jede Aktion schlägt fehl, der Knopf wirkt tot. Ein Fehler ist
+    // deshalb der beste Moment, die Version zu prüfen: schneller als das
+    // Intervall im VersionBanner und genau dann, wenn es den Nutzer betrifft.
+    // Die Prüfung läuft nebenher und ändert am Fehler selbst nichts.
+    mutationCache: new MutationCache({
+      onError: () => void checkDeploymentVersion(),
+    }),
+    queryCache: new QueryCache({
+      onError: () => void checkDeploymentVersion(),
+    }),
     defaultOptions: {
       queries: {
         staleTime: 30 * 1000,

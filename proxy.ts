@@ -23,7 +23,12 @@ const PUBLIC_PATHS = [
 
 // Server-zu-Server-Webhooks ohne Nutzer-Session — authentisieren sich selbst
 // (z. B. per Capability-Token in der URL/im Payload), nicht per Auth-Cookie.
-const PUBLIC_API_PATHS = ["/api/intake/email"];
+//
+// /api/version liefert nur die Deployment-Kennung (Git-SHA). Ohne Eintrag hier
+// bekämen Monteure darauf 403 aus der Rollenprüfung — ausgerechnet die Nutzer
+// mit den langlebigsten Tabs. Ausserdem spart der frühe Ausstieg den
+// Supabase-Roundtrip bei jeder Prüfung.
+const PUBLIC_API_PATHS = ["/api/intake/email", "/api/version"];
 
 function withSecurityHeaders(res: NextResponse): NextResponse {
   const isProd = process.env.NODE_ENV === "production";

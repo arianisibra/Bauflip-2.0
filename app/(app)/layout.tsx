@@ -16,6 +16,7 @@ import { isAdminMfaRequiredAndMissing } from "@/lib/auth/mfa";
 import { getVisibleSidebarItems } from "@/lib/navigation/sidebar-config";
 import { AuthenticatedRealtime } from "@/components/app/authenticated-realtime";
 import { SessionProfileProvider } from "@/components/app/session-profile-provider";
+import { VersionBanner } from "@/components/app/version-banner";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await getLayoutSession();
@@ -48,6 +49,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <WorkflowTransitionsProvider value={workflowTransitions}>
       <div className="flex h-dvh max-h-dvh min-h-0 flex-col overflow-hidden bg-muted/40 dark:bg-muted/35 md:h-screen md:max-h-none">
       <AuthenticatedRealtime orgId={session.organizationId} />
+      <VersionBanner />
       {onboardingPending ? <OnboardingWizard initialCompanyName={branding?.name ?? ""} /> : null}
       <div className="flex min-h-0 flex-1">
         <div className="hidden overflow-hidden md:block">
