@@ -4,6 +4,7 @@ import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf
 import type { Quote } from "@/lib/domain/types";
 import type { OrganizationBranding, OrganizationBillingSettings } from "@/lib/domain/types";
 import type { QuotePdfProjectHead } from "@/lib/db/quotes";
+import { MAX_LOGO_BYTES, istErlaubteLogoQuelle } from "@/lib/pdf/logo-source";
 import { roundRappen } from "@/lib/quotes/totals";
 
 // A4 in PDF-Punkten
@@ -304,15 +305,24 @@ export async function buildQuotePdf(input: QuotePdfInput): Promise<Uint8Array> {
 export async function fetchLogoBytes(
   logoUrl: string | null,
 ): Promise<{ bytes: Uint8Array; mimeType: string } | null> {
-  if (!logoUrl) return null;
+  if (!logoUrl || !istErlaubteLogoQuelle(logoUrl)) return null;
   try {
-    const res = await fetch(logoUrl, { signal: AbortSignal.timeout(5_000) });
+    // `redirect: "error"` verhindert, dass eine erlaubte URL über eine
+    // Weiterleitung doch noch auf ein internes Ziel führt.
+    const res = await fetch(logoUrl, {
+      signal: AbortSignal.timeout(5_000),
+      redirect: "error",
+    });
     if (!res.ok) return null;
     const mimeType = res.headers.get("content-type") ?? "";
     if (!mimeType.includes("png") && !mimeType.includes("jpeg") && !mimeType.includes("jpg")) {
       return null;
     }
-    return { bytes: new Uint8Array(await res.arrayBuffer()), mimeType };
+    const angekuendigt = Number(res.headers.get("content-length") ?? "0");
+    if (Number.isFinite(angekuendigt) && angekuendigt > MAX_LOGO_BYTES) return null;
+    const puffer = await res.arrayBuffer();
+    if (puffer.byteLength > MAX_LOGO_BYTES) return null;
+    return { bytes: new Uint8Array(puffer), mimeType };
   } catch {
     return null;
   }
