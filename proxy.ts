@@ -1,4 +1,4 @@
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { hasSupabaseAuthCookie } from "@/lib/auth/cookies";
@@ -192,8 +192,15 @@ export async function proxy(request: NextRequest) {
     return withSecurityHeaders(NextResponse.redirect(loginUrl));
   }
 
-  // requestHeaders stammt von oben — bereits von eingehenden Proxy-Headern befreit.
-  const response = withSecurityHeaders(forward());
+  // Erneuerte Auth-Cookies sammeln statt sofort auf eine Antwort zu schreiben:
+  // Die Antwort entsteht erst, NACHDEM applyProxyAuthContext die Header gesetzt
+  // hat. NextResponse.next() liest `requestHeaders` beim Erzeugen aus — eine
+  // spätere Mutation käme in der App nicht mehr an.
+  const zuSetzendeCookies: { name: string; value: string; options: CookieOptions }[] = [];
+  const mitCookies = <T extends NextResponse>(res: T): T => {
+    zuSetzendeCookies.forEach(({ name, value, options }) => res.cookies.set(name, value, options));
+    return res;
+  };
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
@@ -203,7 +210,7 @@ export async function proxy(request: NextRequest) {
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value, options }) => {
           request.cookies.set(name, value);
-          response.cookies.set(name, value, options);
+          zuSetzendeCookies.push({ name, value, options: options ?? {} });
         });
       },
     },
@@ -233,26 +240,29 @@ export async function proxy(request: NextRequest) {
 
   if (!isAuthenticated && !isPublicPath) {
     if (pathname.startsWith("/api")) {
-      return withSecurityHeaders(NextResponse.json({ error: "Nicht autorisiert." }, { status: 401 }));
+      return mitCookies(
+        withSecurityHeaders(NextResponse.json({ error: "Nicht autorisiert." }, { status: 401 })),
+      );
     }
     const loginUrl = new URL("/anmeldung", request.url);
-    return withSecurityHeaders(NextResponse.redirect(loginUrl));
+    return mitCookies(withSecurityHeaders(NextResponse.redirect(loginUrl)));
   }
 
   if (isAuthenticated && pathname === "/anmeldung") {
-    return withSecurityHeaders(NextResponse.redirect(new URL("/", request.url)));
+    return mitCookies(withSecurityHeaders(NextResponse.redirect(new URL("/", request.url))));
   }
 
   if (isAuthenticated && pathname === "/") {
     const dest = role === "technician" ? "/tag" : "/projekte";
-    return withSecurityHeaders(NextResponse.redirect(new URL(dest, request.url)));
+    return mitCookies(withSecurityHeaders(NextResponse.redirect(new URL(dest, request.url))));
   }
 
   if (isAuthenticated && role === "technician" && !isTechnicianAllowedPath(pathname)) {
-    return denyTechnician(pathname, request);
+    return mitCookies(denyTechnician(pathname, request));
   }
 
-  return response;
+  // Erst jetzt bauen: requestHeaders trägt inzwischen den Auth-Kontext.
+  return mitCookies(withSecurityHeaders(forward()));
 }
 
 function denyTechnician(pathname: string, request: NextRequest): NextResponse {
