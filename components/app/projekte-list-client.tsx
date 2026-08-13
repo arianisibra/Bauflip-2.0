@@ -460,7 +460,11 @@ export function ProjekteListClient({
     normalizeSearchQuery(q).length > 0 && normalizeSearchQuery(q).length < PROJEKTE_SEARCH_MIN_CHARS;
   const isConcreteStatusFilter = isProjectStatus(statusFilter);
   const hasNoMatchesForStatus = isConcreteStatusFilter && !hasSearch && projects.length === 0;
-  const hasNoActiveProjects = statusFilter === "active" && !hasSearch && projects.length === 0;
+  // Ohne diese Unterscheidung bekam eine frisch registrierte Firma «Alle Projekte
+  // sind abgeschlossen» zu sehen — obwohl sie noch nie eines hatte.
+  const hasNoProjectsAtAll = (statusCountsSnapshot?.totalAll ?? projects.length) === 0;
+  const hasNoActiveProjects =
+    statusFilter === "active" && !hasSearch && projects.length === 0 && !hasNoProjectsAtAll;
   const hasNoArchived = isArchivedView && !hasSearch && projects.length === 0;
   const showEmptyState = sorted.length === 0;
   const projectsLoading = metaLoading || listLoading;

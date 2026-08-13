@@ -35,7 +35,7 @@ export function EinstellungenPageClient() {
     <section className="flex flex-col gap-6">
       <header>
         <h1 className="text-2xl font-semibold">Einstellungen</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Profil und Kalenderdarstellung.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Profil, Firma, Zahlungsdaten, Preisstamm, Vorlagen und Workflow.</p>
       </header>
 
       <ProfileSettingsForm

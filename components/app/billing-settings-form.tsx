@@ -174,7 +174,7 @@ export function BillingSettingsForm() {
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-[2fr_1fr]">
             <div>
               <Label className="text-[11px]">Gläubigername (Firma)</Label>
-              <Input value={form.creditorName} placeholder="Bauflip Storen AG" onChange={set("creditorName")} />
+              <Input value={form.creditorName} placeholder="Muster AG" onChange={set("creditorName")} />
             </div>
             <div>
               <Label className="text-[11px]">UID / MwSt-Nr. (optional)</Label>

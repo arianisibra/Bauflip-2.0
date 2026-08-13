@@ -133,7 +133,7 @@ export function OnboardingWizard({ initialCompanyName }: { initialCompanyName: s
   const stepTitles = ["Willkommen bei Bauflip", "Eure Arbeitsschritte", "Eure Pipeline-Knöpfe"] as const;
   const stepDescriptions = [
     "Wie heisst euer Betrieb? Der Name erscheint auf Offerten, Rechnungen und im Kopfbereich.",
-    "So heissen die Status eines Auftrags bei euch. Passt die Begriffe an eure Sprache an — die Vorschläge stammen aus dem Storenbau und lassen sich später jederzeit in den Einstellungen ändern.",
+    "So heissen die Status eines Auftrags bei euch. Passt die Begriffe an eure Sprache an — die Vorschläge sind ein neutraler Startpunkt und lassen sich später jederzeit in den Einstellungen ändern.",
     "Diese Knöpfe schalten einen Auftrag von einem Status zum nächsten. Beschriftet sie so, wie ihr im Alltag sprecht.",
   ] as const;
 
@@ -170,7 +170,7 @@ export function OnboardingWizard({ initialCompanyName }: { initialCompanyName: s
           <Label className="text-[11px]">Firmenname</Label>
           <Input
             value={companyName}
-            placeholder="z. B. Malerbetrieb Muster GmbH"
+            placeholder="z. B. Muster AG"
             onChange={(e) => setCompanyName(e.target.value)}
           />
         </div>
