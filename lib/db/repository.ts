@@ -1634,7 +1634,17 @@ export async function loadMitarbeiterBootstrapData(
   return { team, absences };
 }
 
-/** Alle Abwesenheiten der Organisation (alle Zeiträume). */
+/**
+ * Abwesenheiten der Organisation — jüngere Vergangenheit und Zukunft.
+ *
+ * Vorher wurden ALLE Zeiträume ohne Obergrenze geladen. Das wächst mit jedem
+ * Betriebsjahr weiter, obwohl die Planungsansicht nur den aktuellen Zeitraum
+ * braucht. Ein Jahr rückwärts deckt Rückfragen zu vergangenen Ferien ab; das
+ * harte Limit verhindert, dass ein einzelner Aufruf die Antwort sprengt.
+ */
+const ABSENCE_LOOKBACK_DAYS = 365;
+const ABSENCE_MAX_ROWS = 2000;
+
 export const listAllTechnicianAbsencesForOrg = cache(async function listAllTechnicianAbsencesForOrg(
   organizationId: string,
   technicianId?: string | null,
@@ -1642,13 +1652,16 @@ export const listAllTechnicianAbsencesForOrg = cache(async function listAllTechn
   const supabase = await createSupabaseServerClient();
   if (!supabase) return [];
 
+  const seit = new Date(Date.now() - ABSENCE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
   let q = supabase
     .from("technician_absences")
     .select(ABSENCE_DB_COLUMNS)
-    .eq("organization_id", organizationId);
+    .eq("organization_id", organizationId)
+    .gte("ends_at", seit);
   if (technicianId) q = q.eq("technician_id", technicianId);
 
-  const { data, error } = await q.order("starts_at", { ascending: false });
+  const { data, error } = await q.order("starts_at", { ascending: false }).limit(ABSENCE_MAX_ROWS);
   if (error || !data) return [];
 
   const rows = data as Record<string, unknown>[];

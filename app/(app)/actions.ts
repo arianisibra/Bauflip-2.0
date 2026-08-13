@@ -326,7 +326,12 @@ export async function updateAttachmentNotesAction(
 
 export async function deleteAttachmentAction(
   attachmentId: string,
-  filePath: string,
+  /**
+   * Wird bewusst IGNORIERT — der Pfad kommt aus der Datenbank.
+   * Der Parameter bleibt nur erhalten, weil der Client ihn mitschickt; ein
+   * Aufrufer soll nicht bestimmen können, WELCHE Datei gelöscht wird.
+   */
+  _filePath: string,
   tabId?: string,
 ): Promise<{ success: true } | { success: false; error: string }> {
   let session;
@@ -338,12 +343,17 @@ export async function deleteAttachmentAction(
   if (!canManageProjectReportFiles(session.role)) {
     return { success: false, error: "Keine Berechtigung." };
   }
-  if (!attachmentId || !filePath) return { success: false, error: "Parameter fehlen." };
+  if (!attachmentId) return { success: false, error: "Parameter fehlen." };
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { success: false, error: "Supabase ist nicht konfiguriert." };
+  // Auch `file_path` laden: Der Wert aus dem Aufruf wird bewusst NICHT zum
+  // Löschen verwendet. Sonst könnte ein Berechtigter eine gültige Anhang-ID mit
+  // einem beliebigen fremden Pfad kombinieren und damit eine Datei löschen, die
+  // nicht zu diesem Anhang gehört. Der Pfad muss aus derselben Zeile stammen,
+  // deren Berechtigung geprüft wurde.
   const { data: att } = await supabase
     .from("project_attachments")
-    .select("project_id")
+    .select("project_id, file_path")
     .eq("id", attachmentId)
     .maybeSingle();
   if (!att?.project_id) return { success: false, error: "Anhang nicht gefunden." };
@@ -352,7 +362,7 @@ export async function deleteAttachmentAction(
   const access = ensureProjectAccessForReportFiles(session, core);
   if (!access.ok) return { success: false, error: access.error };
   try {
-    await deleteProjectAttachment(attachmentId, filePath);
+    await deleteProjectAttachment(attachmentId, String(att.file_path ?? ""));
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "Löschen fehlgeschlagen." };
   }
