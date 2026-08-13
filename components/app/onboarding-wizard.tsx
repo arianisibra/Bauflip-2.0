@@ -82,6 +82,11 @@ export function OnboardingWizard({ initialCompanyName }: { initialCompanyName: s
                 rapportAufgenommen: stage.rapportAufgenommen,
                 rapportMontage: stage.rapportMontage,
                 rapportBehobenTarget: stage.rapportBehobenTarget,
+                // Beide sind im Schema nullable, aber nicht optional. Fehlten sie hier,
+                // scheiterte das Umbenennen im Wizard mit «expected string, received
+                // undefined» — der Schritt, um den es im Onboarding überhaupt geht.
+                rapportNextStepDescription: stage.rapportNextStepDescription,
+                rapportNextStepIcon: stage.rapportNextStepIcon,
               },
             });
           }
