@@ -1,6 +1,7 @@
 /**
- * One-time backfill: mirror active organization_memberships into auth user_metadata
+ * One-time backfill: mirror active organization_memberships into auth app_metadata
  * (role + organization_id) so proxy.ts can skip the membership DB query.
+ * app_metadata is service-role-only writable — safe for authorization.
  *
  * Usage: npx tsx --env-file=.env.local scripts/sync-user-auth-metadata.mts
  */
@@ -49,8 +50,8 @@ for (const [userId, { role, organization_id }] of byUser) {
     continue;
   }
   const { error: updErr } = await admin.auth.admin.updateUserById(userId, {
-    user_metadata: {
-      ...userData.user.user_metadata,
+    app_metadata: {
+      ...userData.user.app_metadata,
       role,
       organization_id,
     },

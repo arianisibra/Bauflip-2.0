@@ -4,7 +4,7 @@ import type { NextRequest } from "next/server";
 import { hasSupabaseAuthCookie } from "@/lib/auth/cookies";
 import { mapRole } from "@/lib/auth/map-role";
 import { applyProxyAuthContext } from "@/lib/auth/proxy-auth-headers";
-import { readProxyAuthFromUserMetadata } from "@/lib/auth/user-metadata-keys";
+import { readProxyAuthFromAppMetadata } from "@/lib/auth/user-metadata-keys";
 import type { RoleType } from "@/lib/domain/types";
 
 const PUBLIC_PATHS = [
@@ -189,11 +189,10 @@ export async function proxy(request: NextRequest) {
   let organizationId: string | null = null;
 
   if (user) {
-    const metaRole = mapRole(user.user_metadata?.role as string | undefined);
-    const fromMetadata = readProxyAuthFromUserMetadata(user);
+    const fromMetadata = readProxyAuthFromAppMetadata(user);
     const membership = fromMetadata
       ? fromMetadata
-      : await resolveMembershipRole(supabase, user.id, metaRole);
+      : await resolveMembershipRole(supabase, user.id, "office");
     role = membership.role;
     organizationId = membership.organizationId;
     applyProxyAuthContext(requestHeaders, {

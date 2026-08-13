@@ -2,19 +2,23 @@ import "server-only";
 
 import type { RoleType } from "@/lib/domain/types";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { buildAuthUserMetadataPatch } from "@/lib/auth/user-metadata-keys";
+import { buildAuthAppMetadataPatch } from "@/lib/auth/user-metadata-keys";
 
-/** Mirror membership into JWT user_metadata for proxy fast-path. */
+/**
+ * Rolle + Organisation in `app_metadata` spiegeln, damit der Proxy die
+ * Membership-Abfrage überspringen kann. `app_metadata` ist nur mit der
+ * Service-Role beschreibbar — deshalb darf der Proxy darauf vertrauen.
+ */
 export async function syncUserAuthMetadata(
   userId: string,
   role: RoleType,
   organizationId: string,
-  existingMetadata?: Record<string, unknown>,
+  existingAppMetadata?: Record<string, unknown>,
 ): Promise<void> {
   const admin = createSupabaseAdminClient();
   if (!admin) return;
   const { error } = await admin.auth.admin.updateUserById(userId, {
-    user_metadata: buildAuthUserMetadataPatch(existingMetadata, role, organizationId),
+    app_metadata: buildAuthAppMetadataPatch(existingAppMetadata, role, organizationId),
   });
   if (error) {
     console.warn("[bauflip] syncUserAuthMetadata failed:", error.message);

@@ -85,16 +85,17 @@ if (membershipError) {
   throw new Error(`Could not create membership: ${membershipError.message}`);
 }
 
-// Mirror role + org into user_metadata so proxy can skip membership DB lookup.
+// Rolle + Org in app_metadata spiegeln (nur Service-Role beschreibbar), damit
+// der Proxy die Membership-Abfrage überspringen darf.
 const { error: metaError } = await admin.auth.admin.updateUserById(authUser.id, {
-  user_metadata: {
-    ...authUser.user_metadata,
+  app_metadata: {
+    ...authUser.app_metadata,
     role: "admin",
     organization_id: organizationId,
   },
 });
 if (metaError) {
-  throw new Error(`Could not set user_metadata.role: ${metaError.message}`);
+  throw new Error(`Could not set app_metadata.role: ${metaError.message}`);
 }
 
 console.log("Bootstrap completed.");

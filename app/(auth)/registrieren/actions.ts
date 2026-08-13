@@ -103,8 +103,11 @@ export async function registerOrganizationAction(
     const { error: workflowError } = await admin.rpc("seed_default_workflow", { p_org: newOrg.id });
     if (workflowError) throw new Error(workflowError.message);
 
+    // display_name bleibt in user_metadata (Anzeige), aber die Autorisierung
+    // (Rolle + Org) gehört in app_metadata — nur mit Service-Role beschreibbar.
     const { error: metaError } = await admin.auth.admin.updateUserById(user.id, {
-      user_metadata: { ...user.user_metadata, display_name: displayName, role: "admin", organization_id: newOrg.id },
+      user_metadata: { ...user.user_metadata, display_name: displayName },
+      app_metadata: { ...user.app_metadata, role: "admin", organization_id: newOrg.id },
     });
     if (metaError) throw new Error(metaError.message);
   } catch {

@@ -381,8 +381,9 @@ export async function acceptInviteOnboardingAction() {
     throw new Error("Mitgliedschaft konnte nicht aktiviert werden.");
   }
 
-  // Mirror role + org into user_metadata so proxy can skip membership DB lookup.
-  await syncUserAuthMetadata(user.id, invite.role, String(invite.organization_id), user.user_metadata);
+  // Rolle + Org in app_metadata spiegeln (nur Service-Role beschreibbar), damit
+  // der Proxy die Membership-Abfrage überspringen darf.
+  await syncUserAuthMetadata(user.id, invite.role, String(invite.organization_id), user.app_metadata);
 
   const { error: invitationUpdateError } = await adminClient
     .from("invitations")

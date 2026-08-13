@@ -315,7 +315,9 @@ export const getCurrentSession = cache(async function getCurrentSession(): Promi
     ]);
 
     const membershipRole = membershipResponse.data?.role as string | null | undefined;
-    const role = mapRole(membershipRole ?? (user.user_metadata?.role as string | null | undefined));
+    // Fallback nur aus app_metadata (Service-Role-geschützt) — niemals aus dem
+    // nutzer-beschreibbaren user_metadata.
+    const role = mapRole(membershipRole ?? (user.app_metadata?.role as string | null | undefined));
     const organizationId = (membershipResponse.data?.organization_id as string | null | undefined) ?? null;
 
     if (!profileResponse.data) {
@@ -371,7 +373,8 @@ export const getCurrentSession = cache(async function getCurrentSession(): Promi
     };
   } catch (err) {
     console.error("[bauflip] session membership/profile failed", err);
-    const role = mapRole(user.user_metadata?.role as string | null | undefined);
+    // Rolle nur aus app_metadata (Service-Role-geschützt), nie aus user_metadata.
+    const role = mapRole(user.app_metadata?.role as string | null | undefined);
     const displayName =
       String(user.user_metadata?.display_name ?? "").trim() ||
       user.email?.split("@")[0] ||
