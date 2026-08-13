@@ -48,4 +48,13 @@ create index if not exists idx_contacts_org_name
 -- jedem Schreibvorgang Zeit und belegt Platz.
 -- Falls später eine organisationsweite «offene Bestellungen»-Ansicht kommt,
 -- wird er zusammen mit dieser Abfrage neu angelegt.
+--
+-- ABER: Der partielle Index deckte nebenbei den Fremdschlüssel
+-- project_orders.organization_id ab. Nach dem Löschen stand dieser ohne Index da
+-- (vom Supabase-Advisor unmittelbar bemängelt). Deshalb hier ein vollwertiger
+-- Ersatz — der zusätzlich den RLS-Policies dient, die alle auf
+-- organization_id filtern.
 drop index if exists public.idx_project_orders_org_open;
+
+create index if not exists idx_project_orders_organization_id
+  on public.project_orders (organization_id);
