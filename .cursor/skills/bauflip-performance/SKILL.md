@@ -38,8 +38,10 @@ Use this skill for Bauflip 2.0 performance work:
 5. **Security unchanged** — never skip server access checks to save a query (PR-E still verifies on server).
 6. **DB migrations need explicit user approval** — document patterns; do not auto-apply SQL.
 7. **RPC + fallback** — every new RPC in [`lib/db/repository.ts`](../../../lib/db/repository.ts) keeps a PostgREST fallback (see calendar range).
-8. **Simplicity first** — smallest diff that moves a HAR gate; defer `project_core_bootstrap`, `availability_range_for_org` until proven pain.
-9. **Postgres practices** — read [supabase-postgres-best-practices](../supabase-postgres-best-practices/SKILL.md) when writing SQL.
+8. **Simplicity first** — smallest diff that moves a HAR gate; defer Tier-2 items (`availability_range_for_org`, Redis) until proven pain.
+9. **Tier 1 active** — `project_core_bootstrap` RPC (PR-I) is the top sheet-open lever; see [massive-perf-roadmap.md](./massive-perf-roadmap.md).
+10. **Postgres practices** — read [supabase-postgres-best-practices](../supabase-postgres-best-practices/SKILL.md) when writing SQL.
+11. **Update this skill** — after every perf phase, sync `.agents/` and `.cursor/skills/bauflip-performance/` mirrors.
 
 ---
 
@@ -79,10 +81,12 @@ After code changes: `npm run typecheck` and `npm run build`. For DB: run matchin
 | Auftrag rapport+photos | POST `/auftrag` | **≤ 4**, **0×** `fetchAuftragProjectCoreAction` |
 | `/tag` load | POST after document | **0×** |
 | `/kalender` load | POST within 500ms of document | **0×** (hydration regression) |
+| Sheet open (PR-I) | `core` POSTs | **1×** (`getProjectSheetBootstrapAction`) |
 | Prefetch noise | early `_rsc` GETs | **0** (see tag/kalender checklists) |
 
 Capture: [`scripts/perf/projekte-interaction-checklist.md`](../../../scripts/perf/projekte-interaction-checklist.md)  
-Summarize: `node scripts/perf/summarize-har.mjs ~/path/file.har`  
+Sheet warm: [`scripts/perf/sheet-open-checklist.md`](../../../scripts/perf/sheet-open-checklist.md)  
+Summarize: `node scripts/perf/summarize-har.mjs ~/path/file.har` — includes **Sheet gates (PR-I)** and interaction gates  
 Local host: `BAUFLIP_HAR_HOST=localhost node scripts/perf/summarize-har.mjs ~/localhost.har`
 
 ---
@@ -99,7 +103,7 @@ Local host: `BAUFLIP_HAR_HOST=localhost node scripts/perf/summarize-har.mjs ~/lo
 | Cache | [`lib/query/invalidations.ts`](../../../lib/query/invalidations.ts) | patch*, scoped invalidation |
 | Realtime | [`lib/query/realtime-bridge.tsx`](../../../lib/query/realtime-bridge.tsx) | Supabase broadcast — **no** `/api/events` |
 | DB | [`lib/db/repository.ts`](../../../lib/db/repository.ts) | RPC first when ≥2 round-trips |
-| Slow ops | [`lib/observability/slow-log.ts`](../../../lib/observability/slow-log.ts) | `SERVER_ACTION_SLOW_MS=800` |
+| Slow ops | [`lib/observability/slow-log.ts`](../../../lib/observability/slow-log.ts) | `SERVER_ACTION_SLOW_MS=800`; labels `loadProjectCoreBootstrap`, `signAttachmentUrls` (+ `attachmentCount`) |
 
 ---
 
@@ -112,8 +116,20 @@ Local host: `BAUFLIP_HAR_HOST=localhost node scripts/perf/summarize-har.mjs ~/lo
 | `projekte_office_bootstrap` | `20260626120000_perf_projekte_office_bootstrap_rpc.sql` |
 | `calendar_range_tasks_for_org` | `20260626200000_perf_calendar_range_rpc.sql` |
 | `mitarbeiter_office_bootstrap` | `20260627120000_perf_mitarbeiter_bootstrap_rpc.sql` |
+| `project_core_bootstrap` | `20260701120000_perf_project_core_bootstrap_rpc.sql` (PR-I, prod verified) |
+| Drop duplicate FK indexes | `20260723140000_perf_drop_duplicate_fk_indexes.sql` (applied — verified in DB 2026-08-13) |
+| 11 FK indexes + RLS initplan wrapping | `20260828090000_perf_fk_indexes_and_rls_initplan.sql` (**pending** — needs user approval) |
 
 Detail: [supabase-database.md](./supabase-database.md)
+
+---
+
+## Next massive wins
+
+| Tier | Doc |
+|------|-----|
+| Tier 1 (sheet RPC + cold start) | [massive-perf-roadmap.md](./massive-perf-roadmap.md) |
+| Tier 2 (year view, ABGEMACHT, availability RPC) | same |
 
 ---
 
@@ -129,6 +145,7 @@ Detail: [supabase-database.md](./supabase-database.md)
 | F | yes | Monteur mutations via hooks |
 | G | yes | Range-scoped calendar invalidation |
 | H | planned | Bootstrap + infinite page-1 dedupe |
+| I | yes (prod verified 2026-06-23) | `project_core_bootstrap` + single sheet action |
 
 Detail: [refactoring-pr-roadmap.md](./refactoring-pr-roadmap.md)
 
@@ -149,13 +166,14 @@ Read only what the task needs:
 | [supabase-database.md](./supabase-database.md) | RPCs, indexes, migrations, EXPLAIN |
 | [refactoring-pr-roadmap.md](./refactoring-pr-roadmap.md) | PR A–H files and verification |
 | [related-domain.md](./related-domain.md) | Status/attachment fixes affecting gates |
+| [massive-perf-roadmap.md](./massive-perf-roadmap.md) | Tier 1–3 massive perf options |
 
 ---
 
 ## Measurement pitfalls
 
 - **Browser extensions** — DevTools showing ~118 requests / 6 MB is often `chrome-extension://`, not Bauflip. Use Incognito or filter `gross-storenbau`.
-- **Warm vs cold** — second hard reload for warm baseline; Netlify cold start ~4–5 s is separate from app logic.
+- **Cold start** — see cold start checklist in [`docs/netlify-compute-optimization.md`](../../../docs/netlify-compute-optimization.md); optional warmup ping
 - **Failed to find Server Action** — deploy mismatch; hard reload after deploy.
 - **Capture after redirect** — HAR without document GET uses first POST as timeline anchor.
 
@@ -163,10 +181,11 @@ Read only what the task needs:
 
 ## Ops checklist (one-time / deploy)
 
-1. `npx tsx --env-file=.env.local scripts/sync-user-auth-metadata.mts` — backfill `user_metadata.organization_id`
+1. `npx tsx --env-file=.env.local scripts/sync-user-auth-metadata.mts` — backfill **`app_metadata`** (role + organization_id)
 2. Apply RPC migrations before relying on code paths (`npm run db:push` with user approval)
 3. Netlify env: `SERVER_ACTION_SLOW_MS=800`
 4. Verify: no `/api/events` in observability after Realtime migration
+5. Cold start: region + pooler — see [`docs/netlify-compute-optimization.md`](../../../docs/netlify-compute-optimization.md) cold start checklist
 
 ---
 

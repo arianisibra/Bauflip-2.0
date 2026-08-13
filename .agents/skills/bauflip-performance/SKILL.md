@@ -117,7 +117,8 @@ Local host: `BAUFLIP_HAR_HOST=localhost node scripts/perf/summarize-har.mjs ~/lo
 | `calendar_range_tasks_for_org` | `20260626200000_perf_calendar_range_rpc.sql` |
 | `mitarbeiter_office_bootstrap` | `20260627120000_perf_mitarbeiter_bootstrap_rpc.sql` |
 | `project_core_bootstrap` | `20260701120000_perf_project_core_bootstrap_rpc.sql` (PR-I, prod verified) |
-| Drop duplicate FK indexes | `20260723140000_perf_drop_duplicate_fk_indexes.sql` (await `db:push`) |
+| Drop duplicate FK indexes | `20260723140000_perf_drop_duplicate_fk_indexes.sql` (applied — verified in DB 2026-08-13) |
+| 11 FK indexes + RLS initplan wrapping | `20260828090000_perf_fk_indexes_and_rls_initplan.sql` (**pending** — needs user approval) |
 
 Detail: [supabase-database.md](./supabase-database.md)
 
@@ -180,7 +181,7 @@ Read only what the task needs:
 
 ## Ops checklist (one-time / deploy)
 
-1. `npx tsx --env-file=.env.local scripts/sync-user-auth-metadata.mts` — backfill `user_metadata.organization_id`
+1. `npx tsx --env-file=.env.local scripts/sync-user-auth-metadata.mts` — backfill **`app_metadata`** (role + organization_id)
 2. Apply RPC migrations before relying on code paths (`npm run db:push` with user approval)
 3. Netlify env: `SERVER_ACTION_SLOW_MS=800`
 4. Verify: no `/api/events` in observability after Realtime migration

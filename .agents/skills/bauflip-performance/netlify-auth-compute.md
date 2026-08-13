@@ -37,7 +37,7 @@ Initially moved heavy reads to client hooks after shell RSC. **Hybrid-SSR supers
 | `requireOfficeSession` / `requireOrgLayoutSession` / `requireTechFieldSession` in mutations | No full `getCurrentSession` + membership DB per action |
 | `SessionProfileProvider` + `getCachedSessionProfile` in layout | **0×** `fetchSessionProfileAction` on tag/wochenplan/profil/etc. |
 | `getCurrentSession()` only for profile save, avatar, settings writes | Documented exceptions |
-| Proxy metadata fast-path (`user_metadata.organization_id`, role) | Skip membership query when metadata present |
+| Proxy metadata fast-path (`app_metadata.organization_id`, role) | Skip membership query when metadata present. **Never `user_metadata`** — user-writable via `updateUser()`, so authorization there is a privilege-escalation hole (fixed 2026-08-13, commit `c7fb76d`). Falls back to the DB membership query when `app_metadata` is empty. |
 | Server-side status filter on `/projekte` | `.eq(status)` in repository |
 
 **One-time after deploy:**
