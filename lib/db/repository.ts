@@ -1451,6 +1451,11 @@ async function buildEmailByUserIdMap(userIds: string[]): Promise<Map<string, str
         emailByUserId.set(user.id, user.email);
       }
     }
+    // Sobald alle gesuchten Adressen beisammen sind, aufhören. Ohne diesen
+    // Abbruch blättert die Mitarbeiterliste jedes Mal durch SÄMTLICHE
+    // Auth-Nutzer aller Mandanten — also durch fremde Daten, nur um die eigenen
+    // paar Adressen zu finden. Das skaliert mit der Plattform, nicht mit der Firma.
+    if (emailByUserId.size === wanted.size) break;
     if (data.users.length < perPage) break;
     page += 1;
   }

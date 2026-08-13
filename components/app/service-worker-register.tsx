@@ -10,7 +10,12 @@ import { useEffect } from "react";
 export function ServiceWorkerRegister() {
   useEffect(() => {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("/sw.js").catch((err) => {
+    // Deployment-Kennung an die SW-URL hängen: Der Worker leitet daraus seine
+    // Cache-Namen ab. Ändert sich die Kennung, holt der Browser den Worker neu
+    // und dieser räumt beim Aktivieren die Caches der Vorversion weg. Ohne das
+    // wüchse der Cache mit jedem Deploy weiter, ohne je etwas freizugeben.
+    const version = process.env.NEXT_PUBLIC_DEPLOYMENT_ID || "dev";
+    navigator.serviceWorker.register(`/sw.js?v=${encodeURIComponent(version)}`).catch((err) => {
       console.error("[bauflip] Service-Worker-Registrierung fehlgeschlagen", err);
     });
   }, []);
