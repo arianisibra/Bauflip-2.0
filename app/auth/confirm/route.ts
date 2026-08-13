@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
+import { publicOrigin } from "@/lib/auth/public-origin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
@@ -9,9 +10,13 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
  * Session umgewandelt → eine evtl. bestehende (fremde) Session bleibt aktiv und man
  * landet im falschen Konto.
  *
- * Unterstützt beide Supabase-Flows:
+ * Unterstützt drei Supabase-Flows:
  *  - `token_hash` + `type`  (empfohlen, Email-Template zeigt auf diese Route)
- *  - `code`                 (PKCE-Fallback, falls Default-Template via /auth/v1/verify kommt)
+ *  - `code`                 (PKCE-Fallback)
+ *  - Hash-Fragment          (Standard-Template über /auth/v1/verify): Supabase löst den
+ *                           Token selbst ein und hängt die fertige Session als
+ *                           `#access_token=…` an. Fragmente erreichen den Server nie,
+ *                           deshalb übernimmt /auth/hash den Rest im Browser.
  */
 
 /** Nur same-origin-relative Ziele erlauben (kein `//host`, kein Schema). */
@@ -26,19 +31,27 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get("type") as EmailOtpType | null;
   const code = searchParams.get("code");
   const next = safeNext(searchParams.get("next"));
+  // Nicht `origin`: hinter dem Proxy zeigt das auf den internen Port.
+  const base = publicOrigin(origin);
 
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
-    return NextResponse.redirect(new URL("/anmeldung?error=config", origin));
+    return NextResponse.redirect(new URL("/anmeldung?error=config", base));
   }
 
   if (tokenHash && type) {
     const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
-    if (!error) return NextResponse.redirect(new URL(next, origin));
+    if (!error) return NextResponse.redirect(new URL(next, base));
   } else if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return NextResponse.redirect(new URL(next, origin));
+    if (!error) return NextResponse.redirect(new URL(next, base));
+  } else {
+    // Weder token_hash noch code: Womöglich steckt die Session im Fragment.
+    // Der Browser hängt es bei dieser Weiterleitung von selbst wieder an.
+    return NextResponse.redirect(
+      new URL(`/auth/hash?next=${encodeURIComponent(next)}`, base),
+    );
   }
 
-  return NextResponse.redirect(new URL("/anmeldung?error=invite", origin));
+  return NextResponse.redirect(new URL("/anmeldung?error=invite", base));
 }

@@ -13,6 +13,9 @@ const PUBLIC_PATHS = [
   "/onboarding",
   "/mfa/setup",
   "/auth/confirm",
+  // Auffangseite für Supabase-Links mit Session im Fragment. Muss öffentlich sein:
+  // Beim Aufruf existiert noch kein Cookie — das schreibt erst der Browser dort.
+  "/auth/hash",
   // Ohne Anmeldung erreichbar — wer sein Passwort vergessen hat, hat keine Session.
   "/passwort-vergessen",
   // Rechtstexte müssen vor der Registrierung lesbar sein: das Formular verlangt
