@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { publicOrigin } from "@/lib/auth/public-origin";
+import { safeNextPath } from "@/lib/auth/safe-next";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
@@ -19,20 +20,16 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
  *                           deshalb übernimmt /auth/hash den Rest im Browser.
  */
 
-/** Nur same-origin-relative Ziele erlauben (kein `//host`, kein Schema). */
-function safeNext(value: string | null): string {
-  if (value && value.startsWith("/") && !value.startsWith("//")) return value;
-  return "/onboarding";
-}
-
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
   const code = searchParams.get("code");
-  const next = safeNext(searchParams.get("next"));
   // Nicht `origin`: hinter dem Proxy zeigt das auf den internen Port.
   const base = publicOrigin(origin);
+  // Gegen den eigenen Ursprung auflösen, nicht bloss die Zeichenkette prüfen —
+  // sonst führt `/\evil.com` nach erfolgreicher Anmeldung auf eine fremde Seite.
+  const next = safeNextPath(searchParams.get("next"), base);
 
   const supabase = await createSupabaseServerClient();
   if (!supabase) {

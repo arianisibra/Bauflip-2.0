@@ -2,13 +2,8 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { safeNextPath } from "@/lib/auth/safe-next";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-
-/** Nur same-origin-relative Ziele erlauben (kein `//host`, kein Schema). */
-function safeNext(value: string | null): string {
-  if (value && value.startsWith("/") && !value.startsWith("//")) return value;
-  return "/onboarding";
-}
 
 /**
  * Liest die von Supabase im Fragment übergebene Session, schreibt sie über den
@@ -22,7 +17,7 @@ export function AuthHashClient() {
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    const next = safeNext(searchParams.get("next"));
+    const next = safeNextPath(searchParams.get("next"), window.location.origin);
     const fragment = globalThis.location.hash.startsWith("#")
       ? globalThis.location.hash.slice(1)
       : "";

@@ -22,17 +22,38 @@ export type SaveProfileSettingsResult = {
   organizationBilling: { companyName: string; logoUrl: string | null } | null;
 };
 
-function extractAvatarPathFromPublicUrl(url: string): string | null {
+/**
+ * Storage-Pfad aus einer öffentlichen URL lesen — aber NUR, wenn er unter dem
+ * erwarteten Präfix liegt.
+ *
+ * Die Quelle ist nutzerbeschreibbar: `profiles.avatar_url` und
+ * `organizations.logo_url` lassen sich per PostgREST direkt setzen. Gelöscht
+ * wird anschliessend mit dem Service-Role-Client, der die Storage-Policies
+ * umgeht. Ohne diese Prüfung konnte jeder Angemeldete einen fremden Pfad
+ * hinterlegen und ihn per «Bild entfernen» löschen lassen — Profilbilder von
+ * Kolleginnen, Firmenlogos, auch die anderer Mandanten. Kein Lesezugriff,
+ * aber dauerhafter Datenverlust ohne Spur in der Anwendung.
+ */
+function avatarPathWithinPrefix(url: string, erlaubtesPraefix: string): string | null {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim().replace(/\/+$/, "");
+  if (!base || !url.startsWith(`${base}/`)) {
+    return null;
+  }
+  const marker = "/object/public/avatars/";
+  const i = url.indexOf(marker);
+  if (i === -1) {
+    return null;
+  }
+  let pfad: string;
   try {
-    const marker = "/object/public/avatars/";
-    const i = url.indexOf(marker);
-    if (i === -1) {
-      return null;
-    }
-    return decodeURIComponent(url.slice(i + marker.length));
+    pfad = decodeURIComponent(url.slice(i + marker.length));
   } catch {
     return null;
   }
+  if (pfad.includes("..") || !pfad.startsWith(erlaubtesPraefix)) {
+    return null;
+  }
+  return pfad;
 }
 
 function avatarStorageClient(supabase: SupabaseClient): SupabaseClient {
@@ -87,7 +108,9 @@ export async function saveProfileSettingsAction(formData: FormData): Promise<Sav
     avatarUrl = null;
     const old = session.profile.avatarUrl;
     if (old) {
-      const path = extractAvatarPathFromPublicUrl(old);
+      // Nur der eigene Avatar-Ordner — nie ein Pfad, den der Nutzer selbst
+      // in profiles.avatar_url hinterlegt hat.
+      const path = avatarPathWithinPrefix(old, `${authUser.id}/`);
       if (path) {
         await storage.storage.from("avatars").remove([path]);
       }
@@ -147,7 +170,9 @@ export async function saveProfileSettingsAction(formData: FormData): Promise<Sav
     }
 
     if (removeCompanyLogo && organizationLogoUrl) {
-      const oldPath = extractAvatarPathFromPublicUrl(organizationLogoUrl);
+      const oldPath = organizationId
+        ? avatarPathWithinPrefix(organizationLogoUrl, `organizations/${organizationId}/`)
+        : null;
       if (oldPath) {
         await storage.storage.from("avatars").remove([oldPath]);
       }
@@ -161,7 +186,9 @@ export async function saveProfileSettingsAction(formData: FormData): Promise<Sav
       }
       const ext = extForAvatarMime(companyLogoFile.type);
       const path = `organizations/${organizationId}/logo.${ext}`;
-      const oldPath = organizationLogoUrl ? extractAvatarPathFromPublicUrl(organizationLogoUrl) : null;
+      const oldPath = organizationLogoUrl
+        ? avatarPathWithinPrefix(organizationLogoUrl, `organizations/${organizationId}/`)
+        : null;
       const buf = Buffer.from(await companyLogoFile.arrayBuffer());
       const { error: uploadLogoError } = await storage.storage.from("avatars").upload(path, buf, {
         contentType: companyLogoFile.type,
