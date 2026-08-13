@@ -66,6 +66,9 @@ const TECHNICIAN_ALLOWED_PREFIXES = [
   "/auftrag",
   "/kalender",
   "/wochenplan",
+  // Die untere Leiste der Monteur-Ansicht bietet «Zeit» an; ohne diesen Eintrag
+  // wirft die Rollenprüfung den Monteur bei jedem Tippen zurück auf «Mein Tag».
+  "/zeit",
   "/mfa/setup",
   "/onboarding",
   "/anmeldung",
@@ -80,9 +83,16 @@ const TECHNICIAN_ALLOWED_PREFIXES = [
   "/datenschutz",
 ];
 
+/**
+ * Segmentgenau vergleichen, nicht per `startsWith`: Sonst gäbe der Eintrag «/zeit»
+ * auch «/zeiterfassung» frei — die Büro-Seite — und der Monteur käme an Daten,
+ * die ihn nichts angehen.
+ */
 function isTechnicianAllowedPath(pathname: string): boolean {
   if (pathname === "/") return true;
-  return TECHNICIAN_ALLOWED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+  return TECHNICIAN_ALLOWED_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
 }
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
