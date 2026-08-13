@@ -1,9 +1,11 @@
 "use server";
 
 import {
+  requireOfficeSession,
   requireOrgLayoutSession,
   requireTechFieldSession,
 } from "@/lib/auth/organization";
+import { consumeRateLimit } from "@/lib/security/rate-limit";
 import type { ProjectAttachment } from "@/lib/domain/types";
 import type { LayoutSession } from "@/lib/auth/session";
 import {
@@ -169,13 +171,28 @@ export async function createIntakeAction(formData: FormData, tabId?: string) {
  * einem Verwaltungsportal) und liefert erkannte Intake-Felder als Vorbefüllung für
  * «+ Neue Anfrage» zurück. Legt nie selbst ein Projekt an — das Büro prüft und bestätigt.
  */
+/** PDF-Import: 10 Auswertungen je Stunde und Nutzer. */
+const INTAKE_PDF_MAX_PRO_STUNDE = 10;
+/** Deutlich enger als die allgemeinen 15 MB — Auftrags-PDFs sind klein. */
+const INTAKE_PDF_MAX_BYTES = 5 * 1024 * 1024;
+
 export async function extractIntakePdfAction(
   formData: FormData,
 ): Promise<{ success: true; fields: IntakePdfExtraction } | { success: false; error: string }> {
+  // Büro/Admin statt «irgendwer mit Organisation»: Anfragen legt das Büro an.
+  // Jeder Aufruf erzeugt einen kostenpflichtigen KI-Request auf den
+  // serverseitigen Schlüssel — ohne Rollenprüfung und Drosselung könnte ein
+  // Monteur (oder wessen Sitzung noch gültig ist) in einer Schleife beliebige
+  // Kosten und Speicherlast erzeugen.
+  let session;
   try {
-    await requireOrgLayoutSession();
+    session = await requireOfficeSession();
   } catch {
-    return { success: false, error: "Nicht angemeldet." };
+    return { success: false, error: "Keine Berechtigung." };
+  }
+
+  if (!consumeRateLimit(`intake-pdf:${session.userId}`, INTAKE_PDF_MAX_PRO_STUNDE, 3_600_000).allowed) {
+    return { success: false, error: "Zu viele PDF-Auswertungen. Bitte später erneut versuchen." };
   }
 
   const file = formData.get("file") as File | null;
@@ -185,8 +202,8 @@ export async function extractIntakePdfAction(
   if ((file.type || "").toLowerCase() !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
     return { success: false, error: "Nur PDF-Dateien werden unterstützt." };
   }
-  if (file.size > PROJECT_FILE_MAX_BYTES) {
-    return { success: false, error: "Datei darf maximal 15 MB gross sein." };
+  if (file.size > INTAKE_PDF_MAX_BYTES) {
+    return { success: false, error: "PDF darf maximal 5 MB gross sein." };
   }
 
   try {
