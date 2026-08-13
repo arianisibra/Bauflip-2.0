@@ -31,6 +31,19 @@ export async function getMyCalendarConnections(): Promise<CalendarConnection[]> 
   }));
 }
 
+/**
+ * Verbindung speichern — Schreiben der Tokens ausschliesslich mit Service-Role.
+ *
+ * Die Spalten `access_token` und `refresh_token` sind für die Client-Rollen
+ * gesperrt (siehe Migration 20260828200000). Grund: Ein Refresh-Token für
+ * Google/Microsoft gilt AUSSERHALB von Bauflip weiter — Abmelden, Passwortwechsel
+ * oder das Deaktivieren des Bauflip-Kontos entziehen ihn nicht. Wer einmal an
+ * eine Sitzung kommt, läse damit dauerhaft den privaten Kalender der Person,
+ * bis sie den Zugriff bei Google bzw. Microsoft selbst widerruft.
+ *
+ * Die Zuordnung bleibt sicher: `technician_id` stammt aus der serverseitig
+ * geprüften Sitzung, nicht aus der Eingabe.
+ */
 export async function saveMyCalendarConnection(provider: CalendarProvider, tokens: OAuthTokens): Promise<void> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) throw new Error("Supabase nicht verfügbar.");
@@ -39,7 +52,10 @@ export async function saveMyCalendarConnection(provider: CalendarProvider, token
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Nicht angemeldet.");
 
-  const { error } = await supabase.from("technician_calendar_connections").upsert(
+  const admin = createSupabaseAdminClient();
+  if (!admin) throw new Error("Kalenderverbindung nicht verfügbar (Service-Role fehlt).");
+
+  const { error } = await admin.from("technician_calendar_connections").upsert(
     {
       technician_id: user.id,
       provider,
