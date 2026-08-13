@@ -325,13 +325,16 @@ export const getCurrentSession = cache(async function getCurrentSession(): Promi
         String(user.user_metadata?.display_name ?? "").trim() ||
         user.email?.split("@")[0] ||
         "Benutzer";
+      // `role` bewusst NICHT mitschreiben: Die Spalte hat den Default 'office',
+      // und die massgebliche Rolle steht in organization_memberships. Würde der
+      // Nutzer-Client die Rolle setzen dürfen, könnte er sie sich selbst
+      // aussuchen — current_user_role() zieht profiles.role als Rückfallebene.
       const { data: inserted } = await supabase
         .from("profiles")
         .upsert(
           {
             id: user.id,
             display_name: displayName,
-            role,
           },
           { onConflict: "id" },
         )

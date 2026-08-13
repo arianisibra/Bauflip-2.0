@@ -145,7 +145,24 @@ alter policy "profiles_admin_delete" on public.profiles
 --
 -- Die Rolle wird ausschliesslich serverseitig gesetzt (Service-Role bei
 -- Registrierung und Einladungsannahme), nie durch den Nutzer selbst.
-revoke update (role), insert (role) on public.profiles from authenticated, anon;
+--
+-- ACHTUNG, Postgres-Falle: Ein reines `revoke update (role)` bleibt WIRKUNGSLOS,
+-- solange ein TABELLEN-Grant besteht — das Spaltenrecht wird daraus abgeleitet.
+-- Deshalb erst den Tabellen-Grant entziehen, dann spaltenweise neu vergeben.
+revoke update on public.profiles from authenticated, anon;
+revoke insert on public.profiles from authenticated, anon;
+
+-- Genau die Felder, die die App über den Nutzer-Client schreibt:
+-- saveProfileSettingsAction (app/(app)/einstellungen/actions.ts:116) und
+-- die Termin-Einladungs-Einstellung (invite-preference-actions.ts:29).
+grant update (display_name, avatar_url, calendar_color, calendar_position,
+              appointment_invites_enabled)
+  on public.profiles to authenticated;
+
+-- Der Sitzungs-Bootstrap (lib/auth/session.ts) legt fehlende Profile an.
+-- `role` fällt dabei auf den Spalten-Default 'office' zurück und ist für den
+-- Nutzer nicht mehr setzbar; massgeblich bleibt organization_memberships.
+grant insert (id, display_name) on public.profiles to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- K4  technician_report_order_forms: DELETE-Policy ohne Organisationsbezug
