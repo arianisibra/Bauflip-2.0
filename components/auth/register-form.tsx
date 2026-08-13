@@ -48,7 +48,7 @@ export function RegisterForm() {
           <Input
             id="companyName"
             name="companyName"
-            placeholder="Muster Storenbau GmbH"
+            placeholder="Muster AG"
             required
             className="h-11 pl-10"
             autoComplete="organization"
