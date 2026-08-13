@@ -11,23 +11,32 @@ import {
 } from "@/lib/domain/types";
 import { RAPPORT_NEXT_STEP_ICON_KEYS, STAGE_COLOR_KEYS } from "@/lib/domain/stage-visuals";
 
-/** Postmark-Inbound-Webhook-Payload (nur die Felder, die der E-Mail-Intake braucht). */
+/**
+ * Postmark-Inbound-Webhook-Payload (nur die Felder, die der E-Mail-Intake braucht).
+ *
+ * Die Längenbegrenzungen sind Absicht: Der Endpunkt nimmt Daten von aussen an,
+ * und der gesamte Payload liegt beim Verarbeiten im Speicher des einen
+ * Node-Prozesses. Ohne Obergrenze legt ein einziger grosser Anhang den Dienst
+ * für alle Mandanten lahm — und erzeugt einen kostenpflichtigen KI-Aufruf.
+ * Base64 bläht um Faktor ~1.37 auf: 14 MB Content ≈ 10 MB Originaldatei.
+ */
 export const postmarkInboundSchema = z.object({
-  From: z.string().optional(),
-  FromName: z.string().optional(),
-  Subject: z.string().optional(),
-  TextBody: z.string().optional(),
-  StrippedTextReply: z.string().optional(),
-  OriginalRecipient: z.string().optional(),
-  To: z.string().optional(),
+  From: z.string().max(320).optional(),
+  FromName: z.string().max(200).optional(),
+  Subject: z.string().max(500).optional(),
+  TextBody: z.string().max(200_000).optional(),
+  StrippedTextReply: z.string().max(200_000).optional(),
+  OriginalRecipient: z.string().max(320).optional(),
+  To: z.string().max(320).optional(),
   Attachments: z
     .array(
       z.object({
-        Name: z.string().optional(),
-        Content: z.string().optional(),
-        ContentType: z.string().optional(),
+        Name: z.string().max(260).optional(),
+        Content: z.string().max(14_000_000).optional(),
+        ContentType: z.string().max(200).optional(),
       }),
     )
+    .max(20)
     .optional(),
 });
 

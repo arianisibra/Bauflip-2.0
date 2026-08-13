@@ -1,4 +1,6 @@
+import { timingSafeEqual } from "node:crypto";
 import { createProject } from "@/lib/db/repository";
+import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { getOrganizationIdByIntakeEmailToken } from "@/lib/db/intake-email";
 import { extractIntakeFromPdf } from "@/lib/intake/extract-intake-pdf";
 import { extractIntakeFromText } from "@/lib/intake/extract-intake-text";
@@ -10,9 +12,41 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 /**
  * Inbound-E-Mail-Intake: Postmark (oder ein Provider mit kompatiblem Inbound-
  * JSON) postet hierher, sobald eine E-Mail an intake+<token>@<INTAKE_EMAIL_DOMAIN>
- * ankommt. Der Token in der Empfänger-Adresse identifiziert die Org UND dient
- * als Auth — kein Login, keine Session (Server-zu-Server-Webhook).
+ * ankommt. Der Token in der Empfänger-Adresse benennt die Organisation.
+ *
+ * WICHTIG: Der Token allein ist KEINE Authentisierung. Er steht in der
+ * Empfänger-Adresse, die jede Verwaltung und jeder Mieter kennt, und er wird
+ * im JSON vom Aufrufer selbst gesetzt. Wer ihn kennt, könnte sonst beliebig
+ * viele Fake-Aufträge in einen fremden Mandanten schreiben.
+ *
+ * Deshalb verlangt der Endpunkt zusätzlich ein gemeinsames Geheimnis
+ * (INTAKE_WEBHOOK_SECRET) als Basic-Auth-Passwort. Beim Provider trägt man die
+ * URL entsprechend ein:  https://intake:<secret>@app.example.ch/api/intake/email
+ * Ohne gesetztes Secret nimmt der Endpunkt bewusst NICHTS an — lieber ein
+ * stiller Ausfall des Komfort-Features als ein offenes Schreibtor.
  */
+
+const MAX_PAYLOAD_BYTES = 15 * 1024 * 1024;
+
+/** Zeitkonstanter Vergleich — verhindert, dass sich das Secret erraten lässt. */
+function secretsMatch(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
+
+/** Basic-Auth-Passwort aus dem Authorization-Header lesen. */
+function readBasicAuthPassword(header: string | null): string | null {
+  if (!header?.startsWith("Basic ")) return null;
+  try {
+    const decoded = Buffer.from(header.slice(6).trim(), "base64").toString("utf8");
+    const separator = decoded.indexOf(":");
+    return separator === -1 ? null : decoded.slice(separator + 1);
+  } catch {
+    return null;
+  }
+}
 
 function extractToken(recipient: string): string | null {
   const local = recipient.split("@")[0] ?? "";
@@ -29,6 +63,31 @@ function deriveTitle(tenantName: string, fromName: string, subject: string): str
 }
 
 export async function POST(request: Request): Promise<Response> {
+  // 1. Absender authentisieren — VOR dem Lesen des Payloads, damit ein
+  //    Unbefugter nicht einmal Speicher belegen kann.
+  const secret = process.env.INTAKE_WEBHOOK_SECRET?.trim();
+  if (!secret) {
+    console.error("[bauflip] INTAKE_WEBHOOK_SECRET fehlt — E-Mail-Intake ist deaktiviert.");
+    return new Response("E-Mail-Intake nicht konfiguriert.", { status: 503 });
+  }
+  const presented = readBasicAuthPassword(request.headers.get("authorization"));
+  if (!presented || !secretsMatch(presented, secret)) {
+    return new Response("Nicht autorisiert.", { status: 401 });
+  }
+
+  // 2. Grösse begrenzen. Der gesamte Payload liegt beim Verarbeiten im Speicher
+  //    des einen Node-Prozesses — ein OOM trifft alle Mandanten gleichzeitig.
+  const declaredLength = Number(request.headers.get("content-length") ?? "0");
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_PAYLOAD_BYTES) {
+    return new Response("Payload zu gross.", { status: 413 });
+  }
+
+  // 3. Missbrauch drosseln, bevor die (kostenpflichtige) KI-Extraktion läuft.
+  const herkunft = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unbekannt";
+  if (!consumeRateLimit(`intake:ip:${herkunft}`, 60, 60_000).allowed) {
+    return new Response("Zu viele Anfragen.", { status: 429 });
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -46,6 +105,12 @@ export async function POST(request: Request): Promise<Response> {
   const token = extractToken(recipient);
   if (!token) {
     return new Response("Keine Intake-Adresse erkannt.", { status: 404 });
+  }
+
+  // Zweite Drosselung je Organisation: Ein einzelner Mandant soll den Dienst
+  // (und das KI-Budget) nicht für die anderen aufbrauchen.
+  if (!consumeRateLimit(`intake:token:${token}`, 30, 60_000).allowed) {
+    return new Response("Zu viele Anfragen.", { status: 429 });
   }
 
   const organizationId = await getOrganizationIdByIntakeEmailToken(token);
