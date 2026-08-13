@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { hasSupabaseAuthCookie } from "@/lib/auth/cookies";
 import { mapRole } from "@/lib/auth/map-role";
-import { applyProxyAuthContext } from "@/lib/auth/proxy-auth-headers";
+import { applyProxyAuthContext, stripProxyAuthContext } from "@/lib/auth/proxy-auth-headers";
 import { readProxyAuthFromAppMetadata } from "@/lib/auth/user-metadata-keys";
 import type { RoleType } from "@/lib/domain/types";
 
@@ -95,6 +95,37 @@ function isTechnicianAllowedPath(pathname: string): boolean {
   );
 }
 
+/**
+ * Echte Dateiendungen statt «enthält einen Punkt».
+ *
+ * Die frühere Prüfung `pathname.includes(".")` stufte auch `/projekte/a.b` als
+ * Datei ein — ein Pfad, der auf die dynamische Route `/projekte/[id]` passt.
+ * Damit liess sich die gesamte Rollen- und Sitzungsprüfung überspringen.
+ */
+const STATIC_ASSET_PATTERN =
+  /\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff2?|ttf|otf|css|js|map|txt|xml|json|webmanifest)$/i;
+
+/**
+ * Statisch ist nur, was wirklich eine Datei ist: feste Asset-Präfixe oder eine
+ * Datei direkt im Wurzelverzeichnis (alles in `public/` liegt dort).
+ *
+ * Entscheidend ist die Segmenttiefe: `/globe.svg` ist eine Datei, `/projekte/x.svg`
+ * dagegen passt auf die dynamische Route `/projekte/[id]` und MUSS durch die
+ * Authentifizierung. Eine reine Endungsprüfung würde beides gleich behandeln
+ * und die Rollenprüfung für jede Route mit Punkt im letzten Segment aushebeln.
+ */
+function isStaticAssetPath(pathname: string): boolean {
+  if (
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/icons/") ||
+    pathname.startsWith("/favicon")
+  ) {
+    return true;
+  }
+  const segments = pathname.split("/").filter(Boolean);
+  return segments.length === 1 && STATIC_ASSET_PATTERN.test(pathname);
+}
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -119,18 +150,22 @@ async function resolveMembershipRole(
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  const isStaticAsset =
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/favicon") ||
-    pathname.startsWith("/icons") ||
-    pathname.includes(".");
+  // ZUERST und bedingungslos: von aussen mitgeschickte Proxy-Header verwerfen.
+  // Sie sind das interne Signal dieses Proxys an die App — käme eines von
+  // aussen durch, könnte ein Fremder Rolle und Organisation frei wählen und
+  // damit jede Rollenprüfung und jeden Service-Role-Pfad übernehmen.
+  // `forward()` reicht ausschliesslich die bereinigten Header weiter; jeder
+  // Rückgabeweg mit Durchlauf zur App MUSS es benutzen, nie NextResponse.next().
+  const requestHeaders = new Headers(request.headers);
+  stripProxyAuthContext(requestHeaders);
+  const forward = () => NextResponse.next({ request: { headers: requestHeaders } });
 
-  if (isStaticAsset) {
-    return withSecurityHeaders(NextResponse.next());
+  if (isStaticAssetPath(pathname)) {
+    return withSecurityHeaders(forward());
   }
 
   if (PUBLIC_API_PATHS.some((path) => pathname.startsWith(path))) {
-    return withSecurityHeaders(NextResponse.next());
+    return withSecurityHeaders(forward());
   }
 
   const isPublicPath = PUBLIC_PATHS.some((path) => pathname.startsWith(path));
@@ -140,12 +175,12 @@ export async function proxy(request: NextRequest) {
       const loginUrl = new URL("/anmeldung", request.url);
       return withSecurityHeaders(NextResponse.redirect(loginUrl));
     }
-    return withSecurityHeaders(NextResponse.next());
+    return withSecurityHeaders(forward());
   }
 
   // Public pages without auth cookie: skip Supabase auth API entirely.
   if (isPublicPath && !hasSupabaseAuthCookie(request.cookies.getAll())) {
-    return withSecurityHeaders(NextResponse.next());
+    return withSecurityHeaders(forward());
   }
 
   // Protected routes without session cookie: redirect without getUser() round-trip.
@@ -157,14 +192,8 @@ export async function proxy(request: NextRequest) {
     return withSecurityHeaders(NextResponse.redirect(loginUrl));
   }
 
-  const requestHeaders = new Headers(request.headers);
-  const response = withSecurityHeaders(
-    NextResponse.next({
-      request: {
-        headers: requestHeaders,
-      },
-    }),
-  );
+  // requestHeaders stammt von oben — bereits von eingehenden Proxy-Headern befreit.
+  const response = withSecurityHeaders(forward());
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
@@ -233,8 +262,15 @@ function denyTechnician(pathname: string, request: NextRequest): NextResponse {
   return withSecurityHeaders(NextResponse.redirect(new URL("/", request.url)));
 }
 
+/**
+ * Nur feste Asset-Pfade ausnehmen — KEINE generische Endungsregel.
+ *
+ * Die frühere Fassung nahm jeden Pfad auf `.svg`, `.png`, … vom Proxy aus.
+ * Da `/projekte/x.svg` auf die dynamische Route `/projekte/[id]` passt, lief so
+ * ein Server-Action-POST vollständig an der Authentifizierung vorbei — samt
+ * mitgeschickter Proxy-Header. Echte Dateien unter anderen Pfaden fängt jetzt
+ * STATIC_ASSET_PATTERN im Proxy ab, nachdem die Header bereinigt sind.
+ */
 export const config = {
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?|txt|xml)$).*)",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icons/).*)"],
 };
