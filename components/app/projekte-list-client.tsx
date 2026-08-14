@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Info, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useIsNarrowViewport } from "@/lib/hooks/use-is-narrow-viewport";
 import type { OfficeProjectListItem, ProjectStatus } from "@/lib/domain/types";
 import {
   projectStatuses,
@@ -477,6 +478,10 @@ export function ProjekteListClient({
     }
     return listMeta?.totalForFilter ?? projects.length;
   }, [hasSearch, hasNextPage, projects.length, statusCountsSnapshot, statusFilter, listMeta?.totalForFilter]);
+  // Nur den aktiven Zweig mounten statt beide und einen per CSS zu verstecken:
+  // Die versteckte Kartenliste hing sonst vollstaendig im DOM und hob die
+  // Virtualisierung der Tabelle auf.
+  const isNarrow = useIsNarrowViewport();
   const useVirtualTable = sorted.length > PROJECT_TABLE_VIRTUAL_THRESHOLD;
   const scrollParentRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
@@ -754,7 +759,8 @@ export function ProjekteListClient({
           </div>
         ) : (
           <>
-            <div className="flex flex-col divide-y sm:hidden">
+            {isNarrow ? (
+            <div className="flex flex-col divide-y">
               {sorted.map((p) => (
                 <div key={p.id} className="space-y-3 px-4 py-4 first:pt-5 last:pb-5">
                   <button
@@ -822,8 +828,10 @@ export function ProjekteListClient({
                 </div>
               ))}
             </div>
+            ) : null}
 
-            <div className="hidden sm:block">
+            {isNarrow ? null : (
+            <div>
               {useVirtualTable ? (
                 <div
                   ref={scrollParentRef}
@@ -899,6 +907,7 @@ export function ProjekteListClient({
                 </Table>
               )}
             </div>
+            )}
             {hasNextPage ? (
               <div className="border-t border-border/70 px-4 py-4 sm:px-6">
                 <Button
