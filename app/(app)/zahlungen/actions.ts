@@ -102,16 +102,42 @@ export async function confirmPaymentImportAction(values: unknown): Promise<Confi
   let appliedCount = 0;
   let failedCount = 0;
 
+  // Nach Projekt gruppieren und die Gruppen parallel abarbeiten.
+  //
+  // Vorher lief die ganze Liste streng nacheinander, mit je drei Rundreisen zur
+  // Datenbank pro Rechnung — bei einem camt-Auszug mit vielen Zahlungen summiert
+  // sich das spürbar. Innerhalb einer Gruppe bleibt es bewusst sequenziell:
+  // Mehrere Rechnungen desselben Projekts nacheinander abarbeiten verhindert,
+  // dass zwei Schreibvorgänge auf derselben Projektzeile kollidieren.
+  const nachProjekt = new Map<string, typeof applications>();
   for (const application of applications) {
-    try {
-      await setInvoiceStatus(application.invoiceId, application.projectId, "paid", {
-        paidAt: new Date(`${application.valueDate}T12:00:00Z`).toISOString(),
-      });
-      changedProjectIds.add(application.projectId);
-      appliedCount += 1;
-    } catch {
-      failedCount += 1;
-    }
+    const liste = nachProjekt.get(application.projectId) ?? [];
+    liste.push(application);
+    nachProjekt.set(application.projectId, liste);
+  }
+
+  const gruppenErgebnisse = await Promise.all(
+    [...nachProjekt.entries()].map(async ([projectId, gruppe]) => {
+      let erfolg = 0;
+      let fehler = 0;
+      for (const application of gruppe) {
+        try {
+          await setInvoiceStatus(application.invoiceId, projectId, "paid", {
+            paidAt: new Date(`${application.valueDate}T12:00:00Z`).toISOString(),
+          });
+          erfolg += 1;
+        } catch {
+          fehler += 1;
+        }
+      }
+      return { projectId, erfolg, fehler };
+    }),
+  );
+
+  for (const { projectId, erfolg, fehler } of gruppenErgebnisse) {
+    if (erfolg > 0) changedProjectIds.add(projectId);
+    appliedCount += erfolg;
+    failedCount += fehler;
   }
 
   const paymentImport = await createPaymentImportLog(session.organizationId, {
@@ -125,9 +151,12 @@ export async function confirmPaymentImportAction(values: unknown): Promise<Confi
     entriesUnmatched: summary.entriesUnmatched,
   });
 
-  for (const projectId of changedProjectIds) {
-    await publish(session.organizationId, { type: "invoice.changed", projectId });
-  }
+  // Auch hier parallel: Die Benachrichtigungen sind voneinander unabhängig.
+  await Promise.all(
+    [...changedProjectIds].map((projectId) =>
+      publish(session.organizationId!, { type: "invoice.changed", projectId }),
+    ),
+  );
 
   return { appliedCount, failedCount, import: paymentImport };
 }

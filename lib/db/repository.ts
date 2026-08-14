@@ -516,9 +516,14 @@ async function attachNextAppointmentsForProjects(
   if (projects.length === 0) return;
   const projectIds = new Set(projects.map((p) => p.id));
   const nowIso = new Date().toISOString();
+  // Nur die Projekte der aktuellen Liste abfragen statt der ganzen Organisation.
+  // Vorher lieferte die Funktion den nächsten Termin ALLER Projekte des Betriebs
+  // — bei 520 Projekten auch dann, wenn nur eine einzige Zeile angezeigt wird;
+  // gefiltert wurde erst hinterher im Speicher.
   const { data: apRows, error: apErr } = await supabase.rpc("next_appointment_starts_for_org", {
     p_org_id: orgId,
     p_now: nowIso,
+    p_project_ids: [...projectIds],
   });
   if (apErr) {
     console.warn("[bauflip] next_appointment_starts_for_org:", apErr.message);
