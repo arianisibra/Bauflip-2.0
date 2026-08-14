@@ -9,16 +9,12 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { downloadCsv } from "@/lib/csv/download";
 import { useOrgTimeEntries } from "@/lib/query/hooks";
-import { todayKeySwiss } from "@/lib/date/swiss";
+// Gemeinsam mit dem serverseitigen Vorlauf: Der Abfrageschlüssel enthält Start
+// und Ende des Zeitraums. Zwei getrennte Berechnungen könnten auseinanderlaufen —
+// dann läge der vorbereitete Stand unter einem anderen Schlüssel und würde nie
+// gelesen. Siehe lib/zeiterfassung/server-bootstrap.ts.
+import { currentMonthRangeSwiss } from "@/lib/date/swiss";
 import type { TimeEntry } from "@/lib/domain/types";
-
-function currentMonthRange(): { start: string; end: string } {
-  const todayKey = todayKeySwiss();
-  const [y, m] = todayKey.split("-").map(Number);
-  const lastDay = new Date(y!, m!, 0).getDate();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return { start: `${y}-${pad(m!)}-01`, end: `${y}-${pad(m!)}-${pad(lastDay)}` };
-}
 
 /** Seite ist ohnehin admin/office-only (page.tsx-Guard) — beide Rollen sehen auch die Team-Übersicht. */
 export function ZeiterfassungPageClient() {
@@ -63,7 +59,7 @@ export function ZeiterfassungPageClient() {
 }
 
 function TeamOverview() {
-  const [{ start, end }, setRange] = useState(() => currentMonthRange());
+  const [{ start, end }, setRange] = useState(() => currentMonthRangeSwiss());
   const { data: entries = [], isFetching } = useOrgTimeEntries(start, end);
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
 
@@ -113,7 +109,7 @@ function TeamOverview() {
         </div>
         <button
           type="button"
-          onClick={() => setRange(currentMonthRange())}
+          onClick={() => setRange(currentMonthRangeSwiss())}
           className="h-8 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-muted/40"
         >
           Dieser Monat

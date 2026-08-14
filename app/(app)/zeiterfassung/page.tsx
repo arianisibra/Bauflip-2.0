@@ -1,6 +1,10 @@
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
+import { QueryHydrationBoundary } from "@/components/app/query-hydration-boundary";
 import { ZeiterfassungPageClient } from "@/components/app/zeiterfassung-page-client";
+import { BauflipLoading } from "@/components/ui/bauflip-loading";
 import { getLayoutSession } from "@/lib/auth/session";
+import { buildZeiterfassungDehydratedState } from "@/lib/zeiterfassung/server-bootstrap";
 
 export const dynamic = "force-dynamic";
 
@@ -13,5 +17,19 @@ export default async function ZeiterfassungPage() {
     redirect("/onboarding");
   }
 
-  return <ZeiterfassungPageClient />;
+  const dehydratedState = await buildZeiterfassungDehydratedState(session.organizationId);
+
+  return (
+    <QueryHydrationBoundary state={dehydratedState}>
+      <Suspense
+        fallback={
+          <div className="flex justify-center py-16" role="status" aria-live="polite">
+            <BauflipLoading size="sm" label="Zeiterfassung wird geladen …" />
+          </div>
+        }
+      >
+        <ZeiterfassungPageClient />
+      </Suspense>
+    </QueryHydrationBoundary>
+  );
 }

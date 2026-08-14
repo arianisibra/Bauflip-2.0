@@ -89,6 +89,22 @@ export function todayKeySwiss(now = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(now);
 }
 
+/**
+ * Laufender Monat nach Schweizer Zeit als {start, end} im Format YYYY-MM-DD.
+ *
+ * Liegt hier gemeinsam, weil Server und Client denselben Zeitraum berechnen
+ * müssen: Der Abfrageschlüssel der Zeiterfassung enthält Start und Ende. Wären
+ * die beiden Berechnungen auch nur einen Tag auseinander, läge der serverseitig
+ * vorbereitete Stand unter einem anderen Schlüssel und würde nie gelesen.
+ */
+export function currentMonthRangeSwiss(now = new Date()): { start: string; end: string } {
+  const todayKey = todayKeySwiss(now);
+  const [y, m] = todayKey.split("-").map(Number);
+  const lastDay = new Date(y!, m!, 0).getDate();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return { start: `${y}-${pad(m!)}-01`, end: `${y}-${pad(m!)}-${pad(lastDay)}` };
+}
+
 /** Current hour (0-23) in Europe/Zurich. */
 export function currentHourSwiss(now = new Date()): number {
   return Number(
