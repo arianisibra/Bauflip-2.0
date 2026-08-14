@@ -464,21 +464,21 @@ export function AdminCalendar() {
 
   const [viewMode, setViewMode] = useState<AdminCalendarViewMode>(urlState.viewMode);
   const [dayKey, setDayKey] = useState(urlState.dayKey);
-  const [year, setYear] = useState(() => swissYmdParts(anchorDateFromDayKey(urlState.dayKey)).y);
-  const [month, setMonth] = useState(() => swissYmdParts(anchorDateFromDayKey(urlState.dayKey)).m);
-  const [anchorDate, setAnchorDate] = useState(() => anchorDateFromDayKey(urlState.dayKey));
+  // Abgeleitet statt als eigener State: `anchorDate`, `year` und `month` folgen
+  // ausschliesslich `dayKey`. Als State gehalten kostete jede URL-Änderung einen
+  // zusätzlichen Renderdurchgang — `setDayKey` und die drei Folge-Setter liefen
+  // nacheinander, und `new Date(...)` erzeugt bei jedem Lauf ein neues Objekt,
+  // das sich nie gleich vergleicht. `dayKey` ist eine Zeichenkette und stabil.
+  const anchorDate = useMemo(() => anchorDateFromDayKey(dayKey), [dayKey]);
+  const { y: year, m: month } = useMemo(() => swissYmdParts(anchorDate), [anchorDate]);
   const [calendarNowTs] = useState(() => Date.now());
   const [selectedTechnicianId, setSelectedTechnicianId] = useState(urlState.selectedTechnicianId);
   const [sortMode, setSortMode] = useState<"time" | "technician">(urlState.sortMode);
   const skipUrlPushRef = useRef(false);
 
+  // anchorDate/year/month folgen automatisch — hier genügt der Tagesschlüssel.
   const applyDayKey = useCallback((nextDayKey: string) => {
     setDayKey(nextDayKey);
-    const ad = anchorDateFromDayKey(nextDayKey);
-    setAnchorDate(ad);
-    const { y, m } = swissYmdParts(ad);
-    setYear(y);
-    setMonth(m);
   }, []);
 
   useEffect(() => {
@@ -663,15 +663,7 @@ export function AdminCalendar() {
   }, [viewMode, visibleTasks, sortAppointmentGroups]);
 
   const bumpDayKey = useCallback((deltaDays: number) => {
-    setDayKey((k) => {
-      const next = shiftSwissDayKey(k, deltaDays);
-      const ad = anchorDateFromDayKey(next);
-      setAnchorDate(ad);
-      const { y, m } = swissYmdParts(ad);
-      setYear(y);
-      setMonth(m);
-      return next;
-    });
+    setDayKey((k) => shiftSwissDayKey(k, deltaDays));
   }, []);
 
   const navigateMonth = useCallback(
@@ -723,15 +715,13 @@ export function AdminCalendar() {
 
   const onViewModeChange = useCallback((next: AdminCalendarViewMode) => {
     setViewMode(next);
-    if (next === "year" || next === "month") {
-      const { y, m } = swissYmdParts(anchorDate);
-      setYear(y);
-      setMonth(m);
-    }
+    // Für «Jahr» und «Monat» ist nichts mehr nachzuziehen: year/month leiten
+    // sich bereits aus anchorDate ab. Nur die Wochenansicht springt auf den
+    // Anker des angezeigten Monats.
     if (next === "week") {
       applyDayKey(dayKeyFromDate(anchorDateForYearMonth(year, month)));
     }
-  }, [anchorDate, year, month, applyDayKey]);
+  }, [year, month, applyDayKey]);
 
   const dayPickerValue = dayKey;
   const monthPickerValue = useMemo(() => `${year}-${String(month).padStart(2, "0")}`, [year, month]);
