@@ -48,24 +48,43 @@ async function resolveRecipients(userIds: string[]): Promise<string[]> {
       .map((p) => p.id),
   );
 
-  const emails: string[] = [];
-  for (const id of ids) {
-    if (!enabled.has(id)) continue;
-    try {
-      const { data } = await admin.auth.admin.getUserById(id);
-      const email = data.user?.email?.trim();
-      if (email) emails.push(email);
-    } catch {
-      // Einzelner Lookup-Fehler darf die übrigen Einladungen nicht verhindern.
-    }
-  }
-  return emails;
+  // Parallel statt nacheinander: Die Abfragen sind voneinander unabhängig, und
+  // der Versand hängt an dieser Kette.
+  const ergebnisse = await Promise.all(
+    ids
+      .filter((id) => enabled.has(id))
+      .map(async (id) => {
+        try {
+          const { data } = await admin.auth.admin.getUserById(id);
+          return data.user?.email?.trim() || null;
+        } catch {
+          // Einzelner Lookup-Fehler darf die übrigen Einladungen nicht verhindern.
+          return null;
+        }
+      }),
+  );
+  return ergebnisse.filter((email): email is string => Boolean(email));
 }
 
-async function buildEventBase(
+/**
+ * Alles, was für das Ereignis nötig ist und NICHT vom Empfänger abhängt.
+ *
+ * Vorher holte die Aufbaufunktion Projekt und Branding für jeden Empfänger neu —
+ * bei zwei zugewiesenen Monteuren also vier Abfragen für dasselbe Projekt.
+ * Der Kontext wird jetzt einmal geladen, das Ereignis daraus je Empfänger gebaut.
+ */
+type EinladungsKontext = {
+  fromAddress: string;
+  organizerName: string;
+  summary: string;
+  description: string | null;
+  location: string | null;
+  sequence: number;
+};
+
+async function ladeEinladungsKontext(
   appointment: InviteAppointmentData,
-  attendeeEmail: string,
-): Promise<CalendarInviteEvent | null> {
+): Promise<EinladungsKontext | null> {
   const fromAddress = getMailFromAddress();
   if (!fromAddress) return null;
 
@@ -99,14 +118,31 @@ async function buildEventBase(
   ].filter(Boolean);
 
   return {
-    uid: `${appointment.appointmentId}@bauflip`,
-    sequence: Math.floor(Date.now() / 1000),
-    startsAtIso: appointment.startsAtIso,
-    endsAtIso: appointment.endsAtIso,
+    fromAddress,
+    organizerName: branding.name,
     summary: `${kindLabel}: ${project.title}`,
     description: descriptionParts.length > 0 ? descriptionParts.join("\n") : null,
     location: location || null,
-    organizer: { name: branding.name, email: fromAddress },
+    // Einmal bestimmt statt je Empfänger: Dasselbe Ereignis soll bei allen
+    // Beteiligten dieselbe Sequenznummer tragen.
+    sequence: Math.floor(Date.now() / 1000),
+  };
+}
+
+function baueEreignis(
+  kontext: EinladungsKontext,
+  appointment: InviteAppointmentData,
+  attendeeEmail: string,
+): CalendarInviteEvent {
+  return {
+    uid: `${appointment.appointmentId}@bauflip`,
+    sequence: kontext.sequence,
+    startsAtIso: appointment.startsAtIso,
+    endsAtIso: appointment.endsAtIso,
+    summary: kontext.summary,
+    description: kontext.description,
+    location: kontext.location,
+    organizer: { name: kontext.organizerName, email: kontext.fromAddress },
     attendeeEmail,
   };
 }
@@ -128,16 +164,19 @@ export async function sendAppointmentInvites(
     );
     if (recipients.length === 0) return;
 
+    // Einmal laden, nicht je Empfänger.
+    const kontext = await ladeEinladungsKontext(appointment);
+    if (!kontext) return;
+    const kindLabel = KIND_LABELS[appointment.kind] ?? "Termin";
+    const dateLabel = new Date(appointment.startsAtIso).toLocaleString("de-CH", {
+      timeZone: "Europe/Zurich",
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+
     for (const email of recipients) {
-      const event = await buildEventBase(appointment, email);
-      if (!event) return;
+      const event = baueEreignis(kontext, appointment, email);
       const ics = method === "REQUEST" ? buildInviteRequest(event) : buildInviteCancel(event);
-      const kindLabel = KIND_LABELS[appointment.kind] ?? "Termin";
-      const dateLabel = new Date(appointment.startsAtIso).toLocaleString("de-CH", {
-        timeZone: "Europe/Zurich",
-        dateStyle: "medium",
-        timeStyle: "short",
-      });
       await sendMail({
         to: email,
         subject:
