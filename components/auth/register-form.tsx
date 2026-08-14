@@ -10,7 +10,12 @@ import { TurnstileField } from "@/components/auth/turnstile-field";
 
 const hasTurnstileSiteKey = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
-export function RegisterForm() {
+/**
+ * `requiresCode` steuert nur die ANZEIGE des Feldes. Die eigentliche Prüfung
+ * sitzt in der Server Action — sie ist ein öffentlicher Endpunkt und lässt sich
+ * ohne dieses Formular aufrufen.
+ */
+export function RegisterForm({ requiresCode = false }: { requiresCode?: boolean }) {
   const [state, formAction] = useActionState(registerOrganizationAction, null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const submitBlocked = hasTurnstileSiteKey && !turnstileToken;
@@ -40,6 +45,19 @@ export function RegisterForm() {
           {state.error}
         </div>
       )}
+
+      {requiresCode ? (
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="registrationCode">Einladungscode</Label>
+          <Input
+            id="registrationCode"
+            name="registrationCode"
+            required
+            autoComplete="off"
+            placeholder="Von Ihrem Ansprechpartner erhalten"
+          />
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="companyName">Firmenname</Label>

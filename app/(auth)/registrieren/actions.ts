@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
+import { checkRegistrationAllowed } from "@/lib/security/registration-mode";
 import { verifyTurnstileToken } from "@/lib/security/turnstile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -21,6 +22,15 @@ export async function registerOrganizationAction(
   formData: FormData,
 ): Promise<RegisterState> {
   const raw = Object.fromEntries(formData.entries());
+
+  // ZUERST: Darf hier überhaupt registriert werden? Server Actions sind
+  // öffentliche HTTP-Endpunkte — wer die Seite gar nicht aufruft, umgeht jede
+  // Prüfung, die nur beim Anzeigen stattfindet.
+  const zugang = checkRegistrationAllowed(String(raw.registrationCode ?? ""));
+  if (!zugang.ok) {
+    return { error: zugang.error };
+  }
+
   const parsed = registerOrganizationSchema.safeParse({
     companyName: raw.companyName,
     displayName: raw.displayName,

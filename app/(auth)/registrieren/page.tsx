@@ -3,8 +3,15 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { RegisterForm } from "@/components/auth/register-form";
+import { resolveRegistrationMode } from "@/lib/security/registration-mode";
+
+// Der Modus steckt in einer Umgebungsvariablen — die Seite darf nicht
+// vorgerendert und zwischengespeichert werden, sonst zeigt sie nach einer
+// Umstellung noch tagelang den alten Zustand.
+export const dynamic = "force-dynamic";
 
 export default function RegistrierenPage() {
+  const modus = resolveRegistrationMode();
   return (
     <main className="relative min-h-screen overflow-hidden bg-gradient-to-b from-background to-accent/20">
       <div className="absolute inset-0 pointer-events-none">
@@ -38,11 +45,23 @@ export default function RegistrierenPage() {
                 Firma registrieren
               </CardTitle>
               <CardDescription>
-                Legen Sie Ihre Organisation an und starten Sie sofort — kein Vertragsabschluss nötig.
+                {modus === "closed"
+                  ? "Neue Firmen werden persönlich eingerichtet."
+                  : "Legen Sie Ihre Organisation an und starten Sie sofort — kein Vertragsabschluss nötig."}
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-2">
-              <RegisterForm />
+              {modus === "closed" ? (
+                <div className="space-y-4 text-center">
+                  <p className="rounded-lg border border-border/70 bg-muted/30 px-4 py-3 text-sm leading-relaxed text-muted-foreground">
+                    Die Registrierung ist derzeit geschlossen. Wenn Sie Bauflip nutzen möchten,
+                    wenden Sie sich bitte an Ihren Ansprechpartner — wir richten Ihre Firma
+                    gemeinsam mit Ihnen ein.
+                  </p>
+                </div>
+              ) : (
+                <RegisterForm requiresCode={modus === "code"} />
+              )}
 
               <p className="mt-4 text-center text-xs leading-relaxed text-muted-foreground">
                 Indem Sie registrieren, stimmen Sie unseren{" "}
