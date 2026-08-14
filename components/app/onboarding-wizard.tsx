@@ -64,9 +64,16 @@ export function OnboardingWizard({ initialCompanyName }: { initialCompanyName: s
           await updateOrganizationNameAction(trimmed);
         }
       } else if (step === 1) {
-        for (const stage of stages) {
-          const edited = stageLabels[stage.id]?.trim();
-          if (edited && edited !== stage.label) {
+        // Parallel statt nacheinander: Die Schritte sind voneinander unabhängig.
+        // Sequenziell wartete der Nutzer beim Umbenennen von 16 Arbeitsschritten
+        // auf 16 aufeinanderfolgende Rundreisen zum Server.
+        // (Eine echte Sammelaktion in einer Transaktion wäre die vollständige
+        // Lösung; sie änderte aber nichts am Verhalten bei Teilfehlern, das hier
+        // schon vorher galt.)
+        await Promise.all(
+          stages.map(async (stage) => {
+            const edited = stageLabels[stage.id]?.trim();
+            if (!edited || edited === stage.label) return;
             await updateStage.mutateAsync({
               stageId: stage.id,
               values: {
@@ -89,18 +96,19 @@ export function OnboardingWizard({ initialCompanyName }: { initialCompanyName: s
                 rapportNextStepIcon: stage.rapportNextStepIcon,
               },
             });
-          }
-        }
+          }),
+        );
       } else if (step === 2) {
-        for (const t of transitions) {
-          const edited = transitionLabels[t.id]?.trim();
-          if (edited && edited !== t.actionLabel) {
+        await Promise.all(
+          transitions.map(async (t) => {
+            const edited = transitionLabels[t.id]?.trim();
+            if (!edited || edited === t.actionLabel) return;
             await updateTransition.mutateAsync({
               transitionId: t.id,
               values: { fromKey: t.fromKey, toKey: t.toKey, actionLabel: edited, sortOrder: t.sortOrder },
             });
-          }
-        }
+          }),
+        );
       }
       return true;
     } catch (e) {
