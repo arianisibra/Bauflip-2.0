@@ -546,6 +546,35 @@ export async function setInvoiceStatus(
   };
 }
 
+const BEXIO_PUSH_CLAIM_STALE_MS = 5 * 60 * 1000;
+
+/**
+ * Atomarer Claim vor dem eigentlichen Bexio-Push (Fund H5, Audit 2): verhindert,
+ * dass zwei gleichzeitige Aufrufe (Auto-Push beim Versand + manueller Retry,
+ * oder Doppelklick) beide einen Bexio-Debitorenbeleg für dieselbe Rechnung
+ * anlegen. Das bedingte UPDATE ist durch die Zeilensperre von Postgres atomar:
+ * der zweite gleichzeitige Aufruf sieht bexio_push_started_at bereits gesetzt
+ * und bekommt 0 Zeilen zurück. Ein Claim älter als 5 Minuten gilt als verwaist
+ * (abgebrochener Prozess) und darf erneut versucht werden.
+ */
+export async function claimInvoiceForBexioPush(invoiceId: string): Promise<boolean> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) throw new Error("Supabase nicht verfügbar.");
+
+  const staleBefore = new Date(Date.now() - BEXIO_PUSH_CLAIM_STALE_MS).toISOString();
+  const { data, error } = await supabase
+    .from("invoices")
+    .update({ bexio_push_started_at: new Date().toISOString() })
+    .eq("id", invoiceId)
+    .is("bexio_invoice_id", null)
+    .or(`bexio_push_started_at.is.null,bexio_push_started_at.lt.${staleBefore}`)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return data != null;
+}
+
 /** Bexio-Push-Status setzen (Teil B) — Erfolg löscht einen evtl. vorherigen Fehler. */
 export async function updateInvoiceBexioSync(
   invoiceId: string,
@@ -556,7 +585,7 @@ export async function updateInvoiceBexioSync(
 
   const patch =
     "bexioSyncError" in result
-      ? { bexio_sync_error: result.bexioSyncError }
+      ? { bexio_sync_error: result.bexioSyncError, bexio_push_started_at: null }
       : {
           bexio_invoice_id: result.bexioInvoiceId,
           bexio_synced_at: result.bexioSyncedAt,

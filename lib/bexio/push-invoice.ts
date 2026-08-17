@@ -9,7 +9,7 @@ import {
 import { resolveBexioContactId } from "@/lib/bexio/contacts";
 import { getBexioToken } from "@/lib/bexio/secrets";
 import { getBexioSettings } from "@/lib/db/bexio";
-import { getProjectForBexio, updateInvoiceBexioSync } from "@/lib/db/invoices";
+import { claimInvoiceForBexioPush, getProjectForBexio, updateInvoiceBexioSync } from "@/lib/db/invoices";
 import type { Invoice } from "@/lib/domain/types";
 
 /**
@@ -20,6 +20,13 @@ import type { Invoice } from "@/lib/domain/types";
  */
 export async function pushInvoiceToBexio(organizationId: string, invoice: Invoice): Promise<number> {
   if (invoice.bexioInvoiceId) return invoice.bexioInvoiceId;
+
+  // Atomarer Claim VOR dem ersten Bexio-API-Aufruf — verhindert doppelte
+  // Debitorenbelege bei gleichzeitigen Aufrufen (Auto-Push + manueller Retry).
+  const claimed = await claimInvoiceForBexioPush(invoice.id);
+  if (!claimed) {
+    throw new Error("Bexio-Übertragung läuft bereits oder ist abgeschlossen.");
+  }
 
   try {
     const token = await getBexioToken(organizationId);
