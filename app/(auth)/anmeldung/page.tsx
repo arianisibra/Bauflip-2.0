@@ -1,11 +1,30 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { AlertCircle, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoginForm } from "@/components/auth/login-form";
 
-export default function AnmeldungPage() {
+/**
+ * Fehlercodes, die /auth/confirm bzw. /auth/hash bei einer fehlgeschlagenen
+ * E-Mail-Link-Bestätigung anhängen (Einladung, Passwort-Reset, Magic-Link).
+ * Ohne diese Zuordnung landete man kommentarlos auf der leeren Login-Maske —
+ * nicht erkennbar, ob der Link abgelaufen, bereits benutzt oder ungültig war.
+ */
+const CONFIRM_ERROR_MESSAGES: Record<string, string> = {
+  invite:
+    "Der Link konnte nicht bestätigt werden — er ist entweder abgelaufen, bereits verwendet oder ungültig. Bitte fordern Sie eine neue Einladung bzw. einen neuen Link an.",
+  config: "Anmeldung derzeit nicht verfügbar. Bitte später erneut versuchen.",
+};
+
+type PageProps = {
+  searchParams: Promise<{ error?: string }>;
+};
+
+export default async function AnmeldungPage({ searchParams }: PageProps) {
+  const sp = await searchParams;
+  const errorMessage = sp.error ? (CONFIRM_ERROR_MESSAGES[sp.error] ?? null) : null;
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-gradient-to-b from-background to-accent/20">
       <div className="absolute inset-0 pointer-events-none">
@@ -43,6 +62,12 @@ export default function AnmeldungPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-2">
+              {errorMessage && (
+                <div className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
+                  <AlertCircle className="size-4 shrink-0" />
+                  {errorMessage}
+                </div>
+              )}
               <LoginForm />
 
               <div className="mt-4 text-center">
