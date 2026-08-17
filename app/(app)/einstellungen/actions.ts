@@ -10,7 +10,8 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ensureCurrentOrganizationId, requireAdminSession } from "@/lib/auth/organization";
 import { getCurrentSession } from "@/lib/auth/session";
-import { listTeamMembersForOrg } from "@/lib/db/repository";
+import { getOrganizationBranding, listTeamMembersForOrg } from "@/lib/db/repository";
+import { isMailConfigured, sendMail } from "@/lib/mail/send";
 import type { TeamMemberListItem } from "@/lib/mitarbeiter/types";
 import { publish } from "@/lib/realtime/publish";
 import { AVATAR_MAX_BYTES, AVATAR_MIME, extForAvatarMime } from "@/lib/storage/mime";
@@ -324,7 +325,58 @@ export async function inviteEmployeeAction(formData: FormData) {
   });
 
   if (authInviteError) {
-    throw new Error("Einladungs-Mail konnte nicht versendet werden.");
+    // Supabase erlaubt inviteUserByEmail nur für Adressen ohne bestehendes
+    // Auth-Konto (422 "email_exists"). Genau das trifft zu, wenn ein früherer
+    // Einladungslink nie fertig abgeschlossen wurde — der Klick darauf legt
+    // bereits ein bestätigtes Auth-Konto an (siehe /auth/hash), auch wenn nie
+    // ein Passwort gesetzt und die Einladung nie akzeptiert wurde. Ohne diesen
+    // Zweig wäre ein zweiter Einladungsversuch für dieselbe Person dauerhaft
+    // blockiert.
+    const emailExists =
+      (authInviteError as { status?: number; code?: string }).status === 422 ||
+      (authInviteError as { code?: string }).code === "email_exists" ||
+      /already.*registered/i.test(authInviteError.message);
+    if (!emailExists) {
+      throw new Error("Einladungs-Mail konnte nicht versendet werden.");
+    }
+
+    const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
+      type: "magiclink",
+      email,
+      options: { redirectTo },
+    });
+    if (linkError || !linkData?.user) {
+      throw new Error("Einladungs-Mail konnte nicht versendet werden.");
+    }
+
+    // Echter Konflikt statt einer nie abgeschlossenen alten Einladung: wer
+    // bereits eine aktive Mitgliedschaft hat, bekommt keinen neuen Link.
+    const { data: existingMembership } = await adminClient
+      .from("organization_memberships")
+      .select("organization_id")
+      .eq("user_id", linkData.user.id)
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle();
+    if (existingMembership) {
+      throw new Error("Diese E-Mail-Adresse gehört bereits zu einem aktiven Konto.");
+    }
+
+    if (!isMailConfigured()) {
+      throw new Error("Einladungs-Mail konnte nicht versendet werden (SMTP nicht konfiguriert).");
+    }
+    const branding = await getOrganizationBranding(organizationId);
+    const text =
+      `Guten Tag\n\n` +
+      `Sie wurden zu «${branding.name}» auf Bauflip eingeladen. Über den folgenden Link ` +
+      `schliessen Sie Ihr Konto ab (Passwort setzen):\n\n${linkData.properties.action_link}\n\n` +
+      `Der Link ist einmalig gültig.\n\nFreundliche Grüsse\n${branding.name}`;
+    await sendMail({
+      to: email,
+      subject: `Einladung zu ${branding.name} auf Bauflip`,
+      text,
+      fromName: branding.name,
+    });
   }
 
   await publish(organizationId, { type: "membership.changed" });
