@@ -34,7 +34,7 @@ async function publishAsync(orgId: string, event: PublishedEvent): Promise<void>
   if (!admin) return;
 
   const channel: RealtimeChannel = admin.channel(orgChannelName(orgId), {
-    config: { broadcast: { self: false } },
+    config: { broadcast: { self: false }, private: true },
   });
 
   const result = await channel.httpSend(REALTIME_BROADCAST_EVENT, event, {

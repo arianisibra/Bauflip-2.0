@@ -100,7 +100,7 @@ export function RealtimeBridge({ orgId }: { orgId: string | null }): null {
       }
 
       channel = supabase.channel(orgChannelName(orgId), {
-        config: { broadcast: { self: false } },
+        config: { broadcast: { self: false }, private: true },
       });
 
       channel.on("broadcast", { event: REALTIME_BROADCAST_EVENT }, (msg) => {
