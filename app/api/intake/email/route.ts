@@ -2,7 +2,12 @@ import { timingSafeEqual } from "node:crypto";
 import { createProject } from "@/lib/db/repository";
 import { getTrustedClientIp } from "@/lib/security/client-ip";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
-import { getOrganizationIdByIntakeEmailToken } from "@/lib/db/intake-email";
+import {
+  claimIntakeEmailMessage,
+  getOrganizationIdByIntakeEmailToken,
+  recordIntakeEmailProject,
+  releaseIntakeEmailClaim,
+} from "@/lib/db/intake-email";
 import { extractIntakeFromPdf } from "@/lib/intake/extract-intake-pdf";
 import { extractIntakeFromText } from "@/lib/intake/extract-intake-text";
 import type { IntakePdfExtraction } from "@/lib/validations/forms";
@@ -124,6 +129,16 @@ export async function POST(request: Request): Promise<Response> {
     return new Response("E-Mail-Intake nicht verfügbar (Service-Role fehlt).", { status: 500 });
   }
 
+  // Idempotenz: Postmark liefert bei Zeitüberschreitung erneut zu — ohne
+  // diesen Claim entstünde pro Wiederholung ein weiterer Projektentwurf.
+  const messageId = mail.MessageID?.trim() || null;
+  if (messageId) {
+    const claim = await claimIntakeEmailMessage(messageId, organizationId);
+    if (!claim.claimed) {
+      return Response.json({ projectId: claim.existingProjectId }, { status: 200 });
+    }
+  }
+
   const subject = mail.Subject ?? "";
   const bodyText = (mail.StrippedTextReply || mail.TextBody || "").trim();
   const fromAddress = (mail.From ?? "").trim();
@@ -170,10 +185,19 @@ export async function POST(request: Request): Promise<Response> {
       serviceCountry: "CH",
     }, admin);
 
+    if (messageId) {
+      await recordIntakeEmailProject(messageId, project.id);
+    }
     await publish(organizationId, { type: "project.core_changed", projectId: project.id });
 
     return Response.json({ projectId: project.id }, { status: 200 });
   } catch (e) {
+    // Claim wieder freigeben — sonst würde ein Postmark-Retry nach einem
+    // fehlgeschlagenen Versuch dauerhaft leer laufen (Claim bereits vergeben,
+    // aber nie ein Projekt entstanden).
+    if (messageId) {
+      await releaseIntakeEmailClaim(messageId).catch(() => {});
+    }
     return new Response(e instanceof Error ? e.message : "Anlegen fehlgeschlagen.", { status: 500 });
   }
 }

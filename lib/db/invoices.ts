@@ -351,6 +351,7 @@ export type InvoiceForPaymentMatching = {
   invoiceNumber: string | null;
   paymentReference: string | null;
   totalGross: number;
+  deductedAmount: number;
   status: InvoiceStatus;
 };
 
@@ -367,7 +368,7 @@ export const listInvoicesForPaymentMatching = cache(async function listInvoicesF
 
   const { data, error } = await supabase
     .from("invoices")
-    .select("id, project_id, invoice_number, payment_reference, total_gross, status")
+    .select("id, project_id, invoice_number, payment_reference, total_gross, deducted_amount, status")
     .eq("organization_id", organizationId)
     .in("status", ["sent", "paid"])
     .not("payment_reference", "is", null);
@@ -390,6 +391,7 @@ export const listInvoicesForPaymentMatching = cache(async function listInvoicesF
     invoiceNumber: row.invoice_number != null ? String(row.invoice_number) : null,
     paymentReference: row.payment_reference != null ? String(row.payment_reference) : null,
     totalGross: Number(row.total_gross ?? 0),
+    deductedAmount: Number(row.deducted_amount ?? 0),
     status: mapInvoiceStatus(row.status),
   }));
 });
@@ -488,6 +490,34 @@ export async function deleteInvoice(invoiceId: string): Promise<void> {
 }
 
 /**
+ * Akonto-Abzug einer Schlussrechnung unmittelbar vor dem Versand neu
+ * berechnen (Fund "Akonto-Abzug eingefroren", Audit 2). `deducted_amount`
+ * wird sonst nur bei Erstellung/Bearbeitung gesetzt — wird zwischen dem
+ * Anlegen der Schlussrechnung und ihrem tatsächlichen Versand eine weitere
+ * Akontorechnung versendet (oder eine bestehende storniert), zeigt das
+ * eingefrorene PDF einen falschen Restbetrag. Nur für "final"-Rechnungen im
+ * Entwurf relevant — keine Wirkung sonst.
+ */
+export async function refreshFinalInvoiceDeduction(invoice: Invoice): Promise<Invoice> {
+  if (invoice.invoiceKind !== "final" || invoice.status !== "draft") return invoice;
+
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) throw new Error("Supabase nicht verfügbar.");
+
+  const deductedAmount = await sumDepositInvoices(supabase, invoice.projectId, invoice.id);
+  if (deductedAmount === invoice.deductedAmount) return invoice;
+
+  const { error } = await supabase
+    .from("invoices")
+    .update({ deducted_amount: deductedAmount })
+    .eq("id", invoice.id)
+    .eq("status", "draft");
+  if (error) throw new Error(error.message);
+
+  return { ...invoice, deductedAmount };
+}
+
+/**
  * Rechnungs-Status setzen (Matrix serverseitig validiert); setzt sent_at/paid_at.
  * `paidAt` überschreibt das Bezahlt-Datum (z. B. Valuta-Datum aus einem camt-Import) —
  * ohne Angabe wird "jetzt" verwendet.
@@ -509,10 +539,8 @@ export async function setInvoiceStatus(
     .maybeSingle();
   if (existingError) throw new Error(existingError.message);
   if (!existing) throw new Error("Rechnung nicht gefunden.");
-  assertAllowedInvoiceStatusTransition(
-    mapInvoiceStatus((existing as { status?: string }).status),
-    status,
-  );
+  const fromStatus = mapInvoiceStatus((existing as { status?: string }).status);
+  assertAllowedInvoiceStatusTransition(fromStatus, status);
 
   const patch: Record<string, unknown> = { status };
   if (status === "sent") {
@@ -525,14 +553,23 @@ export async function setInvoiceStatus(
     patch.paid_at = opts?.paidAt ?? new Date().toISOString();
   }
 
+  // Bedingtes UPDATE (optimistische Sperre, analog setQuoteStatus): verhindert,
+  // dass ein gleichzeitiger zweiter Aufruf (z. B. "bezahlt" markieren, während
+  // parallel storniert wird) den inzwischen veränderten Status überschreibt.
   const { data, error } = await supabase
     .from("invoices")
     .update(patch)
     .eq("id", invoiceId)
     .eq("project_id", projectId)
+    .eq("status", fromStatus)
     .select(INVOICE_DB_COLUMNS)
-    .single();
-  if (error || !data) throw new Error(error?.message ?? "Status konnte nicht gesetzt werden.");
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) {
+    throw new Error(
+      "Der Status hat sich inzwischen geändert — bitte die Seite neu laden und erneut versuchen.",
+    );
+  }
 
   const { data: items } = await supabase
     .from("invoice_line_items")

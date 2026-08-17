@@ -62,15 +62,40 @@ export async function pushInvoiceToBexio(organizationId: string, invoice: Invoic
       is_valid_to: invoice.dueDate ? `${invoice.dueDate} 00:00:00` : null,
       reference: invoice.invoiceNumber ?? "",
       api_reference: invoice.id,
-      positions: invoice.lineItems.map((item) => ({
-        amount: String(item.quantity),
-        unit_id: unitId,
-        account_id: settings.accountId as number,
-        tax_id: settings.taxId as number,
-        text: item.description,
-        unit_price: item.unitPrice.toFixed(2),
-        discount_in_percent: "0",
-      })),
+      // Rabatt (invoice.discountPercent) auf jede Position übertragen — Bexio
+      // kennt keinen Rechnungs-weiten Rabatt, nur pro Position. Ein einheitlicher
+      // Prozentsatz je Position ergibt dieselbe Summe wie unser rechnungsweiter
+      // Rabatt (computeQuoteTotals.ts). Ohne dies wich der gebuchte Debitor vom
+      // tatsächlich versendeten QR-Betrag ab, sobald ein Rabatt gewährt wurde.
+      positions: [
+        ...invoice.lineItems.map((item) => ({
+          amount: String(item.quantity),
+          unit_id: unitId,
+          account_id: settings.accountId as number,
+          tax_id: settings.taxId as number,
+          text: item.description,
+          unit_price: item.unitPrice.toFixed(2),
+          discount_in_percent: invoice.discountPercent.toFixed(2),
+        })),
+        // Akonto-Abzug als eigene Negativposition abbilden — Bexio hat kein
+        // Feld für einen Rechnungs-weiten Abzug. Sonst zeigt der gebuchte
+        // Debitor den vollen Betrag, obwohl der Kunde nur den Restbetrag
+        // ueberwiesen hat (siehe invoice-pdf.ts: amountDue = totalGross -
+        // deductedAmount).
+        ...(invoice.invoiceKind === "final" && invoice.deductedAmount > 0
+          ? [
+              {
+                amount: "1",
+                unit_id: unitId,
+                account_id: settings.accountId as number,
+                tax_id: settings.taxId as number,
+                text: "Bereits akontiert",
+                unit_price: (-invoice.deductedAmount).toFixed(2),
+                discount_in_percent: "0",
+              },
+            ]
+          : []),
+      ],
     });
 
     await updateInvoiceBexioSync(invoice.id, {

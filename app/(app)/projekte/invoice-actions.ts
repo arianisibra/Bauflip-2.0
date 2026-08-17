@@ -9,6 +9,7 @@ import {
   deleteInvoice,
   getInvoiceWithItems,
   listInvoicesForProject,
+  refreshFinalInvoiceDeduction,
   setInvoiceStatus,
   updateInvoice,
 } from "@/lib/db/invoices";
@@ -114,13 +115,17 @@ export async function sendInvoiceAction(values: unknown, tabId?: string): Promis
   }
   assertMailRateLimit(session.userId);
 
-  const invoice = await getInvoiceWithItems(parsed.data.invoiceId);
+  let invoice = await getInvoiceWithItems(parsed.data.invoiceId);
   if (!invoice || invoice.projectId !== parsed.data.projectId) {
     throw new Error("Rechnung nicht gefunden.");
   }
   if (invoice.status !== "draft" && invoice.status !== "sent") {
     throw new Error("Bezahlte oder stornierte Rechnungen können nicht versendet werden.");
   }
+  // Akonto-Abzug unmittelbar vor dem PDF neu berechnen — zwischen dem Anlegen
+  // dieser Schlussrechnung und dem tatsächlichen Versand kann eine weitere
+  // Akontorechnung dazugekommen oder storniert worden sein.
+  invoice = await refreshFinalInvoiceDeduction(invoice);
 
   const [project, branding, billing] = await Promise.all([
     getQuotePdfProjectHead(invoice.projectId),

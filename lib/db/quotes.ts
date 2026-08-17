@@ -379,10 +379,8 @@ export async function setQuoteStatus(
     .maybeSingle();
   if (existingError) throw new Error(existingError.message);
   if (!existing) throw new Error("Offerte nicht gefunden.");
-  assertAllowedQuoteStatusTransition(
-    mapQuoteStatus((existing as { status?: string }).status),
-    status,
-  );
+  const fromStatus = mapQuoteStatus((existing as { status?: string }).status);
+  assertAllowedQuoteStatusTransition(fromStatus, status);
 
   const patch: Record<string, unknown> = { status };
   if (status === "pending_approval") {
@@ -416,14 +414,26 @@ export async function setQuoteStatus(
     patch.decided_at = new Date().toISOString();
   }
 
+  // Bedingtes UPDATE (optimistische Sperre): ohne den status-Filter könnte ein
+  // gleichzeitiger zweiter Aufruf (z. B. Admin weist zurück, während der Kunde
+  // gerade zusagt) den inzwischen veränderten Status stillschweigend
+  // überschreiben — beide Übergänge sind für sich genommen aus "sent" gültig,
+  // der DB-Trigger sieht das Wettrennen also nicht. Wer die Zeile nicht mehr
+  // im erwarteten Ausgangsstatus antrifft, verliert und muss neu laden.
   const { data, error } = await supabase
     .from("quotes")
     .update(patch)
     .eq("id", quoteId)
     .eq("project_id", projectId)
+    .eq("status", fromStatus)
     .select(QUOTE_DB_COLUMNS)
-    .single();
-  if (error || !data) throw new Error(error?.message ?? "Status konnte nicht gesetzt werden.");
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) {
+    throw new Error(
+      "Der Status hat sich inzwischen geändert — bitte die Seite neu laden und erneut versuchen.",
+    );
+  }
 
   const nextProjectStatus = projectStatusAfterQuoteStatusChange(status);
   if (nextProjectStatus) {

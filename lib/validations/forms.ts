@@ -21,6 +21,7 @@ import { RAPPORT_NEXT_STEP_ICON_KEYS, STAGE_COLOR_KEYS } from "@/lib/domain/stag
  * Base64 bläht um Faktor ~1.37 auf: 14 MB Content ≈ 10 MB Originaldatei.
  */
 export const postmarkInboundSchema = z.object({
+  MessageID: z.string().max(200).optional(),
   From: z.string().max(320).optional(),
   FromName: z.string().max(200).optional(),
   Subject: z.string().max(500).optional(),

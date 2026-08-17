@@ -21,6 +21,7 @@ function invoice(overrides: Partial<MatchableInvoice> = {}): MatchableInvoice {
     invoiceNumber: "RE-2026-1001",
     paymentReference: "210000000003139471430009017",
     totalGross: 1334.49,
+    deductedAmount: 0,
     status: "sent",
     ...overrides,
   };
@@ -53,6 +54,23 @@ describe("matchCamtEntries", () => {
       [invoice({ totalGross: 1334.49 })],
     );
     assert.equal(result.kind, "matched");
+  });
+
+  it("matches against totalGross minus deductedAmount, not the full invoice amount (Akonto-Abzug)", () => {
+    const [result] = matchCamtEntries(
+      [entry({ amount: 834.49 })],
+      [invoice({ totalGross: 1334.49, deductedAmount: 500 })],
+    );
+    assert.equal(result.kind, "matched");
+  });
+
+  it("flags a mismatch when a deposit-deducted invoice is paid at the full (undeducted) amount", () => {
+    const [result] = matchCamtEntries(
+      [entry({ amount: 1334.49 })],
+      [invoice({ totalGross: 1334.49, deductedAmount: 500 })],
+    );
+    assert.equal(result.kind, "amountMismatch");
+    if (result.kind === "amountMismatch") assert.equal(result.expectedAmount, 834.49);
   });
 
   it("marks a reference match against an already-paid invoice as alreadyPaid, not matched", () => {

@@ -19,6 +19,8 @@ export type MatchableInvoice = {
   invoiceNumber: string | null;
   paymentReference: string | null;
   totalGross: number;
+  /** Akonto-Abzug bei Schlussrechnungen — der tatsächlich geforderte Betrag ist totalGross - deductedAmount. */
+  deductedAmount: number;
   status: InvoiceStatus;
 };
 
@@ -67,8 +69,15 @@ export function matchCamtEntries<T extends MatchableInvoice>(
 
     if (invoice.status === "paid") return { kind: "alreadyPaid", entry, invoice };
 
-    if (!amountsEqual(entry.amount, invoice.totalGross)) {
-      return { kind: "amountMismatch", entry, invoice, expectedAmount: invoice.totalGross };
+    // Bei Schlussrechnungen mit Akonto-Abzug ist der auf dem QR-Zahlteil
+    // gedruckte (und vom Kunden tatsächlich überwiesene) Betrag totalGross
+    // minus deductedAmount, nicht der volle Rechnungsbetrag (invoice-pdf.ts:
+    // `amountDue = totalGross - deductedAmount`). Ein Vergleich gegen den
+    // vollen Betrag hätte jede bezahlte Schlussrechnung mit Abzug fälschlich
+    // als "amountMismatch" gemeldet.
+    const expectedAmount = invoice.totalGross - invoice.deductedAmount;
+    if (!amountsEqual(entry.amount, expectedAmount)) {
+      return { kind: "amountMismatch", entry, invoice, expectedAmount };
     }
 
     return { kind: "matched", entry, invoice };
