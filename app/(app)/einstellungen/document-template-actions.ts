@@ -91,20 +91,30 @@ export async function hasRapportDocumentTemplateAction(): Promise<boolean> {
   return templates.length > 0;
 }
 
-export async function uploadDocumentTemplateAction(formData: FormData): Promise<DocumentTemplate> {
+export type UploadDocumentTemplateResult =
+  | { ok: true; template: DocumentTemplate }
+  | { ok: false; error: string };
+
+/**
+ * Gibt Fehler als Wert zurück statt zu werfen: Next.js maskiert in Produktion jeden aus
+ * einer Server Action geworfenen Fehler zu einer generischen Meldung (nur der Digest
+ * erreicht den Client, der Klartext bleibt im Server-Log) — die Upload-Validierung
+ * (unbekannte Platzhalter etc.) ist aber gezielt für den Nutzer gedacht.
+ */
+export async function uploadDocumentTemplateAction(formData: FormData): Promise<UploadDocumentTemplateResult> {
   const session = await requireAdminLayoutSession();
-  if (!session.organizationId) throw new Error("Keine Organisation.");
+  if (!session.organizationId) return { ok: false, error: "Keine Organisation." };
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
-    throw new Error("Bitte eine Word-Vorlage (.docx) wählen.");
+    return { ok: false, error: "Bitte eine Word-Vorlage (.docx) wählen." };
   }
   if (file.size > MAX_TEMPLATE_BYTES) {
-    throw new Error("Datei ist zu gross (max. 10 MB).");
+    return { ok: false, error: "Datei ist zu gross (max. 10 MB)." };
   }
   const isDocx = file.type === DOCX_MIME || file.name.toLowerCase().endsWith(".docx");
   if (!isDocx) {
-    throw new Error("Nur Word-Dateien (.docx) werden unterstützt.");
+    return { ok: false, error: "Nur Word-Dateien (.docx) werden unterstützt." };
   }
 
   const name = String(formData.get("name") ?? "").trim() || file.name.replace(/\.docx$/i, "");
@@ -121,16 +131,28 @@ export async function uploadDocumentTemplateAction(formData: FormData): Promise<
     if (unknownTags.length > 0) {
       const shown = unknownTags.slice(0, 8).map((t) => `{${t}}`).join(", ");
       const rest = unknownTags.length > 8 ? ` … (+${unknownTags.length - 8})` : "";
-      throw new Error(
-        `Diese Vorlage nutzt unbekannte Platzhalter: ${shown}${rest}. ` +
+      return {
+        ok: false,
+        error:
+          `Diese Vorlage nutzt unbekannte Platzhalter: ${shown}${rest}. ` +
           `Bitte nur die dokumentierten Bauflip-Felder verwenden (z. B. ${spec.beispiele}). ` +
           `Sonst bleiben die Felder leer.`,
-      );
+      };
     }
   }
 
   const profile = await getCachedSessionProfile(session);
-  return createDocumentTemplate(session.organizationId, { kind, name, makeDefault }, bytes, profile.userId);
+  try {
+    const template = await createDocumentTemplate(
+      session.organizationId,
+      { kind, name, makeDefault },
+      bytes,
+      profile.userId,
+    );
+    return { ok: true, template };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Vorlage konnte nicht angelegt werden." };
+  }
 }
 
 export async function setDefaultDocumentTemplateAction(input: {

@@ -1101,7 +1101,11 @@ export function useDocumentTemplates(enabled = true) {
 export function useUploadDocumentTemplate() {
   const qc = useQueryClient();
   return useMutation<DocumentTemplate, Error, FormData>({
-    mutationFn: (formData) => uploadDocumentTemplateAction(formData),
+    mutationFn: async (formData) => {
+      const result = await uploadDocumentTemplateAction(formData);
+      if (!result.ok) throw new Error(result.error);
+      return result.template;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.documentTemplates() });
       qc.invalidateQueries({ queryKey: queryKeys.hasOfferDocumentTemplate() });
