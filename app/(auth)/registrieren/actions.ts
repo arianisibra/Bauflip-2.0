@@ -9,8 +9,51 @@ import { verifyTurnstileToken } from "@/lib/security/turnstile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { registerOrganizationSchema } from "@/lib/validations/forms";
+import { isMailConfigured, sendMail } from "@/lib/mail/send";
 
 export type RegisterState = { error?: string; confirmEmailSent?: boolean } | null;
+
+/**
+ * Benachrichtigt den Betreiber über eine neue, wartende Registrierung —
+ * mit Freigabe-/Ablehnungs-Link. Text-only (lib/mail/send.ts kennt kein
+ * HTML), analog zu allen anderen Mails in der App. Best-effort: siehe
+ * Aufrufstelle, ein Mailfehler darf die Registrierung nicht rückgängig machen.
+ */
+async function notifyOperatorOfPendingRegistration(input: {
+  organizationName: string;
+  registrantEmail: string;
+  registrantDisplayName: string;
+  approvalToken: string;
+}): Promise<void> {
+  if (!isMailConfigured()) return;
+  const notifyTo = process.env.REGISTRATION_APPROVAL_NOTIFY_EMAIL?.trim();
+  if (!notifyTo) {
+    console.error(
+      "[bauflip] REGISTRATION_APPROVAL_NOTIFY_EMAIL fehlt — niemand wird über wartende Registrierungen benachrichtigt.",
+    );
+    return;
+  }
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, "");
+  if (!siteUrl) return;
+  const approveUrl = `${siteUrl}/api/registrierung/freigabe?token=${input.approvalToken}&entscheid=freigeben`;
+  const rejectUrl = `${siteUrl}/api/registrierung/freigabe?token=${input.approvalToken}&entscheid=ablehnen`;
+
+  const text =
+    `Neue Firma wartet auf Freigabe:\n\n` +
+    `Firma: ${input.organizationName}\n` +
+    `Ansprechpartner: ${input.registrantDisplayName}\n` +
+    `E-Mail: ${input.registrantEmail}\n\n` +
+    `Freigeben:  ${approveUrl}\n` +
+    `Ablehnen:   ${rejectUrl}\n\n` +
+    `Beide Links funktionieren nur einmal.`;
+
+  await sendMail({
+    to: notifyTo,
+    subject: `Neue Registrierung wartet auf Freigabe: ${input.organizationName}`,
+    text,
+  });
+}
 
 /**
  * Self-Service-Registrierung: legt Org + Admin-Profil + Mitgliedschaft an, sobald
@@ -93,9 +136,20 @@ export async function registerOrganizationAction(
       .upsert({ id: user.id, role: "admin", display_name: displayName }, { onConflict: "id" });
     if (profileError) throw new Error(profileError.message);
 
+    // Freigabe-Workflow: die Firma entsteht sofort, bleibt aber auf
+    // approval_status="pending", bis der Betreiber den Link in der
+    // Benachrichtigungsmail (unten) anklickt. Der Token ist selbst die
+    // Authentisierung des Links (Capability-URL, analog intake_email_token).
+    const approvalToken = crypto.randomUUID().replace(/-/g, "");
     const { data: newOrg, error: orgError } = await admin
       .from("organizations")
-      .insert({ name: companyName, created_by: user.id })
+      .insert({
+        name: companyName,
+        created_by: user.id,
+        approval_status: "pending",
+        approval_token: approvalToken,
+        approval_requested_at: new Date().toISOString(),
+      })
       .select("id")
       .single();
     if (orgError || !newOrg) {
@@ -121,6 +175,19 @@ export async function registerOrganizationAction(
       app_metadata: { ...user.app_metadata, role: "admin", organization_id: newOrg.id },
     });
     if (metaError) throw new Error(metaError.message);
+
+    // Betreiber benachrichtigen — best-effort: ein SMTP-Ausfall darf die
+    // Registrierung nicht rückgängig machen (der Betreiber kann die wartende
+    // Firma sonst zwar nicht per Mail sehen, aber weiterhin direkt in der DB).
+    // Deshalb bewusst NICHT im try/catch, das oben den Nutzer wieder löscht.
+    void notifyOperatorOfPendingRegistration({
+      organizationName: companyName,
+      registrantEmail: email,
+      registrantDisplayName: displayName,
+      approvalToken,
+    }).catch((err) => {
+      console.error("[bauflip] Freigabe-Benachrichtigung an Betreiber fehlgeschlagen:", err);
+    });
   } catch {
     await admin.auth.admin.deleteUser(user.id).catch(() => {});
     return { error: "Registrierung fehlgeschlagen. Bitte erneut versuchen oder Support kontaktieren." };

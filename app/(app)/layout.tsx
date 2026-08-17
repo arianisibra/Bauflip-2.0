@@ -6,6 +6,8 @@ import { OrganizationBrandingProvider } from "@/components/app/organization-bran
 import { SidebarNav } from "@/components/app/sidebar-nav";
 import { ThemeToggle } from "@/components/app/theme-toggle";
 import { getCachedSessionProfile, getLayoutSession } from "@/lib/auth/session";
+import { getOrganizationApprovalStatus } from "@/lib/db/organization-approval";
+import { OrganizationApprovalScreen } from "@/components/app/organization-approval-screen";
 import { getOrganizationBranding } from "@/lib/db/repository";
 import { getOrgWorkflowStages, getOrgWorkflowTransitions } from "@/lib/db/workflow";
 import { isOrganizationOnboardingPending } from "@/lib/db/onboarding";
@@ -33,6 +35,22 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       redirect("/mfa/setup");
     }
   }
+
+  // Freigabe-Workflow: eine frisch selbstregistrierte Firma hat sofort eine
+  // gültige Sitzung (Rolle+Org stehen in app_metadata), darf die App aber
+  // erst nach Freigabe durch den Betreiber sehen. Ersetzt die gesamte App
+  // statt zu redirecten — es gibt keine Route, zu der ein wartender Nutzer
+  // stattdessen dürfte.
+  if (session.organizationId) {
+    const approval = await getOrganizationApprovalStatus(session.organizationId);
+    if (approval.status === "pending") {
+      return <OrganizationApprovalScreen status="pending" />;
+    }
+    if (approval.status === "rejected") {
+      return <OrganizationApprovalScreen status="rejected" reason={approval.rejectionReason} />;
+    }
+  }
+
   const items = getVisibleSidebarItems(role);
   const [profile, branding, workflowStages, workflowTransitions, onboardingPending] = await Promise.all([
     getCachedSessionProfile(session),

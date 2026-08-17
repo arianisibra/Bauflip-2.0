@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isAdminMfaRequiredAndMissing } from "@/lib/auth/mfa";
 import { syncUserAuthMetadata } from "@/lib/auth/sync-user-auth-metadata";
 import { getLayoutSession, type LayoutSession } from "@/lib/auth/session";
+import { getOrganizationApprovalStatus } from "@/lib/db/organization-approval";
 import { canAccessTechFieldRoutes, type RoleType } from "@/lib/domain/types";
 
 function isOfficeRole(role: RoleType): boolean {
@@ -29,6 +30,22 @@ async function ensureMfaSatisfied(session: LayoutSession): Promise<void> {
 }
 
 /**
+ * Freigabe-Workflow: eine selbstregistrierte Firma hat sofort eine gültige
+ * Sitzung, darf aber erst nach Freigabe durch den Betreiber echte Aktionen
+ * ausführen. Ohne diese Prüfung würde nur die UI (app/(app)/layout.tsx)
+ * sperren — Server Actions sind öffentliche HTTP-Endpunkte und liessen sich
+ * mit dem Next-Action-Header direkt aufrufen, am Layout vorbei (dasselbe
+ * Muster wie ensureMfaSatisfied()).
+ */
+async function ensureOrganizationApproved(session: LayoutSession): Promise<void> {
+  if (!session.organizationId) return;
+  const { status } = await getOrganizationApprovalStatus(session.organizationId);
+  if (status !== "approved") {
+    throw new Error("Ihre Firma wartet noch auf Freigabe durch den Betreiber.");
+  }
+}
+
+/**
  * MFA-Gate für SSR-Seiten (page.tsx), die dieselben Daten liefern wie eine
  * abgesicherte Server Action. `app/(app)/layout.tsx` prüft den zweiten Faktor
  * nur beim ersten Rendern — Next.js re-rendert Layouts bei Client-Navigation
@@ -51,6 +68,7 @@ export async function requireOfficeSession(): Promise<LayoutSession> {
     throw new Error("Keine Berechtigung.");
   }
   await ensureMfaSatisfied(session);
+  await ensureOrganizationApproved(session);
   return session;
 }
 
@@ -60,6 +78,10 @@ export async function getOfficeSessionOrNull(): Promise<LayoutSession | null> {
   // Auch hier prüfen: Diese Variante bedient u. a. die PDF-Routen, die sonst
   // ohne zweiten Faktor Offerten und Rechnungen herausgäben.
   if (await isAdminMfaRequiredAndMissing(session)) return null;
+  if (session.organizationId) {
+    const { status } = await getOrganizationApprovalStatus(session.organizationId);
+    if (status !== "approved") return null;
+  }
   return session;
 }
 
@@ -69,6 +91,7 @@ export async function requireAdminLayoutSession(): Promise<LayoutSession> {
     throw new Error("Nur Admins dürfen diese Aktion ausführen.");
   }
   await ensureMfaSatisfied(session);
+  await ensureOrganizationApproved(session);
   return session;
 }
 
@@ -92,6 +115,7 @@ export async function requireOrgLayoutSession(): Promise<LayoutSession & { organ
     throw new Error("Nicht angemeldet.");
   }
   await ensureMfaSatisfied(session);
+  await ensureOrganizationApproved(session);
   return session as LayoutSession & { organizationId: string };
 }
 

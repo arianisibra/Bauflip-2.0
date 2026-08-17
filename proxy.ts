@@ -31,7 +31,11 @@ const PUBLIC_PATHS = [
 // bekämen Monteure darauf 403 aus der Rollenprüfung — ausgerechnet die Nutzer
 // mit den langlebigsten Tabs. Ausserdem spart der frühe Ausstieg den
 // Supabase-Roundtrip bei jeder Prüfung.
-const PUBLIC_API_PATHS = ["/api/intake/email", "/api/version"];
+// /api/registrierung/freigabe wird ausschliesslich per Klick aus der
+// Betreiber-Benachrichtigungsmail aufgerufen — der Betreiber hat dort keine
+// Bauflip-Session (der Link geht an eine externe Mailadresse, nicht an einen
+// eingeloggten Tab). Der Capability-Token IM Link ist die Authentisierung.
+const PUBLIC_API_PATHS = ["/api/intake/email", "/api/version", "/api/registrierung/freigabe"];
 
 function withSecurityHeaders(res: NextResponse): NextResponse {
   const isProd = process.env.NODE_ENV === "production";
