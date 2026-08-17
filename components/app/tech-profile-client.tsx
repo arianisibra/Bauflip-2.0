@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { LogOut, Moon, Sun } from "lucide-react";
 import { logoutAction } from "@/app/(app)/logout-action";
+import { clearBauflipRuntimeCaches } from "@/lib/auth/clear-client-caches";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const MIN_PASSWORD_LENGTH = 10;
@@ -225,6 +226,7 @@ export function TechProfileClient({ displayName, email }: Props) {
             disabled={isSigningOut}
             onClick={() => {
               startSignOut(async () => {
+                await clearBauflipRuntimeCaches();
                 await logoutAction();
               });
             }}

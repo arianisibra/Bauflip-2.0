@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ChevronDown, LogOut, Settings } from "lucide-react";
 import { logoutAction } from "@/app/(app)/logout-action";
+import { clearBauflipRuntimeCaches } from "@/lib/auth/clear-client-caches";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -68,7 +69,7 @@ export function UserAvatarButton({ organizationName, organizationLogoUrl }: User
           className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive"
           onSelect={(e) => {
             e.preventDefault();
-            void logoutAction();
+            void clearBauflipRuntimeCaches().then(() => logoutAction());
           }}
         >
           <LogOut className="size-4" />
