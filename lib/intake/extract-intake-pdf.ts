@@ -84,8 +84,13 @@ export async function extractIntakeFromPdf(pdfBase64: string): Promise<IntakePdf
   });
 
   if (!response.ok) {
+    // Der rohe Antwortkörper der KI-API landet nur im Server-Log, nie in der
+    // an den Client zurückgegebenen Fehlermeldung — er kann interne Details
+    // des Anbieters (Anfragestruktur, Ratenlimit-Zustand) enthalten, die für
+    // Endnutzer weder nötig noch gedacht sind.
     const detail = await response.text().catch(() => "");
-    throw new Error(`PDF-Extraktion fehlgeschlagen (${response.status}). ${detail.slice(0, 200)}`);
+    console.error(`[bauflip] PDF-Extraktion fehlgeschlagen (${response.status}):`, detail.slice(0, 500));
+    throw new Error("PDF-Extraktion fehlgeschlagen. Bitte die Felder manuell erfassen.");
   }
 
   const data = (await response.json()) as {

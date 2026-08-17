@@ -119,6 +119,7 @@ export async function createContact(
     .select(CONTACT_DB_COLUMNS)
     .single();
   if (error || !data) {
+    if (error?.code === "23505") throw new Error("Diese Kundennummer ist bereits vergeben.");
     throw new Error(error?.message ?? "Kontakt konnte nicht gespeichert werden.");
   }
   return mapContactRow(data as Record<string, unknown>);
@@ -134,6 +135,7 @@ export async function updateContact(contactId: string, input: ContactWriteInput)
     .eq("id", contactId)
     .select(CONTACT_DB_COLUMNS)
     .maybeSingle();
+  if (error?.code === "23505") throw new Error("Diese Kundennummer ist bereits vergeben.");
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Kontakt nicht gefunden.");
   return mapContactRow(data as Record<string, unknown>);

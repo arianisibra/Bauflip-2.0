@@ -86,20 +86,18 @@ export async function syncBusyCalendar(
     const now = Date.now();
     const intervals = parseIcsBusyIntervals(text, now - SYNC_PAST_MS, now + SYNC_FUTURE_MS);
 
-    // Cache atomar ersetzen: alt weg, neu rein.
-    const del = await admin.from("technician_busy_events").delete().eq("technician_id", technicianId);
-    if (del.error) throw new Error(del.error.message);
-
-    if (intervals.length > 0) {
-      const rows = intervals.map((iv) => ({
-        technician_id: technicianId,
-        organization_id: organizationId,
+    // Cache atomar ersetzen (RPC mit Advisory-Lock + einer Transaktion) —
+    // verhindert doppelte Sperrzeiten bei gleichzeitigen Sync-Läufen
+    // (Cron + manueller "Jetzt synchronisieren"-Button).
+    const { error } = await admin.rpc("sync_technician_busy_events", {
+      p_technician_id: technicianId,
+      p_organization_id: organizationId,
+      p_intervals: intervals.map((iv) => ({
         starts_at: new Date(iv.startMs).toISOString(),
         ends_at: new Date(iv.endMs).toISOString(),
-      }));
-      const ins = await admin.from("technician_busy_events").insert(rows);
-      if (ins.error) throw new Error(ins.error.message);
-    }
+      })),
+    });
+    if (error) throw new Error(error.message);
 
     await setSyncStatus(technicianId, null);
     return intervals.length;
