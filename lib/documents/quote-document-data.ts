@@ -33,6 +33,7 @@ export type QuoteDocumentInput = {
     creditorCity: string | null;
     phone: string | null;
     email: string | null;
+    vatNumber: string | null;
   } | null;
   quote: Pick<
     Quote,
@@ -56,6 +57,7 @@ export type QuoteDocumentInput = {
     | "servicePostalCode"
     | "serviceCity"
     | "referenceCode"
+    | "customerNumber"
   >;
 };
 
@@ -78,6 +80,7 @@ export type QuoteDocumentData = {
   firma_adresse: string;
   firma_telefon: string;
   firma_email: string;
+  firma_mwst_nr: string;
   offerte_nummer: string;
   projekt_titel: string;
   datum: string;
@@ -117,6 +120,7 @@ export const QUOTE_DOCUMENT_FIELDS: { key: keyof QuoteDocumentData; label: strin
   { key: "firma_adresse", label: "Firma Adresse (kombiniert)", example: "Musterweg 3, 8000 Zürich" },
   { key: "firma_telefon", label: "Firma Telefon", example: "044 123 45 67" },
   { key: "firma_email", label: "Firma E-Mail", example: "info@bauflip-storen.ch" },
+  { key: "firma_mwst_nr", label: "Firma MwSt.-Nr.", example: "CHE-123.456.789" },
   { key: "offerte_nummer", label: "Offert-Nummer", example: "OF-2026-014" },
   { key: "projekt_titel", label: "Projekt-/Offert-Titel", example: "Storenreparatur Balkon" },
   { key: "datum", label: "Offert-Datum", example: "13.07.2026" },
@@ -143,6 +147,7 @@ export const SAMPLE_QUOTE_DOCUMENT_DATA: QuoteDocumentData = {
   firma_adresse: "Musterweg 3, 8000 Zürich",
   firma_telefon: "044 123 45 67",
   firma_email: "info@bauflip-storen.ch",
+  firma_mwst_nr: "CHE-123.456.789",
   offerte_nummer: "OF-2026-014",
   projekt_titel: "Storenreparatur Balkon",
   datum: "13.07.2026",
@@ -213,6 +218,7 @@ export function buildQuoteDocumentData(input: QuoteDocumentInput): QuoteDocument
     firma_adresse: [firmaStrasse, firmaPlzOrt].filter(Boolean).join(", "),
     firma_telefon: billing?.phone ?? "",
     firma_email: billing?.email ?? "",
+    firma_mwst_nr: billing?.vatNumber ?? "",
     offerte_nummer: quote.quoteNumber ?? "",
     projekt_titel: project.title,
     datum: formatDateCh(quote.createdAt),
@@ -232,7 +238,7 @@ export function buildQuoteDocumentData(input: QuoteDocumentInput): QuoteDocument
     mwst_satz: `${quote.vatRate}%`,
     mwst_betrag: chf.format(quote.totalGross - quote.totalNet),
     total_brutto: chf.format(quote.totalGross),
-    kundennummer: "",
+    kundennummer: project.customerNumber ?? "",
     lieferfrist: "",
     eigentuemer: project.managementName ?? "",
     briefanrede: "",

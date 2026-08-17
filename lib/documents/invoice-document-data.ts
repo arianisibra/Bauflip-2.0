@@ -27,6 +27,7 @@ export type InvoiceDocumentInput = {
     creditorCity: string | null;
     phone: string | null;
     email: string | null;
+    vatNumber: string | null;
   } | null;
   invoice: Pick<
     Invoice,
@@ -51,6 +52,7 @@ export type InvoiceDocumentInput = {
     | "servicePostalCode"
     | "serviceCity"
     | "referenceCode"
+    | "customerNumber"
   >;
 };
 
@@ -72,6 +74,7 @@ export type InvoiceDocumentData = {
   firma_adresse: string;
   firma_telefon: string;
   firma_email: string;
+  firma_mwst_nr: string;
   rechnung_nummer: string;
   projekt_titel: string;
   datum: string;
@@ -90,6 +93,7 @@ export type InvoiceDocumentData = {
   mwst_satz: string;
   mwst_betrag: string;
   total_brutto: string;
+  kundennummer: string;
 };
 
 /** Beispiel-Datensatz — für die Vorlagen-Prüfung beim Upload (alle Felder belegt). */
@@ -100,6 +104,7 @@ export const SAMPLE_INVOICE_DOCUMENT_DATA: InvoiceDocumentData = {
   firma_adresse: "Musterweg 3, 8000 Zürich",
   firma_telefon: "044 123 45 67",
   firma_email: "info@bauflip-storen.ch",
+  firma_mwst_nr: "CHE-123.456.789",
   rechnung_nummer: "RE-2026-014",
   projekt_titel: "Storenreparatur Balkon",
   datum: "13.07.2026",
@@ -128,6 +133,7 @@ export const SAMPLE_INVOICE_DOCUMENT_DATA: InvoiceDocumentData = {
   mwst_satz: "8.1%",
   mwst_betrag: "34.02",
   total_brutto: "454.02",
+  kundennummer: "K-1024",
 };
 
 /** Alle gültigen Platzhalter-Namen für die Upload-Prüfung. */
@@ -144,6 +150,7 @@ export const INVOICE_DOCUMENT_FIELDS: { key: keyof InvoiceDocumentData; label: s
   { key: "firma_adresse", label: "Firma Adresse (kombiniert)", example: "Musterweg 3, 8000 Zürich" },
   { key: "firma_telefon", label: "Firma Telefon", example: "044 123 45 67" },
   { key: "firma_email", label: "Firma E-Mail", example: "info@bauflip-storen.ch" },
+  { key: "firma_mwst_nr", label: "Firma MwSt.-Nr.", example: "CHE-123.456.789" },
   { key: "rechnung_nummer", label: "Rechnungsnummer", example: "RE-2026-014" },
   { key: "projekt_titel", label: "Projekt-Titel", example: "Storenreparatur Balkon" },
   { key: "datum", label: "Rechnungsdatum", example: "13.07.2026" },
@@ -160,6 +167,7 @@ export const INVOICE_DOCUMENT_FIELDS: { key: keyof InvoiceDocumentData; label: s
   { key: "mwst_satz", label: "MwSt.-Satz", example: "8.1%" },
   { key: "mwst_betrag", label: "MwSt.-Betrag", example: "34.02" },
   { key: "total_brutto", label: "Total brutto", example: "454.02" },
+  { key: "kundennummer", label: "Kundennummer", example: "K-1024" },
 ];
 
 export function buildInvoiceDocumentData(input: InvoiceDocumentInput): InvoiceDocumentData {
@@ -188,6 +196,7 @@ export function buildInvoiceDocumentData(input: InvoiceDocumentInput): InvoiceDo
     firma_adresse: [firmaStrasse, firmaPlzOrt].filter(Boolean).join(", "),
     firma_telefon: billing?.phone ?? "",
     firma_email: billing?.email ?? "",
+    firma_mwst_nr: billing?.vatNumber ?? "",
     rechnung_nummer: invoice.invoiceNumber ?? "",
     projekt_titel: project.title,
     datum: formatDateCh(invoice.createdAt),
@@ -206,5 +215,6 @@ export function buildInvoiceDocumentData(input: InvoiceDocumentInput): InvoiceDo
     mwst_satz: `${invoice.vatRate}%`,
     mwst_betrag: chf.format(invoice.totalGross - invoice.totalNet),
     total_brutto: chf.format(invoice.totalGross),
+    kundennummer: project.customerNumber ?? "",
   };
 }
