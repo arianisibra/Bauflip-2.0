@@ -28,6 +28,7 @@ import {
   useProjectInvoices,
   useProjectQuotes,
   useBexioConnected,
+  useHasInvoiceDocumentTemplate,
   usePushInvoiceToBexio,
   useQuoteMailConfig,
   useSetInvoiceStatus,
@@ -83,6 +84,7 @@ export function ProjektInvoicesSection({
   const mailConfig = useQuoteMailConfig(canEdit);
   const bexioConnected = useBexioConnected(canEdit).data ?? false;
   const mailConfigured = mailConfig.data?.mailConfigured ?? false;
+  const hasInvoiceTemplate = useHasInvoiceDocumentTemplate(canEdit).data ?? false;
 
   /** null = geschlossen; { invoice: null } = neu; { invoice } = bearbeiten. */
   const [editor, setEditor] = useState<{ invoice: Invoice | null } | null>(null);
@@ -263,6 +265,14 @@ export function ProjektInvoicesSection({
                       PDF öffnen
                     </a>
                   </DropdownMenuItem>
+                  {hasInvoiceTemplate ? (
+                    <DropdownMenuItem asChild>
+                      <a href={`/api/invoices/${invoice.id}/document`} target="_blank" rel="noreferrer">
+                        <FileText className="size-4" aria-hidden />
+                        Als Word öffnen
+                      </a>
+                    </DropdownMenuItem>
+                  ) : null}
                   {canSend ? (
                     <DropdownMenuItem onSelect={() => setSendTarget(invoice)}>
                       <Send className="size-4" aria-hidden />

@@ -77,6 +77,66 @@ export type InvoiceDocumentData = {
   total_brutto: string;
 };
 
+/** Beispiel-Datensatz — für die Vorlagen-Prüfung beim Upload (alle Felder belegt). */
+export const SAMPLE_INVOICE_DOCUMENT_DATA: InvoiceDocumentData = {
+  firma_name: "Bauflip Storen AG",
+  rechnung_nummer: "RE-2026-014",
+  projekt_titel: "Storenreparatur Balkon",
+  datum: "13.07.2026",
+  faellig: "12.08.2026",
+  ansprechpartner: "M. Muster",
+  kunde_name: "Familie Muster",
+  verwaltung_name: "Muster Immobilien AG",
+  objekt_strasse: "Musterstrasse 12",
+  objekt_plz_ort: "8600 Dübendorf",
+  objekt: "Musterstrasse 12, 8600 Dübendorf",
+  kunde_zusatz: "c/o Muster Immobilien AG",
+  referenz: "P-2026-014",
+  kopftext: "Für die ausgeführten Arbeiten stellen wir Ihnen wie folgt Rechnung.",
+  positionen: [
+    {
+      pos: 1,
+      beschreibung: "Storen-Motor ersetzen",
+      menge: "1",
+      einheit: "Stk",
+      menge_einheit: "1 Stk",
+      einzelpreis: "420.00",
+      zeilentotal: "420.00",
+    },
+  ],
+  total_netto: "420.00",
+  mwst_satz: "8.1%",
+  mwst_betrag: "34.02",
+  total_brutto: "454.02",
+};
+
+/** Alle gültigen Platzhalter-Namen für die Upload-Prüfung. */
+export const INVOICE_DOCUMENT_TOKEN_KEYS: readonly string[] = [
+  ...Object.keys(SAMPLE_INVOICE_DOCUMENT_DATA),
+  ...Object.keys(SAMPLE_INVOICE_DOCUMENT_DATA.positionen[0]!),
+];
+
+/** Katalog für die «Platzhalter-Referenz» in der UI (Feldname + Bedeutung + Beispiel). */
+export const INVOICE_DOCUMENT_FIELDS: { key: keyof InvoiceDocumentData; label: string; example: string }[] = [
+  { key: "firma_name", label: "Firmenname (Absender)", example: "Bauflip Storen AG" },
+  { key: "rechnung_nummer", label: "Rechnungsnummer", example: "RE-2026-014" },
+  { key: "projekt_titel", label: "Projekt-Titel", example: "Storenreparatur Balkon" },
+  { key: "datum", label: "Rechnungsdatum", example: "13.07.2026" },
+  { key: "faellig", label: "Fällig am", example: "12.08.2026" },
+  { key: "ansprechpartner", label: "Ansprechpartner", example: "M. Muster" },
+  { key: "kunde_name", label: "Kunde/Mieter", example: "Familie Muster" },
+  { key: "verwaltung_name", label: "Verwaltung", example: "Muster Immobilien AG" },
+  { key: "objekt_strasse", label: "Objekt Strasse", example: "Musterstrasse 12" },
+  { key: "objekt_plz_ort", label: "Objekt PLZ/Ort", example: "8600 Dübendorf" },
+  { key: "objekt", label: "Objekt (kombiniert)", example: "Musterstrasse 12, 8600 Dübendorf" },
+  { key: "referenz", label: "Referenz", example: "P-2026-014" },
+  { key: "kopftext", label: "Einleitungstext", example: "Für die ausgeführten Arbeiten …" },
+  { key: "total_netto", label: "Total netto", example: "420.00" },
+  { key: "mwst_satz", label: "MwSt.-Satz", example: "8.1%" },
+  { key: "mwst_betrag", label: "MwSt.-Betrag", example: "34.02" },
+  { key: "total_brutto", label: "Total brutto", example: "454.02" },
+];
+
 export function buildInvoiceDocumentData(input: InvoiceDocumentInput): InvoiceDocumentData {
   const { companyName, invoice, project } = input;
   const positionen: InvoiceDocumentPosition[] = invoice.lineItems

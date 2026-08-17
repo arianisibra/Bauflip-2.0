@@ -95,6 +95,7 @@ import {
   hasOfferDocumentTemplateAction,
   hasAuftragDocumentTemplateAction,
   hasRapportDocumentTemplateAction,
+  hasInvoiceDocumentTemplateAction,
   listDocumentTemplatesAction,
   setDefaultDocumentTemplateAction,
   uploadDocumentTemplateAction,
@@ -1111,6 +1112,7 @@ export function useUploadDocumentTemplate() {
       qc.invalidateQueries({ queryKey: queryKeys.hasOfferDocumentTemplate() });
       qc.invalidateQueries({ queryKey: queryKeys.hasAuftragDocumentTemplate() });
       qc.invalidateQueries({ queryKey: queryKeys.hasRapportDocumentTemplate() });
+      qc.invalidateQueries({ queryKey: queryKeys.hasInvoiceDocumentTemplate() });
     },
   });
 }
@@ -1134,6 +1136,7 @@ export function useDeleteDocumentTemplate() {
       qc.invalidateQueries({ queryKey: queryKeys.hasOfferDocumentTemplate() });
       qc.invalidateQueries({ queryKey: queryKeys.hasAuftragDocumentTemplate() });
       qc.invalidateQueries({ queryKey: queryKeys.hasRapportDocumentTemplate() });
+      qc.invalidateQueries({ queryKey: queryKeys.hasInvoiceDocumentTemplate() });
     },
   });
 }
@@ -1165,6 +1168,17 @@ export function useHasRapportDocumentTemplate(enabled = true) {
   return useQuery<boolean>({
     queryKey: queryKeys.hasRapportDocumentTemplate(),
     queryFn: () => hasRapportDocumentTemplateAction(),
+    enabled,
+    staleTime: 60_000,
+    refetchOnMount: false,
+  });
+}
+
+/** Existiert eine Rechnungsvorlage? Steuert den «Als Word (Rechnung)»-Button je Rechnung. */
+export function useHasInvoiceDocumentTemplate(enabled = true) {
+  return useQuery<boolean>({
+    queryKey: queryKeys.hasInvoiceDocumentTemplate(),
+    queryFn: () => hasInvoiceDocumentTemplateAction(),
     enabled,
     staleTime: 60_000,
     refetchOnMount: false,

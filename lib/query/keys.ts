@@ -92,6 +92,7 @@ export const queryKeys = {
   hasOfferDocumentTemplate: () => ["has-offer-document-template"] as const,
   hasAuftragDocumentTemplate: () => ["has-auftrag-document-template"] as const,
   hasRapportDocumentTemplate: () => ["has-rapport-document-template"] as const,
+  hasInvoiceDocumentTemplate: () => ["has-invoice-document-template"] as const,
   /** Termin-Einladungen per Mail an/aus (eigener Account). */
   invitePreference: () => ["invite-preference"] as const,
   /** Privater Kalender als Busy-Blocker (eigene Konfig/Status). */

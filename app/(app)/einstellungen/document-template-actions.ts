@@ -22,6 +22,10 @@ import {
   RAPPORT_DOCUMENT_TOKEN_KEYS,
   SAMPLE_RAPPORT_DOCUMENT_DATA,
 } from "@/lib/documents/rapport-document-data";
+import {
+  INVOICE_DOCUMENT_TOKEN_KEYS,
+  SAMPLE_INVOICE_DOCUMENT_DATA,
+} from "@/lib/documents/invoice-document-data";
 
 /** Token-Katalog + Beispiel je Vorlagen-Art für die Upload-Prüfung (null = keine Prüfung). */
 function templateTokenSpec(
@@ -46,6 +50,13 @@ function templateTokenSpec(
       tokens: RAPPORT_DOCUMENT_TOKEN_KEYS,
       sample: SAMPLE_RAPPORT_DOCUMENT_DATA as unknown as Record<string, unknown>,
       beispiele: "{monteur}, {ergebnis}, {arbeitsbeschreibung}, {zeit}",
+    };
+  }
+  if (kind === "rechnung") {
+    return {
+      tokens: INVOICE_DOCUMENT_TOKEN_KEYS,
+      sample: SAMPLE_INVOICE_DOCUMENT_DATA as unknown as Record<string, unknown>,
+      beispiele: "{rechnung_nummer}, {kunde_name}, {#positionen}…{/positionen}",
     };
   }
   return null;
@@ -88,6 +99,14 @@ export async function hasRapportDocumentTemplateAction(): Promise<boolean> {
   const session = await requireOfficeSession();
   if (!session.organizationId) return false;
   const templates = await listDocumentTemplates(session.organizationId, "rapport");
+  return templates.length > 0;
+}
+
+/** Für Büro/Admin: existiert eine Rechnungsvorlage? (steuert den «Als Word (Rechnung)»-Button) */
+export async function hasInvoiceDocumentTemplateAction(): Promise<boolean> {
+  const session = await requireOfficeSession();
+  if (!session.organizationId) return false;
+  const templates = await listDocumentTemplates(session.organizationId, "rechnung");
   return templates.length > 0;
 }
 

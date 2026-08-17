@@ -17,11 +17,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SettingsRow } from "@/components/app/settings-row";
 
-/** Vorlagen-Arten mit Laufzeit-Unterstützung (Offerte + Auftrag). Rechnung/Rapport folgen. */
+/** Vorlagen-Arten mit Laufzeit-Unterstützung. */
 const SUPPORTED_KINDS: { kind: DocumentTemplateKind; label: string; hint: string }[] = [
   { kind: "offerte", label: "Offerte", hint: "z. B. {offerte_nummer}, {kunde_name}, {#positionen}…{/positionen}" },
   { kind: "auftrag", label: "Auftrag", hint: "z. B. {auftrag_nummer}, {kunde_name}, {beschreibung}, {objekt}" },
   { kind: "rapport", label: "Rapport", hint: "z. B. {monteur}, {ergebnis}, {arbeitsbeschreibung}, {zeit}" },
+  { kind: "rechnung", label: "Rechnung", hint: "z. B. {rechnung_nummer}, {kunde_name}, {#positionen}…{/positionen}" },
 ];
 
 /**
