@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getTrustedClientIp } from "@/lib/security/client-ip";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { verifyTurnstileToken } from "@/lib/security/turnstile";
+import { resolveAdminMfaGatePathForClient } from "@/lib/auth/mfa";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function loginAction(
@@ -36,13 +37,25 @@ export async function loginAction(
     return { error: "Supabase ist nicht konfiguriert." };
   }
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data: signInData, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
 
   if (error) {
     return { error: "Anmeldung fehlgeschlagen. Bitte Zugangsdaten prüfen." };
+  }
+
+  // Zweiten Faktor einfordern, BEVOR die volle Sitzung (Weiterleitung auf "/")
+  // beginnt — sonst hätte ein Admin mit nur Passwort kurzzeitig Zugriff, bis
+  // die nächste geschützte Aktion die AAL2-Prüfung greift. Unterscheidet
+  // "noch kein Faktor eingerichtet" (/mfa/setup) von "Faktor vorhanden, diese
+  // Sitzung hat ihn noch nicht bestätigt" (/mfa/verify) — sonst würde ein
+  // bereits eingerichteter Admin bei jedem Login erneut in enroll() landen.
+  const role = signInData.user?.app_metadata?.role as string | undefined;
+  const mfaGatePath = await resolveAdminMfaGatePathForClient(supabase, role);
+  if (mfaGatePath) {
+    redirect(mfaGatePath);
   }
 
   redirect("/");

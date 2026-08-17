@@ -1,12 +1,21 @@
 import { redirect } from "next/navigation";
 import { MfaSetupForm } from "@/components/auth/mfa-setup-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { resolveAdminMfaGatePath } from "@/lib/auth/mfa";
 import { getLayoutSession } from "@/lib/auth/session";
 
 export default async function MfaSetupPage() {
   const session = await getLayoutSession();
   if (!session) {
     redirect("/anmeldung");
+  }
+
+  // Wer bereits einen Faktor eingerichtet hat (z. B. per Lesezeichen direkt
+  // hierher), soll bestätigen (/mfa/verify) statt versehentlich enroll()
+  // aufzurufen und einen zweiten, nutzlosen Faktor anzulegen.
+  const gatePath = await resolveAdminMfaGatePath(session);
+  if (gatePath === "/mfa/verify") {
+    redirect("/mfa/verify");
   }
 
   return (

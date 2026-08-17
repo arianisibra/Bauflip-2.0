@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { isAdminMfaRequiredAndMissing } from "@/lib/auth/mfa";
+import { isAdminMfaRequiredAndMissing, resolveAdminMfaGatePath } from "@/lib/auth/mfa";
 import { syncUserAuthMetadata } from "@/lib/auth/sync-user-auth-metadata";
 import { getLayoutSession, type LayoutSession } from "@/lib/auth/session";
 import { getOrganizationApprovalStatus } from "@/lib/db/organization-approval";
@@ -56,8 +56,9 @@ async function ensureOrganizationApproved(session: LayoutSession): Promise<void>
  * Redirect statt Exception, da Seiten keinen Fehlerzustand rendern.
  */
 export async function ensurePageMfaSatisfied(session: LayoutSession): Promise<void> {
-  if (await isAdminMfaRequiredAndMissing(session)) {
-    redirect("/mfa/setup");
+  const gatePath = await resolveAdminMfaGatePath(session);
+  if (gatePath) {
+    redirect(gatePath);
   }
 }
 

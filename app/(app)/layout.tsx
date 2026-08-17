@@ -14,7 +14,7 @@ import { isOrganizationOnboardingPending } from "@/lib/db/onboarding";
 import { WorkflowStagesProvider } from "@/components/app/workflow-stages-provider";
 import { WorkflowTransitionsProvider } from "@/components/app/workflow-transitions-provider";
 import { OnboardingWizard } from "@/components/app/onboarding-wizard";
-import { isAdminMfaRequiredAndMissing } from "@/lib/auth/mfa";
+import { resolveAdminMfaGatePath } from "@/lib/auth/mfa";
 import { getVisibleSidebarItems } from "@/lib/navigation/sidebar-config";
 import { AuthenticatedRealtime } from "@/components/app/authenticated-realtime";
 import { SessionProfileProvider } from "@/components/app/session-profile-provider";
@@ -30,9 +30,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
   const role = session.role;
   if (role === "admin") {
-    const mfaMissing = await isAdminMfaRequiredAndMissing(session);
-    if (mfaMissing) {
-      redirect("/mfa/setup");
+    const mfaGatePath = await resolveAdminMfaGatePath(session);
+    if (mfaGatePath) {
+      redirect(mfaGatePath);
     }
   }
 
