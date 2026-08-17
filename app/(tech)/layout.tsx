@@ -21,6 +21,16 @@ export default async function TechLayout({ children }: { children: React.ReactNo
   if (!canAccessTechFieldRoutes(session.role)) {
     redirect("/");
   }
+  // Ohne Organisation gibt es hier nichts zu zeigen — trifft z. B. einen
+  // Nutzer mit noch offener Einladung: proxy.ts weist ihm mangels aktiver
+  // Mitgliedschaft die am staerksten eingeschraenkte Rolle "technician" zu
+  // (Audit-Fix), was ihn root-seitig auf "/tag" statt "/projekte" leitet.
+  // Die Buero-Seiten haben laengst einen "kein Org → /onboarding"-Redirect
+  // (siehe z. B. app/(app)/projekte/page.tsx) — dieser Pfad hatte ihn nie,
+  // weil vorher niemand ohne Mitgliedschaft hier landete.
+  if (!session.organizationId) {
+    redirect("/onboarding");
+  }
 
   const [profile, workflowStages, workflowTransitions] = await Promise.all([
     getCachedSessionProfile(session),
