@@ -30,11 +30,14 @@ export async function isAdminMfaRequiredAndMissing(layoutSession?: LayoutSession
       const { data } = await mfaApi.getAuthenticatorAssuranceLevel();
       return data?.currentLevel !== "aal2";
     } catch (err) {
+      // Fail-closed: ein Fehler bei der Stufenprüfung darf niemals als
+      // "zweiter Faktor erfüllt" gewertet werden — sonst hebelt ein
+      // Supabase-Fehler die MFA-Pflicht komplett aus.
       console.error("[bauflip] MFA assurance level check failed", err);
-      return false;
+      return true;
     }
   } catch (err) {
     console.error("[bauflip] isAdminMfaRequiredAndMissing failed", err);
-    return false;
+    return true;
   }
 }

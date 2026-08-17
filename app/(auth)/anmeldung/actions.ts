@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { getTrustedClientIp } from "@/lib/security/client-ip";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { verifyTurnstileToken } from "@/lib/security/turnstile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -19,8 +20,7 @@ export async function loginAction(
   }
 
   const headerList = await headers();
-  const forwardedFor = headerList.get("x-forwarded-for");
-  const ip = forwardedFor?.split(",")[0]?.trim() ?? "unknown";
+  const ip = getTrustedClientIp(headerList.get("x-forwarded-for"));
   const rateLimit = consumeRateLimit(`login:${ip}:${email}`, 8, 10 * 60 * 1000);
   if (!rateLimit.allowed) {
     return { error: "Zu viele Anmeldeversuche. Bitte in wenigen Minuten erneut versuchen." };

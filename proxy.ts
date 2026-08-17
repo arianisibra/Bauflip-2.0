@@ -129,10 +129,18 @@ function isStaticAssetPath(pathname: string): boolean {
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+/**
+ * Ohne aktive Mitgliedschaft (z. B. deaktiviertes Konto, noch nicht
+ * eingerichteter Nutzer) darf niemals die privilegierte "office"-Rolle
+ * zufallen — das öffnete die Büro-Seiten (Kontakte, Zahlungen, Zeiterfassung)
+ * für jeden angemeldeten Nutzer ohne jede Organisationszugehörigkeit.
+ * "technician" ist der am stärksten eingeschränkte Wert von `RoleType` und
+ * greift ohnehin nur zusammen mit `organizationId=null`, was jede
+ * SSR-Bootstrap-Seite bereits auf `/onboarding` umleitet.
+ */
 async function resolveMembershipRole(
   supabase: ReturnType<typeof createServerClient>,
   userId: string,
-  fallbackRole: RoleType,
 ): Promise<{ role: RoleType; organizationId: string | null }> {
   const { data: membership } = await supabase
     .from("organization_memberships")
@@ -142,7 +150,7 @@ async function resolveMembershipRole(
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
-  const role = mapRole((membership?.role as string | undefined) ?? fallbackRole);
+  const role = mapRole((membership?.role as string | undefined) ?? "technician");
   const organizationId = (membership?.organization_id as string | null | undefined) ?? null;
   return { role, organizationId };
 }
@@ -228,7 +236,7 @@ export async function proxy(request: NextRequest) {
     const fromMetadata = readProxyAuthFromAppMetadata(user);
     const membership = fromMetadata
       ? fromMetadata
-      : await resolveMembershipRole(supabase, user.id, "office");
+      : await resolveMembershipRole(supabase, user.id);
     role = membership.role;
     organizationId = membership.organizationId;
     applyProxyAuthContext(requestHeaders, {

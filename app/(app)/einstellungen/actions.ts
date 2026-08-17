@@ -1,6 +1,7 @@
 "use server";
 
 import { headers } from "next/headers";
+import { getTrustedClientIp } from "@/lib/security/client-ip";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { verifyTurnstileToken } from "@/lib/security/turnstile";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -267,8 +268,7 @@ export async function inviteEmployeeAction(formData: FormData) {
   }
 
   const headerList = await headers();
-  const forwardedFor = headerList.get("x-forwarded-for");
-  const ip = forwardedFor?.split(",")[0]?.trim() ?? "unknown";
+  const ip = getTrustedClientIp(headerList.get("x-forwarded-for"));
   const rateLimit = consumeRateLimit(`invite:${ip}:${email}`, 12, 10 * 60 * 1000);
   if (!rateLimit.allowed) {
     throw new Error("Zu viele Einladungen in kurzer Zeit.");

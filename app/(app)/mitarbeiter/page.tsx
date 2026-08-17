@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { QueryHydrationBoundary } from "@/components/app/query-hydration-boundary";
 import { MitarbeiterPageClient } from "@/components/app/mitarbeiter-page-client";
 import { BauflipLoading } from "@/components/ui/bauflip-loading";
+import { ensurePageMfaSatisfied } from "@/lib/auth/organization";
 import { getLayoutSession } from "@/lib/auth/session";
 import { buildMitarbeiterDehydratedState } from "@/lib/mitarbeiter/server-bootstrap";
 
@@ -16,6 +17,7 @@ export default async function MitarbeiterPage() {
   if (!session.organizationId) {
     redirect("/onboarding");
   }
+  await ensurePageMfaSatisfied(session);
 
   const dehydratedState = await buildMitarbeiterDehydratedState(session.organizationId);
 

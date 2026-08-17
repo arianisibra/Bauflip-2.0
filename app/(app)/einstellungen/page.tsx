@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { QueryHydrationBoundary } from "@/components/app/query-hydration-boundary";
 import { EinstellungenPageClient } from "@/components/app/einstellungen-page-client";
 import { BauflipLoading } from "@/components/ui/bauflip-loading";
+import { ensurePageMfaSatisfied } from "@/lib/auth/organization";
 import { getLayoutSession } from "@/lib/auth/session";
 import { buildEinstellungenDehydratedState } from "@/lib/einstellungen/server-bootstrap";
 
@@ -13,6 +14,7 @@ export default async function EinstellungenPage() {
   if (!session) {
     redirect("/anmeldung");
   }
+  await ensurePageMfaSatisfied(session);
 
   const dehydratedState = await buildEinstellungenDehydratedState(session);
 

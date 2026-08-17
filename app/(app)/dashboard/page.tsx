@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { QueryHydrationBoundary } from "@/components/app/query-hydration-boundary";
 import { DashboardPageClient } from "@/components/app/dashboard-page-client";
 import { BauflipLoading } from "@/components/ui/bauflip-loading";
+import { ensurePageMfaSatisfied } from "@/lib/auth/organization";
 import { getLayoutSession } from "@/lib/auth/session";
 import { buildDashboardDehydratedState } from "@/lib/dashboard/server-bootstrap";
 
@@ -16,6 +17,7 @@ export default async function DashboardPage() {
   if (!session.organizationId) {
     redirect("/onboarding");
   }
+  await ensurePageMfaSatisfied(session);
 
   const dehydratedState = await buildDashboardDehydratedState(session.organizationId);
 

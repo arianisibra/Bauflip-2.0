@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { createProject } from "@/lib/db/repository";
+import { getTrustedClientIp } from "@/lib/security/client-ip";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { getOrganizationIdByIntakeEmailToken } from "@/lib/db/intake-email";
 import { extractIntakeFromPdf } from "@/lib/intake/extract-intake-pdf";
@@ -83,7 +84,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // 3. Missbrauch drosseln, bevor die (kostenpflichtige) KI-Extraktion läuft.
-  const herkunft = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unbekannt";
+  const herkunft = getTrustedClientIp(request.headers.get("x-forwarded-for"));
   if (!consumeRateLimit(`intake:ip:${herkunft}`, 60, 60_000).allowed) {
     return new Response("Zu viele Anfragen.", { status: 429 });
   }

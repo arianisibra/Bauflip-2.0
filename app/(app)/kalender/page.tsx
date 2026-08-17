@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { QueryHydrationBoundary } from "@/components/app/query-hydration-boundary";
 import { KalenderPageClient } from "@/components/app/kalender-page-client";
 import { BauflipLoading } from "@/components/ui/bauflip-loading";
+import { ensurePageMfaSatisfied } from "@/lib/auth/organization";
 import { getLayoutSession } from "@/lib/auth/session";
 import { buildKalenderDehydratedState } from "@/lib/kalender/server-bootstrap";
 
@@ -29,6 +30,7 @@ export default async function KalenderPage({ searchParams }: PageProps) {
   if (!session.organizationId) {
     redirect("/onboarding");
   }
+  await ensurePageMfaSatisfied(session);
 
   const sp = await searchParams;
   const dehydratedState = await buildKalenderDehydratedState(sp);

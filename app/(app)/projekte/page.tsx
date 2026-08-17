@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { QueryHydrationBoundary } from "@/components/app/query-hydration-boundary";
 import { ProjektePageClient } from "@/components/app/projekte-page-client";
 import { BauflipLoading } from "@/components/ui/bauflip-loading";
+import { ensurePageMfaSatisfied } from "@/lib/auth/organization";
 import { getLayoutSession } from "@/lib/auth/session";
 import { parseProjekteListUrlFilter } from "@/lib/navigation/projekte-list-navigation";
 import { buildProjekteDehydratedState } from "@/lib/projekte/server-bootstrap";
@@ -32,6 +33,7 @@ export default async function ProjektePage({ searchParams }: PageProps) {
   if (!session.organizationId) {
     redirect("/onboarding");
   }
+  await ensurePageMfaSatisfied(session);
 
   const sp = await searchParams;
   const listFilter = parseProjekteListUrlFilter({

@@ -68,7 +68,16 @@ export async function deactivateTeamMemberAction(userId: string): Promise<void> 
 
   // Schnellpfad entwerten: Ohne diesen Schritt liest proxy.ts Rolle und
   // Organisation weiter aus app_metadata und bemerkt die Deaktivierung nie.
-  const { data: bestehend } = await admin.auth.admin.getUserById(userId);
+  const { data: bestehend, error: getUserError } = await admin.auth.admin.getUserById(userId);
+  if (getUserError) {
+    // Ohne den aktuellen Stand koennen wir app_metadata nicht sicher bereinigen
+    // (ein leerer Patch wuerde unbeteiligte Felder ueberschreiben). Die
+    // Mitgliedschaft ist zwar bereits inaktiv, aber der Admin muss erfahren,
+    // dass der Zugriffsentzug nicht bestaetigt werden konnte.
+    throw new Error(
+      `Mitgliedschaft deaktiviert, aber der Zugriff konnte nicht entzogen werden: ${getUserError.message}`,
+    );
+  }
   const uebrigeMetadaten = { ...(bestehend?.user?.app_metadata ?? {}) };
   delete uebrigeMetadaten[AUTH_METADATA_ROLE_KEY];
   delete uebrigeMetadaten[AUTH_METADATA_ORG_KEY];

@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { KontaktePageClient } from "@/components/app/kontakte-page-client";
 import { QueryHydrationBoundary } from "@/components/app/query-hydration-boundary";
 import { BauflipLoading } from "@/components/ui/bauflip-loading";
+import { ensurePageMfaSatisfied } from "@/lib/auth/organization";
 import { getLayoutSession } from "@/lib/auth/session";
 import { buildKontakteDehydratedState } from "@/lib/kontakte/server-bootstrap";
 
@@ -16,6 +17,7 @@ export default async function KontaktePage() {
   if (!session.organizationId) {
     redirect("/onboarding");
   }
+  await ensurePageMfaSatisfied(session);
 
   const dehydratedState = await buildKontakteDehydratedState(session.organizationId);
 

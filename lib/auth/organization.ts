@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isAdminMfaRequiredAndMissing } from "@/lib/auth/mfa";
 import { syncUserAuthMetadata } from "@/lib/auth/sync-user-auth-metadata";
@@ -24,6 +25,22 @@ function isOfficeRole(role: RoleType): boolean {
 async function ensureMfaSatisfied(session: LayoutSession): Promise<void> {
   if (await isAdminMfaRequiredAndMissing(session)) {
     throw new Error("Zweiter Faktor erforderlich. Bitte zuerst die Anmeldung in zwei Schritten einrichten.");
+  }
+}
+
+/**
+ * MFA-Gate für SSR-Seiten (page.tsx), die dieselben Daten liefern wie eine
+ * abgesicherte Server Action. `app/(app)/layout.tsx` prüft den zweiten Faktor
+ * nur beim ersten Rendern — Next.js re-rendert Layouts bei Client-Navigation
+ * nicht ("Layouts do not re-render on navigation"), eine Segment-Anfrage an
+ * die Seite selbst geht am Layout-Redirect vorbei. Jede Seite, die
+ * organisationsweite Daten SSR-vorlädt, muss diese Prüfung deshalb selbst
+ * wiederholen — analog zu ensureMfaSatisfied() für Server Actions, aber mit
+ * Redirect statt Exception, da Seiten keinen Fehlerzustand rendern.
+ */
+export async function ensurePageMfaSatisfied(session: LayoutSession): Promise<void> {
+  if (await isAdminMfaRequiredAndMissing(session)) {
+    redirect("/mfa/setup");
   }
 }
 

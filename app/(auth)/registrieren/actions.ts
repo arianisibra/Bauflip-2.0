@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { getTrustedClientIp } from "@/lib/security/client-ip";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { checkRegistrationAllowed } from "@/lib/security/registration-mode";
 import { verifyTurnstileToken } from "@/lib/security/turnstile";
@@ -43,7 +44,7 @@ export async function registerOrganizationAction(
   const { companyName, displayName, email, password } = parsed.data;
 
   const headerList = await headers();
-  const ip = headerList.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const ip = getTrustedClientIp(headerList.get("x-forwarded-for"));
   const rateLimit = consumeRateLimit(`register:${ip}`, 5, 60 * 60 * 1000);
   if (!rateLimit.allowed) {
     return { error: "Zu viele Registrierungen von dieser Adresse. Bitte später erneut versuchen." };
