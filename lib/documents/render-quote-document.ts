@@ -10,6 +10,7 @@ import {
 } from "@/lib/db/document-templates";
 import { getQuoteWithItems, getQuotePdfProjectHead } from "@/lib/db/quotes";
 import { getOrganizationBranding } from "@/lib/db/repository";
+import { getOrganizationBillingSettings } from "@/lib/db/billing";
 import type { DocumentTemplate } from "@/lib/domain/types";
 
 export type RenderedDocument = { filename: string; bytes: Buffer };
@@ -39,9 +40,10 @@ export async function renderQuoteDocument(
   if (!quote || quote.organizationId !== organizationId) {
     throw new DocumentTemplateError("Offerte nicht gefunden.");
   }
-  const [project, branding, templateBytes] = await Promise.all([
+  const [project, branding, billing, templateBytes] = await Promise.all([
     getQuotePdfProjectHead(quote.projectId),
     getOrganizationBranding(organizationId),
+    getOrganizationBillingSettings(organizationId),
     downloadTemplateBytes(template.storagePath),
   ]);
   if (!project) throw new DocumentTemplateError("Projekt nicht gefunden.");
@@ -49,6 +51,7 @@ export async function renderQuoteDocument(
 
   const data = buildQuoteDocumentData({
     companyName: branding.name,
+    billing,
     quote,
     project,
   });

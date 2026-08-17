@@ -11,6 +11,7 @@ import {
 import { getInvoiceWithItems } from "@/lib/db/invoices";
 import { getQuotePdfProjectHead } from "@/lib/db/quotes";
 import { getOrganizationBranding } from "@/lib/db/repository";
+import { getOrganizationBillingSettings } from "@/lib/db/billing";
 import type { DocumentTemplate } from "@/lib/domain/types";
 import type { RenderedDocument } from "@/lib/documents/render-quote-document";
 
@@ -50,14 +51,16 @@ export async function renderInvoiceDocument(
     throw new DocumentTemplateError("Projekt nicht gefunden.");
   }
 
-  const [branding, templateBytes] = await Promise.all([
+  const [branding, billing, templateBytes] = await Promise.all([
     getOrganizationBranding(organizationId),
+    getOrganizationBillingSettings(organizationId),
     downloadTemplateBytes(template.storagePath),
   ]);
   if (!templateBytes) throw new DocumentTemplateError("Vorlagendatei konnte nicht geladen werden.");
 
   const data = buildInvoiceDocumentData({
     companyName: branding.name,
+    billing,
     invoice,
     project,
   });

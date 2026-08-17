@@ -19,6 +19,15 @@ function formatDateCh(value: string | null): string {
 
 export type InvoiceDocumentInput = {
   companyName: string;
+  /** Absenderadresse aus den Zahlungsdaten (QR-Rechnung) — dieselbe Quelle wie das Rechnungs-PDF. */
+  billing?: {
+    creditorStreet: string | null;
+    creditorBuildingNumber: string | null;
+    creditorPostalCode: string | null;
+    creditorCity: string | null;
+    phone: string | null;
+    email: string | null;
+  } | null;
   invoice: Pick<
     Invoice,
     | "invoiceNumber"
@@ -57,6 +66,12 @@ export type InvoiceDocumentPosition = {
 
 export type InvoiceDocumentData = {
   firma_name: string;
+  firma_strasse: string;
+  firma_plz_ort: string;
+  /** Firmenadresse kombiniert (Strasse, PLZ Ort) — viele Vorlagen haben ein Feld. */
+  firma_adresse: string;
+  firma_telefon: string;
+  firma_email: string;
   rechnung_nummer: string;
   projekt_titel: string;
   datum: string;
@@ -80,6 +95,11 @@ export type InvoiceDocumentData = {
 /** Beispiel-Datensatz — für die Vorlagen-Prüfung beim Upload (alle Felder belegt). */
 export const SAMPLE_INVOICE_DOCUMENT_DATA: InvoiceDocumentData = {
   firma_name: "Bauflip Storen AG",
+  firma_strasse: "Musterweg 3",
+  firma_plz_ort: "8000 Zürich",
+  firma_adresse: "Musterweg 3, 8000 Zürich",
+  firma_telefon: "044 123 45 67",
+  firma_email: "info@bauflip-storen.ch",
   rechnung_nummer: "RE-2026-014",
   projekt_titel: "Storenreparatur Balkon",
   datum: "13.07.2026",
@@ -119,6 +139,11 @@ export const INVOICE_DOCUMENT_TOKEN_KEYS: readonly string[] = [
 /** Katalog für die «Platzhalter-Referenz» in der UI (Feldname + Bedeutung + Beispiel). */
 export const INVOICE_DOCUMENT_FIELDS: { key: keyof InvoiceDocumentData; label: string; example: string }[] = [
   { key: "firma_name", label: "Firmenname (Absender)", example: "Bauflip Storen AG" },
+  { key: "firma_strasse", label: "Firma Strasse", example: "Musterweg 3" },
+  { key: "firma_plz_ort", label: "Firma PLZ/Ort", example: "8000 Zürich" },
+  { key: "firma_adresse", label: "Firma Adresse (kombiniert)", example: "Musterweg 3, 8000 Zürich" },
+  { key: "firma_telefon", label: "Firma Telefon", example: "044 123 45 67" },
+  { key: "firma_email", label: "Firma E-Mail", example: "info@bauflip-storen.ch" },
   { key: "rechnung_nummer", label: "Rechnungsnummer", example: "RE-2026-014" },
   { key: "projekt_titel", label: "Projekt-Titel", example: "Storenreparatur Balkon" },
   { key: "datum", label: "Rechnungsdatum", example: "13.07.2026" },
@@ -138,7 +163,7 @@ export const INVOICE_DOCUMENT_FIELDS: { key: keyof InvoiceDocumentData; label: s
 ];
 
 export function buildInvoiceDocumentData(input: InvoiceDocumentInput): InvoiceDocumentData {
-  const { companyName, invoice, project } = input;
+  const { companyName, billing, invoice, project } = input;
   const positionen: InvoiceDocumentPosition[] = invoice.lineItems
     .slice()
     .sort((a, b) => a.position - b.position)
@@ -153,9 +178,16 @@ export function buildInvoiceDocumentData(input: InvoiceDocumentInput): InvoiceDo
     }));
 
   const plzOrt = [project.servicePostalCode, project.serviceCity].filter(Boolean).join(" ");
+  const firmaStrasse = [billing?.creditorStreet, billing?.creditorBuildingNumber].filter(Boolean).join(" ");
+  const firmaPlzOrt = [billing?.creditorPostalCode, billing?.creditorCity].filter(Boolean).join(" ");
 
   return {
     firma_name: companyName,
+    firma_strasse: firmaStrasse,
+    firma_plz_ort: firmaPlzOrt,
+    firma_adresse: [firmaStrasse, firmaPlzOrt].filter(Boolean).join(", "),
+    firma_telefon: billing?.phone ?? "",
+    firma_email: billing?.email ?? "",
     rechnung_nummer: invoice.invoiceNumber ?? "",
     projekt_titel: project.title,
     datum: formatDateCh(invoice.createdAt),
