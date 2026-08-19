@@ -404,6 +404,7 @@ export function useCalendarRangeTasks(
     staleTime: 90_000,
     refetchOnMount: false,
     refetchOnWindowFocus: true,
+    placeholderData: keepPreviousData,
   });
 }
 
