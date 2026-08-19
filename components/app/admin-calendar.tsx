@@ -25,12 +25,13 @@ import {
   type AdminCalendarViewMode,
 } from "@/lib/navigation/admin-calendar-navigation";
 import { prefetchProjectCore } from "@/lib/query/prefetch-project-core";
+import { prefetchCalendarRange } from "@/lib/query/prefetch-calendar-range";
 import { useKalenderSheet } from "@/components/app/kalender-sheet-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BauflipLoadingInline } from "@/components/ui/bauflip-loading";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useCalendarRangeTasks } from "@/lib/query/hooks";
+import { useAssignableProfiles, useCalendarRangeTasks } from "@/lib/query/hooks";
 import { CalendarAvailabilityRail } from "@/components/app/calendar-availability-rail";
 import { cn } from "@/lib/utils";
 
@@ -568,18 +569,49 @@ export function AdminCalendar() {
     viewMode !== "availability",
   );
 
-  const technicianOptions = useMemo(() => {
-    const map = new Map<string, { id: string; name: string }>();
-    for (const task of tasks) {
-      if (task.assignedTechnicianId && task.technicianName && !map.has(task.assignedTechnicianId)) {
-        map.set(task.assignedTechnicianId, { id: task.assignedTechnicianId, name: task.technicianName });
+  // Nachbar-Zeitraum im Hintergrund vorladen, damit Vor/Zurück nicht jedes Mal auf das
+  // Netzwerk wartet — der Kalender zeigt dank placeholderData ohnehin sofort den alten
+  // Stand, aber mit Prefetch ist der neue Stand meist schon da, wenn er gebraucht wird.
+  useEffect(() => {
+    if (viewMode === "availability" || viewMode === "year") return;
+    const monthNeighbor = (dir: -1 | 1) => {
+      let nm = month + dir;
+      let ny = year;
+      if (nm < 1) {
+        nm = 12;
+        ny -= 1;
+      } else if (nm > 12) {
+        nm = 1;
+        ny += 1;
       }
-      if (task.assignedTechnicianId2 && task.technicianName2 && !map.has(task.assignedTechnicianId2)) {
-        map.set(task.assignedTechnicianId2, { id: task.assignedTechnicianId2, name: task.technicianName2 });
-      }
+      return calendarRangeBoundsFromState("month", anchorDateForYearMonth(ny, nm), ny, nm);
+    };
+    const dayOrWeekNeighbor = (deltaDays: number) => {
+      const nextAnchor = anchorDateFromDayKey(shiftSwissDayKey(dayKey, deltaDays));
+      const { y: ny, m: nm } = swissYmdParts(nextAnchor);
+      return calendarRangeBoundsFromState(viewMode, nextAnchor, ny, nm);
+    };
+    const neighbors =
+      viewMode === "month"
+        ? [monthNeighbor(-1), monthNeighbor(1)]
+        : viewMode === "week"
+          ? [dayOrWeekNeighbor(-7), dayOrWeekNeighbor(7)]
+          : [dayOrWeekNeighbor(-1), dayOrWeekNeighbor(1)];
+    for (const bounds of neighbors) {
+      prefetchCalendarRange(qc, bounds.startIso, bounds.endIso);
     }
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, "de-CH"));
-  }, [tasks]);
+  }, [viewMode, dayKey, year, month, qc]);
+
+  // Alle Team-Mitglieder der Organisation — nicht nur die, die an diesem Tag Termine haben,
+  // sonst verschwinden freie Monteure aus dem Filter, sobald sie mal keinen Termin haben.
+  const { data: assignableProfiles = [] } = useAssignableProfiles(viewMode !== "availability");
+  const technicianOptions = useMemo(
+    () =>
+      assignableProfiles
+        .map((p) => ({ id: p.id, name: p.displayName }))
+        .sort((a, b) => a.name.localeCompare(b.name, "de-CH")),
+    [assignableProfiles],
+  );
 
   const visibleTasks = useMemo(() => {
     const filtered =
@@ -739,7 +771,6 @@ export function AdminCalendar() {
             size="icon"
             className="h-14 w-12 shrink-0 rounded-none rounded-tl-2xl border-r border-border/50 text-muted-foreground hover:bg-muted/60"
             onClick={() => onNavigate(-1)}
-            disabled={pending}
             aria-label={viewMode === "year" ? "Vorheriges Jahr" : viewMode === "month" ? "Vorheriger Monat" : viewMode === "week" ? "Vorherige Woche" : viewMode === "availability" ? "Vorheriger Tag" : "Vorheriger Tag"}
           >
             <ChevronLeft className="size-5" />
@@ -760,7 +791,6 @@ export function AdminCalendar() {
             size="icon"
             className="h-14 w-12 shrink-0 rounded-none rounded-tr-2xl border-l border-border/50 text-muted-foreground hover:bg-muted/60"
             onClick={() => onNavigate(1)}
-            disabled={pending}
             aria-label={viewMode === "year" ? "Nächstes Jahr" : viewMode === "month" ? "Nächster Monat" : viewMode === "week" ? "Nächste Woche" : viewMode === "availability" ? "Nächster Tag" : "Nächster Tag"}
           >
             <ChevronRight className="size-5" />
