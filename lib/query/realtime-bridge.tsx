@@ -13,6 +13,8 @@ import { dispatchRealtimeEvent } from "./realtime";
 import { getTabId } from "./tab-id";
 
 const REALTIME_ERROR_RECONNECT_MS = 5_000;
+/** Obergrenze des Backoffs — bei längerer Offline-Phase nicht dauernd neu versuchen. */
+const REALTIME_MAX_RECONNECT_MS = 30_000;
 /** Collapse duplicate BroadcastChannel + Supabase deliveries of the same event. */
 const INCOMING_EVENT_DEDUPE_MS = 1_500;
 
@@ -57,7 +59,8 @@ export function RealtimeBridge({ orgId }: { orgId: string | null }): null {
     dedupe.lastAt = now;
 
     // Cross-tab / Realtime: refetch inactive caches too (see invalidations.ts).
-    // refetchOnWindowFocus is off globally; background tabs must refresh silently.
+    // Auch Hintergrund-Tabs müssen still nachladen — der Focus-Refetch greift
+    // dort per Definition nicht.
     dispatchRealtimeEvent(qc, event, { refetchType: "all" });
   }, [qc]);
 
@@ -75,6 +78,9 @@ export function RealtimeBridge({ orgId }: { orgId: string | null }): null {
     let channel: RealtimeChannel | null = null;
     let reconnectTimeoutId: number | null = null;
     let cancelled = false;
+    let attempt = 0;
+    /** Nach einer Unterbrechung wurden Broadcasts verpasst — beim Wiederverbinden nachziehen. */
+    let missedEvents = false;
 
     const clearReconnectTimeout = () => {
       if (reconnectTimeoutId) {
@@ -90,14 +96,62 @@ export function RealtimeBridge({ orgId }: { orgId: string | null }): null {
       }
     };
 
+    /** Harter Neuaufbau — nur für echte Fehler, wo der Kanal nicht von selbst zurückkommt. */
+    const scheduleReconnect = () => {
+      if (cancelled || reconnectTimeoutId) return;
+      missedEvents = true;
+      disconnect();
+      const delay = Math.min(
+        REALTIME_ERROR_RECONNECT_MS * 2 ** attempt,
+        REALTIME_MAX_RECONNECT_MS,
+      );
+      attempt += 1;
+      reconnectTimeoutId = window.setTimeout(() => {
+        reconnectTimeoutId = null;
+        void connect();
+      }, delay);
+    };
+
+    /**
+     * Bei `CLOSED` baut der Supabase-Client die Verbindung selbst wieder auf.
+     * Deshalb hier NICHT sofort abreissen — das würde den laufenden Wiederaufbau
+     * stören und Doppelverbindungen erzeugen. Stattdessen nur vormerken, dass
+     * Ereignisse verpasst wurden, und einen Wachhund stellen, der erst eingreift,
+     * wenn der Kanal nach der Frist immer noch nicht zurück ist.
+     */
+    const watchAfterClose = () => {
+      if (cancelled || reconnectTimeoutId) return;
+      missedEvents = true;
+      reconnectTimeoutId = window.setTimeout(() => {
+        reconnectTimeoutId = null;
+        if (cancelled) return;
+        const zurueck = channel?.state === "joined";
+        if (!zurueck) scheduleReconnect();
+      }, REALTIME_ERROR_RECONNECT_MS);
+    };
+
+    /** Tab wieder sichtbar oder Netz zurück: prüfen, ob der Kanal wirklich noch lebt. */
+    const checkAlive = () => {
+      if (cancelled) return;
+      if (!channel) {
+        clearReconnectTimeout();
+        attempt = 0;
+        void connect();
+        return;
+      }
+      if (channel.state !== "joined") watchAfterClose();
+    };
+
     const connect = async () => {
       if (cancelled || channel) return;
 
       const { data: sessionData } = await supabase.auth.getSession();
+      if (cancelled) return;
       const token = sessionData.session?.access_token;
       if (token) {
         await supabase.realtime.setAuth(token);
       }
+      if (cancelled) return;
 
       channel = supabase.channel(orgChannelName(orgId), {
         config: { broadcast: { self: false } },
@@ -110,25 +164,50 @@ export function RealtimeBridge({ orgId }: { orgId: string | null }): null {
       });
 
       channel.subscribe((status) => {
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          disconnect();
+        if (status === "SUBSCRIBED") {
+          attempt = 0;
           clearReconnectTimeout();
-          reconnectTimeoutId = window.setTimeout(() => {
-            reconnectTimeoutId = null;
-            void connect();
-          }, REALTIME_ERROR_RECONNECT_MS);
+          if (missedEvents) {
+            // Während der Unterbrechung geänderte Daten sind im Cache noch alt.
+            // Der Broadcast dieser Änderungen ist unwiederbringlich verpasst —
+            // ohne dieses Nachladen bliebe der Stand veraltet, bis zufällig ein
+            // neues Ereignis kommt oder der Nutzer neu lädt.
+            missedEvents = false;
+            void qc.invalidateQueries({ refetchType: "all" });
+          }
+          return;
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          scheduleReconnect();
+          return;
+        }
+        // CLOSED wurde bisher gar nicht behandelt. Der Socket kommt zwar meist
+        // von selbst zurück, aber die währenddessen verpassten Änderungen holt
+        // niemand nach — genau das lässt die App still veralten.
+        if (status === "CLOSED") {
+          watchAfterClose();
         }
       });
     };
+
+    const onOnline = () => checkAlive();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") checkAlive();
+    };
+
+    window.addEventListener("online", onOnline);
+    document.addEventListener("visibilitychange", onVisible);
 
     void connect();
 
     return () => {
       cancelled = true;
+      window.removeEventListener("online", onOnline);
+      document.removeEventListener("visibilitychange", onVisible);
       clearReconnectTimeout();
       disconnect();
     };
-  }, [dispatchPeerEvent, routeWantsRealtime, orgId]);
+  }, [dispatchPeerEvent, routeWantsRealtime, orgId, qc]);
 
   return null;
 }
