@@ -975,6 +975,11 @@ function parseProjectCoreBootstrapRpc(payload: unknown): ProjectCore | null {
   };
 }
 
+/** Postgres bricht überlange Abfragen selbst ab (statement_timeout, hier 8 s für angemeldete Nutzer). */
+function isStatementTimeout(message: string | null | undefined): boolean {
+  return typeof message === "string" && message.includes("statement timeout");
+}
+
 async function projectCorePostgrestFallback(projectId: string): Promise<ProjectCore | null> {
   const [head, details] = await Promise.all([
     getProjectCoreHead(projectId),
@@ -1011,6 +1016,17 @@ export const loadProjectCoreBootstrap = cache(async function loadProjectCoreBoot
       if (parsed) return parsed;
       console.warn("[bauflip] project_core_bootstrap_rpc_fallback parse");
     } else if (error) {
+      // Statement-Timeout heisst: Die Datenbank war überlastet, nicht dass die
+      // RPC fehlt. Der Ersatzweg macht dann MEHR Abfragen auf genau dieser
+      // überlasteten Datenbank — gemessen am 17.08.: Timeout um 06:19:19,
+      // Ersatzweg erst um 06:19:50 fertig. Aus 8 Sekunden wurden 45, und der
+      // Nutzer hatte längst neu geladen. Hier lieber schnell scheitern; die
+      // Abfrage-Ebene versucht es von selbst noch einmal, und bis dahin ist
+      // die Lastspitze meist vorbei.
+      if (isStatementTimeout(error.message)) {
+        console.warn("[bauflip] project_core_bootstrap_timeout", error.message);
+        throw new Error("Die Datenbank ist gerade überlastet. Bitte kurz erneut versuchen.");
+      }
       console.warn("[bauflip] project_core_bootstrap_rpc_fallback", error.message);
     }
 
