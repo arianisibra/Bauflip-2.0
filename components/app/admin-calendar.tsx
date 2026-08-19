@@ -34,6 +34,17 @@ import { cn } from "@/lib/utils";
 
 const TZ = "Europe/Zurich";
 
+/**
+ * Wartezeit, bevor das Überfahren einer Terminkarte das Projekt im Hintergrund lädt.
+ *
+ * Gemessen auf der Produktion: eine solche Vorabladung kostet 670–930 ms Serverzeit
+ * (Schwelle des Slow-Logs: 800 ms — die Hälfte der Messungen lag darüber). Bei 250 ms
+ * genügte flüchtiges Überfliegen der Liste, um für jede berührte Karte diese Arbeit
+ * auszulösen, obwohl die meisten nie angeklickt werden. 700 ms verlangen bewusstes
+ * Verweilen: Wer wirklich auf eine Karte zielt, bekommt die Vorabladung weiterhin.
+ */
+const HOVER_PREFETCH_DELAY_MS = 700;
+
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", timeZone: TZ });
 }
@@ -358,7 +369,7 @@ export function AdminCalendar() {
       }
       hoverPrefetchTimerRef.current = setTimeout(() => {
         prefetchProjectCore(qc, projectId);
-      }, 250);
+      }, HOVER_PREFETCH_DELAY_MS);
     },
     [qc],
   );
