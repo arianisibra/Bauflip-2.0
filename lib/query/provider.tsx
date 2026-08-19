@@ -33,7 +33,13 @@ function makeQueryClient(): QueryClient {
       queries: {
         staleTime: 30 * 1000,
         gcTime: 5 * 60 * 1000,
-        refetchOnWindowFocus: false,
+        // An: Ohne Focus-Refetch hatte die App ausser Realtime keinen einzigen
+        // Auslöser, um veraltete Daten nachzuladen — wer nach einer Pause
+        // zurückkam, sah den alten Stand und half sich mit F5 (der langsamste
+        // Weg durch die App). `staleTime` bremst das: nur wirklich veraltete
+        // Abfragen laden nach, kein Request-Sturm bei jedem Fensterwechsel.
+        refetchOnWindowFocus: true,
+        refetchOnReconnect: true,
         retry: 1,
       },
       mutations: {
