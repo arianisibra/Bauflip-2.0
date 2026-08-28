@@ -4,6 +4,7 @@ import { QueryHydrationBoundary } from "@/components/app/query-hydration-boundar
 import { KalenderPageClient } from "@/components/app/kalender-page-client";
 import { BauflipLoading } from "@/components/ui/bauflip-loading";
 import { getLayoutSession } from "@/lib/auth/session";
+import { serverRenderNowMs } from "@/lib/date/swiss";
 import { buildKalenderDehydratedState } from "@/lib/kalender/server-bootstrap";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,7 @@ export default async function KalenderPage({ searchParams }: PageProps) {
 
   const sp = await searchParams;
   const dehydratedState = await buildKalenderDehydratedState(sp);
+  const serverNowTs = serverRenderNowMs();
 
   return (
     <QueryHydrationBoundary state={dehydratedState}>
@@ -42,7 +44,7 @@ export default async function KalenderPage({ searchParams }: PageProps) {
           </div>
         }
       >
-        <KalenderPageClient />
+        <KalenderPageClient serverNowTs={serverNowTs} />
       </Suspense>
     </QueryHydrationBoundary>
   );

@@ -84,6 +84,19 @@ export function swissYmdParts(now = new Date()): { y: number; m: number; day: nu
   return { y, m, day };
 }
 
+/**
+ * Renderzeit des Servers als Zeitstempel, zum Weiterreichen an Client-Komponenten.
+ *
+ * Client-Komponenten dürfen die aktuelle Zeit NICHT selbst ermitteln, wenn sie in die
+ * Ausgabe einfliesst: Beim Server-Aufbau und beim Übernehmen im Browser käme je ein
+ * anderer Wert heraus — das erzeugt einen Hydration-Mismatch (React #418), worauf React
+ * den ganzen Baum verwirft und neu aufbaut. Stattdessen einmal hier bestimmen und als
+ * Prop durchreichen, damit beide Seiten garantiert denselben Wert verwenden.
+ */
+export function serverRenderNowMs(): number {
+  return Date.now();
+}
+
 /** Current date string in Europe/Zurich as YYYY-MM-DD. */
 export function todayKeySwiss(now = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(now);

@@ -297,12 +297,15 @@ function WeekSection({
   );
 }
 
-export function AdminCalendar() {
+export function AdminCalendar({ serverNowTs }: { serverNowTs: number }) {
   const qc = useQueryClient();
   const { openProjectSheet } = useKalenderSheet();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const todayKey = useMemo(() => todayKeySwiss(), []);
+  // Ebenfalls aus der Server-Zeit ableiten: Ein Aufbau, der die Schweizer Mitternacht
+  // überspannt, ergäbe sonst auf Server und Client verschiedene „heute“-Tage — derselbe
+  // Hydration-Mismatch wie bei `calendarNowTs` unten, nur seltener.
+  const todayKey = useMemo(() => todayKeySwiss(new Date(serverNowTs)), [serverNowTs]);
   const hoverPrefetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const urlState = useMemo(
@@ -315,7 +318,15 @@ export function AdminCalendar() {
   const [year, setYear] = useState(() => swissYmdParts(anchorDateFromDayKey(urlState.dayKey)).y);
   const [month, setMonth] = useState(() => swissYmdParts(anchorDateFromDayKey(urlState.dayKey)).m);
   const [anchorDate, setAnchorDate] = useState(() => anchorDateFromDayKey(urlState.dayKey));
-  const [calendarNowTs] = useState(() => Date.now());
+  /**
+   * Muss auf Server und Client denselben Wert haben, sonst teilt die Aufteilung in
+   * „Kommende“/„Vergangene“ (unten) die Termine unterschiedlich auf — das erzeugte
+   * bisher React-Fehler #418 (Hydration-Mismatch). React verwirft dann den ganzen
+   * Baum, baut ihn neu auf und wirft dabei den vom Server gelieferten Query-Cache weg;
+   * die Folge waren ~10 Nachlade-Abrufe und ein Ladeindikator, der nicht mehr ausging.
+   * Gemessen beim Kunden am 28.08.2026. Deshalb kommt die Zeit vom Server.
+   */
+  const [calendarNowTs] = useState(serverNowTs);
   const [selectedTechnicianId, setSelectedTechnicianId] = useState(urlState.selectedTechnicianId);
   const [sortMode, setSortMode] = useState<"time" | "technician">(urlState.sortMode);
   const skipUrlPushRef = useRef(false);
@@ -410,7 +421,19 @@ export function AdminCalendar() {
     [viewMode, year, month, anchorDate],
   );
 
-  const { data: tasks = [], isFetching: pending } = useCalendarRangeTasks(
+  /**
+   * `isLoading` statt `isFetching`: `isFetching` ist bei JEDEM Netzzugriff wahr — auch
+   * beim stillen Nachladen nach einem Fensterwechsel (`refetchOnWindowFocus`). Zusammen
+   * mit `keepPreviousData` sah der Nutzer dann fertige Termine UND „Wird geladen …“,
+   * und zwar bei jedem Zurückklicken ins Fenster. Im Büro fühlt sich das an wie
+   * Dauerladen. `isLoading` zeigt nur die echte Erstladung ohne vorhandene Daten.
+   */
+  const {
+    data: tasks = [],
+    isLoading: pending,
+    isError: loadFailed,
+    refetch: reloadTasks,
+  } = useCalendarRangeTasks(
     startIso,
     endIso,
     viewMode !== "availability",
@@ -604,6 +627,25 @@ export function AdminCalendar() {
             {pending ? (
               <span className="mt-0.5">
                 <BauflipLoadingInline label="Wird geladen …" />
+              </span>
+            ) : null}
+            {loadFailed ? (
+              /* Ohne diesen Hinweis blieb eine gescheiterte Abfrage stumm: Der Kalender
+                 zeigte einfach „Keine Termine“ — für den Nutzer nicht von echtem
+                 Dauerladen zu unterscheiden, und für uns ohne jede Diagnose. */
+              <span className="mt-1 flex flex-wrap items-center justify-center gap-2">
+                <span className="text-xs font-medium text-destructive">
+                  Termine konnten nicht geladen werden.
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => void reloadTasks()}
+                >
+                  Erneut versuchen
+                </Button>
               </span>
             ) : null}
           </div>

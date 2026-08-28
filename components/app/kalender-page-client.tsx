@@ -6,7 +6,7 @@ import { AdminCalendar } from "@/components/app/admin-calendar";
 import { KalenderProjectSheet } from "@/components/app/kalender-project-sheet";
 import { KalenderSheetProvider } from "@/components/app/kalender-sheet-context";
 
-function KalenderPageContent() {
+function KalenderPageContent({ serverNowTs }: { serverNowTs: number }) {
   const searchParams = useSearchParams();
   const initialSheet = (searchParams.get("sheet") ?? "").trim() || null;
 
@@ -21,17 +21,17 @@ function KalenderPageContent() {
             Termine nach Monat, Kalenderwoche oder einzelnem Tag (Europe/Zurich).
           </p>
         </div>
-        <AdminCalendar />
+        <AdminCalendar serverNowTs={serverNowTs} />
       </section>
       <KalenderProjectSheet />
     </KalenderSheetProvider>
   );
 }
 
-export function KalenderPageClient() {
+export function KalenderPageClient({ serverNowTs }: { serverNowTs: number }) {
   return (
     <Suspense fallback={null}>
-      <KalenderPageContent />
+      <KalenderPageContent serverNowTs={serverNowTs} />
     </Suspense>
   );
 }
