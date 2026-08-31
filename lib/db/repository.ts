@@ -1031,7 +1031,7 @@ export const loadProjectCoreBootstrap = cache(async function loadProjectCoreBoot
     }
 
     return projectCorePostgrestFallback(projectId);
-  });
+  }, { projectId });
 });
 
 export const getProjectCoreHead = cache(async function getProjectCoreHead(
@@ -1066,7 +1066,7 @@ export const getProjectCoreHead = cache(async function getProjectCoreHead(
       project: mapProjectRow(project as Record<string, unknown>),
       appointments: enrichedAppointments,
     };
-  });
+  }, { projectId });
 });
 
 export async function listProjectAttachmentsForProject(
@@ -1123,7 +1123,7 @@ export const getProjectCoreDetails = cache(async function getProjectCoreDetails(
       attachments,
       reports,
     };
-  });
+  }, { projectId });
 });
 
 export const getProjectCore = cache(async function getProjectCore(projectId: string): Promise<ProjectCore | null> {
@@ -1321,7 +1321,7 @@ async function weekTasksFromAppointmentRange(
         };
       })
       .filter((x): x is WeekTaskItem => x !== null);
-  });
+  }, { rangeStartIso, rangeEndIso });
 }
 
 /** Büro-Kalender: Termine mit `starts_at` im halboffenen Bereich (über ISO-Strings, inkl. Enden). */
@@ -1414,7 +1414,7 @@ export const listTechnicianAbsencesInRange = cache(async function listTechnician
     return rows
       .map((r) => mapAbsenceRow(r, nameMap))
       .filter((x): x is TechnicianAbsence => x !== null);
-  });
+  }, { rangeStartIso, rangeEndIso });
 });
 
 function isTeamRole(v: unknown): v is TeamMemberListItem["role"] {
