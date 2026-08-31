@@ -45,6 +45,34 @@ const TZ = "Europe/Zurich";
  */
 const HOVER_PREFETCH_DELAY_MS = 700;
 
+/**
+ * Wartezeit, bevor ein Tageswechsel tatsächlich Daten anfordert.
+ *
+ * Jeder Wechsel loest drei Server-Aktionen aus: eine fuer den Tag selbst, zwei zum
+ * Vorabladen der Nachbartage. Next.js arbeitet Server-Aktionen NACHEINANDER ab. Bei
+ * zehn schnellen Klicks stehen damit dreissig Aktionen in der Warteschlange — und
+ * einzelne bleiben darin dauerhaft stecken, ohne den Server je zu erreichen.
+ *
+ * Am 31.08.2026 im Zwischenspeicher der App nachgewiesen: vier Abfragen dauerhaft im
+ * Zustand "fetching", darunter die des angezeigten Tages. Fuer den Nutzer blieb die
+ * Ansicht leer, ohne Fehler und ohne Wiederholung — nur ein Neuladen half.
+ *
+ * 250 ms sind kuerzer als eine bewusste Klickpause, aber laenger als das Durchklicken
+ * mehrerer Tage. Zwischentage fordern dadurch keine Daten mehr an; geladen wird nur
+ * der Tag, auf dem man stehen bleibt.
+ */
+const RANGE_SETTLE_DELAY_MS = 250;
+
+/** Gibt `wert` erst zurueck, wenn er `verzoegerungMs` lang unveraendert geblieben ist. */
+function useEntprellt<T>(wert: T, verzoegerungMs: number): T {
+  const [ruhig, setRuhig] = useState(wert);
+  useEffect(() => {
+    const id = setTimeout(() => setRuhig(wert), verzoegerungMs);
+    return () => clearTimeout(id);
+  }, [wert, verzoegerungMs]);
+  return ruhig;
+}
+
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", timeZone: TZ });
 }
@@ -431,6 +459,19 @@ export function AdminCalendar({ serverNowTs }: { serverNowTs: number }) {
   );
 
   /**
+   * Ueberschrift und Bedienelemente folgen dem Klick sofort — nur das LADEN wartet kurz ab
+   * (siehe RANGE_SETTLE_DELAY_MS). Als ein Wert entprellt, damit Anfang und Ende des
+   * Zeitraums niemals aus verschiedenen Ständen stammen können.
+   */
+  const bereichsSchluessel = `${startIso}|${endIso}`;
+  const ruhigerSchluessel = useEntprellt(bereichsSchluessel, RANGE_SETTLE_DELAY_MS);
+  const ruhigerDayKey = useEntprellt(dayKey, RANGE_SETTLE_DELAY_MS);
+  const [ladeStartIso, ladeEndIso] = useMemo(
+    () => ruhigerSchluessel.split("|"),
+    [ruhigerSchluessel],
+  );
+
+  /**
    * `isLoading` statt `isFetching`: `isFetching` ist bei JEDEM Netzzugriff wahr — auch
    * beim stillen Nachladen nach einem Fensterwechsel (`refetchOnWindowFocus`). Zusammen
    * mit `keepPreviousData` sah der Nutzer dann fertige Termine UND „Wird geladen …“,
@@ -443,16 +484,21 @@ export function AdminCalendar({ serverNowTs }: { serverNowTs: number }) {
     isError: loadFailed,
     refetch: reloadTasks,
   } = useCalendarRangeTasks(
-    startIso,
-    endIso,
+    ladeStartIso,
+    ladeEndIso,
     viewMode !== "availability",
   );
 
   // Nachbar-Zeitraum im Hintergrund vorladen, damit Vor/Zurück nicht jedes Mal auf das
   // Netzwerk wartet — der Kalender zeigt dank placeholderData ohnehin sofort den alten
   // Stand, aber mit Prefetch ist der neue Stand meist schon da, wenn er gebraucht wird.
+  //
+  // Läuft bewusst über den ENTPRELLTEN Tag: Beim Durchklicken sind die Nachbarn jedes
+  // Zwischentags uninteressant, und sie waren der grössere Teil der Anfrageflut —
+  // zwei von drei Aktionen pro Wechsel.
   useEffect(() => {
     if (viewMode === "availability" || viewMode === "year") return;
+    const dayKey = ruhigerDayKey;
     const monthNeighbor = (dir: -1 | 1) => {
       let nm = month + dir;
       let ny = year;
@@ -479,7 +525,7 @@ export function AdminCalendar({ serverNowTs }: { serverNowTs: number }) {
     for (const bounds of neighbors) {
       prefetchCalendarRange(qc, bounds.startIso, bounds.endIso);
     }
-  }, [viewMode, dayKey, year, month, qc]);
+  }, [viewMode, ruhigerDayKey, year, month, qc]);
 
   // Alle Team-Mitglieder der Organisation — nicht nur die, die an diesem Tag Termine haben,
   // sonst verschwinden freie Monteure aus dem Filter, sobald sie mal keinen Termin haben.
