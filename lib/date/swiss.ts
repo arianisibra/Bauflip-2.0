@@ -61,12 +61,23 @@ export function zurichWallClockInstant(
     ) {
       return new Date(utcMs);
     }
-    const correctionMs =
-      (d - p.d) * 86_400_000 +
-      (hour - p.h) * 3_600_000 +
-      (minute - p.mi) * 60_000 +
-      (second - p.s) * 1_000;
-    utcMs += correctionMs;
+    /**
+     * Differenz über vollständige Zeitstempel bilden, NICHT über die Tageszahl im Monat.
+     *
+     * Vorher wurde mit `(d - p.d)` gerechnet. Über eine Monatsgrenze hinweg ist das
+     * grob falsch: Für den 31. landet die erste Schätzung in der Sommerzeit bereits im
+     * Folgemonat (p.d = 1), die Korrektur rechnet dann 31 − 1 = 30 Tage und springt einen
+     * ganzen Monat weit statt sich anzunähern. Die Schleife lief davon und gab nach 12
+     * Versuchen den zuletzt erreichten, falschen Wert zurück.
+     *
+     * Messbar: Für den 31.08.2026 lieferte die Tagesgrenze den 31.10.2026 — die
+     * Tagesansicht lud damit ZWEI MONATE Termine statt einem Tag. Betroffen waren alle
+     * sieben Monatsletzten in der Sommerzeit (31.03., 30.04., 31.05., 30.06., 31.07.,
+     * 31.08., 30.09.). Gemessen am 31.08.2026.
+     */
+    const zielMs = Date.UTC(y, mo - 1, d, hour, minute, second, millisecond);
+    const istMs = Date.UTC(p.y, p.mo - 1, p.d, p.h, p.mi, p.s, millisecond);
+    utcMs += zielMs - istMs;
   }
 
   return new Date(utcMs);
