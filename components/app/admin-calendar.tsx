@@ -315,9 +315,22 @@ export function AdminCalendar({ serverNowTs }: { serverNowTs: number }) {
 
   const [viewMode, setViewMode] = useState<AdminCalendarViewMode>(urlState.viewMode);
   const [dayKey, setDayKey] = useState(urlState.dayKey);
-  const [year, setYear] = useState(() => swissYmdParts(anchorDateFromDayKey(urlState.dayKey)).y);
-  const [month, setMonth] = useState(() => swissYmdParts(anchorDateFromDayKey(urlState.dayKey)).m);
-  const [anchorDate, setAnchorDate] = useState(() => anchorDateFromDayKey(urlState.dayKey));
+  /**
+   * `dayKey` ist die EINZIGE Quelle der Wahrheit; `anchorDate`, `year` und `month` werden
+   * daraus abgeleitet statt als eigener Zustand geführt.
+   *
+   * Vorher waren es vier getrennte Zustände, die an drei Stellen von Hand synchron
+   * gehalten wurden — unter anderem mit `setAnchorDate` INNERHALB der Aktualisierungs-
+   * funktion von `setDayKey`. Das kann auseinanderlaufen, und dann folgt die Abfrage dem
+   * einen Wert und die Anzeige dem anderen.
+   *
+   * Belegt am 31.08.2026: Auf dem 18. August wurden die Nachbartage 17. und 19. geladen
+   * (die richten sich nach `dayKey`), der 18. selbst aber NIE — die Hauptabfrage richtete
+   * sich nach dem abweichenden `anchorDate`. Ergebnis: „Keine Termine an diesem Tag",
+   * obwohl die Datenbank für den 18. fünf Termine enthält. Erst ein Neuladen half.
+   */
+  const anchorDate = useMemo(() => anchorDateFromDayKey(dayKey), [dayKey]);
+  const { y: year, m: month } = useMemo(() => swissYmdParts(anchorDate), [anchorDate]);
   /**
    * Muss auf Server und Client denselben Wert haben, sonst teilt die Aufteilung in
    * „Kommende“/„Vergangene“ (unten) die Termine unterschiedlich auf — das erzeugte
@@ -331,13 +344,9 @@ export function AdminCalendar({ serverNowTs }: { serverNowTs: number }) {
   const [sortMode, setSortMode] = useState<"time" | "technician">(urlState.sortMode);
   const skipUrlPushRef = useRef(false);
 
+  /** Alles Weitere (anchorDate, year, month) leitet sich davon ab — siehe oben. */
   const applyDayKey = useCallback((nextDayKey: string) => {
     setDayKey(nextDayKey);
-    const ad = anchorDateFromDayKey(nextDayKey);
-    setAnchorDate(ad);
-    const { y, m } = swissYmdParts(ad);
-    setYear(y);
-    setMonth(m);
   }, []);
 
   useEffect(() => {
@@ -537,16 +546,14 @@ export function AdminCalendar({ serverNowTs }: { serverNowTs: number }) {
     return { upcomingByWeek: upcomingWeeks, pastByWeek: pastWeeks };
   }, [calendarNowTs, sortMode, visibleTasks]);
 
+  /**
+   * Reine Aktualisierungsfunktion ohne Seiteneffekte. Vorher standen hier drei weitere
+   * `set…`-Aufrufe INNERHALB der Funktion — React darf solche Funktionen mehrfach
+   * aufrufen, wodurch die Werte auseinanderliefen. Jetzt wird nur `dayKey` bewegt;
+   * schnelle Klicks summieren sich dadurch weiterhin korrekt.
+   */
   const bumpDayKey = useCallback((deltaDays: number) => {
-    setDayKey((k) => {
-      const next = shiftSwissDayKey(k, deltaDays);
-      const ad = anchorDateFromDayKey(next);
-      setAnchorDate(ad);
-      const { y, m } = swissYmdParts(ad);
-      setYear(y);
-      setMonth(m);
-      return next;
-    });
+    setDayKey((k) => shiftSwissDayKey(k, deltaDays));
   }, []);
 
   const navigateMonth = useCallback(
@@ -590,15 +597,12 @@ export function AdminCalendar({ serverNowTs }: { serverNowTs: number }) {
 
   const onViewModeChange = useCallback((next: AdminCalendarViewMode) => {
     setViewMode(next);
-    if (next === "year" || next === "month") {
-      const { y, m } = swissYmdParts(anchorDate);
-      setYear(y);
-      setMonth(m);
-    }
+    // Für Jahr/Monat ist nichts mehr zu tun: `year` und `month` leiten sich aus `dayKey`
+    // ab und zeigen damit ohnehin auf den Monat des aktuellen Tages.
     if (next === "week") {
       applyDayKey(dayKeyFromDate(anchorDateForYearMonth(year, month)));
     }
-  }, [anchorDate, year, month, applyDayKey]);
+  }, [year, month, applyDayKey]);
 
   const dayPickerValue = dayKey;
   const monthPickerValue = useMemo(() => `${year}-${String(month).padStart(2, "0")}`, [year, month]);
