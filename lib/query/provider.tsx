@@ -20,7 +20,15 @@ function makeQueryClient(): QueryClient {
         // Abfragen laden nach, kein Request-Sturm bei jedem Fensterwechsel.
         refetchOnWindowFocus: true,
         refetchOnReconnect: true,
-        retry: 1,
+        // 2 Wiederholungen mit Abstand statt 1 sofortige: Beim Ausfall vom
+        // 31.08. (Disk-IO-Drosselung) scheiterte der sofortige zweite Versuch
+        // genauso, weil die Datenbank noch gedrosselt war — mit 2 s und 6 s
+        // Abstand wäre ein Teil der Abbrüche beim Kunden nie sichtbar geworden.
+        // Nur Lese-Abfragen (idempotent); Mutationen bleiben bei retry: 0.
+        // Ehrlich: Gegen minutenlange Drosselung hilft auch das nicht — dann
+        // greift die Fehlermeldung mit "Erneut versuchen".
+        retry: 2,
+        retryDelay: (attemptIndex) => (attemptIndex === 0 ? 2_000 : 6_000),
       },
       mutations: {
         retry: 0,

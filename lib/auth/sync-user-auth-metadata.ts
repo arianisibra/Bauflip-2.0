@@ -4,7 +4,15 @@ import type { RoleType } from "@/lib/domain/types";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { buildAuthUserMetadataPatch } from "@/lib/auth/user-metadata-keys";
 
-/** Mirror membership into JWT user_metadata for proxy fast-path. */
+/**
+ * Spiegelt die Mitgliedschaft in die Auth-Metadaten, damit der Proxy-Schnellweg
+ * greift (keine Abfrage auf organization_memberships pro Anfrage).
+ *
+ * Massgeblich ist `app_metadata` — dieselbe Quelle, die die RLS-Regeln lesen,
+ * und vom Nutzer selbst nicht beschreibbar. `user_metadata` wird übergangsweise
+ * mitgeschrieben, damit ein noch laufender alter Serverprozess während eines
+ * Deploys weiterhin fündig wird; kann nach ein paar Releases entfallen.
+ */
 export async function syncUserAuthMetadata(
   userId: string,
   role: RoleType,
@@ -14,6 +22,7 @@ export async function syncUserAuthMetadata(
   const admin = createSupabaseAdminClient();
   if (!admin) return;
   const { error } = await admin.auth.admin.updateUserById(userId, {
+    app_metadata: buildAuthUserMetadataPatch(undefined, role, organizationId),
     user_metadata: buildAuthUserMetadataPatch(existingMetadata, role, organizationId),
   });
   if (error) {

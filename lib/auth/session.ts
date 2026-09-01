@@ -73,26 +73,16 @@ function readEmailFromSupabaseAuthCookie(
 }
 
 /**
- * Resolves the authenticated user. When proxy already ran getUser() this
- * request, reuse the cookie session (no second Auth API round-trip).
+ * Resolves the authenticated user via one getUser() round-trip.
+ *
+ * Vorher stand hier ein zweiter, sofortiger getUser()-Aufruf für den Fall,
+ * dass der erste fehlschlug oder nicht zur Proxy-Kennung passte — eine
+ * Wiederholung ohne Wartezeit gegen denselben Auth-Server liefert aber
+ * praktisch immer dasselbe Ergebnis und verdoppelte nur die Last.
+ * (Der Kommentar versprach zudem "no second Auth API round-trip", was der
+ * Code nie eingelöst hat.)
  */
 async function resolveAuthUser(supabase: SupabaseClient): Promise<User | null> {
-  let proxyUserId: string | null = null;
-  try {
-    const headerStore = await headers();
-    proxyUserId = readProxyAuthUserId(headerStore);
-  } catch {
-    proxyUserId = null;
-  }
-
-  if (proxyUserId) {
-    const { data, error } = await supabase.auth.getUser();
-    const user = data?.user ?? null;
-    if (!error && user?.id === proxyUserId) {
-      return user;
-    }
-  }
-
   const { data, error } = await supabase.auth.getUser();
   if (error) {
     console.warn("[bauflip] auth.getUser:", error.message);
