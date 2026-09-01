@@ -4,7 +4,7 @@ import type { NextRequest } from "next/server";
 import { hasSupabaseAuthCookie } from "@/lib/auth/cookies";
 import { mapRole } from "@/lib/auth/map-role";
 import { applyProxyAuthContext } from "@/lib/auth/proxy-auth-headers";
-import { readProxyAuthFromUserMetadata } from "@/lib/auth/user-metadata-keys";
+import { readProxyAuthFromAppMetadata } from "@/lib/auth/user-metadata-keys";
 import type { RoleType } from "@/lib/domain/types";
 
 const PUBLIC_PATHS = [
@@ -154,8 +154,10 @@ export async function proxy(request: NextRequest) {
   let organizationId: string | null = null;
 
   if (user) {
-    const metaRole = mapRole(user.user_metadata?.role as string | undefined);
-    const fromMetadata = readProxyAuthFromUserMetadata(user);
+    // Rollen-Vorgabe für den Ersatzweg ebenfalls aus app_metadata — derselben
+    // Quelle, die auch die RLS-Regeln der Datenbank lesen.
+    const metaRole = mapRole(user.app_metadata?.role as string | undefined);
+    const fromMetadata = readProxyAuthFromAppMetadata(user);
     const membership = fromMetadata
       ? fromMetadata
       : await resolveMembershipRole(supabase, user.id, metaRole);
@@ -201,6 +203,13 @@ function denyTechnician(pathname: string, request: NextRequest): NextResponse {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?|txt|xml)$).*)",
+    // `api/browser-log` bewusst ausgenommen: Der Mitschnitt darf keine
+    // Anmeldeprüfung auslösen. Sonst würde jede Meldung ein `auth.getUser()`
+    // und ggf. eine Abfrage auf `organization_memberships` nach sich ziehen —
+    // ausgerechnet während einer Störung, wo die Datenbank ohnehin am Limit
+    // ist, würde das Diagnosewerkzeug die Last erhöhen. Ausserdem wären
+    // Monteure ausgesperrt: `/api/browser-log` steht nicht in
+    // TECHNICIAN_ALLOWED_PREFIXES, `denyTechnician` beantwortet /api-Pfade mit 403.
+    "/((?!api/browser-log|_next/static|_next/image|favicon.ico|manifest.webmanifest|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?|txt|xml)$).*)",
   ],
 };

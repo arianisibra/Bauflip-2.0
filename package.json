@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:lokal": "cross-env NEXT_PUBLIC_TURNSTILE_SITE_KEY= CLOUDFLARE_TURNSTILE_SECRET_KEY= next dev",
     "build": "next build",
     "analyze": "cross-env ANALYZE=true next build",
     "start": "next start",
