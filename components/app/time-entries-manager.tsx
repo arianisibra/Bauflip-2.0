@@ -8,6 +8,7 @@ import {
   useUpdateTimeEntry,
 } from "@/lib/query/hooks";
 import type { TimeEntry } from "@/lib/domain/types";
+import { getErrorMessage } from "@/lib/errors/friendly-message";
 import { todayKeySwiss } from "@/lib/date/swiss";
 import { shiftSwissDayKey, swissWeekDays, swissWeekReferenceIsoFromDayKey } from "@/lib/date/swiss-week";
 import { Button } from "@/components/ui/button";
@@ -135,7 +136,7 @@ export function TimeEntriesManager() {
     };
     const onSuccess = () => resetForm();
     const onError = (err: unknown) =>
-      setError(err instanceof Error ? err.message : "Speichern fehlgeschlagen.");
+      setError(getErrorMessage(err, "Speichern fehlgeschlagen."));
 
     if (editingId) {
       update.mutate({ id: editingId, ...payload }, { onSuccess, onError });

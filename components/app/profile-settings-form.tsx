@@ -3,6 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { saveProfileSettingsAction } from "@/app/(app)/einstellungen/actions";
+import { getErrorMessage } from "@/lib/errors/friendly-message";
 import { usePatchSessionProfile } from "@/components/app/session-profile-provider";
 import { BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -70,7 +71,7 @@ export function ProfileSettingsForm({
         avatarUrl: result.profile.avatarUrl,
       });
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "Speichern fehlgeschlagen.");
+      setSaveError(getErrorMessage(error, "Speichern fehlgeschlagen."));
     } finally {
       setPending(false);
     }

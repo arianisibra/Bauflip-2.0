@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors/friendly-message";
 import type { Appointment, TechnicianReport, ProjectStatus, UserProfile } from "@/lib/domain/types";
 import {
   PROJECT_STATUS_ABGESCHLOSSEN_REQUIRES_ABRECHNEN_MESSAGE,
@@ -375,7 +376,7 @@ function StatusPipeline({
     updateStatus.mutate({ projectId, status: nextStatus }, {
       onError: (e) => {
         console.error(e);
-        toast.error(e instanceof Error ? e.message : "Status konnte nicht geändert werden.");
+        toast.error(getErrorMessage(e, "Status konnte nicht geändert werden."));
       },
     });
   };
@@ -402,7 +403,7 @@ function StatusPipeline({
       },
       onError: (e) => {
         console.error(e);
-        toast.error(e instanceof Error ? e.message : "Garantiefall konnte nicht gespeichert werden.");
+        toast.error(getErrorMessage(e, "Garantiefall konnte nicht gespeichert werden."));
       },
     });
   };
@@ -721,7 +722,7 @@ function AppointmentRow({
                           setEditingTime(false);
                         },
                         onError: (err) =>
-                          setTimeError(err instanceof Error ? err.message : "Speichern fehlgeschlagen."),
+                          setTimeError(getErrorMessage(err, "Speichern fehlgeschlagen.")),
                       },
                     );
                   }}
@@ -808,7 +809,7 @@ function AppointmentRow({
                     onSuccess: () => toast.success("Zuständige Person geändert"),
                     onError: (err) => {
                       setPreviewId1(a.assignedTechnicianId ?? "");
-                      toast.error(err instanceof Error ? err.message : "Zuweisung fehlgeschlagen.");
+                      toast.error(getErrorMessage(err, "Zuweisung fehlgeschlagen."));
                     },
                   },
                 );
@@ -865,7 +866,7 @@ function AppointmentRow({
                       toast.success(nextId ? "Monteur 2 geändert" : "Monteur 2 entfernt"),
                     onError: (err) => {
                       setPreviewId2(a.assignedTechnicianId2 ?? "");
-                      toast.error(err instanceof Error ? err.message : "Zuweisung fehlgeschlagen.");
+                      toast.error(getErrorMessage(err, "Zuweisung fehlgeschlagen."));
                     },
                   },
                 );
@@ -908,7 +909,7 @@ function AppointmentRow({
               {
                 onSuccess: () => toast.success("Termin gelöscht"),
                 onError: (err) =>
-                  toast.error(err instanceof Error ? err.message : "Löschen fehlgeschlagen."),
+                  toast.error(getErrorMessage(err, "Löschen fehlgeschlagen.")),
               },
             );
           }}
@@ -1081,7 +1082,7 @@ export function ProjektSheetEditor({
             },
             {
               onSuccess: () => toast.success("Projekt gespeichert"),
-              onError: (err) => toast.error(err instanceof Error ? err.message : "Speichern fehlgeschlagen."),
+              onError: (err) => toast.error(getErrorMessage(err, "Speichern fehlgeschlagen.")),
             },
           );
         }}
@@ -1272,7 +1273,7 @@ export function ProjektSheetEditor({
                 setError(result.error);
               }
             } catch (err) {
-              setError(err instanceof Error ? err.message : "Upload fehlgeschlagen.");
+              setError(getErrorMessage(err, "Upload fehlgeschlagen."));
             }
           }}
         >
@@ -1348,7 +1349,7 @@ export function ProjektSheetEditor({
                           toast.error(result.error);
                         }
                       } catch (err) {
-                        toast.error(err instanceof Error ? err.message : "Löschen fehlgeschlagen.");
+                        toast.error(getErrorMessage(err, "Löschen fehlgeschlagen."));
                       }
                     }}
                   >
@@ -1404,7 +1405,7 @@ export function ProjektSheetEditor({
                           toast.error(result.error);
                         }
                       } catch (err) {
-                        toast.error(err instanceof Error ? err.message : "Löschen fehlgeschlagen.");
+                        toast.error(getErrorMessage(err, "Löschen fehlgeschlagen."));
                       }
                     }}
                   >
@@ -1455,7 +1456,7 @@ export function ProjektSheetEditor({
                     await deleteReport.mutateAsync({ reportId: r.id, projectId });
                     toast.success("Rapport gelöscht");
                   } catch (e) {
-                    toast.error(e instanceof Error ? e.message : "Löschen fehlgeschlagen.");
+                    toast.error(getErrorMessage(e, "Löschen fehlgeschlagen."));
                   }
                 }}
               />
@@ -1479,7 +1480,7 @@ export function ProjektSheetEditor({
               toast.success("Rapport aktualisiert");
               setEditReport(null);
             } catch (e) {
-              toast.error(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
+              toast.error(getErrorMessage(e, "Speichern fehlgeschlagen."));
             }
           }}
         />

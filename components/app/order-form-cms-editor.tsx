@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { useDeleteOrderFormTemplate, useUpdateOrderFormTemplate } from "@/lib/query/hooks";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors/friendly-message";
 import type { OrderFormTemplate } from "@/lib/domain/types";
 import type { OrderFormFieldDef } from "@/lib/order-forms/schema";
 import { orderFormFieldsSchema, slugifyOrderFormSlug } from "@/lib/order-forms/schema";
@@ -517,7 +518,7 @@ export function CmsFormEditor({
       });
       toast.success("Formular gespeichert");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
+      toast.error(getErrorMessage(e, "Speichern fehlgeschlagen."));
     }
   };
 
@@ -528,7 +529,7 @@ export function CmsFormEditor({
       toast.success("Formular gelöscht");
       onDeleted();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Löschen fehlgeschlagen.");
+      toast.error(getErrorMessage(e, "Löschen fehlgeschlagen."));
     }
   };
 

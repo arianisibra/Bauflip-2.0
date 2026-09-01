@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors/friendly-message";
 import type { OfficeProjectListItem, ProjectStatus } from "@/lib/domain/types";
 import {
   projectStatusLabels,
@@ -468,7 +469,7 @@ export function ProjekteListClient({
           setSelected(null);
         }
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Archivieren fehlgeschlagen.");
+        toast.error(getErrorMessage(err, "Archivieren fehlgeschlagen."));
       }
     },
     [archiveProject],
@@ -480,7 +481,7 @@ export function ProjekteListClient({
         await restoreProject.mutateAsync(p.id);
         toast.success("Projekt wiederhergestellt");
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Wiederherstellen fehlgeschlagen.");
+        toast.error(getErrorMessage(err, "Wiederherstellen fehlgeschlagen."));
       }
     },
     [restoreProject],
@@ -500,7 +501,7 @@ export function ProjekteListClient({
           setSelected(null);
         }
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Löschen fehlgeschlagen.");
+        toast.error(getErrorMessage(err, "Löschen fehlgeschlagen."));
       }
     },
     [deleteProjectPermanently],

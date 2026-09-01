@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { getErrorMessage } from "@/lib/errors/friendly-message";
 import { useCreateIntake } from "@/lib/query/hooks";
 import { BauflipLoadingButtonLabel } from "@/components/ui/bauflip-loading";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,7 @@ export function IntakeForm({ onCreated }: { onCreated?: (projectId: string) => v
           const res = await createIntake.mutateAsync(fd);
           if (res?.projectId) onCreated?.(res.projectId);
         } catch (e) {
-          setError(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
+          setError(getErrorMessage(e, "Speichern fehlgeschlagen."));
         }
       }}
     >

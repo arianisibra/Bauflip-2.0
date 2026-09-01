@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { getErrorMessage } from "@/lib/errors/friendly-message";
 import { useAbsences, useAssignableProfiles, useCreateAbsence, useDeleteAbsence } from "@/lib/query/hooks";
 import {
   technicianAbsenceKindLabels,
@@ -141,7 +142,7 @@ export function AbsencesManager() {
           setKind("ferien");
           setNote("");
         },
-        onError: (err) => setError(err instanceof Error ? err.message : "Speichern fehlgeschlagen."),
+        onError: (err) => setError(getErrorMessage(err, "Speichern fehlgeschlagen.")),
       },
     );
   };

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors/friendly-message";
 import { useSessionProfile } from "@/components/app/session-profile-provider";
 import { inviteEmployeeAction, type TeamMemberListItem } from "@/app/(app)/einstellungen/actions";
 import { InviteEmployeeSubmitButton } from "@/components/app/invite-employee-submit-button";
@@ -149,7 +150,7 @@ export function MitarbeiterPageClient() {
       await deactivate.mutateAsync(row.userId);
       toast.success(`${row.displayName} wurde entfernt`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Entfernen fehlgeschlagen.");
+      toast.error(getErrorMessage(e, "Entfernen fehlgeschlagen."));
     }
   };
 
@@ -159,7 +160,7 @@ export function MitarbeiterPageClient() {
       await revokeInvite.mutateAsync(row.email);
       toast.success("Einladung zurückgezogen");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Zurückziehen fehlgeschlagen.");
+      toast.error(getErrorMessage(e, "Zurückziehen fehlgeschlagen."));
     }
   };
   const turnstileConfigured = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);

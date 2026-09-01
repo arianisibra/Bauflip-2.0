@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BauflipLoadingButtonLabel, BauflipLoadingInline } from "@/components/ui/bauflip-loading";
 import { useAddAppointment, useAvailabilityRange } from "@/lib/query/hooks";
+import { getErrorMessage } from "@/lib/errors/friendly-message";
 import {
   taskAssignedTechnicianIds,
   technicianAbsenceKindLabels,
@@ -349,7 +350,7 @@ export function AppointmentBookingForm({
       },
       {
         onError: (err) =>
-          setError(err instanceof Error ? err.message : "Termin fehlgeschlagen."),
+          setError(getErrorMessage(err, "Termin fehlgeschlagen.")),
         onSuccess: () => {
           setStartsAtLocal("");
           setEndsAtLocal("");

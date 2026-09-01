@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors/friendly-message";
 import type { ProjectOrderLine } from "@/lib/domain/types";
 import {
   useCreateProjectOrder,
@@ -144,7 +145,7 @@ export function OrderLinesSection({
       toast.success("Bestellung erfasst");
       setForm(null);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
+      toast.error(getErrorMessage(e, "Speichern fehlgeschlagen."));
     }
   };
 
@@ -190,14 +191,14 @@ export function OrderLinesSection({
                 try {
                   await setReceived.mutateAsync({ orderId: o.id, projectId, received: o.receivedAt == null });
                 } catch (e) {
-                  toast.error(e instanceof Error ? e.message : "Aktion fehlgeschlagen.");
+                  toast.error(getErrorMessage(e, "Aktion fehlgeschlagen."));
                 }
               }}
               onDelete={async () => {
                 try {
                   await deleteOrder.mutateAsync({ orderId: o.id, projectId });
                 } catch (e) {
-                  toast.error(e instanceof Error ? e.message : "Löschen fehlgeschlagen.");
+                  toast.error(getErrorMessage(e, "Löschen fehlgeschlagen."));
                 }
               }}
             />

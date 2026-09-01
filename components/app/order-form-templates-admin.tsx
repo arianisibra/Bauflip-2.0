@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { useCreateOrderFormTemplate, useOrderFormTemplates } from "@/lib/query/hooks";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors/friendly-message";
 import type { OrderFormTemplate } from "@/lib/domain/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -65,7 +66,7 @@ export function OrderFormTemplatesAdmin({ templates: initialTemplates }: { templ
       setSelectedId(id);
       toast.success("Formular erstellt");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Anlegen fehlgeschlagen.");
+      toast.error(getErrorMessage(e, "Anlegen fehlgeschlagen."));
     }
   };
 

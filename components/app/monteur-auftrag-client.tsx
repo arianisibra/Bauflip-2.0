@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors/friendly-message";
 import type { ProjectCore } from "@/lib/db/repository";
 import type {
   OrderFormTemplate,
@@ -506,7 +507,7 @@ export function MonteurAuftragClient({
           toast.success("Datei hochgeladen");
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Upload fehlgeschlagen.";
+        const message = getErrorMessage(err, "Upload fehlgeschlagen.");
         setError(message);
         toast.error(message);
       } finally {
@@ -998,7 +999,7 @@ export function MonteurAuftragClient({
               toast.success("Rapport aktualisiert");
               setEditReport(null);
             } catch (e) {
-              toast.error(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
+              toast.error(getErrorMessage(e, "Speichern fehlgeschlagen."));
             }
           }}
         />
