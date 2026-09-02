@@ -20,6 +20,18 @@
       ],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "bauflip-os",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "/Users/arianisibrahimi/Work/Github/bauflip-os-port",
+        "run",
+        "dev:lokal"
+      ],
+      "port": 3001,
+      "autoPort": true
     }
   ]
 }
