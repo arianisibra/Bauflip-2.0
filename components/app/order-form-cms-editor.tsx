@@ -525,7 +525,17 @@ export function CmsFormEditor({
   const handleDeleteForm = async () => {
     if (!window.confirm(`Formular „${formName}" wirklich löschen?`)) return;
     try {
-      await deleteTpl.mutateAsync(template.id);
+      const { deaktiviert } = await deleteTpl.mutateAsync(template.id);
+      if (deaktiviert) {
+        // Bleibt in der Liste (als inaktiv), damit die bestehenden Rapporte lesbar bleiben.
+        setIsActive(false);
+        toast.success("Formular deaktiviert", {
+          description:
+            "Es wird in bestehenden Rapporten verwendet und kann deshalb nicht gelöscht werden. Es erscheint nicht mehr in der Auswahl; die alten Rapporte bleiben erhalten.",
+          duration: 10_000,
+        });
+        return;
+      }
       toast.success("Formular gelöscht");
       onDeleted();
     } catch (e) {

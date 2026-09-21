@@ -21,6 +21,8 @@ import {
   getProjectCoreHead,
   listAssignableProfiles,
   listActiveOrderFormTemplatesForOrg,
+  listOrderFormTemplatesForOrg,
+  listStoredOrderFormValuesForReport,
   listProjectsForOfficePage,
   loadProjectCoreBootstrap,
   signAttachmentUrls,
@@ -42,6 +44,7 @@ import {
   technicianReportUpdateSchema,
 } from "@/lib/validations/forms";
 import { validateOrderFormValues } from "@/lib/order-forms/validate-submission";
+import { alsAktionsFehler, FachFehler, type AktionsFehler } from "@/lib/errors/fach-fehler";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { withSlowLog } from "@/lib/observability/slow-log";
 
@@ -406,7 +409,7 @@ export async function deleteReportAction(
 export async function updateTechnicianReportAction(
   values: unknown,
   tabId?: string,
-): Promise<{ core: ProjectCore }> {
+): Promise<{ core: ProjectCore } | AktionsFehler> {
   const session = await requireTechFieldSession();
   const isOffice = session.role === "office" || session.role === "admin";
   const isTechnician = session.role === "technician";
@@ -449,29 +452,42 @@ export async function updateTechnicianReportAction(
   }
 
   const organizationId = String(proj.organization_id);
-  const activeTemplates = await listActiveOrderFormTemplatesForOrg(organizationId);
-  const templateById = new Map(activeTemplates.map((t) => [t.id, t]));
+  // Alle Vorlagen (auch deaktivierte) und die bisher gespeicherten Zeilen — parallel, damit das
+  // Speichern nicht länger dauert als vorher. Ein Rapport muss bearbeitbar bleiben, auch wenn
+  // seine Vorlage seither umgebaut oder deaktiviert wurde; sonst friert jede Vorlagenänderung
+  // alle alten Rapporte ein (21.09.2026: 294 von 297).
+  const [alleVorlagen, gespeicherteZeilen] = await Promise.all([
+    listOrderFormTemplatesForOrg(organizationId),
+    listStoredOrderFormValuesForReport(v.reportId),
+  ]);
+  const templateById = new Map(alleVorlagen.map((t) => [t.id, t]));
 
   const orderFormSubmissions: { templateId: string; valuesJson: Record<string, string> }[] = [];
 
-  for (const entry of v.orderForms ?? []) {
-    const tpl = templateById.get(entry.templateId);
-    if (!tpl) {
-      throw new Error("Unbekannte oder inaktive Bestellformular-Vorlage.");
-    }
-    const rawValues = entry.values ?? {};
-    try {
-      const validated = validateOrderFormValues(tpl.id, tpl.fields, rawValues, {
+  try {
+    for (const entry of v.orderForms ?? []) {
+      const tpl = templateById.get(entry.templateId);
+      const gespeichertFuerVorlage = gespeicherteZeilen
+        .filter((z) => z.templateId === entry.templateId)
+        .map((z) => z.values);
+      // Deaktivierte Vorlage: nur für Zeilen, die der Rapport schon hatte — nicht neu wählbar.
+      if (!tpl || (!tpl.isActive && gespeichertFuerVorlage.length === 0)) {
+        throw new FachFehler("Unbekannte oder inaktive Bestellformular-Vorlage.");
+      }
+      const validated = validateOrderFormValues(tpl.id, tpl.fields, entry.values ?? {}, {
         allFieldsVisible: true,
+        storedValues: gespeichertFuerVorlage,
       });
       if (Object.keys(validated).length > 0) {
         orderFormSubmissions.push({ templateId: tpl.id, valuesJson: validated });
       } else if (tpl.fields.some((f) => f.required)) {
-        throw new Error(`Bestellformular „${tpl.name}“ ist unvollständig.`);
+        throw new FachFehler(`Bestellformular „${tpl.name}“ ist unvollständig.`);
       }
-    } catch (validationErr) {
-      throw new Error(validationErr instanceof Error ? validationErr.message : "Validierung fehlgeschlagen.");
     }
+  } catch (e) {
+    const fachfehler = alsAktionsFehler(e);
+    if (fachfehler) return fachfehler;
+    throw e;
   }
 
   await updateTechnicianReport(v.reportId, {

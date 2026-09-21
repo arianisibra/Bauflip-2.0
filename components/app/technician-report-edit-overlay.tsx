@@ -92,7 +92,7 @@ function renderOrderFormFieldInput(
 export function TechnicianReportEditOverlay({
   report,
   projectId,
-  templates,
+  templates: alleVorlagen,
   onClose,
   onSubmit,
   pending,
@@ -104,6 +104,11 @@ export function TechnicianReportEditOverlay({
   onSubmit: (v: TechnicianReportEditPayload) => Promise<void>;
   pending: boolean;
 }) {
+  // Deaktivierte Vorlagen sind nicht neu wählbar — ausser dieser Rapport verwendet sie bereits;
+  // dann bleiben ihre Zeilen sichtbar und bearbeitbar (der Server erlaubt genau das).
+  const templates = alleVorlagen.filter(
+    (t) => t.isActive || report.orderForms.some((of_) => of_.templateId === t.id),
+  );
   const [outcome, setOutcome] = useState<"schaden_behoben" | "schaden_aufgenommen">(report.outcome);
   const [workDescription, setWorkDescription] = useState(report.workDescription);
   const [timeSpentMinutesStr, setTimeSpentMinutesStr] = useState(

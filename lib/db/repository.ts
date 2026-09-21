@@ -2764,6 +2764,30 @@ export async function deleteTechnicianReport(reportId: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+/**
+ * Bereits gespeicherte Bestellformular-Zeilen eines Rapports (eine je Position).
+ * Gebraucht beim nachträglichen Bearbeiten: Schlüssel, die die Vorlage inzwischen nicht mehr
+ * kennt, dürfen nur mitgeführt werden, wenn sie schon gespeichert waren
+ * (siehe `validateOrderFormValues`, Option `storedValues`).
+ */
+export async function listStoredOrderFormValuesForReport(
+  reportId: string,
+): Promise<{ templateId: string; values: Record<string, string> }[]> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("technician_report_order_forms")
+    .select("template_id, values_json")
+    .eq("technician_report_id", reportId);
+  if (error || !data) return [];
+  return (data as { template_id: string; values_json: unknown }[]).map((row) => {
+    const roh = row.values_json && typeof row.values_json === "object" ? (row.values_json as Record<string, unknown>) : {};
+    const values: Record<string, string> = {};
+    for (const [k, v] of Object.entries(roh)) values[k] = v == null ? "" : String(v);
+    return { templateId: String(row.template_id), values };
+  });
+}
+
 export async function listActiveOrderFormTemplatesForOrg(organizationId: string): Promise<OrderFormTemplate[]> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return [];
@@ -2854,11 +2878,24 @@ export async function updateOrderFormTemplate(
   return mapOrderFormTemplateRow(data as Record<string, unknown>);
 }
 
-export async function deleteOrderFormTemplate(templateId: string): Promise<void> {
+/**
+ * Löscht die Vorlage — oder deaktiviert sie, wenn Rapporte sie noch verwenden.
+ * `technician_report_order_forms.template_id` ist ON DELETE RESTRICT (Postgres 23503): Eine
+ * benutzte Vorlage lässt sich nie löschen, ohne Rapportdaten zu verlieren. Deaktiviert
+ * verschwindet sie aus der Auswahl, bestehende Rapporte bleiben lesbar und bearbeitbar.
+ */
+export async function deleteOrderFormTemplate(templateId: string): Promise<{ deaktiviert: boolean }> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) throw new Error("Supabase nicht konfiguriert.");
   const { error } = await supabase.from("order_form_templates").delete().eq("id", templateId);
-  if (error) throw new Error(error.message);
+  if (!error) return { deaktiviert: false };
+  if (error.code !== "23503") throw new Error(error.message);
+  const { error: updError } = await supabase
+    .from("order_form_templates")
+    .update({ is_active: false })
+    .eq("id", templateId);
+  if (updError) throw new Error(updError.message);
+  return { deaktiviert: true };
 }
 
 const PROJECT_ORDER_DB_COLUMNS =

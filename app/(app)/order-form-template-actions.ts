@@ -13,15 +13,19 @@ export async function listOrderFormTemplatesForOrgAction(): Promise<OrderFormTem
   return listOrderFormTemplatesForOrg(session.organizationId);
 }
 
-export async function deleteOrderFormTemplateAction(templateId: string, tabId?: string) {
+export async function deleteOrderFormTemplateAction(
+  templateId: string,
+  tabId?: string,
+): Promise<{ deaktiviert: boolean }> {
   const session = await requireAdminLayoutSession();
   if (!session.organizationId) {
     throw new Error("Keine Berechtigung.");
   }
-  await deleteOrderFormTemplate(templateId);
+  const ergebnis = await deleteOrderFormTemplate(templateId);
 
   await publish(session.organizationId, {
     type: "order_form_template.changed",
     originTabId: tabId,
   });
+  return ergebnis;
 }

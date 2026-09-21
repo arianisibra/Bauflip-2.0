@@ -13,6 +13,7 @@
 import { useEffect } from "react";
 import { useMutation, useInfiniteQuery, useQuery, useQueryClient, keepPreviousData, type QueryClient } from "@tanstack/react-query";
 import type { ProjectCore } from "@/lib/db/repository";
+import { entpacken } from "@/lib/errors/fach-fehler";
 import type {
   OrderFormTemplate,
   ProjectAttachment,
@@ -709,7 +710,7 @@ export function useDeleteReport() {
 export function useUpdateTechnicianReport() {
   const qc = useQueryClient();
   return useMutation<{ core: ProjectCore }, Error, Parameters<typeof updateTechnicianReportAction>[0]>({
-    mutationFn: (values) => updateTechnicianReportAction(values, getTabId()),
+    mutationFn: async (values) => entpacken(await updateTechnicianReportAction(values, getTabId())),
     onSuccess: ({ core }) => {
       primeCore(qc, core.project.id, core);
       qc.setQueryData(queryKeys.projects.auftragCore(core.project.id), core);
@@ -796,12 +797,16 @@ export function useUpdateOrderFormTemplate() {
 
 export function useDeleteOrderFormTemplate() {
   const qc = useQueryClient();
-  return useMutation<void, Error, string>({
+  return useMutation<{ deaktiviert: boolean }, Error, string>({
     mutationFn: (templateId) => deleteOrderFormTemplateAction(templateId, getTabId()),
-    onSuccess: (_, templateId) => {
-      qc.setQueryData<OrderFormTemplate[]>(queryKeys.orderFormTemplates.all(), (old) =>
-        old ? old.filter((t) => t.id !== templateId) : [],
-      );
+    onSuccess: ({ deaktiviert }, templateId) => {
+      qc.setQueryData<OrderFormTemplate[]>(queryKeys.orderFormTemplates.all(), (old) => {
+        if (!old) return [];
+        // In Rapporten verwendet → der Server hat deaktiviert statt gelöscht.
+        return deaktiviert
+          ? old.map((t) => (t.id === templateId ? { ...t, isActive: false } : t))
+          : old.filter((t) => t.id !== templateId);
+      });
     },
   });
 }
