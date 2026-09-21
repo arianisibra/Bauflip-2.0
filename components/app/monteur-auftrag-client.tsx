@@ -28,6 +28,7 @@ import {
   useSubmitTechnicianReport,
   useUpdateAttachmentNotes,
   useUpdateTechnicianReport,
+  useWerkstattFertig,
   useUploadAttachment,
 } from "@/lib/query/hooks";
 import { queryKeys } from "@/lib/query/keys";
@@ -426,6 +427,49 @@ function StatusContextBanner({ status }: { status: string }) {
   );
 }
 
+/**
+ * «Werkstatt fertig» für den Monteur — derselbe Wechsel wie der Büro-Knopf (werkstatt → montagebereit).
+ * Zweistufig statt Browser-Dialog: auf dem Tablet gut treffbar, kein versehentlicher Wechsel.
+ */
+function WerkstattFertigKnopf({ projectId }: { projectId: string }) {
+  const fertig = useWerkstattFertig(projectId);
+  const [bestaetigen, setBestaetigen] = useState(false);
+
+  const melden = async () => {
+    try {
+      await fertig.mutateAsync();
+      toast.success("Werkstatt fertig — Auftrag ist jetzt montagebereit");
+    } catch (e) {
+      toast.error(getErrorMessage(e, "Konnte nicht gespeichert werden."));
+    } finally {
+      setBestaetigen(false);
+    }
+  };
+
+  if (bestaetigen) {
+    return (
+      <div className="mt-3 flex gap-2">
+        <Button className="h-11 flex-1" onClick={() => void melden()} disabled={fertig.isPending}>
+          {fertig.isPending ? <BauflipLoadingButtonLabel>Speichert …</BauflipLoadingButtonLabel> : "Ja, Werkstatt fertig"}
+        </Button>
+        <Button variant="outline" className="h-11" onClick={() => setBestaetigen(false)} disabled={fertig.isPending}>
+          Abbrechen
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <Button
+      variant="outline"
+      className="mt-3 h-11 w-full gap-2 border-orange-500/40 text-orange-700 dark:text-orange-200"
+      onClick={() => setBestaetigen(true)}
+    >
+      <CheckCircle2 className="size-4" aria-hidden />
+      WERKSTATT FERTIG
+    </Button>
+  );
+}
+
 export function MonteurAuftragClient({
   core,
   skipOrderFormTemplates = false,
@@ -648,6 +692,8 @@ export function MonteurAuftragClient({
       <AuftragSectionDivider />
 
       {showStandStep ? <StatusContextBanner status={p.status} /> : null}
+
+      {p.status === "werkstatt" ? <WerkstattFertigKnopf projectId={p.id} /> : null}
 
       {showStandStep ? <AuftragSectionDivider /> : null}
 
