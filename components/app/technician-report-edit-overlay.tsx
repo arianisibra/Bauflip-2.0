@@ -63,6 +63,9 @@ function renderOrderFormFieldInput(
         disabled={pending}
       >
         <option value="">—</option>
+        {/* Gespeicherte Auswahl, die inzwischen aus der Vorlage entfernt wurde: sichtbar lassen,
+            sonst zeigt das Feld «—» und der Wert wirkt verloren (bleibt aber gespeichert). */}
+        {v && !f.options.includes(v) ? <option value={v}>{`${v} (nicht mehr in der Vorlage)`}</option> : null}
         {f.options.map((opt) => (
           <option key={opt} value={opt}>
             {opt}

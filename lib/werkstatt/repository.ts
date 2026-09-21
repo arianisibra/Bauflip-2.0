@@ -18,6 +18,8 @@ export type WerkstattProjekt = {
   title: string;
   referenz: string | null;
   adresse: string;
+  /** Im Büro-Sheet «Wichtige Informationen» — sagt, was zu reparieren ist. */
+  info: string | null;
   hinweise: string | null;
   seit: string;
 };
@@ -27,7 +29,7 @@ export async function listWerkstattProjekte(organizationId: string): Promise<Wer
   if (!admin) throw new Error("Supabase nicht konfiguriert.");
   const { data, error } = await admin
     .from("projects")
-    .select("id, title, reference_code, service_street, service_postal_code, service_city, hints_and_notes, updated_at")
+    .select("id, title, reference_code, service_street, service_postal_code, service_city, intake_original_text, hints_and_notes, updated_at")
     .eq("organization_id", organizationId)
     .eq("status", "werkstatt")
     .is("archived_at", null)
@@ -42,6 +44,7 @@ export async function listWerkstattProjekte(organizationId: string): Promise<Wer
       .map((s) => String(s ?? "").trim())
       .filter(Boolean)
       .join(", "),
+    info: r.intake_original_text ? String(r.intake_original_text) : null,
     hinweise: r.hints_and_notes ? String(r.hints_and_notes) : null,
     seit: String(r.updated_at ?? ""),
   }));

@@ -81,7 +81,10 @@ export function WerkstattListe() {
                       {p.adresse}
                     </p>
                   ) : null}
-                  {p.hinweise ? <p className="mt-2 whitespace-pre-line text-sm">{p.hinweise}</p> : null}
+                  {p.info ? <p className="mt-2 whitespace-pre-line text-sm">{p.info}</p> : null}
+                  {p.hinweise ? (
+                    <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground">{p.hinweise}</p>
+                  ) : null}
                   <p className="mt-2 text-xs text-muted-foreground">{seitText(p.seit)}</p>
                 </div>
                 {bestaetigen === p.id ? (

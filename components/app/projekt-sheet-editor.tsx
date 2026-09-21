@@ -509,6 +509,9 @@ function StatusPipeline({
               Status manuell ändern (inkl. rückgängig)
             </Label>
             <select
+              // Neu aufbauen, wenn sich der Status ändert (z. B. über einen Status-Knopf) —
+              // sonst zeigt das Feld den alten Wert und «Setzen» stellt ihn still zurück.
+              key={currentStatus}
               id={`manual-status-${projectId}`}
               name="manualStatus"
               className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs"
