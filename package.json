@@ -11,7 +11,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "test:date": "npx --yes tsx --test lib/date/week-bounds.test.ts",
-    "test:unit": "npx --yes tsx --test lib/date/week-bounds.test.ts lib/domain/types.test.ts lib/projekte/list-filter.test.ts lib/query/invalidations.test.ts lib/order-forms/validate-submission.test.ts",
+    "test:unit": "npx --yes tsx --test lib/date/week-bounds.test.ts lib/domain/types.test.ts lib/projekte/list-filter.test.ts lib/query/invalidations.test.ts lib/order-forms/validate-submission.test.ts lib/auth/safe-next.test.ts",
     "bootstrap:first-admin": "node --env-file=.env.local scripts/bootstrap-first-admin.mts",
     "sync:user-auth-metadata": "node --env-file=.env.local scripts/sync-user-auth-metadata.mts",
     "db:login": "npx supabase login",
