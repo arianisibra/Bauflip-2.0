@@ -54,6 +54,8 @@ const TECHNICIAN_ALLOWED_PREFIXES = [
   "/anmeldung",
   "/profil",
   "/tech",
+  // Werkstatt-Liste: jeder Monteur darf «Werkstatt fertig» melden (Kundenwunsch 21.09.2026).
+  "/werkstatt",
   // Nach dem Zurücksetzen-Link ist der Monteur angemeldet; ohne diesen Eintrag
   // würde er von hier auf «Mein Tag» umgeleitet, ohne das Passwort zu setzen.
   "/passwort-neu",

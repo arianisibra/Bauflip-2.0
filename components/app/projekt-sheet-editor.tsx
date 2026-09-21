@@ -323,7 +323,8 @@ type PipelineAction = { label: string; nextStatus: ProjectStatus };
 
 const STATUS_PIPELINE: Partial<Record<ProjectStatus, PipelineAction[]>> = {
   offerte_senden:    [{ label: "OFFERTE GESENDET", nextStatus: "offerte_gesendet" }],
-  offerte_gesendet:  [{ label: "OFFERTE GENEHMIGT", nextStatus: "offerte_genehmigt" }],
+  // «Angebot abgelehnt» ist bewusst ein reiner Handstatus: keine Folgeknöpfe, keine Automatik.
+  offerte_gesendet:  [{ label: "OFFERTE GENEHMIGT", nextStatus: "offerte_genehmigt" }, { label: "ANGEBOT ABGELEHNT", nextStatus: "angebot_abgelehnt" }],
   offerte_genehmigt: [{ label: "MATERIAL BESTELLEN", nextStatus: "bestellen" }, { label: "DIREKT ABRECHNEN", nextStatus: "abrechnen" }],
   bestellen:         [{ label: "BESTELLT", nextStatus: "bestellt" }],
   bestellt:          [{ label: "MATERIAL EINGETROFFEN", nextStatus: "montagebereit" }, { label: "ABHOLBEREIT", nextStatus: "abholbereit" }],
@@ -338,6 +339,7 @@ const STATUS_PIPELINE: Partial<Record<ProjectStatus, PipelineAction[]>> = {
 
 const STATUS_ACTION_TONE: Partial<Record<ProjectStatus, string>> = {
   offerte_gesendet: "border-violet-500/35 bg-violet-500/10 text-violet-700 dark:text-violet-200",
+  angebot_abgelehnt: "border-red-500/35 bg-red-500/10 text-red-700 dark:text-red-200",
   offerte_genehmigt: "border-purple-500/35 bg-purple-500/10 text-purple-700 dark:text-purple-200",
   bestellen: "border-fuchsia-500/35 bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-200",
   bestellt: "border-pink-500/35 bg-pink-500/10 text-pink-700 dark:text-pink-200",

@@ -20,6 +20,8 @@ export const queryKeys = {
   auftragExtras: (projectId: string, skipOrderFormTemplates = false) =>
     ["auftrag-extras", projectId, skipOrderFormTemplates] as const,
   auftragExtrasPrefix: (projectId: string) => ["auftrag-extras", projectId] as const,
+  /** Monteur-Seite «Werkstatt»: Werkstatt-Projekte der eigenen Firma. */
+  werkstatt: () => ["werkstatt"] as const,
   weekTasks: {
     all: () => ["week-tasks"] as const,
     byDate: (isoDate: string) => ["week-tasks", isoDate] as const,

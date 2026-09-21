@@ -226,6 +226,7 @@ const STATUS_CONFIG: Record<string, { description: string }> = {
   einsatz_offen: { description: "Bestandesaufnahme oder Reparatur durchführen" },
   offerte_senden: { description: "Büro erstellt Offerte" },
   offerte_gesendet: { description: "Warte auf Kundenentscheid" },
+  angebot_abgelehnt: { description: "Kunde hat das Angebot abgelehnt" },
   offerte_genehmigt: { description: "Offerte akzeptiert — Material bestellen" },
   bestellen: { description: "Büro bestellt Material" },
   bestellt: { description: "Material wurde bestellt — warte auf Lieferung" },

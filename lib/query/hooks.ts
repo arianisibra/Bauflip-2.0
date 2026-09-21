@@ -14,6 +14,8 @@ import { useEffect } from "react";
 import { useMutation, useInfiniteQuery, useQuery, useQueryClient, keepPreviousData, type QueryClient } from "@tanstack/react-query";
 import type { ProjectCore } from "@/lib/db/repository";
 import { entpacken } from "@/lib/errors/fach-fehler";
+import { listWerkstattProjekteAction, werkstattFertigAction } from "@/app/(tech)/werkstatt/actions";
+import type { WerkstattProjekt } from "@/lib/werkstatt/repository";
 import type {
   OrderFormTemplate,
   ProjectAttachment,
@@ -906,6 +908,34 @@ export function useSubmitTechnicianReport() {
       if (result.success) {
         afterProjectCoreChange(qc, values.projectId, { refetchType: "all" });
       }
+    },
+  });
+}
+
+// ───────── Werkstatt (Monteure) ─────────
+
+export function useWerkstattProjekte() {
+  return useQuery<WerkstattProjekt[]>({
+    queryKey: queryKeys.werkstatt(),
+    queryFn: () => listWerkstattProjekteAction(),
+    // Bewusst nicht an die Realtime-Invalidierung gehängt (kein zusätzlicher Refetch bei jeder
+    // Projektänderung im Büro); beim Öffnen und bei Fokus wird frisch geladen.
+    staleTime: 15_000,
+  });
+}
+
+export function useWerkstattFertig() {
+  const qc = useQueryClient();
+  return useMutation<{ ok: true }, Error, string>({
+    mutationFn: async (projectId) => entpacken(await werkstattFertigAction(projectId, getTabId())),
+    onSuccess: (_, projectId) => {
+      qc.setQueryData<WerkstattProjekt[]>(queryKeys.werkstatt(), (old) =>
+        old ? old.filter((p) => p.id !== projectId) : old,
+      );
+    },
+    onError: () => {
+      // Z. B. schon vom Büro weitergeschaltet → Liste neu laden, damit sie stimmt.
+      void qc.invalidateQueries({ queryKey: queryKeys.werkstatt() });
     },
   });
 }

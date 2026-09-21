@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Calendar, CalendarDays, Clock, UserRound } from "lucide-react";
+import { Calendar, CalendarDays, Clock, UserRound, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const tabs = [
   { href: "/tag", label: "Mein Tag", icon: CalendarDays },
   { href: "/wochenplan", label: "Kalender", icon: Calendar },
+  { href: "/werkstatt", label: "Werkstatt", icon: Wrench },
   { href: "/zeit", label: "Zeit", icon: Clock },
   { href: "/profil", label: "Profil", icon: UserRound },
 ] as const;
@@ -29,7 +30,7 @@ export function TechBottomNav() {
               prefetch={false}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex flex-1 flex-col items-center gap-0.5 rounded-xl px-3 py-2.5 text-[11px] font-medium transition-colors",
+                "flex flex-1 flex-col items-center gap-0.5 rounded-xl px-1 py-2.5 text-[11px] font-medium transition-colors",
                 active
                   ? "text-primary"
                   : "text-muted-foreground active:text-foreground",

@@ -11,6 +11,7 @@ export const projectStatuses = [
   "einsatz_offen",
   "offerte_senden",
   "offerte_gesendet",
+  "angebot_abgelehnt",
   "offerte_genehmigt",
   "bestellen",
   "bestellt",
@@ -385,6 +386,7 @@ export const projectStatusLabels: Record<ProjectStatus, string> = {
   einsatz_offen: "EINSATZ / RAPPORT",
   offerte_senden: "OFFERTE SENDEN",
   offerte_gesendet: "OFFERTE GESENDET",
+  angebot_abgelehnt: "ANGEBOT ABGELEHNT",
   offerte_genehmigt: "OFFERTE GENEHMIGT",
   bestellen: "BESTELLEN",
   bestellt: "BESTELLT",
@@ -409,6 +411,8 @@ export const projectStatusBadgeClassNames: Record<ProjectStatus, string> = {
     "border-indigo-500/55 bg-indigo-500/35 text-indigo-950 dark:border-indigo-400/55 dark:bg-indigo-500/45 dark:text-indigo-50",
   offerte_gesendet:
     "border-violet-500/55 bg-violet-500/35 text-violet-950 dark:border-violet-400/55 dark:bg-violet-500/45 dark:text-violet-50",
+  angebot_abgelehnt:
+    "border-red-500/55 bg-red-500/35 text-red-950 dark:border-red-400/55 dark:bg-red-500/45 dark:text-red-50",
   offerte_genehmigt:
     "border-purple-500/55 bg-purple-500/35 text-purple-950 dark:border-purple-400/55 dark:bg-purple-500/45 dark:text-purple-50",
   bestellen:
