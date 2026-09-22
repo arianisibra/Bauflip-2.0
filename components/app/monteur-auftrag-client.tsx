@@ -15,7 +15,7 @@ import type {
   TechnicianReport,
 } from "@/lib/domain/types";
 import { isSinglePositionOrderFormTemplate } from "@/lib/order-forms/template-utils";
-import { getFilledOrderFormFields } from "@/lib/order-forms/filled-fields";
+import { getFilledOrderFormFields, getLegacyOrderFormValues } from "@/lib/order-forms/filled-fields";
 import { isMonteurMontageContext } from "@/lib/tech/monteur-context";
 import { projectStatusBadgeClassName, projectStatusLabels } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
@@ -373,7 +373,8 @@ function MonteurPriorReportsSection({
                     </p>
                     {r.orderForms.map((of_, ofIdx) => {
                       const filledFields = getFilledOrderFormFields(of_);
-                      if (filledFields.length === 0) return null;
+                      const frueher = getLegacyOrderFormValues(of_);
+                      if (filledFields.length === 0 && frueher.length === 0) return null;
                       const sameTplCount = r.orderForms.filter((x) => x.templateId === of_.templateId).length;
                       const positionInTpl =
                         r.orderForms.slice(0, ofIdx).filter((x) => x.templateId === of_.templateId).length + 1;
@@ -396,6 +397,19 @@ function MonteurPriorReportsSection({
                                 </dd>
                               </div>
                             ))}
+                            {frueher.length > 0 ? (
+                              <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1.5">
+                                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">
+                                  Aus einer früheren Vorlage
+                                </p>
+                                {frueher.map((w) => (
+                                  <div key={w.key} className="flex items-baseline gap-2 text-xs">
+                                    <dt className="shrink-0 text-muted-foreground">{w.label}:</dt>
+                                    <dd className="font-medium text-foreground">{w.value}</dd>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
                           </dl>
                         </div>
                       );

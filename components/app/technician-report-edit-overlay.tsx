@@ -5,6 +5,7 @@ import type { OrderFormTemplate, TechnicianReport } from "@/lib/domain/types";
 import type { OrderFormFieldDef } from "@/lib/order-forms/schema";
 import { isOrderFormFieldEffectivelyRequired } from "@/lib/order-forms/field-runtime";
 import { isSinglePositionOrderFormTemplate } from "@/lib/order-forms/template-utils";
+import { getLegacyOrderFormValues } from "@/lib/order-forms/filled-fields";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -366,6 +367,28 @@ export function TechnicianReportEditOverlay({
                                         </div>
                                       );
                                     })}
+                                    {(() => {
+                                      // Werte aus einer früheren Vorlage sichtbar machen (Umbau 18.09.2026:
+                                      // Felder wurden neu angelegt und heissen seither anders). Sie bleiben beim
+                                      // Speichern erhalten; hier nur anzeigen, damit niemand sie neu eintippt.
+                                      const frueher = getLegacyOrderFormValues({ fields, values: vals });
+                                      if (frueher.length === 0) return null;
+                                      return (
+                                        <div className="rounded border border-amber-500/30 bg-amber-500/5 px-2.5 py-2">
+                                          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">
+                                            Aus einer früheren Vorlage — bleibt gespeichert
+                                          </p>
+                                          <dl className="space-y-0.5">
+                                            {frueher.map((w) => (
+                                              <div key={w.key} className="flex items-baseline gap-2 text-xs">
+                                                <dt className="shrink-0 text-muted-foreground">{w.label}:</dt>
+                                                <dd className="font-medium text-foreground">{w.value}</dd>
+                                              </div>
+                                            ))}
+                                          </dl>
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
                                 );
                               })}

@@ -54,7 +54,7 @@ import { BauflipLoading, BauflipLoadingButtonLabel } from "@/components/ui/baufl
 import { TechnicianReportEditOverlay } from "@/components/app/technician-report-edit-overlay";
 import { AppointmentBookingForm } from "@/components/app/appointment-booking-form";
 import type { AvailabilityBundle } from "@/app/(app)/kalender/availability-actions";
-import { getFilledOrderFormFields } from "@/lib/order-forms/filled-fields";
+import { getFilledOrderFormFields, getLegacyOrderFormValues } from "@/lib/order-forms/filled-fields";
 function formatAppointmentRange(startsAtIso: string, endsAtIso: string): string {
   const startsAt = new Date(startsAtIso);
   const endsAt = new Date(endsAtIso);
@@ -101,7 +101,8 @@ function buildReportText(r: TechnicianReport): string {
   }
   r.orderForms.forEach((of_, ofIdx) => {
     const filledFields = getFilledOrderFormFields(of_);
-    if (filledFields.length === 0) return;
+    const frueher = getLegacyOrderFormValues(of_);
+    if (filledFields.length === 0 && frueher.length === 0) return;
     const sameTplCount = r.orderForms.filter((x) => x.templateId === of_.templateId).length;
     const positionInTpl =
       r.orderForms.slice(0, ofIdx).filter((x) => x.templateId === of_.templateId).length + 1;
@@ -113,6 +114,9 @@ function buildReportText(r: TechnicianReport): string {
     for (const f of filledFields) {
       const val = of_.values[f.key]?.trim();
       lines.push(`  ${f.label}: ${val}`);
+    }
+    for (const w of frueher) {
+      lines.push(`  ${w.label}: ${w.value}   (aus einer früheren Vorlage)`);
     }
     lines.push("");
   });
@@ -206,7 +210,8 @@ function ReportCard({
               </p>
               {r.orderForms.map((of_, ofIdx) => {
                 const filledFields = getFilledOrderFormFields(of_);
-                if (filledFields.length === 0) return null;
+                const frueher = getLegacyOrderFormValues(of_);
+                if (filledFields.length === 0 && frueher.length === 0) return null;
                 const sameTplCount = r.orderForms.filter((x) => x.templateId === of_.templateId).length;
                 const positionInTpl =
                   r.orderForms.slice(0, ofIdx).filter((x) => x.templateId === of_.templateId).length + 1;
@@ -230,6 +235,19 @@ function ReportCard({
                         </dd>
                       </div>
                     ))}
+                    {frueher.length > 0 ? (
+                      <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1.5">
+                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">
+                          Aus einer früheren Vorlage
+                        </p>
+                        {frueher.map((w) => (
+                          <div key={w.key} className="flex items-baseline gap-2 text-xs">
+                            <dt className="shrink-0 text-muted-foreground">{w.label}:</dt>
+                            <dd className="font-medium text-foreground">{w.value}</dd>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                   </dl>
                 </div>
                 );
